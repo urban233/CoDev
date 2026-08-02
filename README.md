@@ -56,6 +56,7 @@ To preview or apply a later bundle update:
 ```shell
 codev diff --target ../my-project
 codev update --target ../my-project
+codev remove --target ../my-project --dry-run
 ```
 
 `init`, `diff`, and `update` preflight the entire operation. A locally modified
@@ -68,7 +69,7 @@ my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
 ├── .agents/skills/                   # seven lifecycle skills
 ├── .opencode/agents/                 # orchestrator, builder, reviewer
-├── .opencode/opencode.json           # safely merged, never model-pinned
+├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── docs/                             # workflow, prompts, handbooks, cookbook
 ├── evals/development-workflow/       # behavioral scenarios
 ├── scripts/                          # deterministic validators

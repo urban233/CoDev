@@ -15,6 +15,7 @@ from codev_workflow.installer import (
     check_project,
     format_plan,
     plan_init,
+    plan_remove,
     plan_update,
 )
 
@@ -53,6 +54,10 @@ def _parser() -> argparse.ArgumentParser:
 
     update = commands.add_parser("update", help="apply a conflict-free bundle update")
     update.add_argument("--target", type=_target, default=Path.cwd())
+
+    remove = commands.add_parser("remove", help="remove an unchanged CoDev installation")
+    remove.add_argument("--target", type=_target, default=Path.cwd())
+    remove.add_argument("--dry-run", action="store_true", help="show the plan only")
     return parser
 
 
@@ -109,6 +114,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
             apply_plan(target, plan)
             print(f"Updated CoDev bundle to {__version__} in {target}")
+            return 0
+
+        if args.command == "remove":
+            target = args.target.resolve()
+            plan = plan_remove(target)
+            print(format_plan(plan))
+            if plan.conflicts:
+                print(f"Removal stopped: {len(plan.conflicts)} conflict(s).")
+                return 2
+            if args.dry_run:
+                print("Dry run complete; no files were removed.")
+                return 0
+            apply_plan(target, plan)
+            print(f"Removed CoDev from {target}")
             return 0
     except CoDevError as error:
         print(f"codev: {error}", file=sys.stderr)

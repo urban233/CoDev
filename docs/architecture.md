@@ -58,8 +58,8 @@ For each managed file, CoDev compares:
 | Upstream removed an old file | Retain locally and stop managing it |
 
 Retaining removed files is conservative: an update cannot unexpectedly delete
-repository instructions. A future explicit cleanup command may offer reviewed
-removal, but it must remain opt-in.
+repository instructions. The explicit `codev remove` command preflights and
+removes only unchanged managed files and integrations; it remains opt-in.
 
 ## Invariants
 
@@ -77,4 +77,3 @@ Lock schema changes require a migration before managed files are touched.
 Bundle behavior follows semantic versioning. Patch releases preserve artifact
 contracts; minor releases may add compatible files or behaviors; major releases
 may require an explicit migration and review.
-

@@ -37,6 +37,29 @@ class CliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertIn("not installed", errors.getvalue())
 
+    def test_remove_dry_run_and_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "init",
+                            "--target",
+                            str(target),
+                            "--platform",
+                            "codex",
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0, main(["remove", "--target", str(target), "--dry-run"])
+                )
+                self.assertTrue((target / ".codev" / "lock.json").exists())
+                self.assertEqual(0, main(["remove", "--target", str(target)]))
+                self.assertFalse((target / ".codev" / "lock.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

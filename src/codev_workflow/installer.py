@@ -18,6 +18,20 @@ LOCK_PATH = PurePosixPath(".codev/lock.json")
 AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 VALID_PLATFORMS = frozenset({"codex", "opencode"})
+OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
+    "orchestrator": {
+        "model": "openai/gpt-5.6-luna",
+        "description": "Human-controlled workflow and work-item orchestrator",
+    },
+    "builder": {
+        "model": "openai/gpt-5.6-luna",
+        "description": "Bounded implementation subagent",
+    },
+    "reviewer": {
+        "model": "openai/gpt-5.6-luna",
+        "description": "Independent evidence-based code reviewer",
+    },
+}
 
 AGENTS_BLOCK = """<!-- codev:start -->
 ## CoDev human-AI delivery
@@ -52,7 +66,9 @@ class Plan:
 
     operations: list[Operation] = field(default_factory=list)
     writes: dict[Path, bytes] = field(default_factory=dict, repr=False)
+    deletions: set[Path] = field(default_factory=set, repr=False)
     lock: dict[str, Any] | None = field(default=None, repr=False)
+    remove_lock: bool = False
 
     @property
     def conflicts(self) -> list[Operation]:
@@ -63,7 +79,7 @@ class Plan:
         return [
             item
             for item in self.operations
-            if item.kind in {"add", "update", "integrate", "retire"}
+            if item.kind in {"add", "update", "integrate", "remove", "retire"}
         ]
 
 
@@ -78,6 +94,19 @@ class CheckResult:
     @property
     def ok(self) -> bool:
         return not self.issues
+
+
+@dataclass(frozen=True)
+class OpenCodePreparation:
+    """The result of safely integrating the OpenCode configuration."""
+
+    content: bytes | None
+    default_agent_managed: bool
+    managed_agents: dict[str, str]
+    schema_managed: bool
+    agent_container_managed: bool
+    config_file_managed: bool
+    detail: str
 
 
 def normalize_platforms(platforms: Iterable[str]) -> tuple[str, ...]:
@@ -102,6 +131,16 @@ def _normalise_newlines(value: str) -> str:
 
 def _block_hash(value: str) -> str:
     return _sha256(_normalise_newlines(value).encode("utf-8"))
+
+
+def _json_hash(value: Any) -> str:
+    rendered = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return _sha256(rendered.encode("utf-8"))
 
 
 def _walk_bundle() -> dict[str, bytes]:
@@ -167,6 +206,18 @@ def _atomic_write(path: Path, content: bytes) -> None:
             temporary.unlink()
 
 
+def _remove_empty_parent_dirs(path: Path, target: Path) -> None:
+    """Remove empty managed-file parents without touching the target repository."""
+
+    current = path.parent
+    while current != target:
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
+
+
 def _agent_block_from(text: str) -> str | None:
     start = text.find(AGENTS_START)
     end = text.find(AGENTS_END)
@@ -192,7 +243,30 @@ def _with_agent_block(text: str, block: str) -> str:
     return text.replace(current, rendered, 1)
 
 
-def _prepare_opencode(target: Path) -> tuple[bytes | None, bool, str]:
+def _without_agent_block(text: str) -> str:
+    current = _agent_block_from(text)
+    if current is None:
+        return text
+    start = text.find(current)
+    end = start + len(current)
+    newline = "\r\n" if "\r\n" in text else "\n"
+    prefix = text[:start]
+    suffix = text[end:]
+    if prefix.endswith(newline * 2):
+        prefix = prefix[: -len(newline * 2)]
+    if suffix.startswith(newline):
+        suffix = suffix[len(newline) :]
+    return prefix + suffix
+
+
+def _prepare_opencode(
+    target: Path,
+    managed_agents: dict[str, str] | None = None,
+    *,
+    schema_managed: bool = False,
+    agent_container_managed: bool = False,
+    config_file_managed: bool = False,
+) -> OpenCodePreparation:
     path = target / ".opencode" / "opencode.json"
     if path.exists():
         try:
@@ -203,10 +277,13 @@ def _prepare_opencode(target: Path) -> tuple[bytes | None, bool, str]:
             raise CoDevError(f"{path} must contain a JSON object")
     else:
         config = {}
+        config_file_managed = True
 
+    managed_agents = dict(managed_agents or {})
     changed = False
     if "$schema" not in config:
         config["$schema"] = "https://opencode.ai/config.json"
+        schema_managed = True
         changed = True
 
     default_managed = False
@@ -219,10 +296,59 @@ def _prepare_opencode(target: Path) -> tuple[bytes | None, bool, str]:
     elif config.get("default_agent") == "orchestrator":
         detail = "orchestrator already configured"
 
+    agents = config.get("agent")
+    if agents is None:
+        agents = {}
+        config["agent"] = agents
+        agent_container_managed = True
+        changed = True
+    elif not isinstance(agents, dict):
+        raise CoDevError(f"cannot merge {path}: agent must contain a JSON object")
+
+    integrated_agents: list[str] = []
+    for name, expected in OPENCODE_AGENT_CONFIGS.items():
+        current = agents.get(name)
+        expected_hash = _json_hash(expected)
+        old_hash = managed_agents.get(name)
+        if old_hash is not None:
+            if not isinstance(current, dict) or _json_hash(current) != old_hash:
+                raise CoDevError(
+                    f"managed OpenCode agent {name!r} was modified or removed"
+                )
+            if current != expected:
+                agents[name] = expected
+                changed = True
+            managed_agents[name] = expected_hash
+            continue
+        if name not in agents:
+            agents[name] = expected
+            managed_agents[name] = expected_hash
+            integrated_agents.append(name)
+            changed = True
+
+    if integrated_agents:
+        detail = "integrated OpenCode agents: " + ", ".join(integrated_agents)
+
     if not changed:
-        return None, default_managed, detail
+        return OpenCodePreparation(
+            None,
+            default_managed,
+            managed_agents,
+            schema_managed,
+            agent_container_managed,
+            config_file_managed,
+            detail,
+        )
     content = (json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    return content, default_managed, detail
+    return OpenCodePreparation(
+        content,
+        default_managed,
+        managed_agents,
+        schema_managed,
+        agent_container_managed,
+        config_file_managed,
+        detail,
+    )
 
 
 def _new_lock(
@@ -230,6 +356,10 @@ def _new_lock(
     files: dict[str, bytes],
     *,
     default_agent_managed: bool,
+    managed_opencode_agents: dict[str, str],
+    opencode_schema_managed: bool,
+    opencode_agent_container_managed: bool,
+    opencode_config_file_managed: bool,
 ) -> dict[str, Any]:
     return {
         "schema_version": LOCK_SCHEMA_VERSION,
@@ -239,6 +369,10 @@ def _new_lock(
         "integrations": {
             "agents_block_hash": _block_hash(AGENTS_BLOCK),
             "opencode_default_agent_managed": default_agent_managed,
+            "opencode_agent_hashes": dict(sorted(managed_opencode_agents.items())),
+            "opencode_schema_managed": opencode_schema_managed,
+            "opencode_agent_container_managed": opencode_agent_container_managed,
+            "opencode_config_file_managed": opencode_config_file_managed,
         },
     }
 
@@ -290,28 +424,41 @@ def plan_init(target: Path, platforms: Iterable[str] = ("all",)) -> Plan:
             )
 
     default_agent_managed = False
+    managed_opencode_agents: dict[str, str] = {}
+    opencode_schema_managed = False
+    opencode_agent_container_managed = False
+    opencode_config_file_managed = False
     if "opencode" in selected:
         try:
-            opencode_content, default_agent_managed, detail = _prepare_opencode(target)
+            opencode = _prepare_opencode(target)
         except CoDevError as error:
             plan.operations.append(
                 Operation("conflict", ".opencode/opencode.json", str(error))
             )
         else:
-            if opencode_content is not None:
-                plan.writes[target / ".opencode" / "opencode.json"] = opencode_content
+            default_agent_managed = opencode.default_agent_managed
+            managed_opencode_agents = opencode.managed_agents
+            opencode_schema_managed = opencode.schema_managed
+            opencode_agent_container_managed = opencode.agent_container_managed
+            opencode_config_file_managed = opencode.config_file_managed
+            if opencode.content is not None:
+                plan.writes[target / ".opencode" / "opencode.json"] = opencode.content
                 plan.operations.append(
-                    Operation("integrate", ".opencode/opencode.json", detail)
+                    Operation("integrate", ".opencode/opencode.json", opencode.detail)
                 )
             else:
                 plan.operations.append(
-                    Operation("keep", ".opencode/opencode.json", detail)
+                    Operation("keep", ".opencode/opencode.json", opencode.detail)
                 )
 
     plan.lock = _new_lock(
         selected,
         files,
         default_agent_managed=default_agent_managed,
+        managed_opencode_agents=managed_opencode_agents,
+        opencode_schema_managed=opencode_schema_managed,
+        opencode_agent_container_managed=opencode_agent_container_managed,
+        opencode_config_file_managed=opencode_config_file_managed,
     )
     return plan
 
@@ -413,22 +560,211 @@ def plan_update(target: Path) -> Plan:
     _replace_agent_block_for_update(target, old_block_hash, plan)
 
     default_managed = bool(integrations.get("opencode_default_agent_managed"))
+    schema_managed = bool(integrations.get("opencode_schema_managed"))
+    agent_container_managed = bool(
+        integrations.get("opencode_agent_container_managed")
+    )
+    config_file_managed = bool(integrations.get("opencode_config_file_managed"))
+    managed_opencode_agents = integrations.get("opencode_agent_hashes", {})
+    if not isinstance(managed_opencode_agents, dict) or not all(
+        isinstance(name, str) and isinstance(value, str)
+        for name, value in managed_opencode_agents.items()
+    ):
+        raise CoDevError("lock file has invalid OpenCode agent hashes")
+    if "opencode" in selected:
+        try:
+            opencode = _prepare_opencode(
+                target,
+                managed_opencode_agents,
+                schema_managed=schema_managed,
+                agent_container_managed=agent_container_managed,
+                config_file_managed=config_file_managed,
+            )
+        except CoDevError as error:
+            plan.operations.append(
+                Operation("conflict", ".opencode/opencode.json", str(error))
+            )
+        else:
+            default_managed = default_managed or opencode.default_agent_managed
+            managed_opencode_agents = opencode.managed_agents
+            schema_managed = opencode.schema_managed
+            agent_container_managed = opencode.agent_container_managed
+            config_file_managed = opencode.config_file_managed
+            if opencode.content is not None:
+                plan.writes[target / ".opencode" / "opencode.json"] = opencode.content
+                plan.operations.append(
+                    Operation("integrate", ".opencode/opencode.json", opencode.detail)
+                )
+            else:
+                plan.operations.append(
+                    Operation("keep", ".opencode/opencode.json", opencode.detail)
+                )
     plan.lock = _new_lock(
         selected,
         new_files,
         default_agent_managed=default_managed,
+        managed_opencode_agents=managed_opencode_agents,
+        opencode_schema_managed=schema_managed,
+        opencode_agent_container_managed=agent_container_managed,
+        opencode_config_file_managed=config_file_managed,
     )
+    return plan
+
+
+def _prepare_opencode_removal(
+    target: Path, integrations: dict[str, Any]
+) -> tuple[bytes | None, bool, str]:
+    path = target / ".opencode" / "opencode.json"
+    if not path.exists():
+        return None, False, "OpenCode config already absent"
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise CoDevError(f"cannot remove managed values from {path}: {error}") from error
+    if not isinstance(config, dict):
+        raise CoDevError(f"{path} must contain a JSON object")
+
+    managed_agents = integrations.get("opencode_agent_hashes", {})
+    if not isinstance(managed_agents, dict) or not all(
+        isinstance(name, str) and isinstance(value, str)
+        for name, value in managed_agents.items()
+    ):
+        raise CoDevError("lock file has invalid OpenCode agent hashes")
+
+    changed = False
+    if integrations.get("opencode_default_agent_managed"):
+        current_default = config.get("default_agent")
+        if current_default == "orchestrator":
+            del config["default_agent"]
+            changed = True
+        elif current_default is not None:
+            raise CoDevError("managed OpenCode default_agent has local changes")
+
+    agents = config.get("agent")
+    if agents is not None and not isinstance(agents, dict):
+        if managed_agents:
+            raise CoDevError("managed OpenCode agent configuration has local changes")
+    elif isinstance(agents, dict):
+        for name, expected_hash in sorted(managed_agents.items()):
+            if name not in agents:
+                continue
+            current = agents[name]
+            if not isinstance(current, dict) or _json_hash(current) != expected_hash:
+                raise CoDevError(f"managed OpenCode agent has local changes: {name}")
+            del agents[name]
+            changed = True
+        if integrations.get("opencode_agent_container_managed") and not agents:
+            del config["agent"]
+            changed = True
+
+    if integrations.get("opencode_schema_managed"):
+        schema = config.get("$schema")
+        if schema == "https://opencode.ai/config.json":
+            del config["$schema"]
+            changed = True
+        elif schema is not None:
+            raise CoDevError("managed OpenCode schema has local changes")
+
+    if not changed:
+        return None, False, "no managed OpenCode values to remove"
+    if integrations.get("opencode_config_file_managed") and not config:
+        return None, True, "remove managed OpenCode config"
+    content = (json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    return content, False, "remove managed OpenCode values"
+
+
+def plan_remove(target: Path) -> Plan:
+    """Preflight removal of the installed CoDev bundle and integrations."""
+
+    target = target.resolve()
+    lock = _read_lock(target)
+    files = lock["files"]
+    if not all(isinstance(path, str) and isinstance(value, str) for path, value in files.items()):
+        raise CoDevError("lock file contains an invalid managed-file entry")
+    integrations = lock.get("integrations")
+    if not isinstance(integrations, dict):
+        raise CoDevError("lock file contains invalid integrations")
+
+    plan = Plan(remove_lock=True)
+    for relative, expected_hash in sorted(files.items()):
+        destination = target / Path(relative)
+        if not destination.exists():
+            continue
+        if not destination.is_file():
+            plan.operations.append(
+                Operation("conflict", relative, "managed path is not a file")
+            )
+        elif _sha256(destination.read_bytes()) != expected_hash:
+            plan.operations.append(
+                Operation("conflict", relative, "managed file has local changes")
+            )
+        else:
+            plan.deletions.add(destination)
+            plan.operations.append(Operation("remove", relative))
+
+    agents_path = target / "AGENTS.md"
+    if agents_path.exists():
+        try:
+            block = _agent_block_from(agents_path.read_text(encoding="utf-8"))
+        except CoDevError as error:
+            plan.operations.append(Operation("conflict", "AGENTS.md", str(error)))
+        else:
+            expected_hash = integrations.get("agents_block_hash")
+            if not isinstance(expected_hash, str):
+                raise CoDevError("lock file has no valid AGENTS.md block hash")
+            if block is not None:
+                if _block_hash(block) != expected_hash:
+                    plan.operations.append(
+                        Operation("conflict", "AGENTS.md", "managed policy block was modified")
+                    )
+                else:
+                    plan.writes[agents_path] = _without_agent_block(
+                        agents_path.read_text(encoding="utf-8")
+                    ).encode("utf-8")
+                    plan.operations.append(
+                        Operation("integrate", "AGENTS.md", "remove managed policy block")
+                    )
+
+    selected = normalize_platforms(lock.get("platforms", []))
+    if "opencode" in selected:
+        try:
+            opencode_content, remove_opencode_config, detail = _prepare_opencode_removal(
+                target, integrations
+            )
+        except CoDevError as error:
+            plan.operations.append(
+                Operation("conflict", ".opencode/opencode.json", str(error))
+            )
+        else:
+            if opencode_content is not None:
+                plan.writes[target / ".opencode" / "opencode.json"] = opencode_content
+                plan.operations.append(
+                    Operation("integrate", ".opencode/opencode.json", detail)
+                )
+            elif remove_opencode_config:
+                plan.deletions.add(target / ".opencode" / "opencode.json")
+                plan.operations.append(Operation("remove", ".opencode/opencode.json"))
     return plan
 
 
 def apply_plan(target: Path, plan: Plan) -> None:
     if plan.conflicts:
         raise CoDevError("cannot apply a plan that contains conflicts")
-    if plan.lock is None:
+    if plan.lock is None and not plan.remove_lock:
         raise CoDevError("installation plan has no lock state")
     target = target.resolve()
     for path, content in sorted(plan.writes.items(), key=lambda item: str(item[0])):
         _atomic_write(path, content)
+    for path in sorted(plan.deletions, key=str):
+        path.unlink()
+    for path in sorted(plan.deletions, key=str):
+        _remove_empty_parent_dirs(path, target)
+    if plan.remove_lock:
+        lock_path = target / Path(LOCK_PATH.as_posix())
+        lock_path.unlink(missing_ok=True)
+        _remove_empty_parent_dirs(lock_path, target)
+        return
+    assert plan.lock is not None
     lock_content = (json.dumps(plan.lock, indent=2, ensure_ascii=False) + "\n").encode(
         "utf-8"
     )
@@ -463,7 +799,14 @@ def check_project(target: Path) -> CheckResult:
             elif _block_hash(block) != integrations.get("agents_block_hash"):
                 issues.append("the managed AGENTS.md block has local changes")
 
-    if integrations.get("opencode_default_agent_managed"):
+    managed_opencode_agents = integrations.get("opencode_agent_hashes", {})
+    if not isinstance(managed_opencode_agents, dict) or not all(
+        isinstance(name, str) and isinstance(value, str)
+        for name, value in managed_opencode_agents.items()
+    ):
+        issues.append("lock file has invalid OpenCode agent hashes")
+        managed_opencode_agents = {}
+    if integrations.get("opencode_default_agent_managed") or managed_opencode_agents:
         config_path = target / ".opencode" / "opencode.json"
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -472,6 +815,14 @@ def check_project(target: Path) -> CheckResult:
         else:
             if config.get("default_agent") != "orchestrator":
                 issues.append("managed OpenCode default_agent is not orchestrator")
+            agents = config.get("agent")
+            if not isinstance(agents, dict):
+                issues.append("managed OpenCode agent configuration is missing")
+            else:
+                for name, expected_hash in sorted(managed_opencode_agents.items()):
+                    current = agents.get(name)
+                    if not isinstance(current, dict) or _json_hash(current) != expected_hash:
+                        issues.append(f"managed OpenCode agent has local changes: {name}")
 
     issues.extend(_validate_installed_skills(target, files))
     return CheckResult(

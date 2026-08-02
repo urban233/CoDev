@@ -65,6 +65,121 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("my-existing-agent", config["default_agent"])
         self.assertEqual("system", config["theme"])
         self.assertIn("$schema", config)
+        self.assertEqual(installer.OPENCODE_AGENT_CONFIGS, config["agent"])
+
+    def test_init_preserves_existing_opencode_agent(self) -> None:
+        config_path = self.target / ".opencode" / "opencode.json"
+        config_path.parent.mkdir(parents=True)
+        local_orchestrator = {
+            "model": "anthropic/claude-sonnet-4",
+            "description": "Project-owned orchestrator",
+        }
+        config_path.write_text(
+            json.dumps({"agent": {"orchestrator": local_orchestrator}}),
+            encoding="utf-8",
+        )
+
+        self.install(("opencode",))
+
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(local_orchestrator, config["agent"]["orchestrator"])
+        self.assertEqual(
+            installer.OPENCODE_AGENT_CONFIGS["builder"], config["agent"]["builder"]
+        )
+        self.assertEqual(
+            installer.OPENCODE_AGENT_CONFIGS["reviewer"], config["agent"]["reviewer"]
+        )
+
+    def test_update_rejects_modified_managed_opencode_agent(self) -> None:
+        self.install(("opencode",))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["agent"]["builder"]["model"] = "project/custom"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertTrue(
+            any(item.path == ".opencode/opencode.json" for item in plan.conflicts)
+        )
+
+    def test_update_integrates_agents_for_a_prior_opencode_install(self) -> None:
+        self.install(("opencode",))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config.pop("agent")
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        lock_path = self.target / ".codev" / "lock.json"
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock["integrations"].pop("opencode_agent_hashes")
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        updated = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(installer.OPENCODE_AGENT_CONFIGS, updated["agent"])
+
+    def test_remove_deletes_managed_files_and_preserves_shared_content(self) -> None:
+        agents_path = self.target / "AGENTS.md"
+        agents_path.write_text("# Project policy\n", encoding="utf-8")
+        config_path = self.target / ".opencode" / "opencode.json"
+        config_path.parent.mkdir(parents=True)
+        local_orchestrator = {"model": "project/model"}
+        config_path.write_text(
+            json.dumps(
+                {
+                    "default_agent": "project-agent",
+                    "theme": "system",
+                    "agent": {"orchestrator": local_orchestrator},
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.install(("opencode",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".codev" / "lock.json").exists())
+        self.assertFalse((self.target / ".codev").exists())
+        self.assertFalse((self.target / ".agents" / "skills").exists())
+        self.assertFalse((self.target / ".agents").exists())
+        self.assertFalse(
+            (self.target / ".opencode" / "agents" / "builder.md").exists()
+        )
+        self.assertNotIn(installer.AGENTS_START, agents_path.read_text(encoding="utf-8"))
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual("project-agent", config["default_agent"])
+        self.assertEqual("system", config["theme"])
+        self.assertEqual(local_orchestrator, config["agent"]["orchestrator"])
+        self.assertNotIn("builder", config["agent"])
+        self.assertNotIn("reviewer", config["agent"])
+        self.assertNotIn("$schema", config)
+
+    def test_remove_deletes_a_managed_opencode_config_file(self) -> None:
+        self.install(("opencode",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".opencode" / "opencode.json").exists())
+
+    def test_remove_conflict_prevents_all_deletions(self) -> None:
+        self.install(("codex",))
+        skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"
+        skill.write_text(skill.read_text(encoding="utf-8") + "local edit\n", encoding="utf-8")
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertTrue(plan.conflicts)
+        with self.assertRaises(installer.CoDevError):
+            installer.apply_plan(self.target, plan)
+        self.assertTrue(skill.exists())
+        self.assertTrue((self.target / ".codev" / "lock.json").exists())
 
     def test_init_stops_before_writing_on_collision(self) -> None:
         collision = self.target / ".agents" / "skills" / "build-change" / "SKILL.md"

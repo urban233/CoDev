@@ -1,20 +1,57 @@
 ---
 name: plan-delivery
-description: Turn an accepted product or feature brief and any required design into a lightweight multi-developer delivery plan. Use when a team needs outcome-based milestones, ready work items, owners, independent reviewers, simple dependencies, integration checkpoints, WIP limits, risks, or rolling-wave planning. Do not create a separate architecture or capacity bureaucracy.
+description: Turn an accepted product or feature brief and any required design into a lightweight, team-profile-aware multi-developer delivery plan. Use when a team needs outcome-based milestones, unassigned capability lanes or ready work items, owners, independent reviewers, simple dependencies, integration checkpoints, WIP limits, risks, or rolling-wave planning. Do not create a separate architecture or capacity bureaucracy.
 ---
 
 # Plan Delivery
 
 Create a plan that helps a team choose the next useful work, not a prediction of
-every future edit. Use `assets/delivery-plan.template.md` when the repository has
-no external project tracker.
+every future edit. Use `assets/delivery-plan.template.md` when the repository
+has no external project tracker.
 
 ## 1. Verify planning inputs
 
 Read the accepted brief and applicable design. Confirm the next outcome, fixed
-contracts, important risks, available developers, current commitments, and
-required reviewers. Return unresolved product questions to `define-product` and
-architectural questions to `design-solution`.
+contracts, important risks, current commitments, and required reviewers. Return
+unresolved product questions to `define-product` and architectural questions to
+`design-solution`.
+
+Classify uncertain facts before planning:
+
+- **fixed:** accepted product or architectural decisions;
+- **hard blocker:** a missing decision or contract that prevents a specific item
+  from starting safely;
+- **risk track:** evidence that can be retired independently without blocking
+  unrelated work;
+- **staffing input:** capability, capacity, ownership, or reviewer information;
+  and
+- **deferred:** a decision that is not needed for the current milestone.
+
+Do not call a risk track, staffing input, or deferred decision a blocker unless
+it actually prevents the named work from starting.
+
+### Team-profile gate
+
+Headcount is not a delivery profile. Do not infer a developer's skills,
+availability, component ownership, review authority, or security/domain
+qualification from a team size, title, or anonymous label.
+
+Before assigning ready work, establish the smallest useful profile for each
+developer: stable name or label, relevant strengths, current capacity or WIP,
+component/API ownership, and independent-review restrictions. Inspect existing
+ownership and tracker facts first; ask only for missing information.
+
+If profiles are incomplete:
+
+1. recommend the next milestone and show **unassigned capability lanes**, not
+   `Developer 1`, `Developer 2`, or similar placeholders;
+2. show only candidate concurrency, conditional on named contracts or fixtures;
+3. do not claim that work items are ready or assign reviewers; and
+4. ask exactly one recommendation-led question for the missing team profile.
+
+When the human explicitly asks for an initial milestone framing first, provide
+that framing as an unassigned planning brief, then make the team profile the
+single remaining input before producing assignments.
 
 ## 2. Define outcome milestones
 
@@ -22,10 +59,22 @@ Each milestone must demonstrate observable value or retire a named risk, such as
 "internal user completes the primary workflow." Avoid component-completion
 milestones such as "backend done."
 
+For a requested first **useful product** milestone, name the target user, the
+observable action, and the durable result. A foundation-only milestone is valid
+when it retires a named risk, but label it as an enabling or risk-retirement
+milestone rather than presenting it as user value. Include the smallest
+in-scope product object when that is necessary to make the demonstration useful.
+
 Plan the current milestone in detail. Keep later milestones coarse and revise
 them using evidence from working software.
 
 ## 3. Create reviewable work items
+
+Before team profiles are available, create only capability lanes. For every lane
+that could proceed concurrently, name the accepted API, schema, decision, or
+contract fixture that makes it safe. If no such authority exists, state
+**Blocked by** the missing contract; do not imply parallelism from technical
+layer names alone.
 
 Each current work item must include:
 
@@ -39,6 +88,9 @@ Each current work item must include:
 
 A work item should normally produce one small pull request or a short stack of
 independently valid pull requests. Split by behavior, not by technical layer.
+Use a bounded discovery item when a needed contract cannot be resolved from
+accepted authority. Never turn an unresolved decision into an implementation
+assignment.
 
 Use only ordinary dependency language:
 
@@ -50,9 +102,10 @@ Use only ordinary dependency language:
 ## 4. Coordinate the team
 
 Default maximum work in progress to one implementation item per developer.
-Assign by relevant capability and support, not title alone. Ensure owners do not
-approve their own changes. Name an integration owner only for milestones that
-cross ownership boundaries.
+Assign only after the team-profile gate passes. Map by relevant capability,
+capacity, ownership, and support needs, not title or headcount. Ensure owners do
+not approve their own changes. Name an integration owner only for milestones
+that cross ownership boundaries.
 
 Treat review capacity as real work. Confirm reviewer availability before an item
 becomes ready and define a small review queue limit (default two active reviews
@@ -69,6 +122,11 @@ An item is ready only when its outcome, acceptance, required design decisions,
 dependencies, owner, reviewer, and test environment are known. Use a bounded
 discovery item when evidence is missing. Never disguise uncertainty as an
 implementation task.
+
+Do not assign an item merely because there are idle developers. Keep it
+unassigned or blocked until its contract, owner, and independent reviewer are
+known. If the plan is still awaiting team profiles, report it as an unassigned
+planning brief rather than a ready delivery plan.
 
 Review the plan with the team in one pass: current milestone, ready work,
 parallel work, blockers, integration points, and risks. Update routine status
