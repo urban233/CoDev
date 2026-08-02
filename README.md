@@ -8,6 +8,13 @@
 
 ![Active Feature Development](https://img.shields.io/badge/Project_State-Active_Feature_Development-brightgreen?style=flat-square)
 ![AI-driven](https://img.shields.io/badge/AI_Use-AI--driven-orange?style=flat-square)
+![CI](https://img.shields.io/github/actions/workflow/status/urban233/CoDev/ci.yml?branch=main&label=CI&style=flat-square)
+![PyPI version](https://img.shields.io/pypi/v/open-codev-workflow?style=flat-square)
+![Python versions](https://img.shields.io/pypi/pyversions/open-codev-workflow?style=flat-square)
+![License](https://img.shields.io/github/license/urban233/CoDev?style=flat-square)
+![Latest release](https://img.shields.io/github/v/release/urban233/CoDev?style=flat-square)
+![GitHub stars](https://img.shields.io/github/stars/urban233/CoDev?style=flat-square)
+![GitHub issues](https://img.shields.io/github/issues/urban233/CoDev?style=flat-square)
 
 CoDev installs a small, production-minded collaboration system into any Git
 repository. It helps a developer and AI move through four understandable steps:
