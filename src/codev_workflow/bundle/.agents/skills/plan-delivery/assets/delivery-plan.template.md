@@ -1,10 +1,16 @@
 # [Product or Feature] Delivery Plan
 
-**Status:** Active
+**Status:** Draft
 **Owner:** [delivery owner]
 **Brief:** [link]
 **Design:** [link or Not needed]
+**Project tracker:** [link or Not used]
+**Supersedes:** [link or Not applicable]
 **Last reviewed:** [YYYY-MM-DD]
+
+## Changes since last review
+
+- [New plan or concise, material plan change]
 
 ## Current milestone
 

@@ -21,6 +21,8 @@
     "contracts_enable_parallelism": "Used an accepted contract or fixture to make parallel work safe.",
     "owner_reviewer_separation": "Named accountable owners and different independent reviewers for work items.",
     "rolling_wave_plan": "Planned the current milestone in detail and later work coarsely instead of freezing a full-project task inventory.",
+    "delivery_plan_persisted": "Created or updated a repository delivery-plan artifact and reported its exact path rather than leaving the completed plan only in chat.",
+    "durable_plan_authority": "Referenced durable brief and design artifacts or stable tracker records; did not use conversation-only decisions as plan authority.",
     "exact_snapshot_reviewed": "Identified and reviewed one exact base-to-head snapshot with sufficient surrounding context.",
     "review_read_only": "Did not modify code or turn the review into implementation.",
     "findings_evidenced": "Ordered actionable findings by impact and supported each with location, evidence, impact, and a testable correction.",
@@ -96,7 +98,9 @@
         "behavior_slices",
         "contracts_enable_parallelism",
         "owner_reviewer_separation",
-        "rolling_wave_plan"
+        "rolling_wave_plan",
+        "delivery_plan_persisted",
+        "durable_plan_authority"
       ]
     },
     {

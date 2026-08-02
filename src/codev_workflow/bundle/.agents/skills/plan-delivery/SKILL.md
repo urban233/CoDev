@@ -6,8 +6,36 @@ description: Turn an accepted product or feature brief and any required design i
 # Plan Delivery
 
 Create a plan that helps a team choose the next useful work, not a prediction of
-every future edit. Use `assets/delivery-plan.template.md` when the repository
-has no external project tracker.
+every future edit. A completed delivery plan is a durable, reviewable project
+artifact, not a chat-only response.
+
+## 0. Persist the plan
+
+First inspect the repository for an existing delivery-plan location and for a
+linked project tracker. The repository plan is the durable coordination
+baseline, even when an external tracker holds routine, high-churn status.
+
+For an explicit request to create or update a delivery plan, create or update
+the plan in the repository. Default to
+`docs/delivery/<milestone-slug>.md`; use an established equivalent location
+when the project already has one. Start from
+`assets/delivery-plan.template.md` when creating a new plan.
+
+An initial request to *show* or frame a milestone without creating a plan may
+remain an unassigned, chat-only planning brief. Make that limitation explicit
+and do not describe it as a completed delivery plan.
+
+Before writing, verify that every referenced brief and design is a durable
+repository artifact or stable tracker record. Never use a conversation as an
+authority link. If accepted product or architectural decisions exist only in
+conversation, return to `define-product` or `design-solution` to persist the
+appropriate authority before making work items ready.
+
+Before updating an existing plan, inspect its current content and the Git
+working tree. Do not silently overwrite a locally changed plan; surface the
+conflict and ask for direction. Preserve the plan's document state using only
+`Draft`, `Accepted`, `Active`, or `Superseded`; Git history is its revision
+record.
 
 ## 1. Verify planning inputs
 
@@ -113,8 +141,11 @@ per reviewer unless the team chooses otherwise). For high- or critical-risk
 work, separately name any policy-authorized security, privacy, compliance, or
 operations approver; never assume an ordinary code reviewer has that authority.
 
-Track changing assignments, availability, and status in the existing project
-tracker. Do not version them as architecture.
+Track changing assignments, availability, and status in the delivery plan or a
+linked project tracker. Do not version them as architecture. When a tracker is
+used, retain the milestone outcome, work-item definitions, ownership/reviewer
+commitments, dependencies, checkpoints, risks, and tracker link in the
+repository plan.
 
 ## 5. Check readiness
 
@@ -132,6 +163,13 @@ Review the plan with the team in one pass: current milestone, ready work,
 parallel work, blockers, integration points, and risks. Update routine status
 without formal approval; seek human decisions only for scope, priority, risk,
 ownership conflicts, or commitments.
+
+## 6. Complete the artifact handoff
+
+After creating or updating the plan, report its exact repository path, document
+state, and the Git change summary. Link to the saved artifact rather than
+leaving the complete plan only in chat. Summarize the decision and next action;
+do not duplicate the full document unless the user asks.
 
 ## Handoff
 
