@@ -22,11 +22,28 @@ execution without turning product development into an unattended coding loop.
 
 ## Quick start
 
-CoDev itself requires Python 3.11 or newer. Target repositories may use any
-language or build system.
+CoDev is a Python 3.11+ command-line tool. Target repositories may use any
+language or build system. Install it with an isolated tool manager; `pipx` and
+`uv tool` are the two supported, primary installation methods. Neither adds
+CoDev or its dependencies to a target repository.
+
+### Install from a wheel
+
+For private, air-gapped, or pre-release distribution, install the supplied
+wheel directly instead of publishing it to a package index:
 
 ```shell
-python -m pip install -e .
+pipx install ./dist/codev_workflow-0.1.0-py3-none-any.whl
+# or
+uv tool install ./dist/codev_workflow-0.1.0-py3-none-any.whl
+```
+
+Store the wheel with its SHA-256 checksum in a controlled artifact location.
+The development workflow for building a wheel is documented below.
+
+### Initialize a repository
+
+```shell
 codev init --target ../my-project --platform all
 codev check --target ../my-project
 ```
@@ -90,4 +107,3 @@ python -m build
 ```
 
 CoDev is licensed under BSD-3-Clause.
-
