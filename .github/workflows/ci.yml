@@ -56,4 +56,5 @@ jobs:
         run: mypy
       - name: Build distributions
         run: python -m build
-
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*

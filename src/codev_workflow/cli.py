@@ -55,7 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     update = commands.add_parser("update", help="apply a conflict-free bundle update")
     update.add_argument("--target", type=_target, default=Path.cwd())
 
-    remove = commands.add_parser("remove", help="remove an unchanged CoDev installation")
+    remove = commands.add_parser(
+        "remove", help="remove an unchanged CoDev installation"
+    )
     remove.add_argument("--target", type=_target, default=Path.cwd())
     remove.add_argument("--dry-run", action="store_true", help="show the plan only")
     return parser

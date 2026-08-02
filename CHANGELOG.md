@@ -5,6 +5,11 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Publish the CLI distribution as `open-codev-workflow` through an attested,
+  trusted-publishing release workflow.
+
 ## [0.1.0] - 2026-08-02
 
 ### Added
@@ -15,4 +20,3 @@ Semantic Versioning.
 - Human and AI workflow references, handbooks, cookbook, and prompt library.
 - Deterministic workflow validators and behavioral scenario catalog.
 - Cross-platform tests and GitHub Actions validation.
-

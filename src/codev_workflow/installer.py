@@ -561,9 +561,7 @@ def plan_update(target: Path) -> Plan:
 
     default_managed = bool(integrations.get("opencode_default_agent_managed"))
     schema_managed = bool(integrations.get("opencode_schema_managed"))
-    agent_container_managed = bool(
-        integrations.get("opencode_agent_container_managed")
-    )
+    agent_container_managed = bool(integrations.get("opencode_agent_container_managed"))
     config_file_managed = bool(integrations.get("opencode_config_file_managed"))
     managed_opencode_agents = integrations.get("opencode_agent_hashes", {})
     if not isinstance(managed_opencode_agents, dict) or not all(
@@ -620,7 +618,9 @@ def _prepare_opencode_removal(
     try:
         config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise CoDevError(f"cannot remove managed values from {path}: {error}") from error
+        raise CoDevError(
+            f"cannot remove managed values from {path}: {error}"
+        ) from error
     if not isinstance(config, dict):
         raise CoDevError(f"{path} must contain a JSON object")
 
@@ -679,7 +679,10 @@ def plan_remove(target: Path) -> Plan:
     target = target.resolve()
     lock = _read_lock(target)
     files = lock["files"]
-    if not all(isinstance(path, str) and isinstance(value, str) for path, value in files.items()):
+    if not all(
+        isinstance(path, str) and isinstance(value, str)
+        for path, value in files.items()
+    ):
         raise CoDevError("lock file contains an invalid managed-file entry")
     integrations = lock.get("integrations")
     if not isinstance(integrations, dict):
@@ -715,21 +718,25 @@ def plan_remove(target: Path) -> Plan:
             if block is not None:
                 if _block_hash(block) != expected_hash:
                     plan.operations.append(
-                        Operation("conflict", "AGENTS.md", "managed policy block was modified")
+                        Operation(
+                            "conflict", "AGENTS.md", "managed policy block was modified"
+                        )
                     )
                 else:
                     plan.writes[agents_path] = _without_agent_block(
                         agents_path.read_text(encoding="utf-8")
                     ).encode("utf-8")
                     plan.operations.append(
-                        Operation("integrate", "AGENTS.md", "remove managed policy block")
+                        Operation(
+                            "integrate", "AGENTS.md", "remove managed policy block"
+                        )
                     )
 
     selected = normalize_platforms(lock.get("platforms", []))
     if "opencode" in selected:
         try:
-            opencode_content, remove_opencode_config, detail = _prepare_opencode_removal(
-                target, integrations
+            opencode_content, remove_opencode_config, detail = (
+                _prepare_opencode_removal(target, integrations)
             )
         except CoDevError as error:
             plan.operations.append(
@@ -821,8 +828,13 @@ def check_project(target: Path) -> CheckResult:
             else:
                 for name, expected_hash in sorted(managed_opencode_agents.items()):
                     current = agents.get(name)
-                    if not isinstance(current, dict) or _json_hash(current) != expected_hash:
-                        issues.append(f"managed OpenCode agent has local changes: {name}")
+                    if (
+                        not isinstance(current, dict)
+                        or _json_hash(current) != expected_hash
+                    ):
+                        issues.append(
+                            f"managed OpenCode agent has local changes: {name}"
+                        )
 
     issues.extend(_validate_installed_skills(target, files))
     return CheckResult(

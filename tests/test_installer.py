@@ -147,10 +147,10 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.target / ".codev").exists())
         self.assertFalse((self.target / ".agents" / "skills").exists())
         self.assertFalse((self.target / ".agents").exists())
-        self.assertFalse(
-            (self.target / ".opencode" / "agents" / "builder.md").exists()
+        self.assertFalse((self.target / ".opencode" / "agents" / "builder.md").exists())
+        self.assertNotIn(
+            installer.AGENTS_START, agents_path.read_text(encoding="utf-8")
         )
-        self.assertNotIn(installer.AGENTS_START, agents_path.read_text(encoding="utf-8"))
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertEqual("project-agent", config["default_agent"])
         self.assertEqual("system", config["theme"])
@@ -171,7 +171,9 @@ class InstallerTests(unittest.TestCase):
     def test_remove_conflict_prevents_all_deletions(self) -> None:
         self.install(("codex",))
         skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"
-        skill.write_text(skill.read_text(encoding="utf-8") + "local edit\n", encoding="utf-8")
+        skill.write_text(
+            skill.read_text(encoding="utf-8") + "local edit\n", encoding="utf-8"
+        )
 
         plan = installer.plan_remove(self.target)
 

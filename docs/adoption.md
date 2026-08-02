@@ -44,15 +44,10 @@ Pin a released CoDev version in team automation. Use `codev diff` before
 consumer repository's CI. Never update from a floating development branch and
 never auto-merge workflow instruction changes.
 
-## Extracting this directory
+## Publishing releases
 
-While CoDev is nested in another repository, its source is self-contained.
-To publish it later:
-
-1. move the entire `codev` directory to an empty directory;
-2. initialize a Git repository there;
-3. replace placeholder ownership and security contact information;
-4. set the repository URL in `pyproject.toml` after it exists;
-5. run the validation commands from the README; and
-6. create the first reviewed `v0.1.0` tag.
-
+`open-codev-workflow` is published from reviewed `vX.Y.Z` tags. The release
+workflow validates the tag and package version, verifies the built artifacts,
+creates provenance attestations, and publishes through PyPI trusted publishing.
+See [the release guide](releasing.md) for the one-time PyPI configuration and
+tagging procedure.

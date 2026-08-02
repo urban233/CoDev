@@ -1,4 +1,4 @@
-name: release-artifact
+name: publish-release
 
 on:
   push:
@@ -8,21 +8,102 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Build
+          cache: pip
+      - name: Verify release tag matches package version
         run: |
-          python -m pip install build
-          python -m build
-      - name: Upload immutable artifact
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          project_version = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          module_source = Path("src/codev_workflow/__init__.py").read_text()
+          module_match = re.search(r'__version__ = "([^"]+)"', module_source)
+          assert module_match, "could not read runtime package version"
+          module_version = module_match.group(1)
+          tag = os.environ["GITHUB_REF_NAME"]
+          assert tag == f"v{project_version}", (
+              f"tag {tag} does not match package version {project_version}"
+          )
+          assert module_version == project_version, (
+              f"runtime version {module_version} does not match package version {project_version}"
+          )
+          PY
+      - name: Install development tools
+        run: python -m pip install -e ".[dev]"
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile sources
+        run: python -m compileall -q src tests
+      - name: Validate bundled workflow catalog
+        run: >-
+          python src/codev_workflow/bundle/scripts/validate-development-workflow.py
+          --repo src/codev_workflow/bundle
+      - name: Self-test behavioral evaluator
+        run: >-
+          python src/codev_workflow/bundle/scripts/evaluate-development-workflow.py
+          --repo src/codev_workflow/bundle
+          --self-test
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Type check
+        run: mypy
+      - name: Build
+        run: python -m build
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*
+      - name: Smoke-test built wheel
+        run: |
+          python -m venv .release-venv
+          .release-venv/bin/python -m pip install --no-deps dist/*.whl
+          .release-venv/bin/codev --version
+      - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
-          name: codev-${{ github.ref_name }}
+          name: pypi-distributions
           path: dist/*
           if-no-files-found: error
 
+  attest:
+    needs: verify
+    permissions:
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+  publish:
+    needs: attest
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/open-codev-workflow
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

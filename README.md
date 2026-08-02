@@ -30,15 +30,23 @@ language or build system. Install it with an isolated tool manager; `pipx` and
 `uv tool` are the two supported, primary installation methods. Neither adds
 CoDev or its dependencies to a target repository.
 
+### Install from PyPI
+
+```shell
+pipx install open-codev-workflow
+# or
+uv tool install open-codev-workflow
+```
+
 ### Install from a wheel
 
 For private, air-gapped, or pre-release distribution, install the supplied
 wheel directly instead of publishing it to a package index:
 
 ```shell
-pipx install ./dist/codev_workflow-0.1.0-py3-none-any.whl
+pipx install ./dist/open_codev_workflow-0.1.0-py3-none-any.whl
 # or
-uv tool install ./dist/codev_workflow-0.1.0-py3-none-any.whl
+uv tool install ./dist/open_codev_workflow-0.1.0-py3-none-any.whl
 ```
 
 Store the wheel with its SHA-256 checksum in a controlled artifact location.

@@ -11,7 +11,7 @@ typefaces, or product language.
 - **Descriptor:** Human-guided AI software delivery
 - **Short promise:** Keep intent, code, evidence, and release on one visible path.
 - **CLI:** `codev`
-- **Package:** `codev-workflow`
+- **Package:** `open-codev-workflow`
 
 Use “CoDev” as a proper noun. Avoid names such as “CoDev AI” or “CoDev
 Agent Platform”; the product is a workflow kit and distribution tool, not an AI
@@ -55,4 +55,3 @@ No drift found. CoDev 0.1.0 is healthy.
 
 The SVG asset is original and may be recolored for monochrome contexts as long
 as the route and four-checkpoint form remain recognizable.
-
