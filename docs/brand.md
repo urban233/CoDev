@@ -50,7 +50,7 @@ Examples:
 ```text
 Installed 29 managed files. Existing repository instructions were preserved.
 Update stopped: 1 managed file has local changes.
-No drift found. CoDev 0.1.0 is healthy.
+No drift found. CoDev 0.1.1 is healthy.
 ```
 
 The SVG asset is original and may be recolored for monochrome contexts as long

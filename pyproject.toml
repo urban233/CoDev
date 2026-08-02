@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-codev-workflow"
-version = "0.1.0"
+version = "0.1.1"
 description = "Human-guided AI software delivery for real repositories."
 readme = "README.md"
 requires-python = ">=3.11"

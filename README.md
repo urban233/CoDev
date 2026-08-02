@@ -51,9 +51,9 @@ For private, air-gapped, or pre-release distribution, install the supplied
 wheel directly instead of publishing it to a package index:
 
 ```shell
-pipx install ./dist/open_codev_workflow-0.1.0-py3-none-any.whl
+pipx install ./dist/open_codev_workflow-0.1.1-py3-none-any.whl
 # or
-uv tool install ./dist/open_codev_workflow-0.1.0-py3-none-any.whl
+uv tool install ./dist/open_codev_workflow-0.1.1-py3-none-any.whl
 ```
 
 Store the wheel with its SHA-256 checksum in a controlled artifact location.

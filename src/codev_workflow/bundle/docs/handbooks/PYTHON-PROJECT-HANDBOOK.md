@@ -370,7 +370,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "example-service"
-version = "0.1.0"
+version = "0.1.1"
 description = "A concise description of the delivered capability."
 readme = "README.md"
 requires-python = ">=3.12"

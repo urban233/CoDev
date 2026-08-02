@@ -10,7 +10,7 @@ Semantic Versioning.
 - Publish the CLI distribution as `open-codev-workflow` through an attested,
   trusted-publishing release workflow.
 
-## [0.1.0] - 2026-08-02
+## [0.1.1] - 2026-08-02
 
 ### Added
 
