@@ -6,6 +6,9 @@
 
 <p align="center"><strong>Human-guided AI software delivery.</strong></p>
 
+![Active Feature Development](https://img.shields.io/badge/Project_State-Active_Feature_Development-brightgreen?style=flat-square)
+![AI-driven](https://img.shields.io/badge/AI_Use-AI--driven-orange?style=flat-square)
+
 CoDev installs a small, production-minded collaboration system into any Git
 repository. It helps a developer and AI move through four understandable steps:
 **Understand, Build, Review, and Ship**. It supports bounded three-agent

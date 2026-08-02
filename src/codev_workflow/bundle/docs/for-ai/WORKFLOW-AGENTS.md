@@ -93,11 +93,6 @@ approval.
 Reference upstream facts; do not duplicate them. Use Git commits as document and
 code revisions. Do not introduce custom planning revision identifiers.
 
-Legacy ADS/MDG/EWP/ALLOC/SPEC packets are migration evidence, not the new
-canonical `SPECIFICATION.md` and not current authority unless the responsible
-human explicitly confirms otherwise. Carry forward only active outcomes,
-decisions, contracts, risks, and work.
-
 ## Repository grounding
 
 Before prescribing code mechanics:

@@ -210,24 +210,3 @@ python scripts/evaluate-development-workflow.py --results <results.json>
 The first command validates the six-scenario catalog. The second creates an
 observation record for an evaluation run; the third scores the completed record
 and fails when a required behavior lacks evidence.
-
-## Migrating from workflow v2
-
-The earlier ADS/MDG/EWP/ALLOC/SPEC files remain historical evidence. They are
-not the guided path's canonical `SPECIFICATION.md`. Do not rename them or treat
-their custom revision codes as current approvals.
-
-For active work:
-
-1. summarize the approved product outcome and non-goals in a brief;
-2. carry forward only current architecture, API contracts, decisions, and risks
-   into a normal design document;
-3. put current milestones, work items, owners, reviewers, dependencies, and
-   status in the project tracker or delivery plan;
-4. convert only the next active EWP into a small work item or implementation
-   plan; and
-5. archive the old planning packet after the human confirms nothing active was
-   lost.
-
-No semantic migration is automatic; the responsible human confirms the new
-brief, design, and current plan.
