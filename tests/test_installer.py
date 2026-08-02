@@ -228,8 +228,8 @@ class InstallerTests(unittest.TestCase):
         changed_bundle = dict(current_bundle)
         changed_bundle[first] += b"\nupstream one\n"
         changed_bundle[second] += b"\nupstream two\n"
-        first_path = self.target / Path(first)
-        second_path = self.target / Path(second)
+        first_path = (self.target / Path(first)).resolve()
+        second_path = (self.target / Path(second)).resolve()
         original_first = first_path.read_bytes()
         second_path.write_bytes(second_path.read_bytes() + b"\nlocal edit\n")
 
