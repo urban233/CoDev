@@ -1,0 +1,37 @@
+name: Bug report
+description: Report incorrect installation, update, or validation behavior.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include secrets or proprietary repository content.
+  - type: input
+    id: version
+    attributes:
+      label: CoDev version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Target platform
+      options: [Codex, OpenCode, Both]
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed and expected behavior
+      description: Include the command, output, and smallest safe reproduction.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, and relevant target layout.
+    validations:
+      required: true
+

@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import codev_workflow.installer as installer
+
+
+class InstallerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.target = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def install(self, platforms: tuple[str, ...] = ("all",)) -> installer.Plan:
+        plan = installer.plan_init(self.target, platforms)
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        return plan
+
+    def test_init_installs_complete_bundle_and_passes_check(self) -> None:
+        self.install()
+
+        bundled = installer._bundle_files(("codex", "opencode"))
+        self.assertFalse(any("__pycache__" in path for path in bundled))
+        self.assertFalse(any(path.endswith(".pyc") for path in bundled))
+        skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
+        self.assertEqual(7, len(skills))
+        self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / "docs/WORKFLOW-HUMAN.md").is_file())
+        self.assertTrue((self.target / ".codev/lock.json").is_file())
+
+        result = installer.check_project(self.target)
+        self.assertTrue(result.ok, result.issues)
+        self.assertGreater(result.managed_files, 30)
+
+    def test_init_preserves_existing_repository_instructions(self) -> None:
+        original = "# Local policy\n\nRun the project tests.\n"
+        (self.target / "AGENTS.md").write_text(original, encoding="utf-8")
+
+        self.install(("codex",))
+
+        merged = (self.target / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertTrue(merged.startswith(original.rstrip()))
+        self.assertIn(installer.AGENTS_START, merged)
+        self.assertIn(installer.AGENTS_END, merged)
+        self.assertFalse((self.target / ".opencode").exists())
+
+    def test_init_preserves_existing_opencode_default(self) -> None:
+        config_path = self.target / ".opencode" / "opencode.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            json.dumps({"default_agent": "my-existing-agent", "theme": "system"}),
+            encoding="utf-8",
+        )
+
+        self.install(("opencode",))
+
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual("my-existing-agent", config["default_agent"])
+        self.assertEqual("system", config["theme"])
+        self.assertIn("$schema", config)
+
+    def test_init_stops_before_writing_on_collision(self) -> None:
+        collision = self.target / ".agents" / "skills" / "build-change" / "SKILL.md"
+        collision.parent.mkdir(parents=True)
+        collision.write_text("project-owned\n", encoding="utf-8")
+
+        plan = installer.plan_init(self.target, ("codex",))
+
+        self.assertTrue(plan.conflicts)
+        with self.assertRaises(installer.CoDevError):
+            installer.apply_plan(self.target, plan)
+        self.assertEqual("project-owned\n", collision.read_text(encoding="utf-8"))
+        self.assertFalse((self.target / ".codev/lock.json").exists())
+
+    def test_update_is_idempotent(self) -> None:
+        self.install(("codex",))
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+        self.assertFalse(plan.changed)
+        installer.apply_plan(self.target, plan)
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_check_reports_managed_file_drift(self) -> None:
+        self.install(("codex",))
+        skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"
+        skill.write_text(
+            skill.read_text(encoding="utf-8") + "\nlocal edit\n",
+            encoding="utf-8",
+        )
+
+        result = installer.check_project(self.target)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("review-change/SKILL.md" in issue for issue in result.issues)
+        )
+
+    def test_update_conflict_prevents_all_planned_writes(self) -> None:
+        self.install(("codex",))
+        current_bundle = installer._bundle_files(("codex",))
+        first, second = sorted(current_bundle)[:2]
+        changed_bundle = dict(current_bundle)
+        changed_bundle[first] += b"\nupstream one\n"
+        changed_bundle[second] += b"\nupstream two\n"
+        first_path = self.target / Path(first)
+        second_path = self.target / Path(second)
+        original_first = first_path.read_bytes()
+        second_path.write_bytes(second_path.read_bytes() + b"\nlocal edit\n")
+
+        with patch.object(installer, "_bundle_files", return_value=changed_bundle):
+            plan = installer.plan_update(self.target)
+            self.assertTrue(plan.conflicts)
+            self.assertIn(first_path, plan.writes)
+            with self.assertRaises(installer.CoDevError):
+                installer.apply_plan(self.target, plan)
+
+        self.assertEqual(original_first, first_path.read_bytes())
+
+    def test_modified_agents_block_is_a_conflict(self) -> None:
+        self.install(("codex",))
+        agents = self.target / "AGENTS.md"
+        agents.write_text(
+            agents.read_text(encoding="utf-8").replace(
+                "Use the lightest safe path.", "Use every possible document."
+            ),
+            encoding="utf-8",
+        )
+
+        plan = installer.plan_update(self.target)
+
+        self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
+
+
+if __name__ == "__main__":
+    unittest.main()

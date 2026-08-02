@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codev-workflow"
+version = "0.1.0"
+description = "Human-guided AI software delivery for real repositories."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Martin Urban" }]
+keywords = ["ai", "developer-tools", "software-delivery", "codex", "opencode"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2.2",
+  "mypy>=1.15",
+  "ruff>=0.11",
+]
+
+[project.scripts]
+codev = "codev_workflow.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+codev_workflow = [
+  "bundle/AGENTS.md",
+  "bundle/.agents/skills/*/SKILL.md",
+  "bundle/.agents/skills/*/agents/*.yaml",
+  "bundle/.agents/skills/*/assets/*",
+  "bundle/.agents/skills/*/references/*",
+  "bundle/.agents/skills/*/scripts/*",
+  "bundle/.opencode/agents/*.md",
+  "bundle/docs/*.md",
+  "bundle/docs/for-ai/*.md",
+  "bundle/docs/handbooks/*.md",
+  "bundle/evals/development-workflow/*.json",
+  "bundle/scripts/*.py",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = ["src/codev_workflow/bundle"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+files = ["src/codev_workflow", "tests"]
+exclude = "src/codev_workflow/bundle/"

@@ -1,0 +1,28 @@
+name: release-artifact
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build
+        run: |
+          python -m pip install build
+          python -m build
+      - name: Upload immutable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codev-${{ github.ref_name }}
+          path: dist/*
+          if-no-files-found: error
+
