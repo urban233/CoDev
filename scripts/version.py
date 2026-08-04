@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Bump the project version and replace the old version in repository text files."""
+"""Bump the release version in the files owned by the package release process."""
 
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import re
 from pathlib import Path
 
@@ -13,7 +14,12 @@ BUMP_MINOR = False
 BUMP_PATCH = True
 
 VERSION_RE = re.compile(r"^version\s*=\s*[\"']([^\"']+)[\"']$", re.MULTILINE)
-SKIP_DIRS = {".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "dist"}
+UNRELEASED_RE = re.compile(r"^## \[Unreleased\]$", re.MULTILINE)
+VERSION_FILES = (
+    Path("CHANGELOG.md"),
+    Path("pyproject.toml"),
+    Path("src/codev_workflow/__init__.py"),
+)
 
 
 def configured_bump() -> str:
@@ -53,16 +59,38 @@ def bumped_version(version: str, bump: str) -> str:
     raise ValueError(f"unknown bump type: {bump}")
 
 
-def replace_in_repository(root: Path, old: str, new: str, dry_run: bool) -> list[Path]:
+def update_changelog(content: str, new: str, release_date: str) -> str:
+    replacement = f"## [{new}] - {release_date}"
+    updated, count = UNRELEASED_RE.subn(replacement, content, count=1)
+    if count == 0:
+        raise ValueError("could not find ## [Unreleased] in CHANGELOG.md")
+    return updated
+
+
+def replace_in_repository(
+    root: Path,
+    old: str,
+    new: str,
+    dry_run: bool,
+    release_date: str | None = None,
+) -> list[Path]:
     changed: list[Path] = []
-    for path in root.rglob("*"):
-        if not path.is_file() or any(part in SKIP_DIRS for part in path.parts):
-            continue
+    for relative_path in VERSION_FILES:
+        path = root / relative_path
+        if not path.is_file():
+            raise ValueError(f"version file does not exist: {relative_path}")
         try:
             content = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue
-        updated = content.replace(old, new)
+        except (UnicodeDecodeError, OSError) as error:
+            raise ValueError(f"could not read version file: {relative_path}") from error
+        if relative_path == Path("CHANGELOG.md"):
+            updated = update_changelog(
+                content,
+                new,
+                release_date or date.today().isoformat(),
+            )
+        else:
+            updated = content.replace(old, new)
         if updated == content:
             continue
         changed.append(path)
@@ -75,6 +103,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="repository root")
     parser.add_argument("--bump", choices=("major", "minor", "patch"))
+    parser.add_argument(
+        "--release-date",
+        help="release date for the changelog in YYYY-MM-DD format (defaults to today)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -82,7 +114,7 @@ def main() -> int:
     old = read_current_version(root)
     bump = args.bump or configured_bump()
     new = bumped_version(old, bump)
-    changed = replace_in_repository(root, old, new, args.dry_run)
+    changed = replace_in_repository(root, old, new, args.dry_run, args.release_date)
     action = "would update" if args.dry_run else "updated"
     print(f"{action} {len(changed)} file(s): {old} -> {new}")
     for path in changed:
