@@ -30,7 +30,10 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(7, len(skills))
+        self.assertEqual(8, len(skills))
+        self.assertTrue(
+            (self.target / ".agents/skills/clean-code-review/SKILL.md").is_file()
+        )
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / "docs/WORKFLOW-HUMAN.md").is_file())
         self.assertTrue((self.target / ".codev/lock.json").is_file())

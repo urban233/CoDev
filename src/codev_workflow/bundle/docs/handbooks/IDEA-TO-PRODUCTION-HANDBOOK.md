@@ -49,6 +49,7 @@ Idea
   -> plan-delivery        Milestones, ready work, owners, dependencies
   -> build-change         Inspect, plan, implement, and validate one item
   -> review-change        Independently evaluate the exact change
+  -> clean-code-review    Optionally scan coding practices and cataloged smells
   -> launch-product       Prove readiness, stage exposure, learn, and clean up
 ```
 

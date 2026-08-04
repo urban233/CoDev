@@ -9,6 +9,8 @@ Semantic Versioning.
 
 - Publish the CLI distribution as `open-codev-workflow` through an attested,
   trusted-publishing release workflow.
+- Add the catalog-driven `clean-code-review` specialist skill for Clean Code,
+  GoF, and Python-specific review findings.
 
 ## [0.1.1] - 2026-08-02
 

@@ -1,7 +1,8 @@
 # Release process
 
 1. Confirm the working tree contains one reviewed release purpose.
-2. Run unit tests, compilation, Ruff, mypy, and package build.
+2. Run the focused test suite, integration checks, compilation, Ruff, mypy, and
+   package build. Coverage percentages are diagnostic only, not a release gate.
 3. Validate the behavioral catalog and independently evaluate material workflow
    changes.
 4. Update `CHANGELOG.md`, `pyproject.toml`, and `src/codev_workflow/__init__.py`

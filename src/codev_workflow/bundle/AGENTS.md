@@ -10,6 +10,7 @@ work. Use the applicable repository skill:
 - `plan-delivery` for multi-developer milestones and work coordination;
 - `build-change` for interactive implementation of one bounded change;
 - `review-change` for an independent, read-only code review; and
+- `clean-code-review` for a focused Clean Code, GoF, and Python smell scan; and
 - `launch-product` for readiness, rollout, rollback, and learning.
 
 Use the lightest safe path. Inspect the repository before prescribing code
@@ -21,3 +22,8 @@ Do not require developers to choose a skill. Route their request internally and
 describe the current human-facing step as `Understand`, `Build`, `Review`, or
 `Ship`; insert design or delivery planning only when risk or coordination needs
 it.
+
+Use `clean-code-review` as an optional specialist pass for requests about code
+smells, maintainability, Clean Code practices, GoF signals, or Python-specific
+hazards. It complements `review-change` and does not replace correctness,
+security, regression, or release review.

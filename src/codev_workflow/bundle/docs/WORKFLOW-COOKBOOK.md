@@ -23,7 +23,8 @@ AI's internal routing; it is not a list of commands the developer must memorize.
 
 All implementation eventually uses `build-change`, independent human review,
 and proportionate validation. Use `review-change` as a fresh AI review for normal
-or higher-risk work, and `launch-product` for material production exposure.
+or higher-risk work, `clean-code-review` for a focused coding-practices scan,
+and `launch-product` for material production exposure.
 
 ## Recipe 1: Create a greenfield project
 

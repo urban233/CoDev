@@ -21,14 +21,19 @@ Prioritize:
 
 1. incorrect or missing required behavior;
 2. security, privacy, permission, data-loss, concurrency, and compatibility risk;
-3. error handling and edge cases;
+3. error handling and material edge cases;
 4. test quality, missing tests, and weakened or misleading tests;
 5. architecture/API conformance and unnecessary scope;
 6. maintainability, clarity, documentation, and repository conventions; and
 7. rollout, monitoring, migration, and rollback concerns.
 
 Passing checks are evidence, not proof. Rerun proportionate checks when useful
-and authorized. Do not invent requirements or block on personal style.
+and authorized. Prefer a few representative integration tests at important
+boundaries over exhaustive unit-test enumeration. Coverage percentages are
+diagnostic only, never a required quality gate. Do not block on theoretical,
+rare, low-impact edge cases unless they create a credible correctness, safety,
+data-integrity, compatibility, or regression risk. Do not invent requirements
+or block on personal style.
 
 ## Findings
 

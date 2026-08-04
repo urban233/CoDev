@@ -82,7 +82,7 @@ managed file becomes a visible conflict; CoDev never silently replaces it.
 ```text
 my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
-├── .agents/skills/                   # seven lifecycle skills
+├── .agents/skills/                   # lifecycle and specialist review skills
 ├── .opencode/agents/                 # orchestrator, builder, reviewer
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── docs/                             # workflow, prompts, handbooks, cookbook

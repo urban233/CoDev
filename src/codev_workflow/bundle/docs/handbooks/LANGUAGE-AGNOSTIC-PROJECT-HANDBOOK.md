@@ -331,17 +331,20 @@ or be removed. A permanently noisy check is not a control.
 
 | Layer | Purpose | Normal trigger |
 |---|---|---|
-| Unit | deterministic behavior in one component | every change |
+| Unit | focused deterministic behavior in one component | risk-based; use when it gives useful confidence |
 | Contract | compatibility between independently changed components | interface changes and presubmit |
-| Integration | real adapters such as database, queue, filesystem, or service | presubmit or postsubmit |
+| Integration | real adapters such as database, queue, filesystem, or service | primary confidence at important boundaries; presubmit or postsubmit |
 | End-to-end | critical user journey across deployed boundaries | staging and selected presubmit |
 | Performance | latency, throughput, memory, scale, regression | scheduled and release candidates |
 | Resilience | timeout, retry, partial failure, restore, failover | risk-based and scheduled |
 | Security | abuse cases, authorization, dependency and source scanning | every relevant change plus scheduled |
 | Accessibility/usability | actual user interaction quality | feature and release review |
 
-Most tests should be fast and deterministic; a small number should exercise the
-real integration. Test observable behavior, not private method shape.
+Keep the suite intentionally small: cover the main workflows, important failure
+paths, and selected rare edge cases whose impact justifies their cost. Prefer
+integration tests that exercise real boundaries when they provide stronger
+confidence than isolated unit tests. Test observable behavior, not private
+method shape, and do not use coverage percentages as a quality target.
 
 ### 10.2 Protect the evaluator
 
@@ -352,7 +355,8 @@ behavior:
 - have a human or independent reviewer examine test adequacy;
 - use hidden, immutable, or independently owned evaluation cases where gaming is
   consequential;
-- add property, fuzz, mutation, differential, or fault-injection tests when useful;
+- add property, fuzz, mutation, differential, or fault-injection tests only when
+  the risk justifies their cost;
 - validate negative paths and authorization boundaries;
 - track false positives and false negatives in quality gates.
 
@@ -573,6 +577,7 @@ guided project facade:
 | coordinate a team | `plan-delivery` | milestones, ready items, owners, dependencies |
 | implement one item | `build-change` | small validated change with checkpoints |
 | independently inspect it | `review-change` | evidence-based findings on an exact snapshot |
+| scan coding practices | `clean-code-review` | cataloged Clean Code, GoF, and Python smell findings |
 | release safely | `launch-product` | readiness, rollout, rollback, and learning |
 
 Use the lightest safe path:

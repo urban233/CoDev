@@ -361,7 +361,7 @@ tools. Do not maintain competing settings in `setup.py`, `setup.cfg`, `tox.ini`,
 and several requirements files unless a tool truly requires them.
 
 The following is a strong starting point. Replace names, descriptions, licence,
-Python support, entry points, and coverage threshold intentionally.
+Python support and entry points intentionally.
 
 ```toml
 [build-system]
@@ -388,7 +388,6 @@ dev = [
   "build",
   "mypy",
   "pytest",
-  "pytest-cov",
   "ruff",
 ]
 
@@ -433,14 +432,6 @@ addopts = [
 testpaths = ["tests"]
 xfail_strict = true
 
-[tool.coverage.run]
-branch = true
-source = ["example_service"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-fail_under = 85
 ```
 
 Notes:
@@ -450,9 +441,9 @@ Notes:
 - A library should declare the broadest honest compatible runtime ranges and
   test every supported Python version. An application should deploy from a
   committed exact lock.
-- An 85% coverage threshold is an example starting guardrail, not a Google
-  requirement and not evidence that tests are good. Raise or lower it based on
-  risk, and require stronger branch coverage for critical logic.
+- Coverage reports may be useful diagnostics, but coverage percentages are not
+  a quality target or merge gate. Choose tests for realistic behavior,
+  important boundaries, and risk.
 - If strict typing cannot be enabled immediately, configure narrow per-module
   exceptions with owner and removal issue. Do not disable checking globally.
 - Do not use `lint.select = ["ALL"]` without reviewing upgrades; new Ruff rules
@@ -635,9 +626,9 @@ clarity, ownership, complexity, and correctness.
 
 | Level | Purpose | Properties | Typical frequency |
 |---|---|---|---|
-| Unit | Domain and small application behavior | Fast, hermetic, deterministic | Every local change and CI |
+| Unit | Focused domain or small application behavior | Fast, hermetic, deterministic | Risk-based; use when it adds confidence |
 | Contract | Producer/consumer agreement | Versioned examples or schemas | Every affected change |
-| Integration | Real database, queue, HTTP client, filesystem, or framework boundary | Isolated environment; controlled dependencies | CI and pre-release |
+| Integration | Real database, queue, HTTP client, filesystem, or framework boundary | Isolated environment; controlled dependencies | Primary confidence at important boundaries; CI and pre-release |
 | End-to-end | Critical user journey | Few, high-value, production-like | CI subset and staged release |
 | Performance | Latency, throughput, memory, scaling | Stable environment and budgets | Scheduled and release gate |
 | Resilience | Timeouts, retries, partial failure, recovery | Fault injection or controlled simulation | High-risk changes and scheduled |
@@ -655,6 +646,9 @@ clarity, ownership, complexity, and correctness.
 - Do not allow tests to access production services or real customer data.
 - Quarantine is temporary: every skipped, flaky, or expected-failure test needs a
   reason, owner, and removal condition.
+- Prefer a few high-value integration tests over exhaustive unit-test coverage.
+- Cover the main workflows, important failure paths, and selected rare edge cases
+  only when their impact justifies the maintenance cost.
 - Review test code as carefully as production code. Google’s review guidance
   explicitly notes that tests do not test themselves.
 
@@ -665,10 +659,10 @@ clarity, ownership, complexity, and correctness.
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src tests
-uv run pytest tests/unit
+uv run pytest tests/integration
 
 # Full presubmit
-uv run pytest --cov=example_service --cov-report=term-missing
+uv run pytest
 uv build
 
 # Verify the built wheel in a clean environment
@@ -798,7 +792,7 @@ jobs:
       - run: uv run --locked ruff format --check .
       - run: uv run --locked ruff check .
       - run: uv run --locked mypy src tests
-      - run: uv run --locked pytest --cov=example_service --cov-report=term-missing
+      - run: uv run --locked pytest
       - run: uv build
 ```
 
@@ -807,7 +801,8 @@ Production CI should additionally:
 - run supported Python/OS matrices for libraries;
 - test migrations against representative snapshots;
 - scan dependencies, source, secrets, licences, and containers;
-- produce machine-readable test and coverage evidence;
+- produce machine-readable test evidence; collect coverage only when it is a
+  useful diagnostic for a specific risk;
 - separate trusted release jobs from untrusted pull-request jobs;
 - use minimum `GITHUB_TOKEN` permissions;
 - never expose secrets to forked or untrusted code;
@@ -882,7 +877,7 @@ Use the lifecycle skills and optional guided facade according to work size:
 
 | Situation | Skills |
 |---|---|
-| Local low-risk fix | `build-change` -> human review; add `review-change` when useful |
+| Local low-risk fix | `build-change` -> human review; add `review-change` or `clean-code-review` when useful |
 | Normal feature | `define-product` -> optional `design-solution` -> `build-change` -> `review-change` -> proportionate rollout |
 | New greenfield product, guided | `specify-project` -> `plan-delivery` -> build/review loops -> `launch-product` |
 | New product, modular | `define-product` -> `design-solution` -> all later lifecycle skills through `launch-product` |

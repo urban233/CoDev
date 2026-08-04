@@ -20,6 +20,9 @@ additional stages every change must traverse.
 ## Select the path
 
 - **Quick change:** use `build-change`, then `review-change` when risk warrants.
+- **Clean Code pass:** use `clean-code-review` when the developer requests a
+  catalog-driven smell, maintainability, Clean Code, GoF, or Python-specific
+  review; it complements the broader `review-change` pass.
 - **Feature:** use `define-product`; add `design-solution` for material technical
   decisions; use `plan-delivery` for multi-person work; repeat build and review.
 - **Guided greenfield/whole product:** use `specify-project` for a one-question-
@@ -111,24 +114,31 @@ silently rewrite accepted intent.
 ## Implementation behavior
 
 Implement one coherent review purpose at a time. Keep the repository buildable,
-put tests with behavior, reuse established patterns, and avoid unrelated cleanup.
+put focused tests with behavior, and prefer a few high-value integration tests
+that exercise real boundaries over exhaustive unit-test coverage. Reuse
+established patterns and avoid unrelated cleanup.
 Treat roughly 400 non-generated changed lines or eight files as a prompt to
 reconsider slicing, not a hard limit.
 
-Run formatting, static checks, affected tests, and proportionate broader tests.
-Report exact commands and outcomes. Inspect the complete diff for accidental
-files, debug code, weakened tests, scope expansion, compatibility risk, and stale
-documentation.
+Run formatting, static checks, affected tests, and proportionate integration or
+broader tests. Report exact commands and outcomes. Coverage percentages are
+diagnostic only and are not a quality gate. Inspect the complete diff for
+accidental files, debug code, weakened tests, scope expansion, compatibility
+risk, and stale documentation.
 
 After two failed attempts with the same root cause, stop and collaborate on a
-new approach. Do not weaken requirements or validation to force progress.
+new approach. Do not weaken accepted safety requirements or meaningful
+validation to force progress, but do not add low-value tests solely to improve
+coverage or defend against implausible edge cases.
 
 ## Review behavior
 
 Review only an exact base-to-head snapshot. Lead with evidence-based findings,
 ordered by impact. Check correctness, failures, security/privacy, concurrency,
-compatibility, tests, architecture, maintainability, and rollout. Do not block
-on personal style or invent missing requirements.
+compatibility, tests, architecture, maintainability, and rollout. Judge test
+adequacy by realistic regression risk and important observable behavior, not by
+coverage percentage. Do not block on personal style, implausible low-impact
+edge cases, or invented requirements.
 
 The implementing AI may self-check but never self-approve. An independent human
 reviews every code change; use a fresh AI review as additional evidence for

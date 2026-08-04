@@ -26,6 +26,10 @@ return `BLOCKED BY MISSING EVIDENCE` rather than reconstructing it from chat.
 
 Prioritize correctness, security/privacy, data loss, concurrency, compatibility,
 error behavior, test quality, architecture, scope, maintainability, and rollout.
+Assess tests by whether a small, representative suite catches realistic
+regressions and important boundary behavior; coverage percentages are
+diagnostic only. Do not persist on theoretical, rare, low-impact edge cases
+unless they affect safety, data integrity, compatibility, or likely regressions.
 Lead with actionable findings ordered P0 through P3. Give a tight location,
 evidence, impact, and testable correction for each finding.
 

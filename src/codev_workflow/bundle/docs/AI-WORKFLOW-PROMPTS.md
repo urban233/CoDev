@@ -2,8 +2,9 @@
 
 Use these templates with the repository's primary `orchestrator` agent. The
 orchestrator routes internally to `specify-project`, `define-product`,
-`design-solution`, `plan-delivery`, `build-change`, `review-change`, or
-`launch-product`; developers do not need to invoke a skill manually.
+`design-solution`, `plan-delivery`, `build-change`, `review-change`,
+`clean-code-review`, or `launch-product`; developers do not need to invoke a
+skill manually.
 
 Every replaceable variable is highlighted as **`{{UPPER_SNAKE_CASE}}`**. Replace
 all applicable variables before sending a prompt. Delete an optional line or
