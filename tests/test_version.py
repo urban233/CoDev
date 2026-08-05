@@ -12,7 +12,10 @@ class VersionScriptTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         (self.root / "CHANGELOG.md").write_text(
-            "# Changelog\n\n## [Unreleased]\n\n- New change\n\n## [0.1.1] - 2026-08-02\n",
+            (
+                "# Changelog\n\n## [Unreleased]\n\n- New change\n\n"
+                "## [0.1.1] - 2026-08-02\n"
+            ),
             encoding="utf-8",
         )
         for relative_path in version.VERSION_FILES[1:]:
