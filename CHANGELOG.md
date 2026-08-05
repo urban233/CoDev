@@ -5,6 +5,12 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Add the read-only `critique-review` specialist skill, which turns concrete
+  review or presubmit findings into precise suggested diffs and requires an
+  explicit handoff to `build-change` or the developer before application.
+
 ### Changed
 
 - Move verification, linting, packaging, and wheel smoke tests into the default

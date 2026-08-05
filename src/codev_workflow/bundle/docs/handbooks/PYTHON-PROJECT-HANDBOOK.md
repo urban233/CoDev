@@ -877,7 +877,7 @@ Use the lifecycle skills and optional guided facade according to work size:
 
 | Situation | Skills |
 |---|---|
-| Local low-risk fix | `build-change` -> human review; add `review-change` or `clean-code-review` when useful |
+| Local low-risk fix | `build-change` -> human review; add `review-change`, `clean-code-review`, or `critique-review` when useful |
 | Normal feature | `define-product` -> optional `design-solution` -> `build-change` -> `review-change` -> proportionate rollout |
 | New greenfield product, guided | `specify-project` -> `plan-delivery` -> build/review loops -> `launch-product` |
 | New product, modular | `define-product` -> `design-solution` -> all later lifecycle skills through `launch-product` |

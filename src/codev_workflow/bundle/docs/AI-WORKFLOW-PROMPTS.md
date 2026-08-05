@@ -3,7 +3,7 @@
 Use these templates with the repository's primary `orchestrator` agent. The
 orchestrator routes internally to `specify-project`, `define-product`,
 `design-solution`, `plan-delivery`, `build-change`, `review-change`,
-`clean-code-review`, or `launch-product`; developers do not need to invoke a
+`clean-code-review`, `critique-review`, or `launch-product`; developers do not need to invoke a
 skill manually.
 
 Every replaceable variable is highlighted as **`{{UPPER_SNAKE_CASE}}`**. Replace
@@ -197,6 +197,9 @@ passes all handoffs; the human does not copy messages between subagents.
 
 Use this shorter Build prompt for a local, reversible defect with an obvious
 accepted outcome. It still uses `build-change` and independent `review-change`.
+When a finding needs a concrete patch, use `critique-review` to draft a
+suggestion only, then explicitly hand it to `build-change` or ask the developer
+to apply it before repeating independent review.
 
 > Fix **`{{BUG_ID_OR_TITLE}}`** using the orchestrator, builder, and reviewer.
 >

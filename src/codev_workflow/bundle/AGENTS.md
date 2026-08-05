@@ -11,6 +11,7 @@ work. Use the applicable repository skill:
 - `build-change` for interactive implementation of one bounded change;
 - `review-change` for an independent, read-only code review; and
 - `clean-code-review` for a focused Clean Code, GoF, and Python smell scan; and
+- `critique-review` for precise, read-only suggested diffs from review findings; and
 - `launch-product` for readiness, rollout, rollback, and learning.
 
 Use the lightest safe path. Inspect the repository before prescribing code
@@ -27,3 +28,8 @@ Use `clean-code-review` as an optional specialist pass for requests about code
 smells, maintainability, Clean Code practices, GoF signals, or Python-specific
 hazards. It complements `review-change` and does not replace correctness,
 security, regression, or release review.
+
+Use `critique-review` only after a review finding or presubmit failure needs a
+concrete proposed edit. It produces suggested diffs and an explicit handoff;
+it does not modify files. Apply an accepted suggestion through `build-change`
+or by an explicit developer request, then run a fresh independent review.

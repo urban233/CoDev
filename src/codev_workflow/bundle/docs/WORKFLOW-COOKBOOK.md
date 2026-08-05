@@ -24,6 +24,7 @@ AI's internal routing; it is not a list of commands the developer must memorize.
 All implementation eventually uses `build-change`, independent human review,
 and proportionate validation. Use `review-change` as a fresh AI review for normal
 or higher-risk work, `clean-code-review` for a focused coding-practices scan,
+and `critique-review` for read-only suggested diffs from concrete findings,
 and `launch-product` for material production exposure.
 
 ## Recipe 1: Create a greenfield project
@@ -141,6 +142,11 @@ stop for any material decision not settled by SPECIFICATION.md.
 
 Use a fresh `review-change` pass and an independent human reviewer. Do not ask AI
 to implement the full specification in one pass.
+
+If the review identifies a concrete bounded correction, use `critique-review` to
+draft a suggested diff. It must not modify files; explicitly hand the accepted
+suggestion to `build-change` or ask the developer to apply it, then repeat
+independent review.
 
 ### Step 7: launch and learn
 

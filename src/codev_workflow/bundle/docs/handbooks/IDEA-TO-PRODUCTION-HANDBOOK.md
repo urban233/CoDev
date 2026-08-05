@@ -50,6 +50,7 @@ Idea
   -> build-change         Inspect, plan, implement, and validate one item
   -> review-change        Independently evaluate the exact change
   -> clean-code-review    Optionally scan coding practices and cataloged smells
+  -> critique-review      Optionally prepare precise suggested diffs
   -> launch-product       Prove readiness, stage exposure, learn, and clean up
 ```
 
@@ -604,6 +605,11 @@ reasonable option.
 
 Invoke `review-change` in a fresh context for normal or higher-risk work. The
 review skill is read-only unless a later request explicitly asks for fixes.
+
+When a finding needs a concrete correction, invoke `critique-review` to prepare
+a precise suggested diff. It remains read-only; explicitly hand an accepted
+suggestion to `build-change` or ask the developer to apply it, then repeat the
+fresh independent review.
 
 ### 10.1 Freeze the review target
 

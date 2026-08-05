@@ -23,6 +23,10 @@ additional stages every change must traverse.
 - **Clean Code pass:** use `clean-code-review` when the developer requests a
   catalog-driven smell, maintainability, Clean Code, GoF, or Python-specific
   review; it complements the broader `review-change` pass.
+- **Suggested fix:** use `critique-review` after a concrete review or presubmit
+  finding; it drafts a precise diff without modifying files. Require an
+  explicit handoff to `build-change` or the developer before applying it, then
+  obtain a fresh `review-change` pass.
 - **Feature:** use `define-product`; add `design-solution` for material technical
   decisions; use `plan-delivery` for multi-person work; repeat build and review.
 - **Guided greenfield/whole product:** use `specify-project` for a one-question-

@@ -578,11 +578,13 @@ guided project facade:
 | implement one item | `build-change` | small validated change with checkpoints |
 | independently inspect it | `review-change` | evidence-based findings on an exact snapshot |
 | scan coding practices | `clean-code-review` | cataloged Clean Code, GoF, and Python smell findings |
+| prepare a suggested correction | `critique-review` | precise read-only diffs from concrete findings |
 | release safely | `launch-product` | readiness, rollout, rollback, and learning |
 
 Use the lightest safe path:
 
 - **Quick change:** issue -> `build-change` -> human review -> merge.
+- **Suggested correction:** `review-change` -> optional `critique-review` -> explicit handoff to `build-change` -> fresh review.
 - **Feature:** `define-product` -> optional `design-solution` -> repeated
   `build-change`/`review-change` -> proportionate rollout.
 - **Greenfield guided product:** `specify-project` -> `plan-delivery` -> repeated

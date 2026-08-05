@@ -57,6 +57,7 @@ Idea
   -> build-change         Interactive plan, implementation, validation
   -> review-change        Independent evidence-based review
   -> clean-code-review    Optional Clean Code, GoF, and Python smell review
+  -> critique-review      Optional precise suggested diffs from review findings
   -> launch-product       Readiness, staged rollout, measurement, learning
 ```
 
@@ -70,6 +71,12 @@ Small work may enter at `build-change`. A feature may skip `design-solution`
 when there is no material technical decision. A product uses either the guided
 specification or the modular brief/design path, and only the current milestone
 is planned in detail.
+
+When a review or presubmit finding needs a concrete correction, use
+`critique-review` after `review-change` or the relevant specialist pass. It is
+read-only and prepares a suggested diff. An explicit developer handoff to
+`build-change`, or an explicit request from the developer, is required before
+the suggestion is applied; then repeat independent review.
 
 ## Canonical artifacts
 
