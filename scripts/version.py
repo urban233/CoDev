@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
 import re
+from datetime import date
 from pathlib import Path
 
 # Change one of these settings for a no-argument bump, or pass --bump explicitly.
