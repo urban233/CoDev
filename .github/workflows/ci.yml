@@ -4,11 +4,22 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 jobs:
+  release-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify package and runtime versions
+        run: python scripts/verify_release.py
+
   test:
     strategy:
       fail-fast: false
@@ -58,3 +69,77 @@ jobs:
         run: python -m build
       - name: Validate distribution metadata
         run: python -m twine check dist/*
+      - name: Smoke-test built wheel
+        run: |
+          python -m venv .release-venv
+          .release-venv/bin/python -m pip install --no-deps dist/*.whl
+          .release-venv/bin/codev --version
+      - name: Upload tested distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  prepare-release:
+    needs: [release-integrity, test, quality]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify release tag and package versions
+        run: python scripts/verify_release.py --tag "$GITHUB_REF_NAME"
+      - name: Download distributions tested by CI
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+      - name: Recheck distribution metadata
+        run: |
+          python -m pip install --disable-pip-version-check twine
+          python -m twine check dist/*
+      - name: Upload release distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  attest:
+    needs: prepare-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: dist
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
+  publish:
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/open-codev-workflow
+    steps:
+      - name: Download release distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -3,6 +3,15 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Move verification, linting, packaging, and wheel smoke tests into the default
+  CI workflow for pull requests, `main`, and release tags.
+- Gate the PyPI release phase on successful checks from the exact tag run and
+  publish the distributions produced by that run.
+
 ## [0.1.3] - 2026-08-05
 
 ### Fixed

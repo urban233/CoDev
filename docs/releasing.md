@@ -7,13 +7,18 @@
    changes.
 4. Update `CHANGELOG.md`, `pyproject.toml`, and `src/codev_workflow/__init__.py`
    to the same release version.
-5. Review the exact release diff.
-6. Create and push a reviewed, signed `vX.Y.Z` tag after human authorization.
+5. Run the lightweight metadata preflight locally:
+   `python scripts/verify_release.py --tag vX.Y.Z`.
+6. Review the exact release diff.
+7. Create and push a reviewed, signed `vX.Y.Z` tag after human authorization.
 
-The tag starts the release workflow. It verifies that the tag matches package
-metadata, reruns the quality checks, builds and checks the distributions,
-installs the wheel in a clean environment, creates provenance attestations,
-and publishes to PyPI.
+Pull-request, `main`, and release-tag CI runs the complete verification,
+quality, packaging, and wheel smoke-test path. On a release tag, the same CI
+workflow enables a separate release phase only after those checks succeed. It
+verifies the tag and package versions, downloads the distributions produced by
+that exact CI run, rechecks their metadata, creates provenance attestations,
+and publishes them to PyPI. Branch and pull-request runs skip that release
+phase.
 
 ## One-time PyPI setup
 
@@ -23,7 +28,7 @@ pending trusted publisher on PyPI with these exact values:
 - **PyPI project:** `open-codev-workflow`
 - **Owner:** `urban233`
 - **Repository:** `CoDev`
-- **Workflow:** `release.yml`
+- **Workflow:** `ci.yml`
 - **Environment:** `pypi`
 
 In GitHub, create the `pypi` environment and configure required reviewers if a
