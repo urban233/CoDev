@@ -3,6 +3,13 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.1.3] - 2026-08-05
+
+### Fixed
+
+- Correct import ordering in the versioning script to satisfy Ruff.
+- Format the version-script changelog fixture so the test suite remains lint-clean.
+
 ## [0.1.2] - 2026-08-05
 
 ### Changed
