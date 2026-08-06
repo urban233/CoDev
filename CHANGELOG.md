@@ -3,6 +3,13 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- Clarify `pr-review` summaries and publication/retry guidance to prevent
+  duplicate reviews and make authorized submissions explicit.
+
 ## [0.1.4] - 2026-08-06
 
 ### Added
