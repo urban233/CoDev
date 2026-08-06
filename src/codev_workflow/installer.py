@@ -506,9 +506,7 @@ def _replace_agent_block_for_update(target: Path, old_hash: str, plan: Plan) -> 
         )
 
 
-def plan_update(
-    target: Path, platforms: Iterable[str] | None = None
-) -> Plan:
+def plan_update(target: Path, platforms: Iterable[str] | None = None) -> Plan:
     target = target.resolve()
     lock = _read_lock(target)
     selected = normalize_platforms(lock.get("platforms", []))

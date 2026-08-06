@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 SCRIPT = (
@@ -47,7 +48,7 @@ class PullRequestReviewTests(unittest.TestCase):
             output_dir=None,
         )
 
-        def request(_token, _method, _url, **kwargs):
+        def request(_token: Any, _method: Any, _url: Any, **kwargs: Any) -> Any:
             if kwargs.get("decode_json") is False:
                 return DIFF
             return {"head": {"sha": "abc123"}}

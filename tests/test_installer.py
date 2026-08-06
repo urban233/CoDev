@@ -26,9 +26,7 @@ class InstallerTests(unittest.TestCase):
     def test_init_installs_complete_bundle_and_passes_check(self) -> None:
         self.install()
 
-        bundled = installer._bundle_files(
-            ("antigravity", "codex", "junie", "opencode")
-        )
+        bundled = installer._bundle_files(("antigravity", "codex", "junie", "opencode"))
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
