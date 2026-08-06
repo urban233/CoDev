@@ -577,6 +577,7 @@ guided project facade:
 | coordinate a team | `plan-delivery` | milestones, ready items, owners, dependencies |
 | implement one item | `build-change` | small validated change with checkpoints |
 | independently inspect it | `review-change` | evidence-based findings on an exact snapshot |
+| review a GitHub PR before merge | `pr-review` | exact-head findings and validated inline comments |
 | scan coding practices | `clean-code-review` | cataloged Clean Code, GoF, and Python smell findings |
 | prepare a suggested correction | `critique-review` | precise read-only diffs from concrete findings |
 | release safely | `launch-product` | readiness, rollout, rollback, and learning |

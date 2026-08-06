@@ -56,6 +56,7 @@ Idea
   -> plan-delivery        Milestones, work items, owners, dependencies
   -> build-change         Interactive plan, implementation, validation
   -> review-change        Independent evidence-based review
+  -> pr-review            GitHub PR review with anchored pending comments
   -> clean-code-review    Optional Clean Code, GoF, and Python smell review
   -> critique-review      Optional precise suggested diffs from review findings
   -> launch-product       Readiness, staged rollout, measurement, learning

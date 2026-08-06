@@ -24,6 +24,7 @@ AI's internal routing; it is not a list of commands the developer must memorize.
 All implementation eventually uses `build-change`, independent human review,
 and proportionate validation. Use `review-change` as a fresh AI review for normal
 or higher-risk work, `clean-code-review` for a focused coding-practices scan,
+`pr-review` for an existing GitHub Pull Request and validated inline comments,
 and `critique-review` for read-only suggested diffs from concrete findings,
 and `launch-product` for material production exposure.
 

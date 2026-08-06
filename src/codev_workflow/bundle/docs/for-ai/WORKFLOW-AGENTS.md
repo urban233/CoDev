@@ -23,6 +23,9 @@ additional stages every change must traverse.
 - **Clean Code pass:** use `clean-code-review` when the developer requests a
   catalog-driven smell, maintainability, Clean Code, GoF, or Python-specific
   review; it complements the broader `review-change` pass.
+- **GitHub Pull Request:** use `pr-review` only for an existing GitHub PR that
+  needs a merge-candidate review or validated inline comments. It is not a
+  general branch, commit, or working-tree review.
 - **Suggested fix:** use `critique-review` after a concrete review or presubmit
   finding; it drafts a precise diff without modifying files. Require an
   explicit handoff to `build-change` or the developer before applying it, then

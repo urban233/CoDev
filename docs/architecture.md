@@ -23,7 +23,10 @@ not require maintaining a second file list.
 
 `AGENTS.md` and `.opencode/opencode.json` are integrations rather than copied
 files. CoDev owns one marked block in `AGENTS.md` and selected missing values
-in OpenCode configuration, preserving all project-owned content.
+in OpenCode configuration, preserving all project-owned content. Junie
+subagents are ordinary managed Markdown files under `.junie/agents/`, while
+Antigravity subagents use its official `.agents/agents/` location alongside
+CoDev's `.agents/skills/` directory.
 
 ### Installer
 

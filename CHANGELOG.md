@@ -3,10 +3,23 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.1.4] - 2026-08-06
 
 ### Added
 
+- Add the GitHub-only `pr-review` skill with exact-head validation, anchored
+  inline comments, `gh api` authentication with token fallback, and PR context
+  fetching for metadata, diffs, files, commits, reviews, comments, and checks.
+- Add Google Antigravity support with managed `builder`, `orchestrator`, and
+  `reviewer` subagents under the official `.agents/agents/` workspace location,
+  selectable through `--platform antigravity` or `--platform all`.
+- Add JetBrains Junie support with managed `builder`, `orchestrator`, and
+  `reviewer` subagents under `.junie/agents/`, selectable through
+  `--platform junie` or `--platform all`.
+- Allow `update --platform junie` to add Junie to an existing CoDev
+  installation with the same conflict-aware preflight as initial installs.
+- Add the Junie project slash command `/pr-review repo=OWNER/REPO pr=123`, plus
+  the secure GitHub-token helper for the PR-review workflow.
 - Add the read-only `critique-review` specialist skill, which turns concrete
   review or presubmit findings into precise suggested diffs and requires an
   explicit handoff to `build-change` or the developer before application.
@@ -44,3 +57,7 @@ Semantic Versioning.
 - Human and AI workflow references, handbooks, cookbook, and prompt library.
 - Deterministic workflow validators and behavioral scenario catalog.
 - Cross-platform tests and GitHub Actions validation.
+# Unreleased
+
+- Add the GitHub-only `pr-review` skill with exact-commit validation and a
+  standard-library publisher for dry-run or pending inline reviews.

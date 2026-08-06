@@ -17,7 +17,7 @@ LOCK_SCHEMA_VERSION = 1
 LOCK_PATH = PurePosixPath(".codev/lock.json")
 AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
-VALID_PLATFORMS = frozenset({"codex", "opencode"})
+VALID_PLATFORMS = frozenset({"antigravity", "codex", "junie", "opencode"})
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
@@ -171,6 +171,18 @@ def _bundle_files(platforms: tuple[str, ...]) -> dict[str, bytes]:
             path: content
             for path, content in files.items()
             if not path.startswith(".opencode/")
+        }
+    if "junie" not in platforms:
+        files = {
+            path: content
+            for path, content in files.items()
+            if not path.startswith(".junie/")
+        }
+    if "antigravity" not in platforms:
+        files = {
+            path: content
+            for path, content in files.items()
+            if not path.startswith(".agents/agents/")
         }
     return files
 
@@ -494,10 +506,14 @@ def _replace_agent_block_for_update(target: Path, old_hash: str, plan: Plan) -> 
         )
 
 
-def plan_update(target: Path) -> Plan:
+def plan_update(
+    target: Path, platforms: Iterable[str] | None = None
+) -> Plan:
     target = target.resolve()
     lock = _read_lock(target)
     selected = normalize_platforms(lock.get("platforms", []))
+    if platforms is not None:
+        selected = normalize_platforms((*selected, *platforms))
     new_files = _bundle_files(selected)
     old_files = lock["files"]
     valid_entries = all(

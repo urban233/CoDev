@@ -37,7 +37,7 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument(
         "--platform",
         action="append",
-        choices=("all", "codex", "opencode"),
+        choices=("all", "antigravity", "codex", "junie", "opencode"),
         default=None,
         help="target adapter; repeat to select several (default: all)",
     )
@@ -51,9 +51,23 @@ def _parser() -> argparse.ArgumentParser:
 
     diff = commands.add_parser("diff", help="preview update changes")
     diff.add_argument("--target", type=_target, default=Path.cwd())
+    diff.add_argument(
+        "--platform",
+        action="append",
+        choices=("all", "antigravity", "codex", "junie", "opencode"),
+        default=None,
+        help="also add this adapter; repeat to select several",
+    )
 
     update = commands.add_parser("update", help="apply a conflict-free bundle update")
     update.add_argument("--target", type=_target, default=Path.cwd())
+    update.add_argument(
+        "--platform",
+        action="append",
+        choices=("all", "antigravity", "codex", "junie", "opencode"),
+        default=None,
+        help="also add this adapter; repeat to select several",
+    )
 
     remove = commands.add_parser(
         "remove", help="remove an unchanged CoDev installation"
@@ -106,7 +120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.command in {"diff", "update"}:
             target = args.target.resolve()
-            plan = plan_update(target)
+            plan = plan_update(target, args.platform)
             print(format_plan(plan))
             if plan.conflicts:
                 print(f"Update stopped: {len(plan.conflicts)} conflict(s).")

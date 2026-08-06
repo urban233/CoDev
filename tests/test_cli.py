@@ -60,6 +60,38 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(0, main(["remove", "--target", str(target)]))
                 self.assertFalse((target / ".codev" / "lock.json").exists())
 
+    def test_update_can_add_a_platform_to_an_existing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "init",
+                            "--target",
+                            str(target),
+                            "--platform",
+                            "codex",
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "update",
+                            "--target",
+                            str(target),
+                            "--platform",
+                            "antigravity",
+                        ]
+                    ),
+                )
+            self.assertTrue((target / ".agents/agents/reviewer.md").is_file())
+            self.assertTrue((target / ".agents/skills/review-change/SKILL.md").is_file())
+            self.assertEqual(0, main(["check", "--target", str(target)]))
+
 
 if __name__ == "__main__":
     unittest.main()

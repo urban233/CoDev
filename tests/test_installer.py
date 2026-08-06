@@ -26,11 +26,14 @@ class InstallerTests(unittest.TestCase):
     def test_init_installs_complete_bundle_and_passes_check(self) -> None:
         self.install()
 
-        bundled = installer._bundle_files(("codex", "opencode"))
+        bundled = installer._bundle_files(
+            ("antigravity", "codex", "junie", "opencode")
+        )
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(9, len(skills))
+        self.assertEqual(10, len(skills))
+        self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/clean-code-review/SKILL.md").is_file()
         )
@@ -38,12 +41,58 @@ class InstallerTests(unittest.TestCase):
             (self.target / ".agents/skills/critique-review/SKILL.md").is_file()
         )
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / "docs/WORKFLOW-HUMAN.md").is_file())
         self.assertTrue((self.target / ".codev/lock.json").is_file())
 
         result = installer.check_project(self.target)
         self.assertTrue(result.ok, result.issues)
         self.assertGreater(result.managed_files, 30)
+
+    def test_antigravity_adapter_uses_official_agents_location(self) -> None:
+        self.install(("antigravity",))
+
+        self.assertTrue((self.target / ".agents/agents/builder.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/reviewer.md").is_file())
+        self.assertFalse((self.target / ".junie").exists())
+        self.assertFalse((self.target / ".opencode").exists())
+        content = (self.target / ".agents/agents/reviewer.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("name: reviewer", content)
+        self.assertIn("mainAgent: false", content)
+        self.assertIn("subagent: true", content)
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_junie_adapter_installs_valid_subagents_without_other_adapters(self) -> None:
+        self.install(("junie",))
+
+        self.assertTrue((self.target / ".junie/agents/builder.md").is_file())
+        self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".junie/agents/reviewer.md").is_file())
+        self.assertFalse((self.target / ".opencode").exists())
+        self.assertIn(
+            'description: "Bounded implementation subagent',
+            (self.target / ".junie/agents/builder.md").read_text(encoding="utf-8"),
+        )
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_junie_managed_files_update_and_remove_safely(self) -> None:
+        self.install(("junie",))
+        agent = self.target / ".junie/agents/reviewer.md"
+        original = agent.read_bytes()
+
+        plan = installer.plan_update(self.target)
+        self.assertFalse(plan.conflicts)
+        self.assertFalse(plan.changed)
+
+        agent.write_bytes(original + b"\nlocal edit\n")
+        remove_plan = installer.plan_remove(self.target)
+        self.assertTrue(remove_plan.conflicts)
+        self.assertTrue(agent.exists())
 
     def test_init_preserves_existing_repository_instructions(self) -> None:
         original = "# Local policy\n\nRun the project tests.\n"

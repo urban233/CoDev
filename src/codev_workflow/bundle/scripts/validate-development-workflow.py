@@ -25,6 +25,7 @@ EXPECTED_SKILLS = {
     "plan-delivery": ["assets/delivery-plan.template.md"],
     "build-change": ["assets/implementation-plan.template.md"],
     "review-change": [],
+    "pr-review": ["scripts/publish_review.py"],
     "clean-code-review": [],
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],

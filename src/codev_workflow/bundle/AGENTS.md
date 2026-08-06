@@ -10,6 +10,8 @@ work. Use the applicable repository skill:
 - `plan-delivery` for multi-developer milestones and work coordination;
 - `build-change` for interactive implementation of one bounded change;
 - `review-change` for an independent, read-only code review; and
+- `pr-review` for an exact GitHub Pull Request review with validated inline
+  comments; and
 - `clean-code-review` for a focused Clean Code, GoF, and Python smell scan; and
 - `critique-review` for precise, read-only suggested diffs from review findings; and
 - `launch-product` for readiness, rollout, rollback, and learning.
@@ -28,6 +30,10 @@ Use `clean-code-review` as an optional specialist pass for requests about code
 smells, maintainability, Clean Code practices, GoF signals, or Python-specific
 hazards. It complements `review-change` and does not replace correctness,
 security, regression, or release review.
+
+Use `pr-review` only for an existing GitHub Pull Request. It reviews the exact
+PR head and can prepare or explicitly publish a pending GitHub review with
+anchored comments; it does not apply code, approve, merge, or release.
 
 Use `critique-review` only after a review finding or presubmit failure needs a
 concrete proposed edit. It produces suggested diffs and an explicit handoff;

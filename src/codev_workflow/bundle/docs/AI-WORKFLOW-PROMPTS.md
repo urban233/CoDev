@@ -3,7 +3,7 @@
 Use these templates with the repository's primary `orchestrator` agent. The
 orchestrator routes internally to `specify-project`, `define-product`,
 `design-solution`, `plan-delivery`, `build-change`, `review-change`,
-`clean-code-review`, `critique-review`, or `launch-product`; developers do not need to invoke a
+`pr-review`, `clean-code-review`, `critique-review`, or `launch-product`; developers do not need to invoke a
 skill manually.
 
 Every replaceable variable is highlighted as **`{{UPPER_SNAKE_CASE}}`**. Replace
