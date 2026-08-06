@@ -9,7 +9,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 SCRIPT = (
     Path(__file__).parents[1]
     / "src"
@@ -68,7 +67,9 @@ class PullRequestReviewTests(unittest.TestCase):
 
         with (
             patch.object(publish_review, "_gh_executable", return_value="gh"),
-            patch.object(publish_review.subprocess, "run", return_value=completed) as run,
+            patch.object(
+                publish_review.subprocess, "run", return_value=completed
+            ) as run,
         ):
             result = publish_review._request(
                 None,

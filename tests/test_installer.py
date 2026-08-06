@@ -67,7 +67,9 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("subagent: true", content)
         self.assertTrue(installer.check_project(self.target).ok)
 
-    def test_junie_adapter_installs_valid_subagents_without_other_adapters(self) -> None:
+    def test_junie_adapter_installs_valid_subagents_without_other_adapters(
+        self,
+    ) -> None:
         self.install(("junie",))
 
         self.assertTrue((self.target / ".junie/agents/builder.md").is_file())

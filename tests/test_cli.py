@@ -89,7 +89,9 @@ class CliTests(unittest.TestCase):
                     ),
                 )
             self.assertTrue((target / ".agents/agents/reviewer.md").is_file())
-            self.assertTrue((target / ".agents/skills/review-change/SKILL.md").is_file())
+            self.assertTrue(
+                (target / ".agents/skills/review-change/SKILL.md").is_file()
+            )
             self.assertEqual(0, main(["check", "--target", str(target)]))
 
 
