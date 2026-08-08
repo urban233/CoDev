@@ -1,221 +1,217 @@
-# Product Development Workflow
+# The CoDev Workflow
 
-This workflow helps developers and AI build software together. Humans remain
-accountable for product intent, material design decisions, code acceptance, and
-release authorization. AI investigates, proposes, implements, validates, and
-reviews bounded work with frequent human checkpoints.
+*Start here. This is the short version — the mental model, the lifecycle, and
+the rules you need to work day to day. For stage-by-stage depth, worked
+examples, and team mechanics, see the
+[Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md).*
 
-The workflow uses familiar engineering artifacts and scales with risk. It is not
-an autonomous coding loop and it does not require every change to produce every
-document.
+## The problem this solves
 
-For complete setup and operating guidance, use the companion handbooks:
+AI can now write plausible code faster than a human can review it. That
+creates a new failure mode: velocity without accountability. A model can
+invent an API that doesn't exist, "fix" a test by weakening it, or quietly
+expand a bug fix into a redesign — and do all of it fluently enough that a
+tired reviewer skims past it.
 
-- [Google-inspired Python project setup](handbooks/PYTHON-PROJECT-HANDBOOK.md)
-- [Google-inspired language-agnostic project setup](handbooks/LANGUAGE-AGNOSTIC-PROJECT-HANDBOOK.md)
-- [Idea-to-production human-AI delivery](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md)
-- [Four common workflow recipes](WORKFLOW-COOKBOOK.md)
-- [Ready-to-use workflow prompts](AI-WORKFLOW-PROMPTS.md)
+CoDev is a small set of files — an `AGENTS.md` policy, a handful of skills, an
+optional three-agent topology, and this documentation — installed into a Git
+repository to make AI-assisted development **fast without being unaccountable**.
+It does this by fixing three things that ad-hoc "chat with an AI" workflows
+usually get wrong:
 
-## Start here: four steps
+1. **Plans are grounded in the repository, not the model's memory.** The AI
+   reads your actual code, tests, and conventions before proposing anything.
+2. **Process scales with risk and coordination, not with ceremony.** A typo
+   fix and a payments migration should not go through the same amount of
+   paperwork.
+3. **Authority stays human at the points that matter.** An AI can investigate,
+   propose, implement, and review. It cannot approve its own work, and it
+   never merges, deploys, migrates data, or expands production exposure.
 
-Developers do not need to learn or select the skills below. Describe the change
-in normal language; the AI routes it and explains why any design or planning is
-needed.
+## The mental model
 
-1. **Understand:** agree on the outcome. Resolve material architecture and team
-   coordination only when the change needs them.
-2. **Build:** implement and validate one bounded, reviewable change.
-3. **Review:** independently inspect the exact change and its evidence.
-4. **Ship:** authorize controlled exposure, observe it, and learn.
+Think of CoDev as a **narrow waist between intent and code**. On one side is
+what you actually want (a product outcome, an architecture decision, a bug
+report). On the other is a diff. Everything in between exists to keep those
+two things connected as the work passes through however many hands — human or
+AI — touch it.
 
-Small fixes can move directly from Understand to Build. Design and delivery
-planning deepen Understand; they are not mandatory extra stages.
+Three ideas carry almost all of the workflow's behavior:
 
-## Choose the lightest safe path
+- **Repository grounding.** An AI's claims about "how the code works" are
+  worth nothing until checked against the actual files. Every skill starts
+  with inspection, not proposal.
+- **One fact, one owner.** Outcome and scope live in a brief or specification.
+  Architecture and contracts live in a design document. Assignment and status
+  live in a tracker. Code behavior lives in code and tests. Nothing is copied
+  between documents — later documents *link* to earlier ones. If you find
+  yourself updating the same fact in two places, one of those places is wrong.
+- **Small, reviewable, evidence-backed changes.** A change is not "done"
+  because the AI says so. It is done when it is small enough to review, has
+  been validated with commands you can rerun, and an independent reviewer —
+  human, and optionally AI — has looked at the *exact* diff.
 
-| Path | Use for | Flow |
+If you remember nothing else: **the AI supplies evidence, you supply
+authority.**
+
+## The four steps
+
+Every piece of work, from a one-line fix to a new product, moves through the
+same four human-facing steps. You do not need to name a skill or memorize the
+internal routing — describe what you want in plain language, and the AI
+resolves it to the right step and the right internal skill
+(`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
+`build-change`, `review-change`, `clean-code-review`, `critique-review`,
+`launch-product`).
+
+| Step | Question it answers | Deepens into |
 |---|---|---|
-| Quick change | Local, reversible, low-risk fixes or refactors | Issue -> build -> review -> merge |
-| Feature | Bounded user-visible or cross-file behavior | Feature brief -> optional design -> build/review loops -> rollout |
-| Product, modular | New products, cross-team systems, migrations, or high-risk work | Product brief -> design -> delivery plan -> build/review loops -> launch |
-| Product, guided | Greenfield or whole-product blueprint where one continuous interview is helpful | `SPECIFICATION.md` with product/design checkpoints -> delivery plan -> build/review loops -> launch |
+| **Understand** | What are we building, and what must be decided before code is safe to write? | `design-solution` for shared architecture; `plan-delivery` for multi-developer coordination |
+| **Build** | What is the smallest change that delivers this, with evidence it works? | interactive pairing, or bounded delegation to a `builder` subagent |
+| **Review** | Is this exact change correct, safe, and consistent with what we agreed? | a fresh, read-only reviewer pass; `clean-code-review` for a maintainability-focused scan |
+| **Ship** | Are we ready to expose this to real users, and how do we find out if it's working? | staged rollout, observation, and a decision to expand, hold, or roll back |
 
-Security, privacy, permissions, public APIs, persistent data, billing,
-compliance, and destructive behavior always require explicit design and review,
-even when the diff is small.
+A small, local, reversible fix can go **Understand → Build → Review → Ship**
+in minutes, with Understand collapsing to "here's the bug, here's the
+expected behavior." A new product spends real time in Understand, because
+getting the outcome and architecture right is what makes everything after it
+cheap. **The step names don't change. Only how much work each step requires
+changes** — and that's decided by risk and coordination need, not by habit.
 
-## Lifecycle and skills
+### When a step needs more than a conversation
 
-```text
-Idea
-  -> specify-project      Optional guided facade: product frame + design in one specification
-     OR
-  -> define-product       Modular path: why, users, outcome, scope, success
-  -> design-solution      Modular path: architecture, APIs, trade-offs, risk
-  -> plan-delivery        Milestones, work items, owners, dependencies
-  -> build-change         Interactive plan, implementation, validation
-  -> review-change        Independent evidence-based review
-  -> pr-review            GitHub PR review with anchored pending comments
-  -> clean-code-review    Optional Clean Code, GoF, and Python smell review
-  -> critique-review      Optional precise suggested diffs from review findings
-  -> launch-product       Readiness, staged rollout, measurement, learning
-```
+Design and delivery planning are not extra stages you must pass through —
+they're *conditional depth inside Understand*, triggered by specific
+properties of the change:
 
-`specify-project` combines the first two forms of thinking for a new or
-whole-product blueprint; it does not add a lifecycle stage. It asks one
-recommendation-led question at a time, accepts the product frame before the
-technical design, and creates one canonical `SPECIFICATION.md`. Do not also
-create a brief and design containing the same facts.
+- Touches a **public or shared API, contract, or persistent data model** →
+  needs `design-solution`.
+- Touches **authentication, permissions, privacy, or abuse controls** → needs
+  `design-solution`.
+- Needs **more than one developer working concurrently** → needs
+  `plan-delivery`, and any contracts between their work need
+  `design-solution` first.
+- Is a **genuinely new product or a whole-product redesign** → consider the
+  single guided interview, `specify-project`, which walks through product
+  framing and technical design in one conversation and produces one canonical
+  `SPECIFICATION.md`. Use this *or* the modular `define-product` +
+  `design-solution` path — never both for the same facts.
 
-Small work may enter at `build-change`. A feature may skip `design-solution`
-when there is no material technical decision. A product uses either the guided
-specification or the modular brief/design path, and only the current milestone
-is planned in detail.
+Everything else stays a conversation. Risk always overrides size: a five-line
+change to a permission check gets a design discussion and independent review
+even though the diff is tiny.
 
-When a review or presubmit finding needs a concrete correction, use
-`critique-review` after `review-change` or the relevant specialist pass. It is
-read-only and prepares a suggested diff. An explicit developer handoff to
-`build-change`, or an explicit request from the developer, is required before
-the suggestion is applied; then repeat independent review.
+## The interaction model
+
+### Who does what
+
+| | Human | AI |
+|---|---|---|
+| **Understand** | States the problem, accepts or corrects the framing, makes product/architecture decisions | Investigates the repository, proposes framing, drafts briefs/designs, asks one targeted question at a time |
+| **Build** | Approves the plan, answers stop-condition questions | Grounds the plan in real code, implements, tests, self-checks |
+| **Review** | Reads the exact diff, decides whether it may merge | Produces an independent, read-only review with prioritized findings |
+| **Ship** | Authorizes exposure and expansion | Assembles readiness evidence, proposes rollout stages and thresholds |
+
+### Handoff points
+
+Two artifacts carry the handoff between AI activity and human control, and
+neither requires bureaucracy for routine work:
+
+- **The focus card**, presented before any editing begins: what's changing,
+  what success looks like, what's explicitly out of scope, which files are
+  fair game, how the change will be validated, and the exact conditions that
+  should stop work and return to you.
+- **The evidence receipt**, returned when implementation is "done": what
+  changed, the exact commands run and their output, which acceptance
+  criteria map to which evidence, any deviations from the plan, and current
+  review status.
+
+Neither has to be a separate document for ordinary work — for a small change
+both can be a few lines in the conversation. They become written artifacts
+(using the templates under `.agents/skills/*/assets/`) once work spans
+sessions, touches several components, or carries enough risk that a
+reconstructable record matters.
+
+### Review loops
+
+Every code change gets an **independent human review** — the person who wrote
+it, human or AI, does not approve it. For normal- or higher-risk work, add a
+fresh AI review (`review-change`) as a second, independent pass before the
+human looks at it; use `clean-code-review` alongside it when maintainability
+and idiom matter as much as correctness. If a review turns up a concrete,
+bounded fix, `critique-review` will draft the exact suggested diff — but it
+never applies it. An explicit handoff to `build-change`, or the developer
+applying it directly, is required before the correction lands, and the
+corrected diff gets reviewed again from scratch.
+
+### Where it breaks down (and how CoDev catches it)
+
+| Failure mode | What it looks like | The guardrail |
+|---|---|---|
+| Hallucinated implementation | AI invents an API or config key that doesn't exist | Mandatory repository inspection before proposing; the reviewer checks claims against the diff |
+| Scope creep | A bug fix quietly becomes a refactor | The focus card's allowed scope is a drift boundary; expansion must be surfaced before acting on it |
+| Self-approval | The implementing AI declares its own work done | The builder cannot invoke another agent or approve; the reviewer is a fresh, independent context |
+| Retry spiral | Repeated attempts at the same broken approach | Stop after two failed attempts with the same root cause; escalate to the human |
+| Stale plan drift | The repository moved under the plan mid-implementation | Base-commit and snapshot checks; a changed base is a stop condition, not something to paper over |
+| Rubber-stamp review | A review that restates the diff instead of finding problems | Reviews must cite evidence and end in one of three explicit states: `READY FOR HUMAN APPROVAL`, `CHANGES REQUIRED`, `BLOCKED BY MISSING EVIDENCE` |
+
+## On a subagent-capable platform
+
+Where the platform supports it, the three-agent topology (`orchestrator`,
+`builder`, `reviewer`) automates the mechanical parts of this loop without
+changing who has authority. You stay in one conversation with the
+orchestrator; it plans, delegates to a bounded `builder`, and sends the exact
+resulting diff to a fresh, read-only `reviewer`. You are not copying messages
+between agents — but you still approve the plan before delegation, and you
+still approve merge, release, and any expansion of production exposure. Use a
+separate branch or worktree and a separate orchestrator session for each
+concurrently executing work item; do not run two implementation streams
+through one conversation.
+
+## Multi-developer rules, briefly
+
+- **Own components and APIs.** Every important component or contract has one
+  responsible owner for design, review, compatibility, and operation.
+- **Agree on contracts before working in parallel.** Two developers may work
+  concurrently once they share an accepted schema or signature and a contract
+  fixture to test against it.
+- **Keep branches short-lived and changes small.** Prefer feature flags over
+  long-lived branches for incomplete but safe intermediate states.
+- **Limit work in progress.** One active implementation item per developer by
+  default; the owner and reviewer are always different people.
+
+The full mechanics — dependency vocabulary, integration checkpoints, rolling-
+wave planning, and a worked multi-developer example — live in the
+[Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md#15-multi-developer-coordination-in-detail).
 
 ## Canonical artifacts
 
-| Artifact | Purpose | When needed |
+| Artifact | Owns | Needed when |
 |---|---|---|
-| Project specification | Combined product frame and high-level technical blueprint with separate acceptance checkpoints | Optional guided path for greenfield or whole-product definition |
-| Product or feature brief | Outcome, users, success, scope, non-goals | Features and products |
-| Design document | Architecture, ownership, APIs, trade-offs, quality and rollout | Material or risky technical change |
-| Delivery plan or project tracker | Milestones, ready work, owners, reviewers, dependencies, status | Multi-developer work |
-| Implementation plan | Repository-grounded steps and validation for one work item | Complex, risky, or cross-session changes |
-| Pull request/change | Small implementation plus tests | Every code change |
-| Launch plan | Readiness, exposure stages, thresholds, rollback, learning | Material releases |
+| `SPECIFICATION.md` | Product frame *and* technical blueprint, with two acceptance checkpoints | Guided greenfield or whole-product path (`specify-project`) |
+| Brief | Outcome, users, success measures, scope, non-goals | Every feature or product (`define-product`) |
+| Design | Architecture, ownership, contracts, trade-offs, rollout | Material or risky technical change (`design-solution`) |
+| Delivery plan | Milestones, ready work, owners, reviewers, dependencies | Multi-developer work (`plan-delivery`) |
+| Implementation plan | Repository-grounded steps and validation for one work item | Complex, risky, or cross-session changes (`build-change`) |
+| Pull request | The actual change, with tests | Every code change |
+| Launch plan | Readiness, rollout stages, thresholds, rollback | Material releases (`launch-product`) |
 
-Git history is the revision record. Use `Draft`, `Accepted`, `Active`, and
-`Superseded` for document state. Version APIs and schemas when consumers need a
-compatibility contract; do not invent a second revision system for planning
-documents.
+Git history is the revision record for all of them — use `Draft`, `Accepted`,
+`Active`, and `Superseded` as document status, and don't invent a second
+versioning scheme for planning documents. Link to upstream facts; never copy
+them.
 
-## How a developer works with AI
+## How the companion documents fit together
 
-For each work item:
+| Document | Answers | Audience |
+|---|---|---|
+| **This document** | What is CoDev, and what's the model for using it? | You, once |
+| [AI Agent Reference](for-ai/WORKFLOW-AGENTS.md) | Exactly how must an AI behave inside this workflow? | The AI, every session |
+| [Workflow Cookbook](WORKFLOW-COOKBOOK.md) | What do I actually type for the four common shapes of work? | You, while working |
+| [Prompt Templates](AI-WORKFLOW-PROMPTS.md) | What's a ready-to-paste prompt for this specific situation? | You, while working |
+| [Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md) | What's the full stage-by-stage detail, quality gates, and team mechanics? | You, when you need depth |
+| [Python Project Handbook](handbooks/PYTHON-PROJECT-HANDBOOK.md) | How should a Python repository using this workflow be structured and operated? | You, setting up or maintaining a Python project |
+| [Language-Agnostic Project Handbook](handbooks/LANGUAGE-AGNOSTIC-PROJECT-HANDBOOK.md) | Same question, for any other language or stack | You, setting up or maintaining a non-Python project |
 
-1. **Frame:** agree on the outcome, acceptance criteria, non-goals, and risk.
-2. **Inspect:** AI reads the current repository, relevant design, tests, and
-   conventions. It separates verified facts from assumptions.
-3. **Plan:** AI proposes the smallest coherent change and validation. The human
-   decides any product, API, data, security, dependency, or architecture choice.
-4. **Build:** AI edits one reviewable slice and shares concise progress at
-   meaningful boundaries.
-5. **Verify:** AI runs formatting, static checks, affected tests, and
-   proportionate broader tests, then inspects the complete diff.
-6. **Review:** an independent human reviews every change. A fresh AI review is
-   recommended for normal or higher-risk changes.
-7. **Accept:** the human inspects the exact diff and authorizes commit or merge
-   according to repository policy.
-
-The AI stops when required behavior conflicts, a material decision is missing,
-the base changed unexpectedly, concurrent work collides, or required evidence
-cannot be produced. It gives facts, a recommendation, and one precise question.
-
-Immediately before editing, the AI presents a short focus card: change,
-observable success, non-goals, allowed scope, validation, stop conditions, and
-whether the work remains interactive pairing or is safe for bounded delegation.
-When implementation finishes, it returns an evidence receipt containing what
-changed, validation actually run, acceptance evidence, deviations, limitations,
-and review state. Neither requires a separate document for ordinary work.
-
-On a subagent-capable platform, the developer stays in one orchestrator
-conversation. The orchestrator creates the plan, sends it to a bounded editing
-builder, sends the exact resulting snapshot and evidence to a fresh read-only
-reviewer, and routes findings back automatically. The human does not copy
-messages between agents, but still approves delegation, material plan changes,
-merge, and release. Use separate branches/worktrees and orchestrator sessions
-for concurrently executing work items.
-
-## Multi-developer rules
-
-### Own components and APIs
-
-Each important component or API has a team or person responsible for design,
-review, compatibility, and operation. Describe these in the design document or
-repository ownership configuration; do not maintain a separate ownership graph
-unless it provides independent value.
-
-### Agree on contracts before parallel work
-
-Two developers may work concurrently when they share an accepted API/schema and
-a contract fixture or test. Record ordinary relations in the tracker:
-
-- **Blocked by:** work cannot begin safely.
-- **Integrates with:** work proceeds against a contract; integration occurs at a
-  named checkpoint.
-- **Lands after:** merge or migration order matters.
-
-### Keep work and branches small
-
-Prefer short-lived branches and one-purpose pull requests. Incomplete behavior
-may merge behind a feature flag when the intermediate state is safe. Revalidate
-after updating the target branch. Shared migrations, generated files, schemas,
-and other hotspots need one named coordination rule.
-
-### Limit work in progress
-
-Default to one implementation item per developer. Queue additional work instead
-of opening several half-finished changes. The owner and reviewer must differ.
-Name an integration owner only where several work items meet.
-
-## Team operating rhythm
-
-- Review outcomes, the current milestone, and major risks weekly.
-- Review architecture and API changes when they arise, not in recurring ritual
-  meetings without a decision.
-- Select one ready work item per developer.
-- Merge small validated changes continuously.
-- Demonstrate working behavior at every milestone.
-- Plan the next wave using evidence from the demonstration and production.
-- Treat launch as a measured learning cycle, not a finish line.
-
-## Quality and approval
-
-Automation supplies evidence; it does not approve work. The implementing AI
-cannot approve its own change. Reviewer readiness does not authorize merge.
-Merge, deployment, data migration, publication, and rollout expansion require
-the responsible human action or the repository's established approval policy.
-
-High- and critical-risk work may additionally require security/privacy review,
-two-person approval, immutable test suites, restricted tool permissions,
-staging, canaries, and tested rollback.
-
-## Maintenance rule
-
-Every fact has one owner:
-
-- outcome and scope live in the brief, or in the accepted specification when
-  using the guided path;
-- architecture and contracts live in the design/API source, or in that same
-  accepted specification;
-- assignment and status live in the tracker;
-- code behavior lives in code and tests;
-- durable rationale lives in a design decision;
-- rollout state and evidence live in the launch record and observability system.
-
-Link to facts instead of copying them. Add process only when it prevents a named
-failure and cannot be enforced by existing code, tests, CI, ownership, or
-deployment tooling.
-
-Workflow rules are also software behavior. Changes to `AGENTS.md`, skills, or AI
-workflow policy should be exercised against the repository's behavioral
-scenarios. An external harness, human, or independent AI records observable
-actions and evidence; the agent being evaluated does not score itself, and
-private reasoning is never required.
-
-```text
-python scripts/evaluate-development-workflow.py
-python scripts/evaluate-development-workflow.py --write-template <results.json>
-python scripts/evaluate-development-workflow.py --results <results.json>
-```
-
-The first command validates the six-scenario catalog. The second creates an
-observation record for an evaluation run; the third scores the completed record
-and fails when a required behavior lacks evidence.
+If a rule appears in more than one of these, that's a bug in the
+documentation, not a feature — each document above owns a distinct question.
