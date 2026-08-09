@@ -21,7 +21,7 @@ class InstallerTests(unittest.TestCase):
     def install(
         self,
         platforms: tuple[str, ...] = ("all",),
-        programming_language: str = "all",
+        programming_language: str = "none",
     ) -> installer.Plan:
         plan = installer.plan_init(self.target, platforms, programming_language)
         self.assertFalse(plan.conflicts)
@@ -29,11 +29,12 @@ class InstallerTests(unittest.TestCase):
         return plan
 
     def test_init_installs_complete_bundle_and_passes_check(self) -> None:
-        self.install()
+        self.install(programming_language="all")
 
         bundled = installer._bundle_files(("antigravity", "codex", "junie", "opencode"))
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
+        self.assertFalse(any(path.endswith(".template") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
         self.assertEqual(13, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
@@ -53,6 +54,11 @@ class InstallerTests(unittest.TestCase):
                 self.target / ".agents/skills/audit-google-typescript-style/SKILL.md"
             ).is_file()
         )
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("audit-google-python-style: allow", audit_agent)
+        self.assertIn("audit-google-typescript-style: allow", audit_agent)
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
@@ -67,6 +73,28 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(result.ok, result.issues)
         self.assertGreater(result.managed_files, 30)
 
+    def test_init_defaults_to_language_agnostic_audit(self) -> None:
+        self.install()
+
+        skills = sorted(
+            path.parent.name
+            for path in (self.target / ".agents" / "skills").glob("*/SKILL.md")
+        )
+        self.assertNotIn("audit-google-python-style", skills)
+        self.assertNotIn("audit-google-typescript-style", skills)
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("language-agnostic code style and quality issues", audit_agent)
+        self.assertIn("Do not assume a programming language", audit_agent)
+        self.assertNotIn("audit-google-python-style", audit_agent)
+        self.assertNotIn("audit-google-typescript-style", audit_agent)
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("none", lock["programming_language"])
+        self.assertTrue(installer.check_project(self.target).ok)
+
     def test_init_installs_only_python_audit_skill(self) -> None:
         self.install(programming_language="python")
 
@@ -76,6 +104,11 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertIn("audit-google-python-style", skills)
         self.assertNotIn("audit-google-typescript-style", skills)
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("audit-google-python-style: allow", audit_agent)
+        self.assertNotIn("audit-google-typescript-style: allow", audit_agent)
         lock = json.loads(
             (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
         )
@@ -91,6 +124,11 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertNotIn("audit-google-python-style", skills)
         self.assertIn("audit-google-typescript-style", skills)
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("audit-google-typescript-style: allow", audit_agent)
+        self.assertNotIn("audit-google-python-style: allow", audit_agent)
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_update_changes_exact_programming_language_selection(self) -> None:
@@ -108,6 +146,40 @@ class InstallerTests(unittest.TestCase):
                 self.target / ".agents/skills/audit-google-typescript-style/SKILL.md"
             ).is_file()
         )
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("audit-google-python-style: allow", audit_agent)
+        self.assertIn("audit-google-typescript-style: allow", audit_agent)
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_update_without_language_preserves_lock_selection(self) -> None:
+        self.install(programming_language="python")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+        self.assertFalse(plan.changed)
+        assert plan.lock is not None
+        self.assertEqual("python", plan.lock["programming_language"])
+
+    def test_update_can_switch_to_language_agnostic_audit(self) -> None:
+        self.install(programming_language="python")
+
+        plan = installer.plan_update(self.target, programming_language="none")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse(
+            (self.target / ".agents/skills/audit-google-python-style").exists()
+        )
+        self.assertFalse(
+            (self.target / ".agents/skills/audit-google-typescript-style").exists()
+        )
+        audit_agent = (
+            self.target / ".opencode" / "agents" / "code-audit.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Do not assume a programming language", audit_agent)
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_update_language_change_conflicts_on_local_audit_skill_edit(self) -> None:

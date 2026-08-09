@@ -19,11 +19,13 @@ LOCK_PATH = PurePosixPath(".codev/lock.json")
 AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 VALID_PLATFORMS = frozenset({"antigravity", "codex", "junie", "opencode"})
-VALID_PROGRAMMING_LANGUAGES = frozenset({"python", "typescript"})
+VALID_PROGRAMMING_LANGUAGES = frozenset({"none", "python", "typescript", "all"})
 AUDIT_SKILL_PREFIXES = {
     "python": ".agents/skills/audit-google-python-style/",
     "typescript": ".agents/skills/audit-google-typescript-style/",
 }
+AUDIT_AGENT_TEMPLATE = ".opencode/agents/code-audit.md.template"
+AUDIT_AGENT_PATH = ".opencode/agents/code-audit.md"
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
@@ -128,8 +130,8 @@ def normalize_platforms(platforms: Iterable[str]) -> tuple[str, ...]:
 
 
 def normalize_programming_language(value: str | None) -> str:
-    selected = value or "all"
-    if selected != "all" and selected not in VALID_PROGRAMMING_LANGUAGES:
+    selected = value or "none"
+    if selected not in VALID_PROGRAMMING_LANGUAGES:
         raise CoDevError(f"unknown programming language: {selected}")
     return selected
 
@@ -174,23 +176,80 @@ def _walk_bundle() -> dict[str, bytes]:
     return found
 
 
+def _render_code_audit_agent(template: bytes, programming_language: str) -> bytes:
+    scopes = {
+        "none": "language-agnostic code style and quality issues",
+        "python": "Google Python style violations",
+        "typescript": "Google TypeScript style violations",
+        "all": "Google TypeScript and Python style violations",
+    }
+    skill_names = {
+        "python": "audit-google-python-style",
+        "typescript": "audit-google-typescript-style",
+    }
+    selected_skills = (
+        tuple(skill_names.values())
+        if programming_language == "all"
+        else (
+            ()
+            if programming_language == "none"
+            else (skill_names[programming_language],)
+        )
+    )
+    permissions = "".join(f"    {name}: allow\n" for name in selected_skills)
+    if programming_language == "none":
+        instructions = (
+            "Do not assume a programming language or invoke language-specific "
+            "audit skills. Perform a language-agnostic audit using repository "
+            "instructions, available deterministic tooling, and local conventions."
+        )
+    else:
+        language_instructions = {
+            "python": "Use `audit-google-python-style` for Python.",
+            "typescript": "Use `audit-google-typescript-style` for TypeScript/TSX.",
+            "all": (
+                "Use `audit-google-typescript-style` for TypeScript/TSX and "
+                "`audit-google-python-style` for Python. Use both when the "
+                "approved scope spans both languages."
+            ),
+        }
+        instructions = language_instructions[programming_language]
+    rendered = template.decode("utf-8")
+    rendered = rendered.replace("{{DESCRIPTION_SCOPE}}", scopes[programming_language])
+    rendered = rendered.replace("{{SKILL_PERMISSIONS}}", permissions.rstrip("\n"))
+    rendered = rendered.replace("{{LANGUAGE_INSTRUCTIONS}}", instructions)
+    return rendered.encode("utf-8")
+
+
 def _bundle_files(
-    platforms: tuple[str, ...], programming_language: str = "all"
+    platforms: tuple[str, ...], programming_language: str = "none"
 ) -> dict[str, bytes]:
     programming_language = normalize_programming_language(programming_language)
     files = _walk_bundle()
+    template = files.pop(AUDIT_AGENT_TEMPLATE, None)
+    if template is None:
+        raise CoDevError(f"bundle is missing {AUDIT_AGENT_TEMPLATE}")
     # The validator needs a complete policy fixture at the bundle root, while
     # target repositories receive the conflict-safe managed block instead.
     files.pop("AGENTS.md", None)
-    if programming_language != "all":
-        excluded = AUDIT_SKILL_PREFIXES[
-            "typescript" if programming_language == "python" else "python"
-        ]
-        files = {
-            path: content
-            for path, content in files.items()
-            if not path.startswith(excluded)
-        }
+    selected_audit_languages = (
+        set(AUDIT_SKILL_PREFIXES)
+        if programming_language == "all"
+        else {programming_language} - {"none"}
+    )
+    files = {
+        path: content
+        for path, content in files.items()
+        if not any(
+            path.startswith(prefix)
+            for language, prefix in AUDIT_SKILL_PREFIXES.items()
+            if language not in selected_audit_languages
+        )
+    }
+    if "opencode" in platforms:
+        files[AUDIT_AGENT_PATH] = _render_code_audit_agent(
+            template, programming_language
+        )
     if "opencode" not in platforms:
         files = {
             path: content
@@ -428,7 +487,7 @@ def _new_lock(
 def plan_init(
     target: Path,
     platforms: Iterable[str] = ("all",),
-    programming_language: str = "all",
+    programming_language: str = "none",
 ) -> Plan:
     target = target.resolve()
     if (target / Path(LOCK_PATH.as_posix())).exists():

@@ -66,6 +66,13 @@ codev init --target ../my-project --agent-platform all
 codev check --target ../my-project
 ```
 
+Language-specific audit skills are not installed unless selected explicitly.
+Use `--programming-language python` or `--programming-language typescript` for
+one language, `--programming-language all` for both, or
+`--programming-language none` for the language-agnostic audit agent. The default
+for `init` is `none`. An `update` without this flag preserves the selection in
+`.codev/lock.json`.
+
 To preview or apply a later bundle update:
 
 ```shell
@@ -228,9 +235,9 @@ python -m codev_workflow --version
 Optional development checks:
 
 ```shell
-ruff check .
-ruff format --check .
-mypy
+python -m ruff check .
+python -m ruff format --check .
+python -m mypy
 python -m build
 ```
 

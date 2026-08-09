@@ -122,6 +122,36 @@ class CliTests(unittest.TestCase):
                 ).is_file()
             )
 
+    def test_init_without_programming_language_installs_no_audit_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "init",
+                            "--target",
+                            str(target),
+                            "--agent-platform",
+                            "opencode",
+                        ]
+                    ),
+                )
+
+            self.assertFalse(
+                (target / ".agents/skills/audit-google-python-style").exists()
+            )
+            self.assertFalse(
+                (target / ".agents/skills/audit-google-typescript-style").exists()
+            )
+            audit_agent = (
+                target / ".opencode" / "agents" / "code-audit.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("language-agnostic", audit_agent)
+            self.assertNotIn("audit-google-python-style", audit_agent)
+            self.assertNotIn("audit-google-typescript-style", audit_agent)
+
     def test_update_can_add_codex_to_an_existing_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

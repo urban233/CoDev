@@ -3,6 +3,13 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- Default programming-language selection to `none`, omit language-specific audit
+  skills unless requested, and render the OpenCode code-audit agent from a
+  language-aware template.
+
 ## [0.1.7] - 09.08.2026
 
 ### Fixed
@@ -82,7 +89,3 @@ Semantic Versioning.
 - Human and AI workflow references, handbooks, cookbook, and prompt library.
 - Deterministic workflow validators and behavioral scenario catalog.
 - Cross-platform tests and GitHub Actions validation.
-# Unreleased
-
-- Add the GitHub-only `pr-review` skill with exact-commit validation and a
-  standard-library publisher for dry-run or pending inline reviews.

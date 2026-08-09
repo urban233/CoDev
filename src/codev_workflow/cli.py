@@ -43,9 +43,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     init.add_argument(
         "--programming-language",
-        choices=("all", "python", "typescript"),
-        default="all",
-        help="code style audit skills to install (default: all)",
+        choices=("none", "all", "python", "typescript"),
+        default="none",
+        help="code style audit skills to install (default: none)",
     )
     init.add_argument("--dry-run", action="store_true", help="show the plan only")
 
@@ -66,7 +66,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     diff.add_argument(
         "--programming-language",
-        choices=("all", "python", "typescript"),
+        choices=("none", "all", "python", "typescript"),
         default=None,
         help="code style audit skills to select",
     )
@@ -82,7 +82,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     update.add_argument(
         "--programming-language",
-        choices=("all", "python", "typescript"),
+        choices=("none", "all", "python", "typescript"),
         default=None,
         help="code style audit skills to select",
     )

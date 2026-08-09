@@ -58,6 +58,7 @@ codev_workflow = [
   "bundle/.agents/agents/*.md",
   "bundle/.codex/agents/*.toml",
   "bundle/.opencode/agents/*.md",
+  "bundle/.opencode/agents/*.md.template",
   "bundle/.junie/agents/*.md",
   "bundle/.junie/commands/*.md",
   "bundle/docs/*.md",
