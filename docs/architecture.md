@@ -17,7 +17,8 @@ CoDev source -> versioned Python package -> explicit CLI command -> target repo
 ### Bundle
 
 `src/codev_workflow/bundle` mirrors target-relative paths. It contains the
-skills, OpenCode agents, documentation, validators, and evaluation catalog.
+skills, Codex and OpenCode agents, documentation, validators, and evaluation
+catalog.
 The installer discovers package data recursively, so adding a bundled file does
 not require maintaining a second file list.
 
@@ -26,7 +27,8 @@ files. CoDev owns one marked block in `AGENTS.md` and selected missing values
 in OpenCode configuration, preserving all project-owned content. Junie
 subagents are ordinary managed Markdown files under `.junie/agents/`, while
 Antigravity subagents use its official `.agents/agents/` location alongside
-CoDev's `.agents/skills/` directory.
+CoDev's `.agents/skills/` directory. Codex agents use the official
+`.codex/agents/` directory and TOML format.
 
 ### Installer
 

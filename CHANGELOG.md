@@ -9,6 +9,8 @@ Semantic Versioning.
 
 - Clarify `pr-review` summaries and publication/retry guidance to prevent
   duplicate reviews and make authorized submissions explicit.
+- Complete Codex adapter distribution and platform filtering so `.codex/agents/`
+  TOML agents install, update, validate, and remove safely.
 
 ## [0.1.4] - 2026-08-06
 

@@ -184,6 +184,12 @@ def _bundle_files(platforms: tuple[str, ...]) -> dict[str, bytes]:
             for path, content in files.items()
             if not path.startswith(".agents/agents/")
         }
+    if "codex" not in platforms:
+        files = {
+            path: content
+            for path, content in files.items()
+            if not path.startswith(".codex/")
+        }
     return files
 
 

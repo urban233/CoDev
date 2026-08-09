@@ -94,6 +94,37 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(0, main(["check", "--target", str(target)]))
 
+    def test_update_can_add_codex_to_an_existing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "init",
+                            "--target",
+                            str(target),
+                            "--platform",
+                            "opencode",
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "update",
+                            "--target",
+                            str(target),
+                            "--platform",
+                            "codex",
+                        ]
+                    ),
+                )
+                self.assertEqual(0, main(["check", "--target", str(target)]))
+            self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

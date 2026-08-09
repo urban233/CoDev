@@ -173,6 +173,7 @@ my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
 ├── .agents/agents/                   # Antigravity subagents
+├── .codex/agents/                     # Codex orchestrator, builder, reviewer
 ├── .opencode/agents/                 # orchestrator, builder, reviewer
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── .junie/agents/                    # Junie subagents
@@ -183,6 +184,7 @@ my-project/
 ```
 
 Use `--platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
+The Codex adapter installs TOML agents under `.codex/agents/`.
 Use `--platform opencode`, `--platform junie`, or `--platform antigravity` to
 select one adapter, or use `--platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
@@ -197,6 +199,9 @@ platform expansion first.
 
 The Antigravity adapter follows its official workspace location:
 `.agents/agents/<name>.md`.
+
+The Codex adapter follows its official workspace location:
+`.codex/agents/<name>.toml`.
 
 ## Design principles
 

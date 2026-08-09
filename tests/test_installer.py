@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -42,12 +43,46 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
         self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".codex/agents/builder.toml").is_file())
+        self.assertTrue((self.target / ".codex/agents/orchestrator.toml").is_file())
+        self.assertTrue((self.target / ".codex/agents/reviewer.toml").is_file())
         self.assertTrue((self.target / "docs/for-human/development-guide.md").is_file())
         self.assertTrue((self.target / ".codev/lock.json").is_file())
 
         result = installer.check_project(self.target)
         self.assertTrue(result.ok, result.issues)
         self.assertGreater(result.managed_files, 30)
+
+    def test_codex_adapter_installs_valid_agents_without_other_adapters(self) -> None:
+        self.install(("codex",))
+
+        agents = sorted((self.target / ".codex" / "agents").glob("*.toml"))
+        self.assertEqual(
+            ["builder.toml", "orchestrator.toml", "reviewer.toml"],
+            [path.name for path in agents],
+        )
+        for agent in agents:
+            config = tomllib.loads(agent.read_text(encoding="utf-8"))
+            self.assertEqual(agent.stem, config["name"])
+            self.assertTrue(config["description"])
+            self.assertTrue(config["developer_instructions"])
+        self.assertFalse((self.target / ".opencode").exists())
+        self.assertFalse((self.target / ".junie").exists())
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_bundle_filters_codex_adapter_files(self) -> None:
+        codex_files = installer._bundle_files(("codex",))
+        opencode_files = installer._bundle_files(("opencode",))
+
+        self.assertEqual(
+            {
+                ".codex/agents/builder.toml",
+                ".codex/agents/orchestrator.toml",
+                ".codex/agents/reviewer.toml",
+            },
+            {path for path in codex_files if path.startswith(".codex/")},
+        )
+        self.assertFalse(any(path.startswith(".codex/") for path in opencode_files))
 
     def test_antigravity_adapter_uses_official_agents_location(self) -> None:
         self.install(("antigravity",))
@@ -93,6 +128,15 @@ class InstallerTests(unittest.TestCase):
         remove_plan = installer.plan_remove(self.target)
         self.assertTrue(remove_plan.conflicts)
         self.assertTrue(agent.exists())
+
+    def test_remove_deletes_codex_agents(self) -> None:
+        self.install(("codex",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".codex").exists())
 
     def test_init_preserves_existing_repository_instructions(self) -> None:
         original = "# Local policy\n\nRun the project tests.\n"
