@@ -44,6 +44,11 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5.6-luna",
         "description": "Human-controlled workflow and work-item orchestrator",
     },
+    "code-audit": {
+        "model": "openai/gpt-5.6-luna",
+        "description": "Standalone primary code audit agent",
+        "mode": "primary",
+    },
     "builder": {
         "model": "openai/gpt-5.6-luna",
         "description": "Bounded implementation subagent",

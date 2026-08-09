@@ -340,6 +340,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("system", config["theme"])
         self.assertIn("$schema", config)
         self.assertEqual(installer.OPENCODE_AGENT_CONFIGS, config["agent"])
+        self.assertEqual("primary", config["agent"]["code-audit"]["mode"])
 
     def test_init_preserves_existing_opencode_agent(self) -> None:
         config_path = self.target / ".opencode" / "opencode.json"
@@ -362,6 +363,10 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertEqual(
             installer.OPENCODE_AGENT_CONFIGS["reviewer"], config["agent"]["reviewer"]
+        )
+        self.assertEqual(
+            installer.OPENCODE_AGENT_CONFIGS["code-audit"],
+            config["agent"]["code-audit"],
         )
 
     def test_update_rejects_modified_managed_opencode_agent(self) -> None:
@@ -430,6 +435,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual("system", config["theme"])
         self.assertEqual(local_orchestrator, config["agent"]["orchestrator"])
         self.assertNotIn("builder", config["agent"])
+        self.assertNotIn("code-audit", config["agent"])
         self.assertNotIn("reviewer", config["agent"])
         self.assertNotIn("$schema", config)
 
