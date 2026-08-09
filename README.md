@@ -179,9 +179,9 @@ is versioned with the repository and appears in Junie’s `/` command list.
 my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
-├── .agents/agents/                   # Antigravity subagents
-├── .codex/agents/                     # Codex orchestrator, builder, reviewer
-├── .opencode/agents/                 # orchestrator, builder, reviewer
+├── .agents/agents/                   # Antigravity workflow and audit agents
+├── .codex/agents/                     # Codex workflow and audit agents
+├── .opencode/agents/                 # OpenCode workflow and audit agents
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── .junie/agents/                    # Junie subagents
 ├── docs/                             # AI guidance and human delivery guide

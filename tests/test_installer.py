@@ -199,7 +199,12 @@ class InstallerTests(unittest.TestCase):
 
         agents = sorted((self.target / ".codex" / "agents").glob("*.toml"))
         self.assertEqual(
-            ["builder.toml", "orchestrator.toml", "reviewer.toml"],
+            [
+                "builder.toml",
+                "code-audit.toml",
+                "orchestrator.toml",
+                "reviewer.toml",
+            ],
             [path.name for path in agents],
         )
         for agent in agents:
@@ -218,6 +223,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(
             {
                 ".codex/agents/builder.toml",
+                ".codex/agents/code-audit.toml",
                 ".codex/agents/orchestrator.toml",
                 ".codex/agents/reviewer.toml",
             },
@@ -229,6 +235,7 @@ class InstallerTests(unittest.TestCase):
         self.install(("antigravity",))
 
         self.assertTrue((self.target / ".agents/agents/builder.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/code-audit.md").is_file())
         self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".agents/agents/reviewer.md").is_file())
         self.assertFalse((self.target / ".junie").exists())
@@ -239,6 +246,11 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("name: reviewer", content)
         self.assertIn("mainAgent: false", content)
         self.assertIn("subagent: true", content)
+        audit = (self.target / ".agents/agents/code-audit.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("mainAgent: true", audit)
+        self.assertIn("language-agnostic", audit)
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_junie_adapter_installs_valid_subagents_without_other_adapters(
@@ -247,6 +259,7 @@ class InstallerTests(unittest.TestCase):
         self.install(("junie",))
 
         self.assertTrue((self.target / ".junie/agents/builder.md").is_file())
+        self.assertTrue((self.target / ".junie/agents/code-audit.md").is_file())
         self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/agents/reviewer.md").is_file())
         self.assertFalse((self.target / ".opencode").exists())
@@ -254,6 +267,27 @@ class InstallerTests(unittest.TestCase):
             'description: "Bounded implementation subagent',
             (self.target / ".junie/agents/builder.md").read_text(encoding="utf-8"),
         )
+        self.assertIn(
+            "language-agnostic",
+            (self.target / ".junie/agents/code-audit.md").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_all_adapters_render_selected_audit_language(self) -> None:
+        self.install(programming_language="python")
+
+        agents = (
+            self.target / ".opencode/agents/code-audit.md",
+            self.target / ".junie/agents/code-audit.md",
+            self.target / ".agents/agents/code-audit.md",
+            self.target / ".codex/agents/code-audit.toml",
+        )
+        for agent in agents:
+            content = agent.read_text(encoding="utf-8")
+            self.assertIn("audit-google-python-style", content)
+            self.assertNotIn("audit-google-typescript-style", content)
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_junie_managed_files_update_and_remove_safely(self) -> None:

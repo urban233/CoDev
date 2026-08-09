@@ -24,8 +24,21 @@ AUDIT_SKILL_PREFIXES = {
     "python": ".agents/skills/audit-google-python-style/",
     "typescript": ".agents/skills/audit-google-typescript-style/",
 }
-AUDIT_AGENT_TEMPLATE = ".opencode/agents/code-audit.md.template"
-AUDIT_AGENT_PATH = ".opencode/agents/code-audit.md"
+AUDIT_AGENT_TEMPLATES = {
+    "antigravity": (
+        ".agents/agents/code-audit.md.template",
+        ".agents/agents/code-audit.md",
+    ),
+    "codex": (
+        ".codex/agents/code-audit.toml.template",
+        ".codex/agents/code-audit.toml",
+    ),
+    "junie": (".junie/agents/code-audit.md.template", ".junie/agents/code-audit.md"),
+    "opencode": (
+        ".opencode/agents/code-audit.md.template",
+        ".opencode/agents/code-audit.md",
+    ),
+}
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
@@ -226,9 +239,12 @@ def _bundle_files(
 ) -> dict[str, bytes]:
     programming_language = normalize_programming_language(programming_language)
     files = _walk_bundle()
-    template = files.pop(AUDIT_AGENT_TEMPLATE, None)
-    if template is None:
-        raise CoDevError(f"bundle is missing {AUDIT_AGENT_TEMPLATE}")
+    templates: dict[str, bytes] = {}
+    for platform, (source, _) in AUDIT_AGENT_TEMPLATES.items():
+        template = files.pop(source, None)
+        if template is None:
+            raise CoDevError(f"bundle is missing {source}")
+        templates[platform] = template
     # The validator needs a complete policy fixture at the bundle root, while
     # target repositories receive the conflict-safe managed block instead.
     files.pop("AGENTS.md", None)
@@ -246,10 +262,12 @@ def _bundle_files(
             if language not in selected_audit_languages
         )
     }
-    if "opencode" in platforms:
-        files[AUDIT_AGENT_PATH] = _render_code_audit_agent(
-            template, programming_language
-        )
+    for platform in platforms:
+        if platform in AUDIT_AGENT_TEMPLATES:
+            _, destination = AUDIT_AGENT_TEMPLATES[platform]
+            files[destination] = _render_code_audit_agent(
+                templates[platform], programming_language
+            )
     if "opencode" not in platforms:
         files = {
             path: content

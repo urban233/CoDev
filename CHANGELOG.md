@@ -9,6 +9,8 @@ Semantic Versioning.
 - Default programming-language selection to `none`, omit language-specific audit
   skills unless requested, and render the OpenCode code-audit agent from a
   language-aware template.
+- Add the language-aware code-audit agent to the Junie, Codex, and Antigravity
+  adapters.
 
 ## [0.1.7] - 09.08.2026
 
