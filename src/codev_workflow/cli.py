@@ -35,11 +35,17 @@ def _parser() -> argparse.ArgumentParser:
     init = commands.add_parser("init", help="install CoDev into a repository")
     init.add_argument("--target", type=_target, default=Path.cwd())
     init.add_argument(
-        "--platform",
+        "--agent-platform",
         action="append",
         choices=("all", "antigravity", "codex", "junie", "opencode"),
         default=None,
         help="target adapter; repeat to select several (default: all)",
+    )
+    init.add_argument(
+        "--programming-language",
+        choices=("all", "python", "typescript"),
+        default="all",
+        help="code style audit skills to install (default: all)",
     )
     init.add_argument("--dry-run", action="store_true", help="show the plan only")
 
@@ -52,21 +58,33 @@ def _parser() -> argparse.ArgumentParser:
     diff = commands.add_parser("diff", help="preview update changes")
     diff.add_argument("--target", type=_target, default=Path.cwd())
     diff.add_argument(
-        "--platform",
+        "--agent-platform",
         action="append",
         choices=("all", "antigravity", "codex", "junie", "opencode"),
         default=None,
         help="also add this adapter; repeat to select several",
     )
+    diff.add_argument(
+        "--programming-language",
+        choices=("all", "python", "typescript"),
+        default=None,
+        help="code style audit skills to select",
+    )
 
     update = commands.add_parser("update", help="apply a conflict-free bundle update")
     update.add_argument("--target", type=_target, default=Path.cwd())
     update.add_argument(
-        "--platform",
+        "--agent-platform",
         action="append",
         choices=("all", "antigravity", "codex", "junie", "opencode"),
         default=None,
         help="also add this adapter; repeat to select several",
+    )
+    update.add_argument(
+        "--programming-language",
+        choices=("all", "python", "typescript"),
+        default=None,
+        help="code style audit skills to select",
     )
 
     remove = commands.add_parser(
@@ -96,8 +114,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "init":
             target = args.target.resolve()
-            platforms = args.platform or ["all"]
-            plan = plan_init(target, platforms)
+            platforms = args.agent_platform or ["all"]
+            plan = plan_init(target, platforms, args.programming_language)
             print(format_plan(plan))
             if plan.conflicts:
                 print(f"Installation stopped: {len(plan.conflicts)} conflict(s).")
@@ -120,7 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.command in {"diff", "update"}:
             target = args.target.resolve()
-            plan = plan_update(target, args.platform)
+            plan = plan_update(
+                target,
+                args.agent_platform,
+                programming_language=args.programming_language,
+            )
             print(format_plan(plan))
             if plan.conflicts:
                 print(f"Update stopped: {len(plan.conflicts)} conflict(s).")

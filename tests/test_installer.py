@@ -18,8 +18,12 @@ class InstallerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def install(self, platforms: tuple[str, ...] = ("all",)) -> installer.Plan:
-        plan = installer.plan_init(self.target, platforms)
+    def install(
+        self,
+        platforms: tuple[str, ...] = ("all",),
+        programming_language: str = "all",
+    ) -> installer.Plan:
+        plan = installer.plan_init(self.target, platforms, programming_language)
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
         return plan
@@ -39,6 +43,15 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(
             (self.target / ".agents/skills/critique-review/SKILL.md").is_file()
         )
+        self.assertTrue(
+            (self.target / ".agents/skills/audit-google-python-style/SKILL.md").is_file()
+        )
+        self.assertTrue(
+            (
+                self.target
+                / ".agents/skills/audit-google-typescript-style/SKILL.md"
+            ).is_file()
+        )
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
@@ -52,6 +65,62 @@ class InstallerTests(unittest.TestCase):
         result = installer.check_project(self.target)
         self.assertTrue(result.ok, result.issues)
         self.assertGreater(result.managed_files, 30)
+
+    def test_init_installs_only_python_audit_skill(self) -> None:
+        self.install(programming_language="python")
+
+        skills = sorted(
+            path.parent.name
+            for path in (self.target / ".agents" / "skills").glob("*/SKILL.md")
+        )
+        self.assertIn("audit-google-python-style", skills)
+        self.assertNotIn("audit-google-typescript-style", skills)
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("python", lock["programming_language"])
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_init_installs_only_typescript_audit_skill(self) -> None:
+        self.install(programming_language="typescript")
+
+        skills = sorted(
+            path.parent.name
+            for path in (self.target / ".agents" / "skills").glob("*/SKILL.md")
+        )
+        self.assertNotIn("audit-google-python-style", skills)
+        self.assertIn("audit-google-typescript-style", skills)
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_update_changes_exact_programming_language_selection(self) -> None:
+        self.install(programming_language="python")
+
+        plan = installer.plan_update(self.target, programming_language="typescript")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse(
+            (self.target / ".agents/skills/audit-google-python-style").exists()
+        )
+        self.assertTrue(
+            (
+                self.target
+                / ".agents/skills/audit-google-typescript-style/SKILL.md"
+            ).is_file()
+        )
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_update_language_change_conflicts_on_local_audit_skill_edit(self) -> None:
+        self.install(programming_language="python")
+        skill = self.target / ".agents/skills/audit-google-python-style/SKILL.md"
+        skill.write_bytes(skill.read_bytes() + b"\nlocal edit\n")
+
+        plan = installer.plan_update(self.target, programming_language="typescript")
+
+        self.assertTrue(plan.conflicts)
+        with self.assertRaises(installer.CoDevError):
+            installer.apply_plan(self.target, plan)
+        self.assertTrue(skill.exists())
 
     def test_codex_adapter_installs_valid_agents_without_other_adapters(self) -> None:
         self.install(("codex",))

@@ -62,7 +62,7 @@ The development workflow for building a wheel is documented below.
 ### Initialize a repository
 
 ```shell
-codev init --target ../my-project --platform all
+codev init --target ../my-project --agent-platform all
 codev check --target ../my-project
 ```
 
@@ -183,10 +183,11 @@ my-project/
 └── .codev/lock.json                # installed version and source hashes
 ```
 
-Use `--platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
+Use `--agent-platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
 The Codex adapter installs TOML agents under `.codex/agents/`.
-Use `--platform opencode`, `--platform junie`, or `--platform antigravity` to
-select one adapter, or use `--platform all` for every supported platform. Core
+Use `--agent-platform opencode`, `--agent-platform junie`, or
+`--agent-platform antigravity` to select one adapter, or use
+`--agent-platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
 
 The human delivery guide is installed at `docs/for-human/development-guide.md`.
@@ -194,7 +195,7 @@ The cookbook, prompt templates, and detailed handbooks are maintained as
 dedicated Wiki pages.
 
 To add an adapter to an existing installation, pass it to `update`, for example
-`codev update --platform junie`. Use `diff --platform junie` to preview the
+`codev update --agent-platform junie`. Use `diff --agent-platform junie` to preview the
 platform expansion first.
 
 The Antigravity adapter follows its official workspace location:

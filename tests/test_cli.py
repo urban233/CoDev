@@ -21,7 +21,7 @@ class CliTests(unittest.TestCase):
                             "init",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "codex",
                         ]
                     ),
@@ -48,7 +48,7 @@ class CliTests(unittest.TestCase):
                             "init",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "codex",
                         ]
                     ),
@@ -71,7 +71,7 @@ class CliTests(unittest.TestCase):
                             "init",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "codex",
                         ]
                     ),
@@ -83,7 +83,7 @@ class CliTests(unittest.TestCase):
                             "update",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "antigravity",
                         ]
                     ),
@@ -93,6 +93,35 @@ class CliTests(unittest.TestCase):
                 (target / ".agents/skills/review-change/SKILL.md").is_file()
             )
             self.assertEqual(0, main(["check", "--target", str(target)]))
+
+    def test_programming_language_flag_selects_audit_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "init",
+                            "--target",
+                            str(target),
+                            "--agent-platform",
+                            "codex",
+                            "--programming-language",
+                            "typescript",
+                        ]
+                    ),
+                )
+
+            self.assertFalse(
+                (target / ".agents/skills/audit-google-python-style").exists()
+            )
+            self.assertTrue(
+                (
+                    target
+                    / ".agents/skills/audit-google-typescript-style/SKILL.md"
+                ).is_file()
+            )
 
     def test_update_can_add_codex_to_an_existing_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -105,7 +134,7 @@ class CliTests(unittest.TestCase):
                             "init",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "opencode",
                         ]
                     ),
@@ -117,7 +146,7 @@ class CliTests(unittest.TestCase):
                             "update",
                             "--target",
                             str(target),
-                            "--platform",
+                            "--agent-platform",
                             "codex",
                         ]
                     ),

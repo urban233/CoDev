@@ -7,6 +7,10 @@ Semantic Versioning.
 
 ### Changed
 
+- Rename the platform-selection flag to `--agent-platform` to distinguish agent
+  platforms from operating-system platforms.
+- Add the `--programming-language` flag with lock-file persistence to install
+  only the selected Python, TypeScript, or all code-style audit skills.
 - Clarify `pr-review` summaries and publication/retry guidance to prevent
   duplicate reviews and make authorized submissions explicit.
 - Complete Codex adapter distribution and platform filtering so `.codex/agents/`

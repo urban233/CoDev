@@ -13,11 +13,17 @@ from typing import Any
 
 from codev_workflow import __version__
 
-LOCK_SCHEMA_VERSION = 1
+LOCK_SCHEMA_VERSION = 2
+LEGACY_LOCK_SCHEMA_VERSION = 1
 LOCK_PATH = PurePosixPath(".codev/lock.json")
 AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 VALID_PLATFORMS = frozenset({"antigravity", "codex", "junie", "opencode"})
+VALID_PROGRAMMING_LANGUAGES = frozenset({"python", "typescript"})
+AUDIT_SKILL_PREFIXES = {
+    "python": ".agents/skills/audit-google-python-style/",
+    "typescript": ".agents/skills/audit-google-typescript-style/",
+}
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
@@ -121,6 +127,13 @@ def normalize_platforms(platforms: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(selected))
 
 
+def normalize_programming_language(value: str | None) -> str:
+    selected = value or "all"
+    if selected != "all" and selected not in VALID_PROGRAMMING_LANGUAGES:
+        raise CoDevError(f"unknown programming language: {selected}")
+    return selected
+
+
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
@@ -161,11 +174,23 @@ def _walk_bundle() -> dict[str, bytes]:
     return found
 
 
-def _bundle_files(platforms: tuple[str, ...]) -> dict[str, bytes]:
+def _bundle_files(
+    platforms: tuple[str, ...], programming_language: str = "all"
+) -> dict[str, bytes]:
+    programming_language = normalize_programming_language(programming_language)
     files = _walk_bundle()
     # The validator needs a complete policy fixture at the bundle root, while
     # target repositories receive the conflict-safe managed block instead.
     files.pop("AGENTS.md", None)
+    if programming_language != "all":
+        excluded = AUDIT_SKILL_PREFIXES[
+            "typescript" if programming_language == "python" else "python"
+        ]
+        files = {
+            path: content
+            for path, content in files.items()
+            if not path.startswith(excluded)
+        }
     if "opencode" not in platforms:
         files = {
             path: content
@@ -203,7 +228,10 @@ def _read_lock(target: Path) -> dict[str, Any]:
         raise CoDevError(f"cannot read {path}: {error}") from error
     if not isinstance(raw, dict):
         raise CoDevError(f"{path} must contain a JSON object")
-    if raw.get("schema_version") != LOCK_SCHEMA_VERSION:
+    if raw.get("schema_version") not in {
+        LEGACY_LOCK_SCHEMA_VERSION,
+        LOCK_SCHEMA_VERSION,
+    }:
         raise CoDevError(
             f"unsupported lock schema {raw.get('schema_version')!r}; "
             "install a compatible CoDev version"
@@ -373,6 +401,7 @@ def _new_lock(
     platforms: tuple[str, ...],
     files: dict[str, bytes],
     *,
+    programming_language: str,
     default_agent_managed: bool,
     managed_opencode_agents: dict[str, str],
     opencode_schema_managed: bool,
@@ -383,6 +412,7 @@ def _new_lock(
         "schema_version": LOCK_SCHEMA_VERSION,
         "bundle_version": __version__,
         "platforms": list(platforms),
+        "programming_language": programming_language,
         "files": {path: _sha256(files[path]) for path in sorted(files)},
         "integrations": {
             "agents_block_hash": _block_hash(AGENTS_BLOCK),
@@ -395,12 +425,17 @@ def _new_lock(
     }
 
 
-def plan_init(target: Path, platforms: Iterable[str] = ("all",)) -> Plan:
+def plan_init(
+    target: Path,
+    platforms: Iterable[str] = ("all",),
+    programming_language: str = "all",
+) -> Plan:
     target = target.resolve()
     if (target / Path(LOCK_PATH.as_posix())).exists():
         raise CoDevError("CoDev is already installed; use diff or update")
     selected = normalize_platforms(platforms)
-    files = _bundle_files(selected)
+    selected_language = normalize_programming_language(programming_language)
+    files = _bundle_files(selected, selected_language)
     plan = Plan()
 
     for relative, content in sorted(files.items()):
@@ -472,6 +507,7 @@ def plan_init(target: Path, platforms: Iterable[str] = ("all",)) -> Plan:
     plan.lock = _new_lock(
         selected,
         files,
+        programming_language=selected_language,
         default_agent_managed=default_agent_managed,
         managed_opencode_agents=managed_opencode_agents,
         opencode_schema_managed=opencode_schema_managed,
@@ -512,13 +548,28 @@ def _replace_agent_block_for_update(target: Path, old_hash: str, plan: Plan) -> 
         )
 
 
-def plan_update(target: Path, platforms: Iterable[str] | None = None) -> Plan:
+def _audit_skill_language(path: str) -> str | None:
+    for language, prefix in AUDIT_SKILL_PREFIXES.items():
+        if path.startswith(prefix):
+            return language
+    return None
+
+
+def plan_update(
+    target: Path,
+    platforms: Iterable[str] | None = None,
+    *,
+    programming_language: str | None = None,
+) -> Plan:
     target = target.resolve()
     lock = _read_lock(target)
     selected = normalize_platforms(lock.get("platforms", []))
     if platforms is not None:
         selected = normalize_platforms((*selected, *platforms))
-    new_files = _bundle_files(selected)
+    selected_language = normalize_programming_language(
+        programming_language or lock.get("programming_language")
+    )
+    new_files = _bundle_files(selected, selected_language)
     old_files = lock["files"]
     valid_entries = all(
         isinstance(path, str) and isinstance(value, str)
@@ -533,6 +584,20 @@ def plan_update(target: Path, platforms: Iterable[str] | None = None) -> Plan:
         old_hash = old_files.get(relative)
         content = new_files.get(relative)
         if content is None:
+            audit_language = _audit_skill_language(relative)
+            if audit_language is not None and audit_language != selected_language:
+                if not destination.is_file():
+                    plan.operations.append(
+                        Operation("conflict", relative, "managed skill is missing")
+                    )
+                elif _sha256(destination.read_bytes()) == old_hash:
+                    plan.deletions.add(destination)
+                    plan.operations.append(Operation("remove", relative))
+                else:
+                    plan.operations.append(
+                        Operation("conflict", relative, "managed skill has local changes")
+                    )
+                continue
             plan.operations.append(
                 Operation("retire", relative, "upstream removed; retained locally")
             )
@@ -620,6 +685,7 @@ def plan_update(target: Path, platforms: Iterable[str] | None = None) -> Plan:
     plan.lock = _new_lock(
         selected,
         new_files,
+        programming_language=selected_language,
         default_agent_managed=default_managed,
         managed_opencode_agents=managed_opencode_agents,
         opencode_schema_managed=schema_managed,

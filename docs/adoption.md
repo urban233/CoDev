@@ -4,7 +4,7 @@
 
 1. Create the repository and its normal build, test, lint, ownership, and CI
    foundations.
-2. Run `codev init --target <repo> --platform all`.
+2. Run `codev init --target <repo> --agent-platform all`.
 3. Add project-specific instructions outside the marked CoDev block in
    `AGENTS.md`.
 4. Configure model/provider choices in the normal platform configuration.
