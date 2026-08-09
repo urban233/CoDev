@@ -145,9 +145,9 @@ class CliTests(unittest.TestCase):
             self.assertFalse(
                 (target / ".agents/skills/audit-google-typescript-style").exists()
             )
-            audit_agent = (
-                target / ".opencode" / "agents" / "code-audit.md"
-            ).read_text(encoding="utf-8")
+            audit_agent = (target / ".opencode" / "agents" / "code-audit.md").read_text(
+                encoding="utf-8"
+            )
             self.assertIn("language-agnostic", audit_agent)
             self.assertNotIn("audit-google-python-style", audit_agent)
             self.assertNotIn("audit-google-typescript-style", audit_agent)
