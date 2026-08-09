@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "normalize-slug",
+  "description": "Collapse whitespace while producing a lowercase URL slug.",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

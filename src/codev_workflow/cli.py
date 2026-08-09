@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from codev_workflow import __version__
+from codev_workflow.eval import EvaluationError, create_fixture, evaluate
 from codev_workflow.installer import (
     CoDevError,
     apply_plan,
@@ -92,6 +93,18 @@ def _parser() -> argparse.ArgumentParser:
     )
     remove.add_argument("--target", type=_target, default=Path.cwd())
     remove.add_argument("--dry-run", action="store_true", help="show the plan only")
+
+    fixture = commands.add_parser("fixture", help="manage evaluation fixtures")
+    fixture_commands = fixture.add_subparsers(dest="fixture_command", required=True)
+    create = fixture_commands.add_parser("create", help="create an evaluation fixture")
+    create.add_argument("name")
+    create.add_argument("--target", type=_target, required=True)
+    create.add_argument("--include", action="append", required=True)
+
+    evaluation = commands.add_parser("eval", help="evaluate a local fixture")
+    evaluation.add_argument("name")
+    evaluation.add_argument("--target", type=_target, required=True)
+    evaluation.add_argument("--output", type=_target, required=True)
     return parser
 
 
@@ -167,7 +180,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             apply_plan(target, plan)
             print(f"Removed CoDev from {target}")
             return 0
-    except CoDevError as error:
+        if args.command == "fixture" and args.fixture_command == "create":
+            created = create_fixture(args.name, args.target, args.include)
+            print(f"Created fixture at {created}")
+            return 0
+        if args.command == "eval":
+            passed = evaluate(args.name, args.target, args.output)
+            print(f"Evaluation {'passed' if passed else 'failed'}: {args.output}")
+            return 0 if passed else 1
+    except (CoDevError, EvaluationError) as error:
         print(f"codev: {error}", file=sys.stderr)
         return 2
     except OSError as error:

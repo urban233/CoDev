@@ -51,6 +51,7 @@ verifier evidence plus an independent qualitative review.
 - Reuse existing OpenCode subscriber authentication; never read, print, or
   persist credentials.
 - Preserve project-owned provider and model selection.
-- Support Windows and Linux cleanup behavior.
+- V1 is macOS-verified. Windows and Linux compatibility, including cleanup
+  behavior, is deferred risk rather than a V1 acceptance requirement.
 - Keep target repositories free of CoDev runtime dependencies.
 - All execution remains an explicit `codev` command.

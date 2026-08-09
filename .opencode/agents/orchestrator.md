@@ -16,7 +16,9 @@ permission:
     "git rev-parse*": allow
     "git commit*": deny
     "git push*": deny
-  external_directory: deny
+  external_directory:
+    "*": deny
+    /var/folders/n1/ysxzz6m941q01xgj9lrmfnxr0000gn/T/opencode/**: allow
 ---
 
 Act as the human's primary engineering partner. Follow `AGENTS.md`,

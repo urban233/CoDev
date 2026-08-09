@@ -1,10 +1,11 @@
 # Local OpenCode Skill Evaluation Harness Design
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** CoDev maintainers
 **Reviewers:** Python maintainer; OpenCode CLI domain reviewer
 **Brief:** [brief.md](brief.md)
 **Last reviewed:** 2026-08-09
+**Compatibility evidence:** OpenCode 1.18.11 on macOS
 
 ## Summary
 
@@ -29,6 +30,8 @@ scorer. The harness evaluates observable local execution, not agent reasoning.
 - Contain actor changes and all subprocess effects to a temporary worktree.
 - Fail safely on invalid fixtures, unavailable OpenCode, process timeouts, and
   cleanup failures.
+- Treat macOS as the V1-supported platform. Windows and Linux compatibility is
+  deferred risk, not a V1 acceptance requirement.
 
 ### Non-goals
 
@@ -94,12 +97,15 @@ or secrets.
    skips the verifier and judge. Otherwise, the verifier runs in the worktree.
    A nonzero verifier exit, timeout, or launch error records a failed result and
    skips the judge.
-7. On verifier success, a fresh judge process receives `rubric.md`, the actor
-   transcript, the `git diff` from the worktree, and verifier evidence. It must
-   return JSON matching the judge-result contract.
-8. The harness writes `result.json` and captured text/JSON artifacts to the
-   caller's output directory, then removes the worktree and temporary seed.
-   Cleanup failure marks the result failed when it can still be written.
+7. On verifier success, the harness captures the actor transcript, `git diff`,
+   and verifier evidence, then removes the worktree and temporary seed before
+   judging. A cleanup failure records an error and skips the judge.
+8. A fresh judge process runs in a new temporary directory containing only
+   copied `rubric.md` and the captured observable artifacts. It has no evaluated
+   checkout to mutate and must return JSON matching the judge-result contract.
+9. The harness writes `result.json` and captured text/JSON artifacts to the
+   caller's output directory, then removes the judge directory. Cleanup failure
+   marks the result as an error when it can still be written.
 
 ## Fixture Contract
 
@@ -154,6 +160,7 @@ writes each evidence file into it using a staging path and writes this layout:
 
 ```text
 <output>/
+  .codev-eval-commit.json # hidden durable completeness marker
   result.json
   actor-events.jsonl
   actor-output.txt
@@ -166,6 +173,16 @@ writes each evidence file into it using a staging path and writes this layout:
 
 `result.json` is the stable machine-readable summary. Paths are relative to the
 output directory so evidence can be relocated together.
+
+Publication is a single result-bundle transaction. The harness stages every
+evidence file, validates an expected-path and content manifest, flushes file and
+directory data, and writes `.codev-eval-commit.json` last. The marker contains
+the result schema version, bundle identifier, and expected artifact manifest.
+Consumers must validate the marker and every listed file before treating the
+output as a complete evaluation. An interrupted or invalid bundle is removed
+or recovered before a subsequent read; it must never be reported as complete.
+The marker is implementation metadata and is not included in the user-facing
+artifact summary.
 
 ```json
 {
@@ -185,6 +202,38 @@ means fixture validation, process launch, malformed judge output, output write,
 or cleanup prevented a valid evaluation. A verifier failure has
 `judge.status: "skipped"`. No result may be `passed` unless actor, verifier,
 and judge all pass.
+
+### Judge-result Contract
+
+The judge writes exactly one UTF-8 JSON object to standard output. Its complete
+v1 schema is:
+
+```json
+{
+  "schema_version": 1,
+  "verdict": "pass",
+  "summary": "Short rubric-based explanation.",
+  "findings": [
+    {
+      "criterion": "rubric criterion identifier or text",
+      "verdict": "pass",
+      "evidence": "Observable artifact evidence."
+    }
+  ]
+}
+```
+
+All fields are required. `schema_version` must be `1`; top-level `verdict` and
+each finding `verdict` must be `pass` or `fail`; `summary`, `criterion`, and
+`evidence` must be nonempty strings; `findings` must be nonempty; and unknown
+fields are rejected. The judge prompt directs findings to the fixture rubric
+only and supplies only the copied observable artifacts.
+
+A valid top-level `pass` allows an evaluation to pass only after actor and
+verifier success. A valid top-level `fail` produces a failed evaluation. Empty
+output, malformed JSON, a schema violation, a judge launch error, or a judge
+timeout produces an error. The harness retains the captured judge events and
+raw output as evidence whenever the judge was launched.
 
 ## CLI Behavior
 
@@ -207,11 +256,13 @@ discovered from the worktree; it never writes a configuration file or supplies
 a model/provider flag.
 
 The exact OpenCode invocation is deliberately an adapter boundary. The supported
-v1 contract is a fresh `opencode run --format json --dir <worktree>` process for
-both actor and judge. The judge prompt is read-only and rubric-constrained; it
-must return the judge-result JSON and has no authority to override deterministic
-failures. The driver pins those supported flags in tests using a fake executable;
-the user-facing CoDev contract above remains stable if OpenCode changes.
+v1 contract is a fresh `opencode run --format json --dir <directory> <message>`
+process, where `<message>` is the actor prompt or judge prompt. The actor runs
+in the worktree; the judge runs in the separate evidence-only judge directory.
+The judge is rubric-constrained, must return the judge-result JSON, and has no
+authority to override deterministic failures. The driver pins those supported
+flags and positional prompt transport in tests using a fake executable; the
+user-facing CoDev contract above remains stable if OpenCode changes.
 
 ## Alternatives and Trade-offs
 
@@ -228,10 +279,30 @@ the user-facing CoDev contract above remains stable if OpenCode changes.
 - **Security and privacy:** Treat fixture contents, actor output, and diffs as
   potentially sensitive local data. Do not upload, log environment variables,
   or copy excluded paths. Do not accept arbitrary shell strings in a verifier.
+- **Judge integrity:** The judge runs only after successful actor-worktree and
+  seed cleanup, in a separate temporary directory containing copied evidence.
+  It therefore cannot modify the evaluated checkout. It cannot turn an actor or
+  verifier failure into a pass.
+- **Known V1 publication issue:** Evidence files are published into the
+  caller-provided output directory before the durable commit marker is final.
+  A process interruption during that narrow window can leave partial evidence,
+  and a concurrent replacement of the output directory can create a
+  publication race. Normal completed runs validate the commit marker and
+  manifest, but crash-consistent single-bundle publication is deferred and is
+  not being fixed in V1. Callers should use a unique output directory and
+  discard incomplete outputs that lack a valid commit marker.
+- **Accepted V1 privacy risk:** Unstructured diagnostic text may contain
+  credential-bearing URLs, including user-info or sensitive query parameters,
+  that the conservative sanitizer does not reliably redact. Structured JSON
+  secret fields are sanitized, but URL credential detection is deferred. V1
+  users must avoid placing credentials in fixture/process diagnostics; a later
+  hardening change should add URL-aware redaction.
 - **Reliability and concurrency:** Use a unique OS temporary directory per run.
   Run subprocesses in new process groups and terminate their process trees on
   timeout. Cleanup is attempted in `finally` regardless of earlier failure.
-  Concurrent runs are safe because output directories must differ.
+  Concurrent runs are safe because output directories must differ. This behavior
+  was exercised on macOS only for V1; Windows and Linux cleanup semantics remain
+  deferred compatibility risk.
 - **Observability and cost:** Print phase transitions and the final output path.
   Record duration and status for each phase. There is no CoDev-side model cost;
   the user controls their authenticated OpenCode subscription and configuration.
@@ -242,9 +313,9 @@ the user-facing CoDev contract above remains stable if OpenCode changes.
 
 ## Implementation Plan
 
-1. Confirm the supported OpenCode CLI JSON actor and fresh read-only judge
-   contracts with a documented compatibility spike. Stop if the installed CLI
-   cannot supply isolated noninteractive runs or machine-readable output.
+1. Confirm the supported OpenCode CLI JSON actor and separate evidence-only
+   judge contracts with a documented compatibility spike. Stop if the installed
+   CLI cannot supply isolated noninteractive runs or machine-readable output.
 2. Add a standard-library `codev_workflow.eval` boundary for strict fixture and
    result validation, selected-path creation, and atomic evidence writing.
    Unit-test valid data, schema rejection, path traversal, symlink rejection,
@@ -253,8 +324,9 @@ the user-facing CoDev contract above remains stable if OpenCode changes.
    detached-worktree removal after success and failure, timeout termination,
    and active-target non-mutation using fake `git` and OpenCode executables.
 4. Add the verifier and actor/judge orchestration. Test phase ordering,
-   artifact capture, verifier-gated judge skipping, malformed judge JSON, and
-   the result outcome matrix without calling real OpenCode.
+   artifact capture, verifier-gated judge skipping, cleanup-before-judge,
+   malformed judge JSON, and the result outcome matrix without calling real
+   OpenCode.
 5. Register the two CLI commands and add integration tests for exit codes,
    required `--output`, output atomicity, and a complete passing evaluation
    driven by fake executables.
@@ -278,20 +350,31 @@ This is additive: no existing command, managed bundle file, or workflow catalog
 changes behavior. Ship the commands as experimental in the release notes with
 one example fixture. Removing the package version removes command access but
 does not delete developer-authored fixtures or caller-selected evidence output.
-Every run removes only its uniquely owned temporary seed and worktree; it never
-calls destructive Git commands against the target repository.
+Every run removes only its uniquely owned temporary seed, worktree, and judge
+directory; it never calls destructive Git commands against the target
+repository.
 
-## Open Questions
+## Resolved Contracts and Deferred Risks
 
-| Question | Owner | Evidence needed | Blocking? |
-|---|---|---|---|
-| Does the current OpenCode JSON runner preserve the required read-only judge prompt boundary without provider overrides? | OpenCode CLI domain reviewer | Compatibility spike on supported Windows and Linux installations | Yes |
-| Does OpenCode inherit project-local configuration from a temporary worktree without an explicit config path? | OpenCode CLI domain reviewer | Compatibility fixture with an installed CoDev project | Yes |
-| What output schema can the judge reliably produce for a rubric verdict? | CoDev maintainers | Prompt prototype and malformed-output handling test | Yes |
+| Topic | Decision | Evidence or follow-up |
+|---|---|---|
+| OpenCode actor, judge output, and project configuration | Supported for V1 on macOS with OpenCode 1.18.11. | Compatibility spike recorded an isolated actor edit, a fresh judge result of `{"verdict":"pass"}`, and temporary-worktree configuration discovery. |
+| Judge isolation | Cleanup the actor worktree and seed before judge launch; run the judge only against copied observable artifacts in a separate temporary directory. | Test successful cleanup before judge launch and judge skipping after cleanup failure. |
+| Judge-result schema | Use the strict v1 JSON contract above. | Test valid pass/fail responses plus malformed JSON, unknown fields, missing fields, and invalid values. |
+| Windows and Linux compatibility | Deferred risk; not a V1 acceptance requirement. | Qualify cleanup and process-tree behavior before adding either platform as supported. |
+| Crash-consistent publication | Known V1 issue; deferred. | A later hardening change should publish one atomic result bundle or otherwise eliminate partial-output and directory-replacement races. |
+| URL credentials in unstructured diagnostics | Accepted P1 V1 risk; deferred. | A later hardening change should redact URL user-info and sensitive query parameters before persistence and judge staging. |
 
 ## Acceptance
 
 - [x] V1 outcome, local-only boundary, and selected-path fixture model are accepted in [brief.md](brief.md).
-- [ ] OpenCode compatibility spike resolves the three blocking contracts.
+- [x] Judge isolation and judge-result schema contracts are accepted for V1.
+- [x] macOS OpenCode 1.18.11 compatibility spike supports actor execution,
+  judge output, and temporary-worktree project configuration discovery.
+- [x] V1 publication crash-consistency limitation is documented as a known issue
+  and explicitly deferred.
+- [x] URL-credential redaction gap is documented as an accepted P1 V1 risk and
+  explicitly deferred.
 - [ ] Python maintainer and OpenCode CLI domain reviewer approve the design.
-- [ ] Accountable human accepts implementation planning against this design.
+- [x] Accountable human accepts implementation planning against this design,
+  with Windows/Linux retained as deferred risk.
