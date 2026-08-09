@@ -31,18 +31,12 @@ EXPECTED_SKILLS = {
     "launch-product": ["assets/launch-plan.template.md"],
 }
 
-EXPECTED_HANDBOOKS = [
-    "PYTHON-PROJECT-HANDBOOK.md",
-    "LANGUAGE-AGNOSTIC-PROJECT-HANDBOOK.md",
-    "IDEA-TO-PRODUCTION-HANDBOOK.md",
-]
+EXPECTED_HANDBOOKS: list[str] = []
 
 EXPECTED_GUIDES = [
     "AGENTS.md",
     "docs/for-human/development-guide.md",
     "docs/for-ai/ai-agent-guidelines.md",
-    "docs/WORKFLOW-COOKBOOK.md",
-    "docs/AI-WORKFLOW-PROMPTS.md",
 ]
 
 EVALUATION_SCRIPT = "scripts/evaluate-development-workflow.py"

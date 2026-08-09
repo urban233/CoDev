@@ -3,6 +3,12 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.1.6] - 09.08.2026
+
+### Fixed
+
+- Align workflow validation expectations with the current bundled documentation.
+
 ## [0.1.5] - 09.08.2026
 
 ### Changed
