@@ -3,6 +3,12 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.1.7] - 09.08.2026
+
+### Fixed
+- Prevent release preparation from rebuilding distributions by validating tag and
+  version metadata before downloading the exact tested artifacts.
+
 ## [0.1.6] - 09.08.2026
 
 ### Fixed

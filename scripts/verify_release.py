@@ -137,6 +137,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--tag", help="release tag to validate, for example v0.1.3")
+    parser.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="validate versions and tag without running release checks",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
@@ -149,6 +154,8 @@ def main() -> int:
     except (OSError, SyntaxError, KeyError, TypeError, ValueError) as error:
         parser.error(str(error))
     print("Release metadata is consistent.")
+    if args.metadata_only:
+        return 0
     try:
         run_release_checks(root)
     except ValueError as error:

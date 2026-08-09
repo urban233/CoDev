@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +41,18 @@ class ReleaseVerificationTests(unittest.TestCase):
     def test_mismatched_tag_fails(self) -> None:
         with self.assertRaisesRegex(ValueError, "tag v0.1.4"):
             verify_release.verify(self.root, "v0.1.4")
+
+    def test_metadata_only_mode_skips_release_checks(self) -> None:
+        with (
+            patch.object(
+                sys,
+                "argv",
+                ["verify_release.py", "--root", str(self.root), "--metadata-only"],
+            ),
+            patch.object(verify_release, "run_release_checks") as checks,
+        ):
+            self.assertEqual(0, verify_release.main())
+        checks.assert_not_called()
 
     def test_release_checks_run_all_quality_gates(self) -> None:
         (self.root / "dist").mkdir()

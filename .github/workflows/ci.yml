@@ -94,7 +94,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Verify release tag and package versions
-        run: python scripts/verify_release.py --tag "$GITHUB_REF_NAME"
+        run: >-
+          python scripts/verify_release.py
+          --tag "$GITHUB_REF_NAME"
+          --metadata-only
       - name: Download distributions tested by CI
         uses: actions/download-artifact@v4
         with:
