@@ -176,7 +176,7 @@ my-project/
 ├── .opencode/agents/                 # orchestrator, builder, reviewer
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── .junie/agents/                    # Junie subagents
-├── docs/                             # workflow, prompts, handbooks, cookbook
+├── docs/                             # AI guidance and human delivery guide
 ├── evals/development-workflow/       # behavioral scenarios
 ├── scripts/                          # deterministic validators
 └── .codev/lock.json                # installed version and source hashes
@@ -186,6 +186,10 @@ Use `--platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
 Use `--platform opencode`, `--platform junie`, or `--platform antigravity` to
 select one adapter, or use `--platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
+
+The human delivery guide is installed at `docs/for-human/development-guide.md`.
+The cookbook, prompt templates, and detailed handbooks are maintained as
+dedicated Wiki pages.
 
 To add an adapter to an existing installation, pass it to `update`, for example
 `codev update --platform junie`. Use `diff --platform junie` to preview the

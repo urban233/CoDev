@@ -39,8 +39,8 @@ EXPECTED_HANDBOOKS = [
 
 EXPECTED_GUIDES = [
     "AGENTS.md",
-    "docs/WORKFLOW-HUMAN.md",
-    "docs/for-ai/WORKFLOW-AGENTS.md",
+    "docs/for-human/development-guide.md",
+    "docs/for-ai/ai-agent-guidelines.md",
     "docs/WORKFLOW-COOKBOOK.md",
     "docs/AI-WORKFLOW-PROMPTS.md",
 ]

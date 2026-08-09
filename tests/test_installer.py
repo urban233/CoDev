@@ -30,7 +30,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(10, len(skills))
+        self.assertEqual(13, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/clean-code-review/SKILL.md").is_file()
@@ -42,7 +42,7 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
         self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / "docs/WORKFLOW-HUMAN.md").is_file())
+        self.assertTrue((self.target / "docs/for-human/development-guide.md").is_file())
         self.assertTrue((self.target / ".codev/lock.json").is_file())
 
         result = installer.check_project(self.target)

@@ -33,6 +33,7 @@ through. Most changes do not need them.
 | Situation | Skill(s) |
 |---|---|
 | Local, low-risk, obvious fix | `build-change`, then `review-change` if risk warrants |
+| Existing GitHub Pull Request review | `pr-review` |
 | Maintainability / Clean Code / GoF / Python-smell scan | `clean-code-review`, alongside `review-change` — it does not replace correctness or security review |
 | A review or presubmit finding needs a concrete patch | `critique-review` — drafts a diff only; requires an explicit developer or `build-change` handoff before anything is modified, then a fresh `review-change` |
 | Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |

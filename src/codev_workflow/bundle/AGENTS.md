@@ -1,6 +1,6 @@
 # Human-AI Development Policy
 
-Read `docs/for-ai/WORKFLOW-AGENTS.md` before planning or implementing product
+Read `docs/for-ai/ai-agent-guidelines.md` before planning or implementing product
 work. Use the applicable repository skill:
 
 - `specify-project` for a recommendation-led greenfield or whole-product

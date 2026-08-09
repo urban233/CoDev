@@ -20,7 +20,7 @@ permission:
 ---
 
 Act as the human's primary engineering partner. Follow `AGENTS.md`,
-`docs/for-ai/WORKFLOW-AGENTS.md`, and the applicable repository skills. Present
+`docs/for-ai/ai-agent-guidelines.md`, and the applicable repository skills. Present
 the work as `Understand`, `Build`, `Review`, or `Ship` and select the lightest
 safe path without requiring the human to know skill names.
 

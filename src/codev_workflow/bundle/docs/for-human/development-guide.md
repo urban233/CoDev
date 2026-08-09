@@ -3,7 +3,9 @@
 *Start here. This is the short version — the mental model, the lifecycle, and
 the rules you need to work day to day. For stage-by-stage depth, worked
 examples, and team mechanics, see the
-[Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md).*
+[Idea-to-Production Handbook](../handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md). The
+cookbook, prompt templates, and detailed handbooks are also available as
+dedicated Wiki pages.*
 
 ## The problem this solves
 
@@ -61,7 +63,7 @@ same four human-facing steps. You do not need to name a skill or memorize the
 internal routing — describe what you want in plain language, and the AI
 resolves it to the right step and the right internal skill
 (`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
-`build-change`, `review-change`, `clean-code-review`, `critique-review`,
+`build-change`, `review-change`, `pr-review`, `clean-code-review`, `critique-review`,
 `launch-product`).
 
 | Step | Question it answers | Deepens into |
@@ -182,7 +184,7 @@ through one conversation.
 
 The full mechanics — dependency vocabulary, integration checkpoints, rolling-
 wave planning, and a worked multi-developer example — live in the
-[Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md#15-multi-developer-coordination-in-detail).
+[Idea-to-Production Handbook](../handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md#15-multi-developer-coordination-in-detail).
 
 ## Canonical artifacts
 
@@ -206,12 +208,12 @@ them.
 | Document | Answers | Audience |
 |---|---|---|
 | **This document** | What is CoDev, and what's the model for using it? | You, once |
-| [AI Agent Reference](for-ai/WORKFLOW-AGENTS.md) | Exactly how must an AI behave inside this workflow? | The AI, every session |
-| [Workflow Cookbook](WORKFLOW-COOKBOOK.md) | What do I actually type for the four common shapes of work? | You, while working |
-| [Prompt Templates](AI-WORKFLOW-PROMPTS.md) | What's a ready-to-paste prompt for this specific situation? | You, while working |
-| [Idea-to-Production Handbook](handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md) | What's the full stage-by-stage detail, quality gates, and team mechanics? | You, when you need depth |
-| [Python Project Handbook](handbooks/PYTHON-PROJECT-HANDBOOK.md) | How should a Python repository using this workflow be structured and operated? | You, setting up or maintaining a Python project |
-| [Language-Agnostic Project Handbook](handbooks/LANGUAGE-AGNOSTIC-PROJECT-HANDBOOK.md) | Same question, for any other language or stack | You, setting up or maintaining a non-Python project |
+| [AI Agent Reference](../for-ai/ai-agent-guidelines.md) | Exactly how must an AI behave inside this workflow? | The AI, every session |
+| [Workflow Cookbook](../WORKFLOW-COOKBOOK.md) | What do I actually type for the four common shapes of work? | You, while working |
+| [Prompt Templates](../AI-WORKFLOW-PROMPTS.md) | What's a ready-to-paste prompt for this specific situation? | You, while working |
+| [Idea-to-Production Handbook](../handbooks/IDEA-TO-PRODUCTION-HANDBOOK.md) | What's the full stage-by-stage detail, quality gates, and team mechanics? | You, when you need depth |
+| [Python Project Handbook](../handbooks/PYTHON-PROJECT-HANDBOOK.md) | How should a Python repository using this workflow be structured and operated? | You, setting up or maintaining a Python project |
+| [Language-Agnostic Project Handbook](../handbooks/LANGUAGE-AGNOSTIC-PROJECT-HANDBOOK.md) | Same question, for any other language or stack | You, setting up or maintaining a non-Python project |
 
 If a rule appears in more than one of these, that's a bug in the
 documentation, not a feature — each document above owns a distinct question.

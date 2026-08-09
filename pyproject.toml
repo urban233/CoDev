@@ -61,6 +61,7 @@ codev_workflow = [
   "bundle/.junie/commands/*.md",
   "bundle/docs/*.md",
   "bundle/docs/for-ai/*.md",
+  "bundle/docs/for-human/*.md",
   "bundle/docs/handbooks/*.md",
   "bundle/evals/development-workflow/*.json",
   "bundle/scripts/*.py",
