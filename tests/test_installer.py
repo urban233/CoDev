@@ -44,12 +44,13 @@ class InstallerTests(unittest.TestCase):
             (self.target / ".agents/skills/critique-review/SKILL.md").is_file()
         )
         self.assertTrue(
-            (self.target / ".agents/skills/audit-google-python-style/SKILL.md").is_file()
+            (
+                self.target / ".agents/skills/audit-google-python-style/SKILL.md"
+            ).is_file()
         )
         self.assertTrue(
             (
-                self.target
-                / ".agents/skills/audit-google-typescript-style/SKILL.md"
+                self.target / ".agents/skills/audit-google-typescript-style/SKILL.md"
             ).is_file()
         )
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
@@ -104,8 +105,7 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertTrue(
             (
-                self.target
-                / ".agents/skills/audit-google-typescript-style/SKILL.md"
+                self.target / ".agents/skills/audit-google-typescript-style/SKILL.md"
             ).is_file()
         )
         self.assertTrue(installer.check_project(self.target).ok)

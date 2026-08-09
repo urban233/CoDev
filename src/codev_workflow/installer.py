@@ -595,7 +595,9 @@ def plan_update(
                     plan.operations.append(Operation("remove", relative))
                 else:
                     plan.operations.append(
-                        Operation("conflict", relative, "managed skill has local changes")
+                        Operation(
+                            "conflict", relative, "managed skill has local changes"
+                        )
                     )
                 continue
             plan.operations.append(

@@ -118,8 +118,7 @@ class CliTests(unittest.TestCase):
             )
             self.assertTrue(
                 (
-                    target
-                    / ".agents/skills/audit-google-typescript-style/SKILL.md"
+                    target / ".agents/skills/audit-google-typescript-style/SKILL.md"
                 ).is_file()
             )
 

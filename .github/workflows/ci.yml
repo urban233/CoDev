@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Install release verification tools
+        run: python -m pip install -e ".[dev]"
       - name: Verify package and runtime versions
         run: python scripts/verify_release.py
 

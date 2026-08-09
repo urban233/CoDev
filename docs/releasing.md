@@ -7,7 +7,7 @@
    changes.
 4. Update `CHANGELOG.md`, `pyproject.toml`, and `src/codev_workflow/__init__.py`
    to the same release version.
-5. Run the lightweight metadata preflight locally:
+5. Run the release metadata and quality-gate preflight locally:
    `python scripts/verify_release.py --tag vX.Y.Z`.
 6. Review the exact release diff.
 7. Create and push a reviewed, signed `vX.Y.Z` tag after human authorization.
