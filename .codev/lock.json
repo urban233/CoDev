@@ -2,6 +2,7 @@
   "schema_version": 2,
   "bundle_version": "0.1.7",
   "platforms": [
+    "codex",
     "opencode"
   ],
   "programming_language": "python",
@@ -45,8 +46,12 @@
     ".agents/skills/specify-project/assets/specification.template.md": "9c5b3c5fdd7a5ace76fa21127d52be636c02097d895f6c2f53c96e522e7d2bda",
     ".agents/skills/specify-project/references/interview-coverage.md": "d4bf578e5f20c729ab7ee83ad00f4defeffaaec3ef6a1c93083861132a29fe05",
     ".agents/skills/specify-project/scripts/validate_specification.py": "4f5bc10184de985823e2a0d36e07b3a6453825ad629f7408d497d8ae9451d4f8",
+    ".codex/agents/builder.toml": "524bb30938271d6041c6590bf32dcb21adc0cb3b91c040cf8c756c40270c2cef",
+    ".codex/agents/code-audit.toml": "d9974137997699fdb5059af1f7c5e4891bcf506686d32308ab3f4df8069c05b2",
+    ".codex/agents/orchestrator.toml": "deae1572dd19938e0bdfe7145e6576b7dadf9eef07006c34dd0ea063179ae4d1",
+    ".codex/agents/reviewer.toml": "433a160aab05d277a8ccdbc306359a7cf6293dc05f49ec61622c6eaf298b5fc1",
     ".opencode/agents/builder.md": "0b5a2225a3cdc0fe64fbdbd75f9908bb46f1d675e8858cc7ea8fd5a0ddcda660",
-    ".opencode/agents/code-audit.md": "8b007850071fddb96286289db14b8c7e88510edc2ab4431591899124636559a3",
+    ".opencode/agents/code-audit.md": "5beff7bb85ee69873df91bf946a38be47e26445b49cdd42ea9ef95c86c532fa9",
     ".opencode/agents/orchestrator.md": "d3ed94b0b83ef394d49aa834fa5a9c2f17ff3ee1470d855d2da77b1a7bfbd803",
     ".opencode/agents/reviewer.md": "3ee4777013212f184b8ec45dc1e20ae9e475bd9c89c823dd290dadd943684541",
     "docs/for-ai/ai-agent-guidelines.md": "bd0709e4f16f31ac03f89cd1cde934a513956802efe213c9b1715d2ece48a0bd",
@@ -60,6 +65,7 @@
     "opencode_default_agent_managed": true,
     "opencode_agent_hashes": {
       "builder": "c794d9f0ed0d09bae2a02b176edc17e13f081294738e76bd817a08eb8489e783",
+      "code-audit": "2e5d4adf2e9a363f928f35c82a032eebf133a81a1797882d00bbcbd1c06fcdd7",
       "orchestrator": "42ca89c2065616410ebf815e0a8fc584051ae4af0bf14422ff119692a7596148",
       "reviewer": "2abf16c50f68b2a5af1ba67fee4ea2fb879d5535cf26b7efbc397f8576f26c3a"
     },
