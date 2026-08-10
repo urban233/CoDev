@@ -1655,7 +1655,7 @@ class FixtureContractTests(unittest.TestCase):
                 env: dict[str, str] | None = None,
                 **kwargs: Any,
             ) -> Any:
-                if argv[0] == str(actor):
+                if Path(argv[0]).resolve() == actor.resolve():
                     raise EvaluationError("actor launch failed")
                 return real_run(argv, cwd, timeout, env)
 
@@ -1741,7 +1741,10 @@ class FixtureContractTests(unittest.TestCase):
                 env: dict[str, str] | None = None,
                 **kwargs: Any,
             ) -> Any:
-                if argv[0] == str(actor) and "Review rubric" in argv[-1]:
+                if (
+                    Path(argv[0]).resolve() == actor.resolve()
+                    and "Review rubric" in argv[-1]
+                ):
                     raise EvaluationError("judge launch failed")
                 return real_run(argv, cwd, timeout, env)
 

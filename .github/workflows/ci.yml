@@ -78,7 +78,7 @@ jobs:
           python -m venv .release-venv
           .release-venv/bin/python -m pip install --no-deps dist/*.whl
           .release-venv/bin/codev --version
-          .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['builder.toml', 'orchestrator.toml', 'reviewer.toml']"
+          .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['builder.toml', 'code-audit.toml.template', 'orchestrator.toml', 'reviewer.toml']"
       - name: Upload tested distributions
         uses: actions/upload-artifact@v4
         with:
