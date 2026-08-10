@@ -2,6 +2,8 @@
   "schema_version": 1,
   "name": "seeded-defect-security",
   "description": "Actor reviews a helper with a planted SQL-injection defect; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "security",
   "actor_timeout_seconds": 600,
   "judge_timeout_seconds": 300
 }

@@ -6,8 +6,9 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
-from codev_workflow.cli import _apply_deprecated_aliases, main
+from codev_workflow.cli import _apply_deprecated_aliases, _format_snapshot_report, main
 
 
 class CliTests(unittest.TestCase):
@@ -604,6 +605,185 @@ class CliTests(unittest.TestCase):
         )
         self.assertEqual(["status"], _apply_deprecated_aliases(["status"]))
         self.assertEqual([], _apply_deprecated_aliases([]))
+
+    def test_eval_run_without_skill_flag_maps_to_with_skill_false(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            code = main(
+                [
+                    "eval",
+                    "run",
+                    "name",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--without-skill",
+                ]
+            )
+        self.assertEqual(0, code)
+        self.assertFalse(evaluate_mock.call_args.kwargs["with_skill"])
+
+    def test_eval_run_defaults_to_with_skill(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(["eval", "run", "name", "--target", "T", "--output", "O"])
+        self.assertTrue(evaluate_mock.call_args.kwargs["with_skill"])
+
+    def test_eval_snapshot_run_prints_category_matrix(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 5,
+            "categories": {
+                "security": {
+                    "with_skill_percentage": 100.0,
+                    "without_skill_percentage": 50.0,
+                    "delta": 50.0,
+                }
+            },
+            "overall": {
+                "with_skill_percentage": 100.0,
+                "without_skill_percentage": 50.0,
+                "delta": 50.0,
+            },
+        }
+        with patch(
+            "codev_workflow.cli.run_snapshot", return_value=report
+        ) as snapshot_mock:
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(
+                    [
+                        "eval",
+                        "snapshot",
+                        "run",
+                        "review-change",
+                        "--target",
+                        "T",
+                        "--output",
+                        "O",
+                        "--repetitions",
+                        "5",
+                    ]
+                )
+        self.assertEqual(0, code)
+        snapshot_mock.assert_called_once()
+        self.assertEqual(5, snapshot_mock.call_args.kwargs["repetitions"])
+        printed = output.getvalue()
+        self.assertIn("Skill: review-change (5 repetitions)", printed)
+        self.assertIn("security", printed)
+        self.assertIn("Overall", printed)
+        self.assertIn("+50.0pp", printed)
+        self.assertIn("Full report:", printed)
+
+    def test_eval_snapshot_run_forwards_repeated_category_flags(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "without_skill_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_snapshot", return_value=report
+            ) as snapshot_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "snapshot",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--category",
+                    "security",
+                    "--category",
+                    "correctness",
+                ]
+            )
+        self.assertEqual(
+            ["security", "correctness"],
+            snapshot_mock.call_args.kwargs["only_categories"],
+        )
+
+    def test_eval_snapshot_run_defaults_categories_to_none(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "without_skill_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_snapshot", return_value=report
+            ) as snapshot_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "snapshot",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertIsNone(snapshot_mock.call_args.kwargs["only_categories"])
+
+    def test_format_snapshot_report_aligns_columns_and_sorts_categories(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 3,
+            "categories": {
+                "security": {
+                    "with_skill_percentage": 100.0,
+                    "without_skill_percentage": 66.7,
+                    "delta": 33.3,
+                },
+                "architecture_scope": {
+                    "with_skill_percentage": 50.0,
+                    "without_skill_percentage": 50.0,
+                    "delta": 0.0,
+                },
+            },
+            "overall": {
+                "with_skill_percentage": 75.0,
+                "without_skill_percentage": 58.4,
+                "delta": 16.7,
+            },
+        }
+        table = _format_snapshot_report(report)
+        lines = table.splitlines()
+        # Category rows are sorted alphabetically; Overall always comes last,
+        # set off by its own separator line, regardless of category order.
+        architecture_index = next(
+            i for i, line in enumerate(lines) if line.startswith("architecture_scope")
+        )
+        security_index = next(
+            i for i, line in enumerate(lines) if line.startswith("security")
+        )
+        overall_index = next(
+            i for i, line in enumerate(lines) if line.startswith("Overall")
+        )
+        self.assertLess(architecture_index, security_index)
+        self.assertLess(security_index, overall_index)
+        self.assertTrue(lines[overall_index - 1].startswith("---"))
+        # Every data row (header excluded) has the same length once padded.
+        data_rows = [line for line in lines if not line.startswith("-") and "%" in line]
+        self.assertEqual(1, len({len(row) for row in data_rows}))
 
 
 if __name__ == "__main__":

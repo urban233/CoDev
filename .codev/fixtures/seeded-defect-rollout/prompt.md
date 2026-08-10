@@ -1,7 +1,6 @@
 # Task
 
-Act as an independent code reviewer, following this repository's
-`review-change` skill and conventions. The file `changed/module.py` was just
+Act as an independent code reviewer. The file `changed/module.py` was just
 introduced in a pull request, replacing a previously public function named
 `calculate_total` that other, unreviewed callers in this codebase still use.
 Review it for defects across every review dimension (correctness;

@@ -17,13 +17,22 @@ Semantic Versioning.
   still references the `codev work` lifecycle wiring, hasn't regressed to the
   retired P0-P3 finding scale, and doesn't grant unrestricted shell execution;
   the same check runs in CI against the shipped bundle for all four platforms.
-- Add a seven-fixture seeded-defect corpus (`.codev/fixtures/seeded-defect-*`,
-  one per review dimension) and `scripts/run_seeded_defect_suite.py` to
-  measure reviewer recall empirically instead of assuming the coverage
-  checklist is followed. A new scheduled `live-eval` CI job runs the suite
-  against a live OpenCode actor and gates `prepare-release`; its OpenCode
-  installation/authentication step is a placeholder pending this project's
-  actual CI credentials.
+- Add `codev eval snapshot run <skill>`: discovers every fixture tagged with
+  a skill (`fixture.json` now requires `skill` and `category`), and for each
+  category runs the fixture with the skill staged into the worktree and
+  without it, repeated (`--repetitions`, default 3), reporting a pass
+  percentage per condition and the delta between them - empirical evidence
+  that a skill measurably outperforms not having it, not just a recall
+  number in isolation. `codev eval run` gained `--without-skill` for
+  single-fixture use. Replaces the fixture-only `scripts/run_seeded_defect_suite.py`.
+  Backed by the seven-fixture seeded-defect corpus
+  (`.codev/fixtures/seeded-defect-*`, one per review dimension, `skill:
+  review-change`), each seeding a small reviewable change with one
+  deliberately planted, known defect verified deterministically rather than
+  trusted from the coverage checklist alone. The scheduled `live-eval` CI job
+  runs a snapshot against a live OpenCode actor and gates `prepare-release`;
+  its OpenCode installation/authentication step is a placeholder pending this
+  project's actual CI credentials.
 
 ### Changed
 - Default programming-language selection to `none`, omit language-specific audit

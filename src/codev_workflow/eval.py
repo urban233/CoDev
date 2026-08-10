@@ -18,10 +18,13 @@ import sys
 import tempfile
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from codev_workflow.installer import AGENTS_END, AGENTS_START
 
 
 class EvaluationError(RuntimeError):
@@ -35,6 +38,21 @@ _SECRET_NAMES = frozenset(
 )
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _JUDGE_FIELDS = {"schema_version", "verdict", "summary", "findings"}
+# _valid_judge() requires exactly this shape. The prompt must spell it out:
+# without it, the judge has no way to know what "the required JSON" means
+# (nothing else staged into judge_dir documents the schema), and in practice
+# spends its whole turn reading files instead of ever producing an answer --
+# reproduced directly against a real model, not a guess.
+_JUDGE_PROMPT = (
+    "Review rubric.md and the other files in this directory as observable "
+    "evidence. Reply with exactly one JSON object and nothing else -- no "
+    "markdown fences, no commentary before or after it -- matching this "
+    "schema: "
+    '{"schema_version": 1, "verdict": "pass" or "fail", "summary": '
+    '"one paragraph", "findings": [{"criterion": "short id", "verdict": '
+    '"pass" or "fail", "evidence": "specific evidence from the files"}]}. '
+    "Include one findings entry per rubric criterion."
+)
 _COMMIT_MARKER = ".codev-eval-commit.json"
 _TRANSACTION_MARKER = ".codev-eval-transaction.json"
 _PRIVATE_OWNER_MARKER = ".codev-eval-owner.json"
@@ -386,8 +404,29 @@ def _isolated_env() -> dict[str, str]:
         "OPENCODE_API_KEY",
         "OPENCODE_AUTH_TOKEN",
         "OPENCODE_SERVER_PASSWORD",
+        # Carry no secrets, but Windows child processes (Node.js-based CLIs
+        # like an npm-installed opencode.CMD in particular) need these just to
+        # start; without SystemRoot in the child environment the process
+        # fails immediately (observed as exit code 0xC0000409).
+        "SystemRoot",
+        "windir",
+        "SystemDrive",
+        "ComSpec",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "NUMBER_OF_PROCESSORS",
+        "PROCESSOR_ARCHITECTURE",
+        "OS",
     }
-    env = {key: value for key, value in os.environ.items() if key in allowed}
+    # Windows environment variable names are case-insensitive at the OS level,
+    # but which case a given launcher (PowerShell, cmd.exe, an MSYS shell...)
+    # actually hands to os.environ varies (e.g. SystemRoot vs SYSTEMROOT), so
+    # match case-insensitively rather than listing every variant by hand.
+    allowed_upper = {name.upper() for name in allowed}
+    env = {
+        key: value for key, value in os.environ.items() if key.upper() in allowed_upper
+    }
     env.update(
         {
             "GIT_CONFIG_NOSYSTEM": "1",
@@ -395,7 +434,39 @@ def _isolated_env() -> dict[str, str]:
             "GIT_CONFIG_SYSTEM": os.devnull,
         }
     )
+    # Guarantee a working "python"/"python3" for fixture verifiers by
+    # prepending the interpreter actually running CoDev, rather than
+    # depending on whatever those bare names happen to resolve to elsewhere
+    # on PATH. On Windows in particular, "python3" commonly resolves only to
+    # a non-functional Microsoft Store execution-alias stub (prints "Python
+    # was not found..." and exits 9009) unless a real interpreter's
+    # directory is earlier on PATH -- observed directly, not theoretical.
+    interpreter_dir = str(Path(sys.executable).resolve().parent)
+    env["PATH"] = interpreter_dir + os.pathsep + env.get("PATH", "")
     return env
+
+
+_BARE_PYTHON_NAMES = {"python", "python3"}
+
+
+def _resolve_verifier_command(command: list[str]) -> list[str]:
+    """Replace a bare "python"/"python3" verifier command with sys.executable.
+
+    A fixture's verifier.json is static, portable data with no templating,
+    so it can only reasonably assume "some Python is available" -- it can't
+    know in advance which one. Prepending sys.executable's directory to PATH
+    covers scripts a verifier shells out to internally, but the top-level
+    command itself deserves a stronger guarantee: substitute the exact
+    interpreter already running CoDev, which is known to work, rather than
+    hoping whatever "python3" resolves to elsewhere on PATH does too. On
+    Windows in particular, a bare "python3" commonly resolves only to a
+    non-functional Microsoft Store execution-alias stub (exit code 9009)
+    when no interpreter's own directory happens to be earlier on PATH --
+    observed directly against a real install, not theoretical.
+    """
+    if command and command[0] in _BARE_PYTHON_NAMES:
+        return [sys.executable, *command[1:]]
+    return command
 
 
 def _redact_value(value: Any) -> Any:
@@ -443,6 +514,8 @@ def _fixture_path(target: Path, name: str) -> Path:
 class Fixture:
     root: Path
     name: str
+    skill: str
+    category: str
     actor_timeout: int
     judge_timeout: int
     command: list[str]
@@ -510,6 +583,8 @@ def validate_fixture(root: Path) -> Fixture:
             "schema_version",
             "name",
             "description",
+            "skill",
+            "category",
             "actor_timeout_seconds",
             "judge_timeout_seconds",
         },
@@ -521,6 +596,12 @@ def validate_fixture(root: Path) -> Fixture:
     description = identity.get("description")
     if not isinstance(description, str) or not description.strip():
         raise EvaluationError("fixture description must be nonempty")
+    skill = identity.get("skill")
+    if not isinstance(skill, str) or not _NAME.fullmatch(skill):
+        raise EvaluationError("fixture skill must be a nonempty skill-like name")
+    category = identity.get("category")
+    if not isinstance(category, str) or not _NAME.fullmatch(category):
+        raise EvaluationError("fixture category must be a nonempty skill-like name")
     actor = _positive_int(identity.get("actor_timeout_seconds"), "actor timeout")
     judge = _positive_int(identity.get("judge_timeout_seconds"), "judge timeout")
     snapshots: dict[str, tuple[bytes, tuple[int, int, int, int]]] = {}
@@ -565,6 +646,8 @@ def validate_fixture(root: Path) -> Fixture:
     return Fixture(
         root,
         name,
+        skill,
+        category,
         actor,
         judge,
         command,
@@ -967,6 +1050,8 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                     "schema_version": 1,
                     "name": name,
                     "description": "Describe the bounded scenario.",
+                    "skill": "replace-with-skill-name",
+                    "category": "replace-with-category",
                     "actor_timeout_seconds": 600,
                     "judge_timeout_seconds": 300,
                 },
@@ -1049,6 +1134,74 @@ def _stop(process: subprocess.Popen[Any]) -> None:
         process.wait(timeout=1.0)
 
 
+# Metacharacters cmd.exe treats specially: pipe/redirect/chain operators,
+# its own escape character, percent/bang variable expansion, and grouping
+# parens. Deliberately excludes '"' -- subprocess's own Win32 argument
+# quoting already escapes embedded quotes correctly, and layering a second,
+# independent escape pass on top of that interacts badly with it (the two
+# passes disagree about which backslash/quote belongs to which layer).
+_WINDOWS_BATCH_METACHARACTERS = set("()%!^<>&|")
+
+
+_NPM_SHIM_TARGET = re.compile(
+    r'"%dp0%\\(?P<relative>[^"]+\.exe)"\s+%\*\s*$', re.MULTILINE
+)
+
+
+def _resolve_windows_shim(executable: str) -> str:
+    """Resolve a standard npm-generated .cmd shim to the real .exe it wraps.
+
+    npm auto-generates this exact wrapper shape (SETLOCAL/find_dp0/%dp0%) for
+    every package with a Windows CLI entry point, including an npm-installed
+    opencode.CMD. Resolving straight to the real executable means never
+    invoking cmd.exe for it at all, which sidesteps its independent,
+    metacharacter-sensitive re-parsing of arguments (see
+    _windows_batch_safe_argv) at the root rather than escaping around it --
+    cleaner than escaping since it leaves the argument text completely
+    unmodified. Falls back to the original path (and _windows_batch_safe_argv
+    escaping) for any .cmd/.bat that isn't this exact, extremely common shape.
+    """
+    if sys.platform != "win32" or not executable.lower().endswith(".cmd"):
+        return executable
+    path = Path(executable)
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return executable
+    match = _NPM_SHIM_TARGET.search(text)
+    if match is None:
+        return executable
+    target = path.parent / match.group("relative")
+    return str(target) if target.is_file() else executable
+
+
+def _windows_batch_safe_argv(argv: list[str]) -> list[str]:
+    """Escape cmd.exe metacharacters when the target is a .bat/.cmd file.
+
+    Launching a .bat/.cmd executable on Windows (e.g. an npm-installed
+    opencode.CMD wrapper) transparently delegates through `cmd.exe /c`,
+    which re-parses the assembled command line for its own metacharacters
+    on top of -- and independently of -- normal Win32 argument quoting.
+    subprocess.Popen only guards against the latter, so e.g. a literal "|"
+    inside a multi-line prompt is read as a pipe operator and silently
+    truncates the argument before it ever reaches the real program. This is
+    the same class of bug fixed for Node's child_process in CVE-2024-27980.
+    Escaping every metacharacter with "^" is safe even where cmd.exe would
+    have handled it correctly anyway.
+    """
+    if sys.platform != "win32" or not argv[0].lower().endswith((".cmd", ".bat")):
+        return argv
+    escaped = [argv[0]]
+    for argument in argv[1:]:
+        escaped.append(
+            "".join(
+                f"^{char}" if char in _WINDOWS_BATCH_METACHARACTERS else char
+                for char in argument
+            )
+        )
+    return escaped
+
+
 def _run(
     argv: list[str],
     cwd: Path,
@@ -1056,6 +1209,7 @@ def _run(
     env: dict[str, str] | None = None,
     decode_errors: str = "replace",
 ) -> Run:
+    argv = _windows_batch_safe_argv(argv)
     start = time.monotonic()
     flags = (
         getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -1325,7 +1479,12 @@ def _content_bytes(content: str) -> bytes:
 
 
 def _sync(path: Path) -> None:
-    with path.open("rb") as handle:
+    # "rb" opens read-only (GENERIC_READ only on Windows); os.fsync() maps to
+    # FlushFileBuffers there, which requires write access on the handle, so a
+    # read-only reopen fails with EBADF. "r+b" requires the file to already
+    # exist (true for every caller here, which sync right after writing) and
+    # does not truncate it.
+    with path.open("r+b") as handle:
         os.fsync(handle.fileno())
 
 
@@ -1493,6 +1652,43 @@ def _copy_seed_tree(source: Path, destination: Path) -> None:
             _write_fixture_file(
                 entry, destination, relative, identity, cast(str, digest)
             )
+
+
+def _stage_skill(seed: Path, target: Path, skill: str) -> None:
+    """Copy an installed skill (plus its AGENTS.md routing block) into a seed.
+
+    This is the entire "with skill" condition for a performance snapshot
+    (see run_snapshot()): the prompt never names the skill, so the only
+    thing that differs between the with- and without-skill conditions is
+    whether the actor can discover and read the skill on its own -- exactly
+    as it would in a real repository that has the skill installed, rather
+    than being told to use it.
+    """
+    skill_source = target / ".agents" / "skills" / skill
+    if not skill_source.is_dir() or skill_source.is_symlink():
+        raise EvaluationError(f"skill is not installed under .agents/skills: {skill}")
+    skill_destination = seed / ".agents" / "skills" / skill
+    skill_destination.parent.mkdir(parents=True, exist_ok=True)
+    _copy_seed_tree(skill_source, skill_destination)
+
+    agents_source = target / "AGENTS.md"
+    if not agents_source.is_file() or agents_source.is_symlink():
+        return
+    text = agents_source.read_text(encoding="utf-8")
+    start = text.find(AGENTS_START)
+    end = text.find(AGENTS_END)
+    if start == -1 or end == -1 or end <= start:
+        return
+    block = text[start : end + len(AGENTS_END)]
+    agents_destination = seed / "AGENTS.md"
+    existing = (
+        agents_destination.read_text(encoding="utf-8")
+        if agents_destination.is_file()
+        else ""
+    )
+    agents_destination.write_text(
+        (existing + "\n" if existing else "") + block + "\n", encoding="utf-8"
+    )
 
 
 def _publish_artifact(source: Path, destination: Path) -> None:
@@ -1728,13 +1924,30 @@ def _recover_output(output: Path) -> None:
     shutil.rmtree(private)
 
 
+def _clear_readonly_and_retry(
+    func: Callable[[str], object], target: str, exc_info: object
+) -> None:
+    # git deliberately makes .git/objects/** read-only; Windows refuses to
+    # delete a read-only file (WinError 5, Access is denied) even though the
+    # containing directory and the current user both have full permissions.
+    # POSIX ignores the read-only bit for deletion, so this only ever
+    # triggers on Windows in practice.
+    os.chmod(target, stat.S_IWRITE)
+    func(target)
+
+
 def _remove(path: Path) -> None:
     if path.exists() or path.is_symlink():
-        shutil.rmtree(path)
+        shutil.rmtree(path, onerror=_clear_readonly_and_retry)
 
 
 def evaluate(
-    name: str, target: Path, output: Path, git: str = "git", opencode: str = "opencode"
+    name: str,
+    target: Path,
+    output: Path,
+    git: str = "git",
+    opencode: str = "opencode",
+    with_skill: bool = True,
 ) -> bool:
     target = target.resolve()
     fixture = validate_fixture(_fixture_path(target, name))
@@ -1753,11 +1966,23 @@ def evaluate(
         or any(output.iterdir())
     ):
         raise EvaluationError("output must be an existing empty directory")
-    if shutil.which(git) is None or shutil.which(opencode) is None:
+    # Resolve to the full path (with extension, e.g. opencode.CMD on Windows)
+    # and use that everywhere below. subprocess.Popen with shell=False does
+    # not perform the shell's PATHEXT extension search, so launching a bare
+    # "opencode" fails on Windows when it resolves to a .cmd/.bat/.ps1 shim,
+    # which is the common case for npm-installed CLIs.
+    resolved_git = shutil.which(git)
+    resolved_opencode = shutil.which(opencode)
+    if resolved_git is None or resolved_opencode is None:
         raise EvaluationError("git and opencode must be available")
+    git = _resolve_windows_shim(resolved_git)
+    opencode = _resolve_windows_shim(resolved_opencode)
     result: dict[str, Any] = {
         "schema_version": 1,
         "fixture": {"name": name, "path": str(Path(".codev") / "fixtures" / name)},
+        "skill": fixture.skill,
+        "category": fixture.category,
+        "with_skill": with_skill,
         "actor": {"status": "skipped"},
         "verifier": {"status": "skipped"},
         "judge": {"status": "skipped"},
@@ -1771,6 +1996,8 @@ def evaluate(
         judge_dir: Path | None = None
         try:
             _copy_seed_tree(fixture.root / "repository", seed)
+            if with_skill:
+                _stage_skill(seed, target, fixture.skill)
             for args in (
                 ["init"],
                 ["config", "user.email", "codev@example.invalid"],
@@ -1851,7 +2078,7 @@ def evaluate(
                 files["verifier-stderr.txt"] = ""
                 try:
                     verifier = _run(
-                        fixture.command,
+                        _resolve_verifier_command(fixture.command),
                         worktree,
                         fixture.verifier_timeout,
                         env=_isolated_env(),
@@ -1911,8 +2138,7 @@ def evaluate(
                                 "json",
                                 "--dir",
                                 str(judge_dir),
-                                "Review rubric.md and observable artifacts. "
-                                "Return only the required judge JSON.",
+                                _JUDGE_PROMPT,
                             ],
                             judge_dir,
                             fixture.judge_timeout,
@@ -1992,3 +2218,153 @@ def evaluate(
     if result["outcome"] == "error":
         raise EvaluationError("evaluation infrastructure failed; see result.json")
     return bool(result["outcome"] == "passed")
+
+
+def _discover_skill_fixtures(target: Path, skill: str) -> dict[str, list[Fixture]]:
+    """Return every valid fixture tagged with `skill`, grouped by category."""
+    fixtures_root = target / ".codev" / "fixtures"
+    by_category: dict[str, list[Fixture]] = {}
+    if not fixtures_root.is_dir():
+        return by_category
+    for entry in sorted(fixtures_root.iterdir()):
+        if not entry.is_dir() or entry.is_symlink():
+            continue
+        try:
+            fixture = validate_fixture(entry)
+        except EvaluationError:
+            continue
+        if fixture.skill == skill:
+            by_category.setdefault(fixture.category, []).append(fixture)
+    return by_category
+
+
+def _condition_percentages(
+    with_passed: int, without_passed: int, total_runs: int
+) -> dict[str, float]:
+    with_pct = 100.0 * with_passed / total_runs if total_runs else 0.0
+    without_pct = 100.0 * without_passed / total_runs if total_runs else 0.0
+    return {
+        "with_skill_percentage": round(with_pct, 1),
+        "without_skill_percentage": round(without_pct, 1),
+        "delta": round(with_pct - without_pct, 1),
+    }
+
+
+def run_snapshot(
+    skill: str,
+    target: Path,
+    output: Path,
+    repetitions: int = 3,
+    only_categories: list[str] | None = None,
+    git: str = "git",
+    opencode: str = "opencode",
+) -> dict[str, Any]:
+    """Run every fixture tagged with `skill`, with it and without it, repeated.
+
+    Answers a sharper question than a single evaluate() call: not "did the
+    actor catch this defect once," but "does having this skill installed
+    measurably outperform not having it at all." Each fixture runs
+    `repetitions` times per condition (live model output has real sampling
+    variance -- one run is a noisy point estimate, not a score). The prompt
+    is identical in both conditions; only whether the skill is discoverable
+    in the worktree changes (see _stage_skill()). Report is grouped by
+    category with a percentage per condition and the delta between them.
+
+    `only_categories`, if given, restricts the run to that subset (e.g. for a
+    cheap trial before committing to the full, live-model-costly corpus) --
+    every full evaluate() call is a real actor (and, if the verifier passes,
+    judge) run against a live model, so cost scales linearly with how many
+    fixtures times conditions times repetitions actually run.
+    """
+    if repetitions < 1:
+        raise EvaluationError("repetitions must be at least 1")
+    target = target.resolve()
+    output = output.resolve()
+    if not output.is_dir() or output.is_symlink() or any(output.iterdir()):
+        raise EvaluationError("output must be an existing empty directory")
+    by_category = _discover_skill_fixtures(target, skill)
+    if not by_category:
+        raise EvaluationError(f"no fixtures found for skill: {skill}")
+    if only_categories is not None:
+        unknown = sorted(set(only_categories) - set(by_category))
+        if unknown:
+            raise EvaluationError(
+                f"unknown categories for skill {skill!r}: {', '.join(unknown)}; "
+                f"available: {', '.join(sorted(by_category))}"
+            )
+        by_category = {name: by_category[name] for name in only_categories}
+
+    categories: dict[str, Any] = {}
+    overall_with_passed = 0
+    overall_without_passed = 0
+    overall_total_runs = 0
+    for category in sorted(by_category):
+        fixtures_report: dict[str, Any] = {}
+        for fixture in by_category[category]:
+            condition_counts: dict[str, int] = {}
+            for condition_key, with_skill in (
+                ("with_skill", True),
+                ("without_skill", False),
+            ):
+                passed_count = 0
+                for repetition in range(1, repetitions + 1):
+                    run_output = (
+                        output
+                        / skill
+                        / category
+                        / fixture.name
+                        / condition_key
+                        / str(repetition)
+                    )
+                    run_output.mkdir(parents=True)
+                    try:
+                        if evaluate(
+                            fixture.name,
+                            target,
+                            run_output,
+                            git=git,
+                            opencode=opencode,
+                            with_skill=with_skill,
+                        ):
+                            passed_count += 1
+                    except EvaluationError as exc:
+                        (run_output / "snapshot-error.txt").write_text(
+                            str(exc), encoding="utf-8"
+                        )
+                condition_counts[condition_key] = passed_count
+            fixtures_report[fixture.name] = {
+                "with_skill": {
+                    "passed": condition_counts["with_skill"],
+                    "total": repetitions,
+                },
+                "without_skill": {
+                    "passed": condition_counts["without_skill"],
+                    "total": repetitions,
+                },
+            }
+        total_runs = len(fixtures_report) * repetitions
+        with_passed = sum(f["with_skill"]["passed"] for f in fixtures_report.values())
+        without_passed = sum(
+            f["without_skill"]["passed"] for f in fixtures_report.values()
+        )
+        categories[category] = {
+            "fixtures": fixtures_report,
+            **_condition_percentages(with_passed, without_passed, total_runs),
+        }
+        overall_with_passed += with_passed
+        overall_without_passed += without_passed
+        overall_total_runs += total_runs
+
+    report: dict[str, Any] = {
+        "schema_version": 1,
+        "skill": skill,
+        "repetitions": repetitions,
+        "categories": categories,
+        "overall": _condition_percentages(
+            overall_with_passed, overall_without_passed, overall_total_runs
+        ),
+    }
+    (output / "snapshot.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    return report

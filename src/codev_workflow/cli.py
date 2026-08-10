@@ -9,13 +9,19 @@ import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import work as work_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
-from codev_workflow.eval import EvaluationError, create_fixture, evaluate
+from codev_workflow.eval import (
+    EvaluationError,
+    create_fixture,
+    evaluate,
+    run_snapshot,
+)
 from codev_workflow.installer import (
     CoDevError,
     _read_lock,
@@ -35,7 +41,7 @@ from codev_workflow.work import (
 
 _AGENT_PLATFORMS = ("antigravity", "codex", "junie", "opencode")
 _AGENT_PLATFORM_CHOICES = ("all", *_AGENT_PLATFORMS)
-_DEPRECATED_EVAL_SUBCOMMANDS = {"run", "fixture"}
+_DEPRECATED_EVAL_SUBCOMMANDS = {"run", "fixture", "snapshot"}
 
 
 def _target(value: str) -> Path:
@@ -130,6 +136,31 @@ def _parser() -> argparse.ArgumentParser:
     e_run.add_argument("name")
     e_run.add_argument("--target", type=_target, required=True)
     e_run.add_argument("--output", type=_target, required=True)
+    e_run.add_argument(
+        "--without-skill",
+        action="store_true",
+        help="run without staging the fixture's skill into the worktree",
+    )
+
+    e_snapshot = eval_commands.add_parser(
+        "snapshot", help="skill performance snapshots (with/without comparisons)"
+    )
+    e_snapshot_commands = e_snapshot.add_subparsers(
+        dest="eval_snapshot_command", required=True
+    )
+    e_snapshot_run = e_snapshot_commands.add_parser(
+        "run", help="run every fixture for one skill, with and without it, repeated"
+    )
+    e_snapshot_run.add_argument("skill")
+    e_snapshot_run.add_argument("--target", type=_target, required=True)
+    e_snapshot_run.add_argument("--output", type=_target, required=True)
+    e_snapshot_run.add_argument("--repetitions", type=int, default=3)
+    e_snapshot_run.add_argument(
+        "--category",
+        dest="categories",
+        action="append",
+        help="restrict the run to this category; repeat to select several",
+    )
 
     adapter = commands.add_parser("adapter", help="manage platform adapters")
     adapter_commands = adapter.add_subparsers(dest="adapter_command", required=True)
@@ -528,6 +559,35 @@ def _run_work_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _format_snapshot_report(report: dict[str, Any]) -> str:
+    """Render a skill performance snapshot as an aligned category matrix."""
+    rows = [(category, data) for category, data in sorted(report["categories"].items())]
+    rows.append(("Overall", report["overall"]))
+    name_width = max(len("Category"), *(len(name) for name, _ in rows))
+
+    def line(name: str, with_pct: str, without_pct: str, delta: str) -> str:
+        return f"{name:<{name_width}}  {with_pct:>10}  {without_pct:>14}  {delta:>9}"
+
+    lines = [
+        f"Skill: {report['skill']} ({report['repetitions']} repetitions)",
+        "",
+        line("Category", "With-skill", "Without-skill", "Delta"),
+        "-" * (name_width + 40),
+    ]
+    for name, data in rows:
+        if name == "Overall":
+            lines.append("-" * (name_width + 40))
+        lines.append(
+            line(
+                name,
+                f"{data['with_skill_percentage']}%",
+                f"{data['without_skill_percentage']}%",
+                f"{data['delta']:+.1f}pp",
+            )
+        )
+    return "\n".join(lines)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = _parser().parse_args(_apply_deprecated_aliases(raw_argv))
@@ -586,9 +646,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Created fixture at {created}")
             return 0
         if args.command == "eval" and args.eval_command == "run":
-            passed = evaluate(args.name, args.target, args.output)
+            passed = evaluate(
+                args.name,
+                args.target,
+                args.output,
+                with_skill=not args.without_skill,
+            )
             print(f"Evaluation {'passed' if passed else 'failed'}: {args.output}")
             return 0 if passed else 1
+        if (
+            args.command == "eval"
+            and args.eval_command == "snapshot"
+            and args.eval_snapshot_command == "run"
+        ):
+            report = run_snapshot(
+                args.skill,
+                args.target,
+                args.output,
+                repetitions=args.repetitions,
+                only_categories=args.categories,
+            )
+            print(_format_snapshot_report(report))
+            print(f"Full report: {args.output / 'snapshot.json'}")
+            return 0
         if args.command == "adapter":
             return _run_adapter_command(args)
         if args.command == "config":

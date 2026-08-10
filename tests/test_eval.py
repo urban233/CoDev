@@ -33,11 +33,13 @@ from codev_workflow.eval import (
     _recover_output,
     _redact_text,
     _safe_process_output,
+    _stage_skill,
     _sync_directory,
     _validate_bundle,
     _write_output,
     create_fixture,
     evaluate,
+    run_snapshot,
     validate_fixture,
 )
 from codev_workflow.eval import (
@@ -67,6 +69,12 @@ class FixtureContractTests(unittest.TestCase):
     def _repo(self, root: Path) -> None:
         subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
         (root / "source.txt").write_text("seed", encoding="utf-8")
+        # Matches create_fixture()'s starter "skill" placeholder, so
+        # evaluate()'s default with_skill=True has something to stage
+        # without every test needing to opt out or set up its own skill.
+        skill_dir = root / ".agents" / "skills" / "replace-with-skill-name"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text("# Test skill\n", encoding="utf-8")
 
     def test_windows_directory_sync_uses_flush_file_buffers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -212,7 +220,11 @@ class FixtureContractTests(unittest.TestCase):
             clear=True,
         ):
             environment = _isolated_env()
-        self.assertEqual("/safe/bin", environment["PATH"])
+        # PATH is prepended with sys.executable's own directory (guarantees a
+        # working "python"/"python3" for fixture verifiers), so it no longer
+        # equals the original value verbatim -- it must still end with it.
+        self.assertTrue(environment["PATH"].endswith(os.pathsep + "/safe/bin"))
+        self.assertIn(str(Path(sys.executable).resolve().parent), environment["PATH"])
         self.assertEqual("/safe/home", environment["HOME"])
         self.assertEqual("secret", environment["OPENCODE_API_KEY"])
         self.assertNotIn("HOST_SECRET", environment)
@@ -1959,6 +1971,250 @@ class FixtureContractTests(unittest.TestCase):
             self.assertEqual("error", result["outcome"])
             self.assertEqual("skipped", result["judge"]["status"])
             self.assertNotIn("diff.patch", result["artifacts"].values())
+
+
+class SkillSnapshotTests(unittest.TestCase):
+    def _repo(self, root: Path) -> None:
+        subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+        (root / "source.txt").write_text("seed", encoding="utf-8")
+
+    def _install_skill(self, root: Path, skill: str, agents_md: bool = True) -> None:
+        skill_dir = root / ".agents" / "skills" / skill
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(f"# {skill}\n", encoding="utf-8")
+        if agents_md:
+            (root / "AGENTS.md").write_text(
+                "Local project notes.\n"
+                "<!-- codev:start -->\n"
+                f"Route to the {skill} skill.\n"
+                "<!-- codev:end -->\n"
+                "More local notes.\n",
+                encoding="utf-8",
+            )
+
+    def _tag_fixture(self, fixture: Path, skill: str, category: str) -> None:
+        identity = json.loads((fixture / "fixture.json").read_text())
+        identity["skill"] = skill
+        identity["category"] = category
+        (fixture / "fixture.json").write_text(json.dumps(identity), encoding="utf-8")
+
+    def test_validate_fixture_rejects_missing_skill_or_category(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            fixture = create_fixture("sample", root, ["source.txt"])
+            identity = json.loads((fixture / "fixture.json").read_text())
+            del identity["skill"]
+            (fixture / "fixture.json").write_text(json.dumps(identity))
+            with self.assertRaises(EvaluationError):
+                validate_fixture(fixture)
+
+    def test_validate_fixture_rejects_empty_category(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            fixture = create_fixture("sample", root, ["source.txt"])
+            self._tag_fixture(fixture, "review-change", "")
+            with self.assertRaises(EvaluationError):
+                validate_fixture(fixture)
+
+    def test_stage_skill_copies_skill_and_agents_md_block_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._install_skill(root, "review-change")
+            seed = root / "seed"
+            seed.mkdir()
+            _stage_skill(seed, root, "review-change")
+            staged_skill = seed / ".agents" / "skills" / "review-change" / "SKILL.md"
+            self.assertTrue(staged_skill.is_file())
+            self.assertEqual("# review-change\n", staged_skill.read_text())
+            staged_agents = (seed / "AGENTS.md").read_text()
+            self.assertIn("<!-- codev:start -->", staged_agents)
+            self.assertIn("Route to the review-change skill.", staged_agents)
+            # Only the marked block is carried over, not surrounding local notes.
+            self.assertNotIn("Local project notes.", staged_agents)
+            self.assertNotIn("More local notes.", staged_agents)
+
+    def test_stage_skill_raises_when_skill_is_not_installed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.joinpath(".git").mkdir()
+            seed = root / "seed"
+            seed.mkdir()
+            with self.assertRaises(EvaluationError):
+                _stage_skill(seed, root, "never-installed")
+
+    def test_evaluate_calls_stage_skill_only_when_with_skill_is_true(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            fixture = create_fixture("sample", root, ["source.txt"])
+            self._tag_fixture(fixture, "sample-skill", "example")
+            # sys.executable is a real, resolvable executable, so evaluate()
+            # gets past its git/opencode availability check and reaches the
+            # staging decision point for both conditions; it then fails for
+            # unrelated reasons (nonsense args to the interpreter), which is
+            # fine here -- only whether _stage_skill was called matters.
+            with patch("codev_workflow.eval._stage_skill") as stage_skill:
+                without_output = root.parent / f"without-skill-{root.name}"
+                without_output.mkdir()
+                evaluate(
+                    "sample",
+                    root,
+                    without_output,
+                    opencode=sys.executable,
+                    with_skill=False,
+                )
+                stage_skill.assert_not_called()
+
+                with_output = root.parent / f"with-skill-{root.name}"
+                with_output.mkdir()
+                evaluate(
+                    "sample",
+                    root,
+                    with_output,
+                    opencode=sys.executable,
+                    with_skill=True,
+                )
+                stage_skill.assert_called_once()
+                self.assertEqual(root, stage_skill.call_args.args[1])
+                self.assertEqual("sample-skill", stage_skill.call_args.args[2])
+
+    def test_run_snapshot_reports_percentage_and_delta_per_category(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            first = create_fixture("first", root, ["source.txt"])
+            self._tag_fixture(first, "sample-skill", "alpha")
+            second = create_fixture("second", root, ["source.txt"])
+            self._tag_fixture(second, "sample-skill", "alpha")
+            third = create_fixture("third", root, ["source.txt"])
+            self._tag_fixture(third, "sample-skill", "beta")
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+
+            def fake_evaluate(
+                name: str,
+                target: Path,
+                run_output: Path,
+                git: str = "git",
+                opencode: str = "opencode",
+                with_skill: bool = True,
+            ) -> bool:
+                (run_output / "result.json").write_text("{}", encoding="utf-8")
+                return with_skill
+
+            with patch("codev_workflow.eval.evaluate", side_effect=fake_evaluate):
+                report = run_snapshot("sample-skill", root, output, repetitions=2)
+
+            self.assertEqual({"alpha", "beta"}, set(report["categories"]))
+            alpha = report["categories"]["alpha"]
+            self.assertEqual(100.0, alpha["with_skill_percentage"])
+            self.assertEqual(0.0, alpha["without_skill_percentage"])
+            self.assertEqual(100.0, alpha["delta"])
+            self.assertEqual(
+                {"passed": 2, "total": 2}, alpha["fixtures"]["first"]["with_skill"]
+            )
+            self.assertEqual(
+                {"passed": 0, "total": 2}, alpha["fixtures"]["first"]["without_skill"]
+            )
+            beta = report["categories"]["beta"]
+            self.assertEqual(100.0, beta["delta"])
+            self.assertTrue((output / "snapshot.json").is_file())
+            on_disk = json.loads((output / "snapshot.json").read_text())
+            self.assertEqual(report, on_disk)
+
+    def test_run_snapshot_records_infrastructure_errors_as_failed_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            fixture = create_fixture("first", root, ["source.txt"])
+            self._tag_fixture(fixture, "sample-skill", "alpha")
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+
+            with patch(
+                "codev_workflow.eval.evaluate",
+                side_effect=EvaluationError("actor launch failed"),
+            ):
+                report = run_snapshot("sample-skill", root, output, repetitions=1)
+
+            alpha = report["categories"]["alpha"]
+            self.assertEqual(0.0, alpha["with_skill_percentage"])
+            self.assertEqual(0.0, alpha["without_skill_percentage"])
+            error_file = (
+                output
+                / "sample-skill"
+                / "alpha"
+                / "first"
+                / "with_skill"
+                / "1"
+                / "snapshot-error.txt"
+            )
+            self.assertIn("actor launch failed", error_file.read_text())
+
+    def test_run_snapshot_rejects_zero_repetitions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+            with self.assertRaises(EvaluationError):
+                run_snapshot("any-skill", root, output, repetitions=0)
+
+    def test_run_snapshot_rejects_skill_with_no_matching_fixtures(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            create_fixture("first", root, ["source.txt"])
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+            with self.assertRaises(EvaluationError):
+                run_snapshot("no-such-skill", root, output)
+
+    def test_run_snapshot_only_categories_restricts_which_fixtures_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            first = create_fixture("first", root, ["source.txt"])
+            self._tag_fixture(first, "sample-skill", "alpha")
+            second = create_fixture("second", root, ["source.txt"])
+            self._tag_fixture(second, "sample-skill", "beta")
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+
+            with patch("codev_workflow.eval.evaluate", return_value=True):
+                report = run_snapshot(
+                    "sample-skill",
+                    root,
+                    output,
+                    repetitions=1,
+                    only_categories=["beta"],
+                )
+
+            self.assertEqual({"beta"}, set(report["categories"]))
+            self.assertNotIn("first", report["categories"]["beta"]["fixtures"])
+            self.assertIn("second", report["categories"]["beta"]["fixtures"])
+
+    def test_run_snapshot_rejects_unknown_category(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            fixture = create_fixture("first", root, ["source.txt"])
+            self._tag_fixture(fixture, "sample-skill", "alpha")
+            output = root.parent / f"snapshot-{root.name}"
+            output.mkdir()
+            with self.assertRaises(EvaluationError):
+                run_snapshot(
+                    "sample-skill",
+                    root,
+                    output,
+                    only_categories=["no-such-category"],
+                )
 
 
 if __name__ == "__main__":

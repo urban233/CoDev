@@ -2,6 +2,8 @@
   "schema_version": 1,
   "name": "seeded-defect-rollout",
   "description": "Actor reviews a breaking rename with no deprecation path; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "rollout",
   "actor_timeout_seconds": 600,
   "judge_timeout_seconds": 300
 }

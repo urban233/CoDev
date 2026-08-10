@@ -87,10 +87,12 @@ jobs:
           if-no-files-found: error
 
   live-eval:
-    # Scheduled (not on every PR): runs the seeded-defect fixture corpus
-    # against a live OpenCode actor and reports reviewer recall per
-    # docs/adr/0001-work-lifecycle-invariant.md. Also runs on release tags so
-    # prepare-release can gate on it, same as release-integrity/test/quality.
+    # Scheduled (not on every PR): runs a review-change skill performance
+    # snapshot against a live OpenCode actor -- every seeded-defect fixture,
+    # with the skill installed and without it, repeated -- and reports the
+    # with/without delta per category, per docs/adr/0001-work-lifecycle-invariant.md.
+    # Also runs on release tags so prepare-release can gate on it, same as
+    # release-integrity/test/quality.
     if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -127,10 +129,11 @@ jobs:
             "step with this project's real OpenCode CI installation and" \
             "authentication steps before relying on this job's result."
           exit 1
-      - name: Run the seeded-defect recall suite
+      - name: Run the review-change skill performance snapshot
         if: steps.creds.outputs.configured == 'true'
         run: >-
-          python scripts/run_seeded_defect_suite.py
+          codev eval snapshot run review-change
+          --target .
           --output "${{ runner.temp }}/seeded-defect-results"
       - name: Upload evidence
         if: steps.creds.outputs.configured == 'true'

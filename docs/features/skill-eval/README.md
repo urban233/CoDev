@@ -60,24 +60,38 @@ failure has a skipped judge, and no failed verifier can be overridden by the
 judge. Use the diff and captured stdout/stderr as observable evidence, not agent
 private reasoning.
 
-## Seeded-defect recall corpus
+## Skill performance snapshots
 
-`.codev/fixtures/seeded-defect-*/` is a committed corpus of seven fixtures,
-one per `review-change` dimension, each seeding a small reviewable change
-with one deliberately planted, known defect. Run the whole corpus and get a
-recall report with:
+Every fixture declares a `"skill"` and a `"category"` in its `fixture.json`.
+`codev eval snapshot run <skill>` discovers every fixture tagged with that
+skill, groups them by category, and runs each one twice: once with the skill
+staged into the worktree (`.agents/skills/<skill>/` plus its `AGENTS.md`
+routing block, copied from `--target`) and once without it. The prompt is
+identical in both conditions - it never names the skill - so the only
+variable is whether the actor can discover and use it on its own, the same
+way it would in a real installed repository. Repeat each condition with
+`--repetitions` (default 3; live model output has real sampling variance, so
+a single run is a noisy point estimate, not a score).
 
 ```shell
-python scripts/run_seeded_defect_suite.py --output ../skill-evidence/seeded-defect
+codev eval snapshot run review-change --target . --output ../skill-evidence/review-change
 ```
 
-This measures whether a reviewer actually catches a known defect - empirical
-evidence for review completeness, rather than trusting that the coverage
-checklist in `review-change/SKILL.md` was followed. See
-`docs/adr/0001-work-lifecycle-invariant.md` for why this exists. CI runs it on
-a schedule (not per pull request) and on release tags; each fixture's
-`repository/check_review.py` is the deterministic verifier, so a fixture
-passes only when the actor's `review.json` actually names the planted defect.
+The report (`snapshot.json` in the output directory) gives a pass percentage
+per category for each condition, plus the delta between them - the empirical
+answer to whether the skill measurably outperforms not having it at all, not
+just whether the reviewer catches a known defect in isolation. `.codev/fixtures/seeded-defect-*/`
+is the committed corpus backing `review-change`'s snapshot: one fixture per
+review dimension, each seeding a small reviewable change with one
+deliberately planted, known defect, verified deterministically by
+`repository/check_review.py` rather than trusted from the coverage checklist
+in `review-change/SKILL.md` alone. See `docs/adr/0001-work-lifecycle-invariant.md`
+for why this exists. CI runs a snapshot on a schedule (not per pull request)
+and on release tags.
+
+A single fixture can still be run in isolation with `codev eval run <name>`;
+pass `--without-skill` to see that one fixture's without-skill condition
+without running a full snapshot.
 
 ## Platform and known risks
 

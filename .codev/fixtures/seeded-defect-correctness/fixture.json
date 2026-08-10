@@ -2,6 +2,8 @@
   "schema_version": 1,
   "name": "seeded-defect-correctness",
   "description": "Actor reviews a helper with a planted off-by-one defect; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "correctness",
   "actor_timeout_seconds": 600,
   "judge_timeout_seconds": 300
 }

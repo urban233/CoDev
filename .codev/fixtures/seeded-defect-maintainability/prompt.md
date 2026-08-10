@@ -1,7 +1,6 @@
 # Task
 
-Act as an independent code reviewer, following this repository's
-`review-change` skill and conventions. The file `changed/module.py` was just
+Act as an independent code reviewer. The file `changed/module.py` was just
 introduced in a pull request. Review it for defects across every review
 dimension (correctness; security/privacy/data loss/concurrency/compatibility;
 error handling; test quality; architecture/scope; maintainability; rollout).
