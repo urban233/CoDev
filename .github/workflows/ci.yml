@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  schedule:
+    - cron: "17 6 * * *"
 
 permissions:
   contents: read
@@ -76,7 +78,7 @@ jobs:
           python -m venv .release-venv
           .release-venv/bin/python -m pip install --no-deps dist/*.whl
           .release-venv/bin/codev --version
-          .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['builder.toml', 'orchestrator.toml', 'reviewer.toml']"
+          .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['builder.toml', 'code-audit.toml.template', 'orchestrator.toml', 'reviewer.toml']"
       - name: Upload tested distributions
         uses: actions/upload-artifact@v4
         with:
@@ -84,8 +86,65 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  live-eval:
+    # Scheduled (not on every PR): runs a review-change skill performance
+    # snapshot against a live OpenCode actor -- every seeded-defect fixture,
+    # with the skill installed and without it, repeated -- and reports the
+    # with/without delta per category, per docs/adr/0001-work-lifecycle-invariant.md.
+    # Also runs on release tags so prepare-release can gate on it, same as
+    # release-integrity/test/quality.
+    if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install CoDev
+        run: python -m pip install -e .
+      - name: Check OpenCode credentials are configured
+        id: creds
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          if [ -z "$OPENCODE_API_KEY" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::OPENCODE_API_KEY is not set as a repository secret." \
+              "Skipping the live seeded-defect recall suite for this run rather" \
+              "than failing the pipeline on it. See" \
+              "docs/features/skill-eval/README.md and" \
+              "docs/adr/0001-work-lifecycle-invariant.md. This job still needs" \
+              "this project's actual OpenCode CI installation and headless-auth" \
+              "steps wired in below before it can measure anything."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install and authenticate OpenCode
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          echo "::error::OPENCODE_API_KEY is set, but this step's actual install" \
+            "and headless-auth commands are still a placeholder. Replace this" \
+            "step with this project's real OpenCode CI installation and" \
+            "authentication steps before relying on this job's result."
+          exit 1
+      - name: Run the review-change skill performance snapshot
+        if: steps.creds.outputs.configured == 'true'
+        run: >-
+          codev eval snapshot run review-change
+          --target .
+          --output "${{ runner.temp }}/seeded-defect-results"
+      - name: Upload evidence
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: seeded-defect-eval-results
+          path: ${{ runner.temp }}/seeded-defect-results
+          if-no-files-found: warn
+
   prepare-release:
-    needs: [release-integrity, test, quality]
+    needs: [release-integrity, test, quality, live-eval]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

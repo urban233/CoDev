@@ -25,8 +25,16 @@ Assess tests by whether a small, representative suite catches realistic
 regressions and important boundary behavior; coverage percentages are
 diagnostic only. Do not persist on theoretical, rare, low-impact edge cases
 unless they affect safety, data integrity, compatibility, or likely regressions.
-Lead with actionable findings ordered P0 through P3. Give a tight location,
-evidence, impact, and testable correction for each finding.
+Follow `review-change`'s finding and coverage format exactly: rank findings
+most-important-first with a binary `blocking` flag, and record a coverage
+verdict for every review dimension.
+
+Record this round with `codev work record --id <work-item-id> --round
+<round> --role reviewer --head <head-sha> --findings <findings.json>
+--coverage <coverage.json> --decision <decision>` before returning findings
+in the conversation. `codev work check` — run by the orchestrator, not you —
+is the sole authority on whether the loop may continue; do not judge
+convergence yourself.
 
 Do not edit code or planning artifacts. Do not invent requirements, block on
 personal style, communicate with the builder directly, or authorize merge. End

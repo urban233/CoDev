@@ -39,6 +39,7 @@ through. Most changes do not need them.
 | Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |
 | Greenfield product or whole-product redesign | `specify-project` — one continuous, recommendation-led interview producing a single canonical `SPECIFICATION.md`; never duplicate its facts into a separate brief and design |
 | Approaching production exposure | `launch-product` |
+| Adding or designing an evaluation fixture for an installed skill | `design-skill-eval` — scaffolds and designs one fixture under `.codev/fixtures/`; never for running an existing snapshot or for building the skill itself |
 
 **Risk overrides size.** Permissions, security, privacy, public APIs,
 persistent data, billing, compliance, destructive operations, or hard-to-
@@ -127,16 +128,19 @@ edge cases either.
 When acting as reviewer, review only the exact base-to-head snapshot you were
 given. If the diff, authority, acceptance criteria, or implementer's evidence
 is missing or ambiguous, say `BLOCKED BY MISSING EVIDENCE` rather than
-reconstructing it from conversation. Lead with actionable, evidence-based
-findings ordered by impact (P0 highest). For each finding, give a precise
-location, the observed evidence, its impact, and a testable correction.
+reconstructing it from conversation. Lead with actionable findings ranked
+most-important-first. Mark a finding `blocking` only if it must be fixed
+before `READY FOR HUMAN APPROVAL`; mark everything else non-blocking — this is
+a binary, not a graded scale. For each finding, give a precise location, the
+observed evidence, its impact, and a testable correction.
 
-Check, in priority order: correctness, security/privacy, data loss,
-concurrency, compatibility, error behavior, test quality, architecture, scope,
-maintainability, rollout. Judge tests by whether a small, representative suite
-would catch realistic regressions and important boundary behavior — not by
-coverage percentage. Do not block on personal style, invented requirements, or
-implausible low-impact edge cases.
+Check, and record a passed/evidence verdict for, every dimension in priority
+order: correctness, security/privacy, data loss, concurrency, compatibility,
+error behavior, test quality, architecture, scope, maintainability, rollout.
+An omitted dimension is not an implicit pass. Judge tests by whether a small,
+representative suite would catch realistic regressions and important boundary
+behavior — not by coverage percentage. Do not block on personal style,
+invented requirements, or implausible low-impact edge cases.
 
 You may self-check your own implementation work, but you may never
 self-approve it. If you are the reviewer, you do not edit code, you do not
@@ -155,24 +159,29 @@ agents — but never the authority checkpoints.
    implementation plan (using `.agents/skills/build-change/assets/
    implementation-plan.template.md` for delegated, multi-session, cross-
    component, or normal/higher-risk work). It never edits product code
-   itself.
+   itself. It opens the work item's round state with `codev work start`.
 2. The human approves the plan and grants permission to delegate.
 3. **Builder** executes only the accepted plan. It may edit and test, but it
    cannot invoke other agents, alter accepted authority, commit, push, merge,
    publish, deploy, migrate data, or expand rollout. It returns an evidence
-   receipt with exact base and head snapshots.
+   receipt with exact base and head snapshots and records it with `codev work
+   record --role builder`.
 4. Orchestrator verifies the evidence receipt is complete, then invokes
    **reviewer** in a *fresh* task with the exact snapshot, work item,
-   accepted plan, authority, and evidence. The reviewer is read-only and never
-   fixes its own findings.
-5. Orchestrator routes actionable findings back to the builder without asking
-   the human to relay them, then reinvokes the reviewer on the corrected
-   snapshot. Stop after two correction attempts with the same root cause, or
-   whenever the accepted plan must change materially, work collides, or safe
-   validation is unavailable — hand it to the human with evidence and a
-   recommendation.
-6. Return the final evidence receipt, reviewer decision, and residual risks.
-   Stop before commit or merge.
+   accepted plan, authority, and evidence. The reviewer is read-only, never
+   fixes its own findings, and records its findings and coverage record with
+   `codev work record --role reviewer`.
+5. Orchestrator runs `codev work check` and acts on its exit code instead of
+   judging convergence itself. On success, it routes actionable findings back
+   to the builder without asking the human to relay them, then reinvokes the
+   reviewer on the corrected snapshot. On any nonzero exit — the round cap is
+   reached, a blocking finding repeats a prior round's, the coverage record is
+   incomplete, or the snapshot drifted — it hands the item to the human with
+   the printed reason and a recommendation, the same as when the accepted plan
+   must change materially, work collides, or safe validation is unavailable.
+6. Once the loop ends, close the item with `codev work close`. Return the
+   final evidence receipt, reviewer decision, and residual risks. Stop before
+   commit or merge.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders

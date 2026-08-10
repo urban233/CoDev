@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "seeded-defect-architecture-scope",
+  "description": "Actor reviews a query helper with an unrelated bolted-on side effect; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "architecture_scope",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

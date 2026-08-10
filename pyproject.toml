@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-codev-workflow"
-version = "0.1.7"
+version = "0.2.0"
 description = "Human-guided AI software delivery for real repositories."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -77,7 +77,7 @@ codev_workflow = [
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-exclude = ["src/codev_workflow/bundle"]
+exclude = ["src/codev_workflow/bundle", ".codev/fixtures/*/repository"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

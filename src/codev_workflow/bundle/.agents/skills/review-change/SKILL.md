@@ -37,17 +37,24 @@ or block on personal style.
 
 ## Findings
 
-Lead with actionable findings, ordered by severity:
-
-- **P0:** immediate security, data-loss, or production-critical defect.
-- **P1:** incorrect behavior or likely serious regression; blocks merge.
-- **P2:** material maintainability, test, or edge-case problem; normally fix.
-- **P3:** optional improvement; never disguise it as a blocker.
+Lead with actionable findings, ranked most-important-first. Mark each finding
+`blocking` only if it must be fixed before this change can be `READY FOR
+HUMAN APPROVAL`; mark everything else non-blocking. This is a binary, not a
+graded scale — do not disguise a preference as a blocker, and do not soften a
+genuine blocker to avoid conflict.
 
 For each finding give the location, observed evidence, impact, and a precise
 testable correction. Keep line ranges tight. If no actionable finding exists,
 say so and list residual risks or validation gaps.
 
+## Coverage
+
+Record a `passed`/evidence verdict for every dimension listed under Review
+order, every round, even when the verdict is "not applicable to this
+change." An omitted dimension is not an implicit pass — silence must never be
+mistaken for coverage.
+
 End with one recommendation: `READY FOR HUMAN APPROVAL`, `CHANGES REQUIRED`, or
 `BLOCKED BY MISSING EVIDENCE`. Reviewer readiness never authorizes merge or
-release.
+release. A `READY FOR HUMAN APPROVAL` recommendation requires a complete,
+passing coverage record — an incomplete one is not a valid basis for it.

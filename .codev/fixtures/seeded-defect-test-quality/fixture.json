@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "seeded-defect-test-quality",
+  "description": "Actor reviews a helper with a tautological test; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "test_quality",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

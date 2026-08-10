@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "seeded-defect-error-handling",
+  "description": "Actor reviews a helper that silently swallows all errors; verifier checks the defect was flagged as blocking.",
+  "skill": "review-change",
+  "category": "error_handling",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

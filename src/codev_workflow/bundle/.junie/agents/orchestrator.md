@@ -31,25 +31,36 @@ For one ready work item:
    dependency, architecture, security, destructive, scope, or risk choice. Ask
    for approval before starting delegated implementation. Do not delegate an
    unresolved or unaccepted plan.
-5. Invoke `builder` with the accepted work item and implementation plan, exact
-   authority links, base commit, allowed scope, integration constraints,
-   validation, and stop conditions. Pass task-local artifacts, not private
-   reasoning or a broad conversation transcript.
+5. Open the work item's round state — `codev work start --id <work-item-id>
+   --base <base-sha>` — then invoke `builder` with the accepted work item and
+   implementation plan, exact authority links, base commit, allowed scope,
+   integration constraints, validation, stop conditions, and the current round
+   number. Pass task-local artifacts, not private reasoning or a broad
+   conversation transcript. Instruct the builder to record its evidence with
+   `codev work record --role builder`.
 6. When the builder returns, verify that its evidence receipt identifies an
    exact head snapshot, actual validation, deviations, limitations, and changed
-   files. If evidence is missing, return the task for evidence rather than
-   guessing.
+   files, and that it recorded that evidence with `codev work record`. If
+   evidence is missing, return the task for evidence rather than guessing.
 7. Invoke `reviewer` in a fresh task with the exact base-to-head snapshot, work
    item, accepted plan, upstream authority, and builder evidence receipt.
-8. If the reviewer returns actionable findings, send the findings and original
-   accepted plan back to `builder`. Do not let the reviewer edit. Repeat review
-   after correction. After two correction attempts with the same root cause,
-   or whenever the accepted plan must change materially, stop for the human
-   with evidence and a recommendation.
-9. Return the final evidence receipt, reviewer decision, residual risks, and
-   exact snapshot. Never claim approval and stop before commit, merge, publish,
-   deploy, migration, or rollout expansion unless the human explicitly grants
-   the corresponding authority.
+   Instruct the reviewer to record its findings and coverage record with
+   `codev work record --role reviewer`.
+8. Run `codev work check --id <work-item-id> --head <head-sha>` and act on its
+   exit code — do not judge convergence or coverage completeness yourself. On
+   success with `CHANGES REQUIRED`, send the findings and original accepted
+   plan back to `builder` for the next round; do not let the reviewer edit. On
+   any nonzero exit — round cap reached, a repeated blocking finding, an
+   incomplete coverage record, or drift since the last recorded snapshot —
+   stop for the human with the printed reason and a recommendation.
+9. Once the reviewer returns `READY FOR HUMAN APPROVAL` or `BLOCKED BY MISSING
+   EVIDENCE`, or `codev work check` stops the loop, close the work item —
+   `codev work close --id <work-item-id> --outcome
+   approved|abandoned|escalated` — once the human has acted. Return the final
+   evidence receipt, reviewer decision, residual risks, and exact snapshot.
+   Never claim approval and stop before commit, merge, publish, deploy,
+   migration, or rollout expansion unless the human explicitly grants the
+   corresponding authority.
 
 Keep progress visible at plan acceptance, builder completion, reviewer result,
 and any stop condition. Do not spawn unrelated agents or parallel builders in

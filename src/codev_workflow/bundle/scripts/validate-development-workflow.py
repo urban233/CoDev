@@ -29,6 +29,7 @@ EXPECTED_SKILLS = {
     "clean-code-review": [],
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
+    "design-skill-eval": ["references/eval-design-checklist.md"],
 }
 
 EXPECTED_HANDBOOKS: list[str] = []

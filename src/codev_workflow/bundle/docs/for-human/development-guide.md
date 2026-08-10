@@ -64,7 +64,7 @@ internal routing — describe what you want in plain language, and the AI
 resolves it to the right step and the right internal skill
 (`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
 `build-change`, `review-change`, `pr-review`, `clean-code-review`, `critique-review`,
-`launch-product`).
+`launch-product`, `design-skill-eval`).
 
 | Step | Question it answers | Deepens into |
 |---|---|---|
@@ -145,6 +145,18 @@ bounded fix, `critique-review` will draft the exact suggested diff — but it
 never applies it. An explicit handoff to `build-change`, or the developer
 applying it directly, is required before the correction lands, and the
 corrected diff gets reviewed again from scratch.
+
+### Measuring whether a skill actually helps
+
+An installed skill is a claim, not a guarantee — `codev eval snapshot run
+<skill>` checks it empirically by running the same task with the skill
+staged and without it, repeated, and reporting the pass-rate delta between
+them. `design-skill-eval` is the skill for adding a new fixture to that
+comparison: it walks through picking a falsifiable ground truth, writing a
+prompt that never gives away which condition is running, and proving the
+fixture actually discriminates before it's committed. See
+`docs/features/skill-eval/README.md` for how to run an existing snapshot
+and what it costs.
 
 ### Where it breaks down (and how CoDev catches it)
 
