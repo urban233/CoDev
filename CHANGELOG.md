@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.2.0] - 2026-08-11
 
 ### Added
 - Add layered configuration (`codev config get|set|list`, flags > env >
