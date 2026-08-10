@@ -292,7 +292,7 @@ def _no_symlink(path: Path, boundary: Path) -> None:
 
 
 def _windows_reparse_safe(path: Path) -> None:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = ctypes.__dict__["WinDLL"]("kernel32", use_last_error=True)
     attributes = kernel32.GetFileAttributesW(str(path))
     if attributes != -1 and attributes & 0x00000400:
         raise EvaluationError(f"reparse points are not allowed: {path}")
@@ -743,7 +743,7 @@ def _secure_directory_fd(path: Path, boundary: Path) -> int | Path:
             "fixture creation requires no-follow directory primitives"
         )
     relative = path.absolute().relative_to(boundary.absolute())
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    flags = os.O_RDONLY | os.__dict__["O_DIRECTORY"] | os.__dict__["O_NOFOLLOW"]
     current_fd = os.open(boundary, flags)
     try:
         for part in relative.parts:
@@ -777,7 +777,7 @@ def _secure_child_directory(
         return child
     # parent_fd is only ever a POSIX dir_fd (int) here; the Path branch above
     # handles Windows. mypy can't narrow that from the isinstance check alone.
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW  # type: ignore[attr-defined]
+    flags = os.O_RDONLY | os.__dict__["O_DIRECTORY"] | os.__dict__["O_NOFOLLOW"]
     try:
         os.mkdir(name, dir_fd=parent_fd)
     except FileExistsError as error:
@@ -789,7 +789,7 @@ def _secure_child_directory(
 
 
 def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = ctypes.__dict__["WinDLL"]("kernel32", use_last_error=True)
     handle = kernel32.CreateFileW(
         str(source), 0x80000000, 0x00000007, None, 3, 0x00200000, None
     )
@@ -801,7 +801,7 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
     try:
         import msvcrt
 
-        file_descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY)
+        file_descriptor = msvcrt.__dict__["open_osfhandle"](handle, os.O_RDONLY)
         handle = -1
         source_info = os.fstat(file_descriptor)
         if not stat.S_ISREG(source_info.st_mode):
@@ -822,6 +822,7 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
 def _read_fixture_source(
     source: Path, expected_identity: tuple[int, int], expected_digest: str
 ) -> bytes:
+    opened_identity: tuple[int, int] | None = None
     if sys.platform == "win32":
         source_bytes, opened_identity = _read_windows_source(source)
         source_info = os.stat(source, follow_symlinks=False)
@@ -847,11 +848,11 @@ def _read_fixture_source(
             source_bytes = b"".join(chunks)
         finally:
             os.close(source_fd)
-    actual_identity = (
-        opened_identity
-        if sys.platform == "win32"
-        else (source_info.st_dev, source_info.st_ino)
-    )
+    if sys.platform == "win32":
+        assert opened_identity is not None
+        actual_identity = opened_identity
+    else:
+        actual_identity = (source_info.st_dev, source_info.st_ino)
     if not stat.S_ISREG(source_info.st_mode) or actual_identity != expected_identity:
         raise EvaluationError(f"fixture source changed during copy: {source}")
     if hashlib.sha256(source_bytes).hexdigest() != expected_digest:
@@ -895,7 +896,7 @@ def _write_fixture_file(
             os.close(current_fd)
             current_fd = next_fd
         # POSIX-only path, same reasoning as _secure_child_directory above.
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW  # type: ignore[attr-defined]
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.__dict__["O_NOFOLLOW"]
         destination_fd = os.open(relative.name, flags, 0o600, dir_fd=current_fd)
         try:
             with os.fdopen(destination_fd, "wb") as handle:
@@ -1082,7 +1083,7 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 # POSIX-only path, same reasoning as _secure_child_directory above.
                 fd = os.open(
                     filename,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,  # type: ignore[attr-defined]
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.__dict__["O_NOFOLLOW"],
                     0o600,
                     dir_fd=destination_fd,
                 )

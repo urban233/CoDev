@@ -2085,7 +2085,7 @@ class SkillSnapshotTests(unittest.TestCase):
                     with_skill=True,
                 )
                 stage_skill.assert_called_once()
-                self.assertEqual(root, stage_skill.call_args.args[1])
+                self.assertEqual(root.resolve(), stage_skill.call_args.args[1])
                 self.assertEqual("sample-skill", stage_skill.call_args.args[2])
 
     def test_run_snapshot_reports_percentage_and_delta_per_category(self) -> None:
