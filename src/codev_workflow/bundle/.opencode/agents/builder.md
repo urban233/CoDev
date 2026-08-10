@@ -50,5 +50,9 @@ information:
 - **Known limitations:** risks and follow-up; and
 - **Review state:** `AWAITING INDEPENDENT REVIEW`.
 
+Record this evidence with `codev work record --id <work-item-id> --round
+<round> --role builder --head <head-sha> --evidence <evidence.json>` before
+returning it in the conversation.
+
 Do not invoke another agent, approve the change, commit, push, merge, publish,
 deploy, migrate data, or expand rollout.

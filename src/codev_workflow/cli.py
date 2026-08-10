@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import platform
+import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from codev_workflow import __version__
+from codev_workflow import config as config_module
+from codev_workflow import work as work_module
+from codev_workflow.adapter import AdapterVerificationError, verify_adapter
+from codev_workflow.config import ConfigError
 from codev_workflow.eval import EvaluationError, create_fixture, evaluate
 from codev_workflow.installer import (
     CoDevError,
+    _read_lock,
     apply_plan,
     check_project,
     format_plan,
@@ -19,6 +26,16 @@ from codev_workflow.installer import (
     plan_remove,
     plan_update,
 )
+from codev_workflow.work import (
+    DEFAULT_MAX_ROUNDS,
+    VALID_DECISIONS,
+    VALID_OUTCOMES,
+    WorkError,
+)
+
+_AGENT_PLATFORMS = ("antigravity", "codex", "junie", "opencode")
+_AGENT_PLATFORM_CHOICES = ("all", *_AGENT_PLATFORMS)
+_DEPRECATED_EVAL_SUBCOMMANDS = {"run", "fixture"}
 
 
 def _target(value: str) -> Path:
@@ -38,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument(
         "--agent-platform",
         action="append",
-        choices=("all", "antigravity", "codex", "junie", "opencode"),
+        choices=_AGENT_PLATFORM_CHOICES,
         default=None,
         help="target adapter; repeat to select several (default: all)",
     )
@@ -50,18 +67,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     init.add_argument("--dry-run", action="store_true", help="show the plan only")
 
-    check = commands.add_parser("check", help="verify an installed bundle")
-    check.add_argument("--target", type=_target, default=Path.cwd())
-
-    doctor = commands.add_parser("doctor", help="show environment and bundle health")
-    doctor.add_argument("--target", type=_target, default=Path.cwd())
+    status = commands.add_parser(
+        "status", help="show installed bundle, adapters, and work-item health"
+    )
+    status.add_argument("--target", type=_target, default=Path.cwd())
+    status.add_argument("--verbose", action="store_true")
+    status.add_argument("--json", action="store_true")
 
     diff = commands.add_parser("diff", help="preview update changes")
     diff.add_argument("--target", type=_target, default=Path.cwd())
     diff.add_argument(
         "--agent-platform",
         action="append",
-        choices=("all", "antigravity", "codex", "junie", "opencode"),
+        choices=_AGENT_PLATFORM_CHOICES,
         default=None,
         help="also add this adapter; repeat to select several",
     )
@@ -77,7 +95,7 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument(
         "--agent-platform",
         action="append",
-        choices=("all", "antigravity", "codex", "junie", "opencode"),
+        choices=_AGENT_PLATFORM_CHOICES,
         default=None,
         help="also add this adapter; repeat to select several",
     )
@@ -94,36 +112,425 @@ def _parser() -> argparse.ArgumentParser:
     remove.add_argument("--target", type=_target, default=Path.cwd())
     remove.add_argument("--dry-run", action="store_true", help="show the plan only")
 
-    fixture = commands.add_parser("fixture", help="manage evaluation fixtures")
-    fixture_commands = fixture.add_subparsers(dest="fixture_command", required=True)
-    create = fixture_commands.add_parser("create", help="create an evaluation fixture")
-    create.add_argument("name")
-    create.add_argument("--target", type=_target, required=True)
-    create.add_argument("--include", action="append", required=True)
+    evaluation = commands.add_parser("eval", help="skill-evaluation fixtures and runs")
+    eval_commands = evaluation.add_subparsers(dest="eval_command", required=True)
 
-    evaluation = commands.add_parser("eval", help="evaluate a local fixture")
-    evaluation.add_argument("name")
-    evaluation.add_argument("--target", type=_target, required=True)
-    evaluation.add_argument("--output", type=_target, required=True)
+    e_fixture = eval_commands.add_parser("fixture", help="manage evaluation fixtures")
+    e_fixture_commands = e_fixture.add_subparsers(
+        dest="eval_fixture_command", required=True
+    )
+    e_fixture_create = e_fixture_commands.add_parser(
+        "create", help="create an evaluation fixture"
+    )
+    e_fixture_create.add_argument("name")
+    e_fixture_create.add_argument("--target", type=_target, required=True)
+    e_fixture_create.add_argument("--include", action="append", required=True)
+
+    e_run = eval_commands.add_parser("run", help="evaluate a local fixture")
+    e_run.add_argument("name")
+    e_run.add_argument("--target", type=_target, required=True)
+    e_run.add_argument("--output", type=_target, required=True)
+
+    adapter = commands.add_parser("adapter", help="manage platform adapters")
+    adapter_commands = adapter.add_subparsers(dest="adapter_command", required=True)
+
+    a_list = adapter_commands.add_parser("list", help="show installed adapters")
+    a_list.add_argument("--target", type=_target, default=Path.cwd())
+    a_list.add_argument("--json", action="store_true")
+
+    a_add = adapter_commands.add_parser(
+        "add", help="add one adapter to an existing installation"
+    )
+    a_add.add_argument("platform", choices=_AGENT_PLATFORMS)
+    a_add.add_argument("--target", type=_target, default=Path.cwd())
+    a_add.add_argument(
+        "--programming-language",
+        choices=("none", "all", "python", "typescript"),
+        default=None,
+        help="code style audit skills to select",
+    )
+    a_add.add_argument("--dry-run", action="store_true", help="show the plan only")
+
+    a_verify = adapter_commands.add_parser(
+        "verify", help="check one installed adapter's structural conformance"
+    )
+    a_verify.add_argument("platform", choices=_AGENT_PLATFORMS)
+    a_verify.add_argument("--target", type=_target, default=Path.cwd())
+    a_verify.add_argument("--json", action="store_true")
+
+    config = commands.add_parser("config", help="read or write layered configuration")
+    config_commands = config.add_subparsers(dest="config_command", required=True)
+
+    c_get = config_commands.add_parser("get", help="resolve one config key")
+    c_get.add_argument("key")
+    c_get.add_argument("--target", type=_target, default=Path.cwd())
+    c_get.add_argument("--json", action="store_true")
+
+    c_set = config_commands.add_parser("set", help="write one config key")
+    c_set.add_argument("key")
+    c_set.add_argument("value")
+    c_set.add_argument("--target", type=_target, default=Path.cwd())
+    c_set.add_argument(
+        "--global",
+        dest="global_scope",
+        action="store_true",
+        help="write to the global config",
+    )
+
+    c_list = config_commands.add_parser("list", help="show every resolved config key")
+    c_list.add_argument("--target", type=_target, default=Path.cwd())
+    c_list.add_argument("--json", action="store_true")
+
+    self_parser = commands.add_parser("self", help="manage the installed codev tool")
+    self_commands = self_parser.add_subparsers(dest="self_command", required=True)
+    self_commands.add_parser("version", help="print the installed codev version")
+    self_commands.add_parser(
+        "update", help="show how to upgrade the installed codev tool"
+    )
+
+    work = commands.add_parser(
+        "work", help="track builder/reviewer round state for one work item"
+    )
+    work_commands = work.add_subparsers(dest="work_command", required=True)
+
+    w_start = work_commands.add_parser("start", help="open a new work item")
+    w_start.add_argument("--id", required=True)
+    w_start.add_argument("--base", required=True, help="base git snapshot")
+    w_start.add_argument("--max-rounds", type=int, default=DEFAULT_MAX_ROUNDS)
+    w_start.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_record = work_commands.add_parser(
+        "record", help="record one builder or reviewer round entry"
+    )
+    w_record.add_argument("--id", required=True)
+    w_record.add_argument("--round", type=int, required=True)
+    w_record.add_argument("--role", choices=("builder", "reviewer"), required=True)
+    w_record.add_argument("--head", required=True, help="head git snapshot")
+    w_record.add_argument(
+        "--evidence", type=_target, help="builder: JSON evidence file"
+    )
+    w_record.add_argument(
+        "--findings", type=_target, help="reviewer: JSON findings file"
+    )
+    w_record.add_argument(
+        "--coverage", type=_target, help="reviewer: JSON coverage-manifest file"
+    )
+    w_record.add_argument("--decision", choices=VALID_DECISIONS)
+    w_record.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_check = work_commands.add_parser(
+        "check", help="check whether it is safe to continue this work item"
+    )
+    w_check.add_argument("--id", required=True)
+    w_check.add_argument("--head", required=True, help="current git snapshot")
+    w_check.add_argument("--json", action="store_true")
+    w_check.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_close = work_commands.add_parser("close", help="close a work item")
+    w_close.add_argument("--id", required=True)
+    w_close.add_argument("--outcome", choices=VALID_OUTCOMES, required=True)
+    w_close.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_status = work_commands.add_parser(
+        "status", help="show one or all open work items"
+    )
+    w_status.add_argument("--id")
+    w_status.add_argument("--json", action="store_true")
+    w_status.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_log = work_commands.add_parser("log", help="print one work item's round history")
+    w_log.add_argument("--id", required=True)
+    w_log.add_argument("--target", type=_target, default=Path.cwd())
     return parser
 
 
-def _print_check(target: Path) -> int:
+def _warn_deprecated(old: str, new: str) -> None:
+    print(
+        f"codev: {old} is deprecated; use {new} instead "
+        "(will be removed in a future major version).",
+        file=sys.stderr,
+    )
+
+
+def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
+    """Rewrite pre-Phase-3 command forms onto their replacements, with a warning."""
+    if not argv:
+        return argv
+    head, rest = argv[0], argv[1:]
+
+    if head == "fixture" and rest and rest[0] == "create":
+        _warn_deprecated("'fixture create'", "'eval fixture create'")
+        return ["eval", "fixture", *rest]
+
+    if head == "eval" and (not rest or rest[0] not in _DEPRECATED_EVAL_SUBCOMMANDS):
+        _warn_deprecated("'eval <name>'", "'eval run <name>'")
+        return ["eval", "run", *rest]
+
+    if head == "check":
+        _warn_deprecated("'check'", "'status'")
+        return ["status", *rest]
+
+    if head == "doctor":
+        _warn_deprecated("'doctor'", "'status --verbose'")
+        return ["status", "--verbose", *rest]
+
+    return argv
+
+
+def _run_status_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
     result = check_project(target)
-    if result.ok:
-        print(
-            f"CoDev {result.version} is healthy: "
-            f"{result.managed_files} managed files, no drift."
-        )
+    platforms = list(_read_lock(target).get("platforms", []))
+    work_items = work_module.describe_all(target=target)
+    in_progress = sum(1 for item in work_items if item["status"] == "in_progress")
+
+    payload: dict[str, object] = {
+        "codev_version": __version__,
+        "target": str(target),
+        "healthy": result.ok,
+        "managed_files": result.managed_files,
+        "issues": list(result.issues),
+        "adapters": platforms,
+        "work_items_in_progress": in_progress,
+    }
+    if args.verbose:
+        payload["python_version"] = platform.python_version()
+        payload["system"] = platform.system()
+
+    if args.json:
+        print(json.dumps(payload))
+    else:
+        print(f"CoDev {__version__} - {target}")
+        if args.verbose:
+            print(f"Python {platform.python_version()} ({platform.system()})")
+        if result.ok:
+            print(f"Bundle: healthy ({result.managed_files} managed files, no drift)")
+        else:
+            print(f"Bundle: {len(result.issues)} issue(s):")
+            for issue in result.issues:
+                print(f"  - {issue}")
+        print(f"Adapters: {', '.join(platforms) if platforms else 'none'}")
+        print(f"Work items in progress: {in_progress}")
+    return 0 if result.ok else 1
+
+
+def _run_adapter_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+
+    if args.adapter_command == "list":
+        platforms = list(_read_lock(target).get("platforms", []))
+        if args.json:
+            print(json.dumps(platforms))
+        elif platforms:
+            for name in platforms:
+                print(name)
+        else:
+            print("No adapters installed.")
         return 0
-    print(f"CoDev check found {len(result.issues)} issue(s):")
-    for issue in result.issues:
-        print(f"- {issue}")
-    return 1
+
+    if args.adapter_command == "add":
+        plan = plan_update(
+            target, [args.platform], programming_language=args.programming_language
+        )
+        print(format_plan(plan))
+        if plan.conflicts:
+            print(f"Adapter add stopped: {len(plan.conflicts)} conflict(s).")
+            return 2
+        if args.dry_run:
+            print("Dry run complete; no files were written.")
+            return 0
+        apply_plan(target, plan)
+        print(f"Added adapter {args.platform!r} in {target}")
+        return 0
+
+    if args.adapter_command == "verify":
+        result = verify_adapter(args.platform, target=target)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "platform": result.platform,
+                        "ok": result.ok,
+                        "findings": [
+                            {
+                                "role": finding.role,
+                                "path": finding.path,
+                                "ok": finding.ok,
+                                "problems": list(finding.problems),
+                            }
+                            for finding in result.findings
+                        ],
+                    }
+                )
+            )
+        else:
+            for finding in result.findings:
+                if finding.ok:
+                    print(f"{finding.role} ({finding.path}): ok")
+                else:
+                    print(f"{finding.role} ({finding.path}): FAILED")
+                    for problem in finding.problems:
+                        print(f"  - {problem}")
+        return 0 if result.ok else 1
+
+    return 2
+
+
+def _run_config_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+
+    if args.config_command == "get":
+        result = config_module.resolve(args.key, target=target)
+        if result is None:
+            if args.json:
+                print(json.dumps(None))
+            else:
+                print(f"{args.key}: not set")
+            return 1
+        if args.json:
+            print(json.dumps({"value": result.value, "source": result.source}))
+        else:
+            print(f"{result.value} (from {result.source})")
+        return 0
+
+    if args.config_command == "set":
+        path = config_module.set_value(
+            args.key, args.value, target=target, global_scope=args.global_scope
+        )
+        print(f"Set {args.key!r} in {path}")
+        return 0
+
+    if args.config_command == "list":
+        values = config_module.list_values(target=target)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        key: {"value": item.value, "source": item.source}
+                        for key, item in values.items()
+                    }
+                )
+            )
+        elif not values:
+            print("No configuration set.")
+        else:
+            for key in sorted(values):
+                item = values[key]
+                print(f"{key} = {item.value} (from {item.source})")
+        return 0
+
+    return 2
+
+
+def _self_update_hint() -> str:
+    if shutil.which("pipx"):
+        return "Run: pipx upgrade open-codev-workflow"
+    if shutil.which("uv"):
+        return "Run: uv tool upgrade open-codev-workflow"
+    return (
+        "Upgrade with the tool you used to install CoDev, for example:\n"
+        "  pipx upgrade open-codev-workflow\n"
+        "  uv tool upgrade open-codev-workflow"
+    )
+
+
+def _run_self_command(args: argparse.Namespace) -> int:
+    if args.self_command == "version":
+        print(f"CoDev {__version__}")
+        return 0
+    if args.self_command == "update":
+        print(_self_update_hint())
+        return 0
+    return 2
+
+
+def _run_work_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+    if args.work_command == "start":
+        path = work_module.start(
+            args.id, args.base, target=target, max_rounds=args.max_rounds
+        )
+        print(f"Started work item {args.id} at {path}")
+        return 0
+
+    if args.work_command == "record":
+        if args.role == "builder":
+            if args.evidence is None:
+                raise WorkError("--evidence is required when --role builder")
+            evidence = work_module.load_json_file(args.evidence)
+            work_module.record_builder(
+                args.id, args.round, args.head, evidence, target=target
+            )
+        else:
+            if args.findings is None or args.decision is None:
+                raise WorkError(
+                    "--findings and --decision are required when --role reviewer"
+                )
+            findings = work_module.load_json_file(args.findings)
+            coverage = (
+                work_module.load_json_file(args.coverage) if args.coverage else {}
+            )
+            work_module.record_reviewer(
+                args.id,
+                args.round,
+                args.head,
+                findings,
+                coverage,
+                args.decision,
+                target=target,
+            )
+        print(f"Recorded round {args.round} ({args.role}) for {args.id}")
+        return 0
+
+    if args.work_command == "check":
+        result = work_module.check(args.id, args.head, target=target)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "ok": result.ok,
+                        "reason": result.reason,
+                        "message": result.message,
+                    }
+                )
+            )
+        else:
+            print(f"{result.reason}: {result.message}")
+        return 0 if result.ok else 1
+
+    if args.work_command == "close":
+        work_module.close(args.id, args.outcome, target=target)
+        print(f"Closed work item {args.id} as {args.outcome}")
+        return 0
+
+    if args.work_command == "status":
+        if args.id:
+            summaries = [work_module.describe(args.id, target=target)]
+        else:
+            summaries = work_module.describe_all(target=target)
+        if args.json:
+            print(json.dumps(summaries[0] if args.id else summaries))
+        elif not summaries:
+            print("No open work items.")
+        else:
+            for item in summaries:
+                print(
+                    f"{item['work_item_id']}: {item['status']} "
+                    f"(round {item['current_round']}/{item['max_rounds']}, "
+                    f"latest decision: {item['latest_decision']})"
+                )
+        return 0
+
+    if args.work_command == "log":
+        print(work_module.log_text(args.id, target=target), end="")
+        return 0
+
+    return 2
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    args = _parser().parse_args(_apply_deprecated_aliases(raw_argv))
     try:
         if args.command == "init":
             target = args.target.resolve()
@@ -140,14 +547,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Installed CoDev {__version__} into {target}")
             return 0
 
-        if args.command == "check":
-            return _print_check(args.target.resolve())
-
-        if args.command == "doctor":
-            print(f"CoDev: {__version__}")
-            print(f"Python: {platform.python_version()} ({platform.system()})")
-            print(f"Target: {args.target.resolve()}")
-            return _print_check(args.target.resolve())
+        if args.command == "status":
+            return _run_status_command(args)
 
         if args.command in {"diff", "update"}:
             target = args.target.resolve()
@@ -180,15 +581,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             apply_plan(target, plan)
             print(f"Removed CoDev from {target}")
             return 0
-        if args.command == "fixture" and args.fixture_command == "create":
+        if args.command == "eval" and args.eval_command == "fixture":
             created = create_fixture(args.name, args.target, args.include)
             print(f"Created fixture at {created}")
             return 0
-        if args.command == "eval":
+        if args.command == "eval" and args.eval_command == "run":
             passed = evaluate(args.name, args.target, args.output)
             print(f"Evaluation {'passed' if passed else 'failed'}: {args.output}")
             return 0 if passed else 1
-    except (CoDevError, EvaluationError) as error:
+        if args.command == "adapter":
+            return _run_adapter_command(args)
+        if args.command == "config":
+            return _run_config_command(args)
+        if args.command == "self":
+            return _run_self_command(args)
+        if args.command == "work":
+            return _run_work_command(args)
+    except (
+        CoDevError,
+        EvaluationError,
+        WorkError,
+        ConfigError,
+        AdapterVerificationError,
+    ) as error:
         print(f"codev: {error}", file=sys.stderr)
         return 2
     except OSError as error:

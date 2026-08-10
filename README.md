@@ -63,7 +63,7 @@ The development workflow for building a wheel is documented below.
 
 ```shell
 codev init --target ../my-project --agent-platform all
-codev check --target ../my-project
+codev status --target ../my-project
 ```
 
 Language-specific audit skills are not installed unless selected explicitly.
@@ -83,6 +83,24 @@ codev remove --target ../my-project --dry-run
 
 `init`, `diff`, and `update` preflight the entire operation. A locally modified
 managed file becomes a visible conflict; CoDev never silently replaces it.
+
+### Command reference
+
+| Command | Purpose |
+|---|---|
+| `codev init` / `diff` / `update` / `remove` | Install, preview, apply, or remove the bundle |
+| `codev status [--verbose] [--json]` | Bundle health, installed adapters, and open work items in one place |
+| `codev adapter list` / `codev adapter add <platform>` | Show or add one platform adapter to an existing install |
+| `codev adapter verify <platform>` | Check one installed adapter's structural conformance (lifecycle wiring present, no unrestricted shell access, no retired patterns) |
+| `codev config get\|set\|list [--global]` | Read or write layered configuration (flags > env > project > global > default) |
+| `codev work start\|record\|check\|close\|status\|log` | Track builder/reviewer round state for one work item — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
+| `codev eval fixture create` / `codev eval run` | Create and run local skill-evaluation fixtures |
+| `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |
+
+`codev check`, `codev doctor`, `codev fixture create`, and bare `codev eval
+<name>` still work as deprecated aliases for `status`, `status --verbose`,
+`eval fixture create`, and `eval run <name>` — each prints a warning and will
+be removed in a future major version.
 
 ## GitHub Pull Request reviews
 

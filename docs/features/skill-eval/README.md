@@ -60,6 +60,25 @@ failure has a skipped judge, and no failed verifier can be overridden by the
 judge. Use the diff and captured stdout/stderr as observable evidence, not agent
 private reasoning.
 
+## Seeded-defect recall corpus
+
+`.codev/fixtures/seeded-defect-*/` is a committed corpus of seven fixtures,
+one per `review-change` dimension, each seeding a small reviewable change
+with one deliberately planted, known defect. Run the whole corpus and get a
+recall report with:
+
+```shell
+python scripts/run_seeded_defect_suite.py --output ../skill-evidence/seeded-defect
+```
+
+This measures whether a reviewer actually catches a known defect - empirical
+evidence for review completeness, rather than trusting that the coverage
+checklist in `review-change/SKILL.md` was followed. See
+`docs/adr/0001-work-lifecycle-invariant.md` for why this exists. CI runs it on
+a schedule (not per pull request) and on release tags; each fixture's
+`repository/check_review.py` is the deterministic verifier, so a fixture
+passes only when the actor's `review.json` actually names the planted defect.
+
 ## Platform and known risks
 
 V1 is verified on macOS with OpenCode 1.18.11. Windows and Linux support,

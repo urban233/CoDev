@@ -10,41 +10,56 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
 from codev_workflow.eval import (
-    EvaluationError,
     _COMMIT_MARKER,
     _PRIVATE_OWNER_MARKER,
     _PRIVATE_TRANSACTION_MARKER,
     _PRIVATE_TRANSACTIONS,
     _TRANSACTION_MARKER,
-    _judge_json,
+    EvaluationError,
+    Run,
     _actor_artifacts,
     _capture_diff,
     _copy_seed_tree,
-    _copy_seed_tree as real_copy_seed_tree,
-    _git as real_git,
-    _git as eval_git,
-    _remove as real_remove,
-    _redact_text,
+    _isolated_env,
+    _judge_json,
+    _manifest,
+    _publish_artifact,
     _recover_output,
-    _run as real_run,
+    _redact_text,
+    _safe_process_output,
     _sync_directory,
     _validate_bundle,
     _write_output,
-    _write_fixture_file as real_write_fixture_file,
-    _read_fixture_source as real_read_fixture_source,
-    _manifest,
-    _publish_artifact,
-    _safe_process_output,
-    _isolated_env,
-    Run,
     create_fixture,
     evaluate,
     validate_fixture,
+)
+from codev_workflow.eval import (
+    _copy_seed_tree as real_copy_seed_tree,
+)
+from codev_workflow.eval import (
+    _git as eval_git,
+)
+from codev_workflow.eval import (
+    _git as real_git,
+)
+from codev_workflow.eval import (
+    _read_fixture_source as real_read_fixture_source,
+)
+from codev_workflow.eval import (
+    _remove as real_remove,
+)
+from codev_workflow.eval import (
+    _run as real_run,
+)
+from codev_workflow.eval import (
+    _write_fixture_file as real_write_fixture_file,
 )
 
 
@@ -58,8 +73,13 @@ class FixtureContractTests(unittest.TestCase):
             kernel32 = Mock()
             kernel32.CreateFileW.return_value = 123
             kernel32.FlushFileBuffers.return_value = True
-            with patch("codev_workflow.eval.os.name", "nt"), patch(
-                "codev_workflow.eval.ctypes.WinDLL", return_value=kernel32, create=True
+            with (
+                patch("codev_workflow.eval.os.name", "nt"),
+                patch(
+                    "codev_workflow.eval.ctypes.WinDLL",
+                    return_value=kernel32,
+                    create=True,
+                ),
             ):
                 _sync_directory(Path(directory))
             kernel32.CreateFileW.assert_called_once()
@@ -98,17 +118,26 @@ class FixtureContractTests(unittest.TestCase):
             destination = root / "seed"
             calls = 0
 
-            def replace_on_copy(path: Path, expected_identity: tuple[int, int], expected_digest: str) -> bytes:
+            def replace_on_copy(
+                path: Path, expected_identity: tuple[int, int], expected_digest: str
+            ) -> bytes:
                 nonlocal calls
                 calls += 1
                 if calls == 2:
                     original.unlink()
                     original.symlink_to(external)
-                return real_read_fixture_source(path, expected_identity, expected_digest)
+                return real_read_fixture_source(
+                    path, expected_identity, expected_digest
+                )
 
-            with patch("codev_workflow.eval._read_fixture_source", side_effect=replace_on_copy):
-                with self.assertRaises(EvaluationError):
-                    _copy_seed_tree(source, destination)
+            with (
+                patch(
+                    "codev_workflow.eval._read_fixture_source",
+                    side_effect=replace_on_copy,
+                ),
+                self.assertRaises(EvaluationError),
+            ):
+                _copy_seed_tree(source, destination)
 
     def test_evaluation_rejects_prompt_mutation_before_actor_execution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -120,7 +149,10 @@ class FixtureContractTests(unittest.TestCase):
             sentinel = root / "actor-ran"
             actor = root / "actor.py"
             actor.write_text(
-                f"#!/usr/bin/env python3\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\nprint('{{}}')\n",
+                "#!/usr/bin/env python3\n"
+                "from pathlib import Path\n"
+                f"Path({str(sentinel)!r}).write_text('ran')\n"
+                "print('{}')\n",
                 encoding="utf-8",
             )
             actor.chmod(actor.stat().st_mode | 0o111)
@@ -130,29 +162,53 @@ class FixtureContractTests(unittest.TestCase):
                 real_copy_seed_tree(source, destination)
                 original_stat = real_prompt.stat()
                 real_prompt.write_text("x" * original_stat.st_size, encoding="utf-8")
-                os.utime(real_prompt, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+                os.utime(
+                    real_prompt,
+                    ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+                )
 
-            with patch("codev_workflow.eval._copy_seed_tree", side_effect=mutate_after_seed):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(actor))
+            with (
+                patch(
+                    "codev_workflow.eval._copy_seed_tree", side_effect=mutate_after_seed
+                ),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(actor))
             self.assertFalse(sentinel.exists())
-            self.assertEqual("error", json.loads((output / "result.json").read_text())["outcome"])
+            self.assertEqual(
+                "error", json.loads((output / "result.json").read_text())["outcome"]
+            )
 
     def test_windows_fixture_branch_is_portable_when_mocked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            with patch("codev_workflow.eval.os.name", "nt"), patch(
-                "codev_workflow.eval._read_windows_source",
-                return_value=(b"seed", (os.stat(root / "source.txt").st_dev, os.stat(root / "source.txt").st_ino)),
-            ), patch("codev_workflow.eval._windows_reparse_safe"):
+            with (
+                patch("codev_workflow.eval.os.name", "nt"),
+                patch(
+                    "codev_workflow.eval._read_windows_source",
+                    return_value=(
+                        b"seed",
+                        (
+                            os.stat(root / "source.txt").st_dev,
+                            os.stat(root / "source.txt").st_ino,
+                        ),
+                    ),
+                ),
+                patch("codev_workflow.eval._windows_reparse_safe"),
+            ):
                 fixture = create_fixture("windows-branch", root, ["source.txt"])
             self.assertEqual("seed", (fixture / "repository/source.txt").read_text())
 
     def test_execution_environment_is_allowlisted(self) -> None:
         with patch.dict(
             os.environ,
-            {"PATH": "/safe/bin", "HOME": "/safe/home", "OPENCODE_API_KEY": "secret", "HOST_SECRET": "must-not-leak"},
+            {
+                "PATH": "/safe/bin",
+                "HOME": "/safe/home",
+                "OPENCODE_API_KEY": "secret",
+                "HOST_SECRET": "must-not-leak",
+            },
             clear=True,
         ):
             environment = _isolated_env()
@@ -165,12 +221,16 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            with patch("codev_workflow.eval.os.name", "nt"), patch(
-                "codev_workflow.eval._read_windows_source",
-                side_effect=EvaluationError("reparse point rejected"),
-            ), patch("codev_workflow.eval._windows_reparse_safe"):
-                with self.assertRaises(EvaluationError):
-                    create_fixture("windows-reparse", root, ["source.txt"])
+            with (
+                patch("codev_workflow.eval.os.name", "nt"),
+                patch(
+                    "codev_workflow.eval._read_windows_source",
+                    side_effect=EvaluationError("reparse point rejected"),
+                ),
+                patch("codev_workflow.eval._windows_reparse_safe"),
+                self.assertRaises(EvaluationError),
+            ):
+                create_fixture("windows-reparse", root, ["source.txt"])
             self.assertFalse((root / ".codev/fixtures/windows-reparse").exists())
 
     def test_create_rejects_traversal_symlink_exclusion_and_overwrite(self) -> None:
@@ -278,21 +338,58 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            verifier_code = "import sys; print('{'+chr(34)+'client_token_value'+chr(34)+':'+chr(34)+'verifier-compound'+chr(34)+','+chr(34)+'ordinary'+chr(34)+':'+chr(34)+'keep'+chr(34)+'}'); print('{'+chr(34)+'secret_value'+chr(34)+':'+chr(34)+'verifier-error'+chr(34)+'}', file=sys.stderr)"
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", verifier_code], "timeout_seconds": 5}))
+            verifier_code = (
+                "import sys; "
+                "print('{'+chr(34)+'client_token_value'+chr(34)+':'+chr(34)"
+                "+'verifier-compound'+chr(34)+','+chr(34)+'ordinary'+chr(34)"
+                "+':'+chr(34)+'keep'+chr(34)+'}'); "
+                "print('{'+chr(34)+'secret_value'+chr(34)+':'+chr(34)"
+                "+'verifier-error'+chr(34)+'}', file=sys.stderr)"
+            )
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", verifier_code],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "secret-actor.py"
-            judge = json.dumps({"schema_version": 1, "verdict": "pass", "summary": '{"passwordHint":"judge-compound","ordinary":"keep"}', "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "credential=judge-secret"}]})
+            judge = json.dumps(
+                {
+                    "schema_version": 1,
+                    "verdict": "pass",
+                    "summary": '{"passwordHint":"judge-compound","ordinary":"keep"}',
+                    "findings": [
+                        {
+                            "criterion": "C1",
+                            "verdict": "pass",
+                            "evidence": "credential=judge-secret",
+                        }
+                    ],
+                }
+            )
             actor.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json, pathlib, sys\n"
                 "if 'Review rubric' in sys.argv[-1]:\n"
-                "    if any(secret in p.read_text(errors='ignore') for p in pathlib.Path.cwd().rglob('*') if p.is_file() for secret in ('actor-secret', 'verifier-secret')):\n"
+                "    secrets = ('actor-secret', 'verifier-secret')\n"
+                "    if any(\n"
+                "        secret in p.read_text(errors='ignore')\n"
+                "        for p in pathlib.Path.cwd().rglob('*')\n"
+                "        if p.is_file()\n"
+                "        for secret in secrets\n"
+                "    ):\n"
                 "        raise SystemExit(9)\n"
                 f"    print({judge!r})\n"
                 "else:\n"
-                "    print(json.dumps({'type': 'text', 'part': {'text': '{\"privateKeyMaterial\":\"actor-compound\",\"ordinary\":\"keep\"}'}}))\n"
+                "    payload = {'privateKeyMaterial': 'actor-compound', "
+                "'ordinary': 'keep'}\n"
+                "    inner = json.dumps(payload, separators=(',', ':'))\n"
+                "    print(json.dumps({'type': 'text', 'part': {'text': inner}}))\n"
                 "    print('Bearer actor-bearer', file=sys.stderr)\n"
                 "    print('{}')\n",
                 encoding="utf-8",
@@ -315,7 +412,13 @@ class FixtureContractTests(unittest.TestCase):
                     self.assertNotIn("verifier-compound", content)
                     self.assertNotIn("judge-compound", content)
                     self.assertNotIn("actor-bearer", content)
-                    if path.name not in {"result.json", "diff.patch", ".codev-eval-commit.json", "verifier-stderr.txt", "actor-output.txt"}:
+                    if path.name not in {
+                        "result.json",
+                        "diff.patch",
+                        ".codev-eval-commit.json",
+                        "verifier-stderr.txt",
+                        "actor-output.txt",
+                    }:
                         self.assertIn("keep", content)
 
     def test_parser_sanitizes_compound_json_secret_keys_and_types(self) -> None:
@@ -331,7 +434,15 @@ class FixtureContractTests(unittest.TestCase):
             }
         )
         sanitized = _redact_text(payload)
-        for secret in ("42", "true", "null", "private-material-secret", "7", "escaped-json-secret", "aws-secret"):
+        for secret in (
+            "42",
+            "true",
+            "null",
+            "private-material-secret",
+            "7",
+            "escaped-json-secret",
+            "aws-secret",
+        ):
             self.assertNotIn(secret, sanitized)
         self.assertIn('"ordinary": {"key": "keep", "monkey": "keep"}', sanitized)
 
@@ -343,14 +454,38 @@ class FixtureContractTests(unittest.TestCase):
             protected.write_text("local change", encoding="utf-8")
             fixture = create_fixture("sample", root, ["source.txt"])
             phase = root / "phase.py"
-            verdict = json.dumps({"schema_version": 1, "verdict": "pass", "summary": "ok", "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "ok"}]})
+            verdict = json.dumps(
+                {
+                    "schema_version": 1,
+                    "verdict": "pass",
+                    "summary": "ok",
+                    "findings": [
+                        {"criterion": "C1", "verdict": "pass", "evidence": "ok"}
+                    ],
+                }
+            )
             phase.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json, pathlib, subprocess, sys\n"
-                "phase = 'judge' if 'Review rubric' in sys.argv[-1] else ('verifier' if 'verifier' in sys.argv[1:] else 'actor')\n"
-                "top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], capture_output=True, text=True)\n"
-                "pathlib.Path('phase-log.txt').write_text(json.dumps({'phase': phase, 'git': top.stdout.strip(), 'git_dir': 'GIT_DIR' in __import__('os').environ}))\n"
-                "subprocess.run(['git', 'reset', '--hard'], check=False, capture_output=True)\n"
+                "phase = (\n"
+                "    'judge'\n"
+                "    if 'Review rubric' in sys.argv[-1]\n"
+                "    else ('verifier' if 'verifier' in sys.argv[1:] else 'actor')\n"
+                ")\n"
+                "top = subprocess.run(\n"
+                "    ['git', 'rev-parse', '--show-toplevel'],\n"
+                "    capture_output=True,\n"
+                "    text=True,\n"
+                ")\n"
+                "log = {\n"
+                "    'phase': phase,\n"
+                "    'git': top.stdout.strip(),\n"
+                "    'git_dir': 'GIT_DIR' in __import__('os').environ,\n"
+                "}\n"
+                "pathlib.Path('phase-log.txt').write_text(json.dumps(log))\n"
+                "subprocess.run(\n"
+                "    ['git', 'reset', '--hard'], check=False, capture_output=True\n"
+                ")\n"
                 "if phase == 'judge':\n"
                 f"    print({verdict!r})\n"
                 "elif phase == 'actor':\n"
@@ -360,10 +495,25 @@ class FixtureContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             phase.chmod(phase.stat().st_mode | 0o111)
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [str(phase), "verifier"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [str(phase), "verifier"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
-            with patch.dict(os.environ, {"GIT_DIR": str(root / ".git"), "GIT_WORK_TREE": str(root), "GIT_INDEX_FILE": str(root / ".git/index")}):
+            with patch.dict(
+                os.environ,
+                {
+                    "GIT_DIR": str(root / ".git"),
+                    "GIT_WORK_TREE": str(root),
+                    "GIT_INDEX_FILE": str(root / ".git/index"),
+                },
+            ):
                 self.assertTrue(evaluate("sample", root, output, opencode=str(phase)))
             self.assertEqual("local change", protected.read_text())
 
@@ -390,20 +540,32 @@ class FixtureContractTests(unittest.TestCase):
                     "schema_version": 1,
                     "verdict": "pass",
                     "summary": "ok",
-                    "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "ok"}],
+                    "findings": [
+                        {"criterion": "C1", "verdict": "pass", "evidence": "ok"}
+                    ],
                 }
             )
             actor.write_text(
                 "#!/usr/bin/env python3\n"
                 "import pathlib, subprocess, sys, time\n"
                 "if 'Review rubric' in sys.argv[-1]:\n"
-                "    if any(p.name == 'unknown-secret.blob' for p in pathlib.Path.cwd().rglob('*')):\n"
+                "    if any(\n"
+                "        p.name == 'unknown-secret.blob'\n"
+                "        for p in pathlib.Path.cwd().rglob('*')\n"
+                "    ):\n"
                 "        raise SystemExit(9)\n"
                 f"    print({verdict!r})\n"
                 "else:\n"
                 "    child = pathlib.Path('child.py')\n"
-                "    child.write_text('import pathlib, sys, time; time.sleep(2); pathlib.Path(sys.argv[1]).write_text(\"late\")')\n"
-                f"    subprocess.Popen([sys.executable, str(child), {str(late)!r}], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "    child.write_text(\n"
+                "        'import pathlib, sys, time; time.sleep(2); '\n"
+                "        'pathlib.Path(sys.argv[1]).write_text(\"late\")'\n"
+                "    )\n"
+                "    subprocess.Popen(\n"
+                f"        [sys.executable, str(child), {str(late)!r}],\n"
+                "        stdout=subprocess.DEVNULL,\n"
+                "        stderr=subprocess.DEVNULL,\n"
+                "    )\n"
                 "    print('{}')\n",
                 encoding="utf-8",
             )
@@ -520,7 +682,9 @@ class FixtureContractTests(unittest.TestCase):
         self.assertNotIn("secret-key", events)
         self.assertIn("[REDACTED_SECRET]", events)
 
-    def test_unstructured_process_output_preserves_safe_diagnostics_and_redacts_secrets(self) -> None:
+    def test_unstructured_process_output_preserves_safe_diagnostics_and_redacts_secrets(
+        self,
+    ) -> None:
         safe = _safe_process_output("plain diagnostic\nBearer secret-token\n")
         self.assertIn("plain diagnostic", safe)
         self.assertNotIn("secret-token", safe)
@@ -528,7 +692,9 @@ class FixtureContractTests(unittest.TestCase):
         url_diagnostic = _safe_process_output(
             "url=https://user:secret-password@example.test/path?token=secret-token&safe=yes&clientKey=secret-key"
         )
-        self.assertIn("https://user:[REDACTED_SECRET]@example.test/path", url_diagnostic)
+        self.assertIn(
+            "https://user:[REDACTED_SECRET]@example.test/path", url_diagnostic
+        )
         self.assertIn("safe=yes", url_diagnostic)
         self.assertNotIn("secret-password", url_diagnostic)
         self.assertNotIn("secret-token", url_diagnostic)
@@ -537,16 +703,18 @@ class FixtureContractTests(unittest.TestCase):
         self.assertIn("{", malformed)
         self.assertNotIn("secret-password", malformed)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires os.mkfifo")
     def test_validation_rejects_special_repository_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
             fifo = fixture / "repository/fifo"
-            os.mkfifo(fifo)
+            getattr(os, "mkfifo")(fifo)  # noqa: B009 -- not in stubs on all platforms
             with self.assertRaises(EvaluationError):
                 validate_fixture(fixture)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires os.mkfifo")
     def test_validation_rejects_special_contract_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -554,7 +722,7 @@ class FixtureContractTests(unittest.TestCase):
             fixture = create_fixture("sample", root, ["source.txt"])
             prompt = fixture / "prompt.md"
             prompt.unlink()
-            os.mkfifo(prompt)
+            getattr(os, "mkfifo")(prompt)  # noqa: B009 -- not in stubs on all platforms
             with self.assertRaises(EvaluationError):
                 validate_fixture(fixture)
 
@@ -564,12 +732,34 @@ class FixtureContractTests(unittest.TestCase):
             outside = output.parent / "outside-evidence.txt"
             outside.write_text("keep", encoding="utf-8")
             marker = output / ".codev-eval-transaction.json"
-            marker.write_text(json.dumps({"schema_version": 1, "bundle_id": "x", "artifacts": [{"path": "../outside-evidence.txt", "size": 4, "sha256": "x"}]}))
+            marker.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "x",
+                        "artifacts": [
+                            {
+                                "path": "../outside-evidence.txt",
+                                "size": 4,
+                                "sha256": "x",
+                            }
+                        ],
+                    }
+                )
+            )
             with self.assertRaises(EvaluationError):
                 _recover_output(output)
             marker.unlink()
             (output / "link").symlink_to(outside)
-            marker.write_text(json.dumps({"schema_version": 1, "bundle_id": "x", "artifacts": [{"path": "link", "size": 4, "sha256": "x"}]}))
+            marker.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "x",
+                        "artifacts": [{"path": "link", "size": 4, "sha256": "x"}],
+                    }
+                )
+            )
             with self.assertRaises(EvaluationError):
                 _recover_output(output)
             self.assertEqual("keep", outside.read_text())
@@ -617,7 +807,9 @@ class FixtureContractTests(unittest.TestCase):
                 "artifacts": marker["artifacts"],
             }
             (stage / ".codev-eval-transaction.json").write_text(json.dumps(transaction))
-            (output / ".codev-eval-transaction.json").write_text(json.dumps(transaction))
+            (output / ".codev-eval-transaction.json").write_text(
+                json.dumps(transaction)
+            )
             with self.assertRaises(EvaluationError):
                 _recover_output(output)
             self.assertEqual("complete", (output / "result.json").read_text())
@@ -638,7 +830,9 @@ class FixtureContractTests(unittest.TestCase):
                 "artifacts": marker["artifacts"],
             }
             (stage / ".codev-eval-transaction.json").write_text(json.dumps(transaction))
-            (output / ".codev-eval-transaction.json").write_text(json.dumps(transaction))
+            (output / ".codev-eval-transaction.json").write_text(
+                json.dumps(transaction)
+            )
             with self.assertRaises(EvaluationError):
                 _recover_output(output)
             self.assertEqual("complete", (output / "result.json").read_text())
@@ -646,7 +840,9 @@ class FixtureContractTests(unittest.TestCase):
             self.assertTrue((output / ".codev-eval-transaction.json").exists())
             self.assertTrue(stage.exists())
 
-    def test_recovery_ignores_forged_output_markers_and_preserves_caller_files(self) -> None:
+    def test_recovery_ignores_forged_output_markers_and_preserves_caller_files(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
             caller_file = output / "caller-owned.txt"
@@ -656,10 +852,24 @@ class FixtureContractTests(unittest.TestCase):
                 "schema_version": 1,
                 "bundle_id": "forged",
                 "stage_id": ".codev-eval-stage-forged",
-                "artifacts": [{"path": caller_file.name, "size": caller_file.stat().st_size, "sha256": digest}],
+                "artifacts": [
+                    {
+                        "path": caller_file.name,
+                        "size": caller_file.stat().st_size,
+                        "sha256": digest,
+                    }
+                ],
             }
             (output / _TRANSACTION_MARKER).write_text(json.dumps(transaction))
-            (output / _COMMIT_MARKER).write_text(json.dumps({"schema_version": 1, "bundle_id": "forged", "artifacts": transaction["artifacts"]}))
+            (output / _COMMIT_MARKER).write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "bundle_id": "forged",
+                        "artifacts": transaction["artifacts"],
+                    }
+                )
+            )
             with self.assertRaises(EvaluationError):
                 _recover_output(output)
             self.assertEqual("do not delete", caller_file.read_text())
@@ -738,13 +948,17 @@ class FixtureContractTests(unittest.TestCase):
             self.assertFalse((output / "result.json").exists())
             self.assertFalse(private.exists())
 
-    def test_recovery_ignores_authenticated_marker_with_malformed_manifest_entry(self) -> None:
+    def test_recovery_ignores_authenticated_marker_with_malformed_manifest_entry(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
             private = Path(tempfile.mkdtemp(prefix=".codev-eval-private-"))
             stage = private / "stage"
             stage.mkdir()
-            malformed = [{"path": "result.json", "size": "not-an-int", "sha256": "0" * 64}]
+            malformed = [
+                {"path": "result.json", "size": "not-an-int", "sha256": "0" * 64}
+            ]
             data = {
                 "schema_version": 1,
                 "bundle_id": "malformed-bundle",
@@ -785,8 +999,12 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             sandbox = root / "sandbox"
-            subprocess.run(["git", "init", str(sandbox)], check=True, capture_output=True)
-            with patch.dict(os.environ, {"GIT_DIR": str(root / ".git"), "GIT_WORK_TREE": str(root)}):
+            subprocess.run(
+                ["git", "init", str(sandbox)], check=True, capture_output=True
+            )
+            with patch.dict(
+                os.environ, {"GIT_DIR": str(root / ".git"), "GIT_WORK_TREE": str(root)}
+            ):
                 result = eval_git("git", ["rev-parse", "--show-toplevel"], sandbox)
             self.assertEqual(0, result.code)
             self.assertEqual(sandbox.resolve(), Path(result.stdout.strip()).resolve())
@@ -802,14 +1020,27 @@ class FixtureContractTests(unittest.TestCase):
             hook.write_text(f"#!/bin/sh\ntouch {root / 'hook-ran'}\n", encoding="utf-8")
             hook.chmod(hook.stat().st_mode | 0o111)
             global_config = root / "global.gitconfig"
-            global_config.write_text(f"[core]\n\thooksPath = {hook_dir}\n", encoding="utf-8")
-            subprocess.run(["git", "init", str(sandbox)], check=True, capture_output=True)
+            global_config.write_text(
+                f"[core]\n\thooksPath = {hook_dir}\n", encoding="utf-8"
+            )
+            subprocess.run(
+                ["git", "init", str(sandbox)], check=True, capture_output=True
+            )
             (sandbox / "file.txt").write_text("file", encoding="utf-8")
             with patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}):
-                self.assertEqual(0, eval_git("git", ["config", "user.email", "test@example.invalid"], sandbox).code)
-                self.assertEqual(0, eval_git("git", ["config", "user.name", "Test"], sandbox).code)
+                self.assertEqual(
+                    0,
+                    eval_git(
+                        "git", ["config", "user.email", "test@example.invalid"], sandbox
+                    ).code,
+                )
+                self.assertEqual(
+                    0, eval_git("git", ["config", "user.name", "Test"], sandbox).code
+                )
                 self.assertEqual(0, eval_git("git", ["add", "."], sandbox).code)
-                self.assertEqual(0, eval_git("git", ["commit", "-m", "test"], sandbox).code)
+                self.assertEqual(
+                    0, eval_git("git", ["commit", "-m", "test"], sandbox).code
+                )
             self.assertFalse((root / "hook-ran").exists())
 
     def test_diff_capture_disables_local_external_diff(self) -> None:
@@ -819,18 +1050,40 @@ class FixtureContractTests(unittest.TestCase):
             sentinel = root / "diff-external-sentinel"
             external = root / "external-diff.py"
             external.write_text(
-                f"#!/usr/bin/env python3\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('executed')\n",
+                "#!/usr/bin/env python3\n"
+                "from pathlib import Path\n"
+                f"Path({str(sentinel)!r}).write_text('executed')\n",
                 encoding="utf-8",
             )
             external.chmod(external.stat().st_mode | 0o111)
-            subprocess.run(["git", "-C", str(root), "config", "diff.external", str(external)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "diff.external", str(external)],
+                check=True,
+            )
             subprocess.run(["git", "-C", str(root), "add", "source.txt"], check=True)
-            subprocess.run(["git", "-C", str(root), "-c", "user.email=test@example.invalid", "-c", "user.name=Test", "commit", "-m", "seed"], check=True, capture_output=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "-c",
+                    "user.email=test@example.invalid",
+                    "-c",
+                    "user.name=Test",
+                    "commit",
+                    "-m",
+                    "seed",
+                ],
+                check=True,
+                capture_output=True,
+            )
             (root / "source.txt").write_text("changed", encoding="utf-8")
             _capture_diff("git", root, "HEAD")
             self.assertFalse(sentinel.exists())
 
-    def test_validation_rejects_symlinked_contract_file_and_repository_entry(self) -> None:
+    def test_validation_rejects_symlinked_contract_file_and_repository_entry(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -841,7 +1094,9 @@ class FixtureContractTests(unittest.TestCase):
             with self.assertRaises(EvaluationError):
                 validate_fixture(fixture)
 
-    def test_validation_rejects_symlinked_repository_directory_inside_target(self) -> None:
+    def test_validation_rejects_symlinked_repository_directory_inside_target(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -854,7 +1109,9 @@ class FixtureContractTests(unittest.TestCase):
             with self.assertRaises(EvaluationError):
                 validate_fixture(fixture)
 
-    def test_output_must_be_existing_and_empty_is_checked_by_eval_boundary(self) -> None:
+    def test_output_must_be_existing_and_empty_is_checked_by_eval_boundary(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -868,7 +1125,15 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root / ".codev/evidence"
             output.mkdir()
             marker = output / ".codev-eval-transaction.json"
@@ -893,8 +1158,10 @@ class FixtureContractTests(unittest.TestCase):
             "#!/usr/bin/env python3\n"
             "import json, pathlib, sys\n"
             "log = pathlib.Path(sys.argv[1])\n"
-            "log.open('a').write(json.dumps({'argv': sys.argv[1:], 'cwd': str(pathlib.Path.cwd())}) + '\\n')\n"
-            f"print({verdict!r} if {judge!r} and 'Review rubric' in sys.argv[-1] else '{{}}')\n",
+            "entry = {'argv': sys.argv[1:], 'cwd': str(pathlib.Path.cwd())}\n"
+            "log.open('a').write(json.dumps(entry) + '\\n')\n"
+            "is_judge = 'Review rubric' in sys.argv[-1]\n"
+            f"print({verdict!r} if {judge!r} and is_judge else '{{}}')\n",
             encoding="utf-8",
         )
         executable.chmod(executable.stat().st_mode | 0o111)
@@ -905,16 +1172,29 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             log = root / "calls.jsonl"
             opencode = self._opencode(root)
             opencode_with_log = root / "runner.py"
-            opencode_with_log.write_text(opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1), encoding="utf-8")
+            opencode_with_log.write_text(
+                opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1),
+                encoding="utf-8",
+            )
             opencode_with_log.chmod(opencode_with_log.stat().st_mode | 0o111)
             before = (root / "source.txt").read_bytes()
-            self.assertTrue(evaluate("sample", root, output, opencode=str(opencode_with_log)))
+            self.assertTrue(
+                evaluate("sample", root, output, opencode=str(opencode_with_log))
+            )
             self.assertEqual(before, (root / "source.txt").read_bytes())
             self.assertTrue((output / "result.json").is_file())
             self.assertTrue((output / "diff.patch").is_file())
@@ -932,11 +1212,28 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor.py"
-            verdict = json.dumps({"schema_version": 1, "verdict": "pass", "summary": "ok", "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "seen"}]})
+            verdict = json.dumps(
+                {
+                    "schema_version": 1,
+                    "verdict": "pass",
+                    "summary": "ok",
+                    "findings": [
+                        {"criterion": "C1", "verdict": "pass", "evidence": "seen"}
+                    ],
+                }
+            )
             actor.write_text(
                 "#!/usr/bin/env python3\n"
                 "import os, pathlib, subprocess, sys\n"
@@ -950,18 +1247,35 @@ class FixtureContractTests(unittest.TestCase):
                 "    pathlib.Path('Node_Modules').mkdir()\n"
                 "    pathlib.Path('Node_Modules/secret').write_text('secret')\n"
                 "    pathlib.Path('committed.txt').write_text('commit')\n"
-                "    subprocess.run(['git', 'config', 'user.name', 'secret-token-author'], check=True)\n"
-                "    subprocess.run(['git', 'config', 'user.email', 'secret@example.test'], check=True)\n"
-                "    pathlib.Path('binary.bin').write_bytes(b'\\x00password=binary-secret\\xff')\n"
-                    "    subprocess.run(['git', 'add', 'committed.txt', 'PRIVATE.PEM', ':(exclude)magic.txt'], check=True, capture_output=True)\n"
-                    "    subprocess.run(['git', 'commit', '-m', 'actor'], check=True, capture_output=True)\n"
-                "    subprocess.run(['git', 'add', 'binary.bin'], check=True, capture_output=True)\n"
-                "    subprocess.run(['git', 'commit', '-m', 'binary'], check=True, capture_output=True)\n"
-                "    subprocess.run(['git', 'commit', '--allow-empty', '-m', 'subject\\x1econtains-delimiter'], check=True, capture_output=True)\n"
-                "    pathlib.Path('.gitignore').write_text('ignored.txt\\nunknown-secret.blob\\n')\n"
-                    "    pathlib.Path('untracked.txt').write_text('password=untracked-secret')\n"
+                "    run = subprocess.run\n"
+                "    ck = dict(check=True)\n"
+                "    cko = dict(check=True, capture_output=True)\n"
+                "    run(\n"
+                "        ['git', 'config', 'user.name', 'secret-token-author'], **ck\n"
+                "    )\n"
+                "    run(\n"
+                "        ['git', 'config', 'user.email', 'secret@example.test'], **ck\n"
+                "    )\n"
+                "    pathlib.Path('binary.bin').write_bytes(\n"
+                "        b'\\x00password=binary-secret\\xff'\n"
+                "    )\n"
+                "    add_paths = ['committed.txt', 'PRIVATE.PEM',"
+                " ':(exclude)magic.txt']\n"
+                "    run(['git', 'add', *add_paths], **cko)\n"
+                "    run(['git', 'commit', '-m', 'actor'], **cko)\n"
+                "    run(['git', 'add', 'binary.bin'], **cko)\n"
+                "    run(['git', 'commit', '-m', 'binary'], **cko)\n"
+                "    subject = 'subject\\x1econtains-delimiter'\n"
+                "    run(['git', 'commit', '--allow-empty', '-m', subject], **cko)\n"
+                "    pathlib.Path('.gitignore').write_text(\n"
+                "        'ignored.txt\\nunknown-secret.blob\\n'\n"
+                "    )\n"
+                "    pathlib.Path('untracked.txt').write_text(\n"
+                "        'password=untracked-secret'\n"
+                "    )\n"
                 "    pathlib.Path('ignored.txt').write_text('ignored')\n"
-                "    pathlib.Path('unknown-secret.blob').write_bytes(b'\\x00proprietary-secret-format\\xff')\n"
+                "    blob = b'\\x00proprietary-secret-format\\xff'\n"
+                "    pathlib.Path('unknown-secret.blob').write_bytes(blob)\n"
                 "    pathlib.Path('.env.local').write_text('secret')\n"
                 "    pathlib.Path('.aws').mkdir()\n"
                 "    pathlib.Path('.aws/credentials').write_text('secret')\n"
@@ -1000,11 +1314,28 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor.py"
-            verdict = json.dumps({"schema_version": 1, "verdict": "pass", "summary": "ok", "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "ok"}]})
+            verdict = json.dumps(
+                {
+                    "schema_version": 1,
+                    "verdict": "pass",
+                    "summary": "ok",
+                    "findings": [
+                        {"criterion": "C1", "verdict": "pass", "evidence": "ok"}
+                    ],
+                }
+            )
             actor.write_text(
                 "#!/usr/bin/env python3\n"
                 "import pathlib, subprocess, sys\n"
@@ -1012,8 +1343,10 @@ class FixtureContractTests(unittest.TestCase):
                 f"    print({verdict!r})\n"
                 "else:\n"
                 "    pathlib.Path('credential.txt').write_text('private material')\n"
-                "    subprocess.run(['git', 'add', 'credential.txt'], check=True, capture_output=True)\n"
-                "    subprocess.run(['git', 'commit', '-m', 'credential'], check=True, capture_output=True)\n"
+                "    run = subprocess.run\n"
+                "    ck = dict(check=True, capture_output=True)\n"
+                "    run(['git', 'add', 'credential.txt'], **ck)\n"
+                "    run(['git', 'commit', '-m', 'credential'], **ck)\n"
                 "    print('{}')\n",
                 encoding="utf-8",
             )
@@ -1028,7 +1361,9 @@ class FixtureContractTests(unittest.TestCase):
             path = "nonutf-\udcff.txt"
             calls: list[list[str]] = []
 
-            def fake_git(git: str, args: list[str], cwd: Path, timeout: int = 60) -> Run:
+            def fake_git(
+                git: str, args: list[str], cwd: Path, timeout: int = 60
+            ) -> Run:
                 calls.append(args)
                 if args[:3] == ["diff", "--name-only", "-z"]:
                     return Run(path + "\x00", "", 0, False, 0.0)
@@ -1055,9 +1390,11 @@ class FixtureContractTests(unittest.TestCase):
                 os.link(source, destination)
                 source.unlink()
 
-            with patch("codev_workflow.eval.os.link", side_effect=fail_second):
-                with self.assertRaises(OSError):
-                    _write_output(output, {"one.txt": "1", "two.txt": "2"})
+            with (
+                patch("codev_workflow.eval.os.link", side_effect=fail_second),
+                self.assertRaises(OSError),
+            ):
+                _write_output(output, {"one.txt": "1", "two.txt": "2"})
             self.assertEqual([], list(output.iterdir()))
 
     def test_publication_falls_back_when_link_crosses_filesystems(self) -> None:
@@ -1067,9 +1404,14 @@ class FixtureContractTests(unittest.TestCase):
             destination = root / "published.txt"
             source.write_text("safe publication", encoding="utf-8")
 
-            with patch("codev_workflow.eval.os.link", side_effect=OSError(errno.EXDEV, "cross-device link")):
+            with patch(
+                "codev_workflow.eval.os.link",
+                side_effect=OSError(errno.EXDEV, "cross-device link"),
+            ):
                 _publish_artifact(source, destination)
-            self.assertEqual("safe publication", destination.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "safe publication", destination.read_text(encoding="utf-8")
+            )
 
     def test_publication_failure_preserves_caller_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1087,9 +1429,11 @@ class FixtureContractTests(unittest.TestCase):
                 first_destination.write_text("caller replacement", encoding="utf-8")
                 raise OSError("injected publication failure")
 
-            with patch("codev_workflow.eval.os.link", side_effect=race_link):
-                with self.assertRaises(OSError):
-                    _write_output(output, {"one.txt": "one", "two.txt": "two"})
+            with (
+                patch("codev_workflow.eval.os.link", side_effect=race_link),
+                self.assertRaises(OSError),
+            ):
+                _write_output(output, {"one.txt": "one", "two.txt": "two"})
             self.assertEqual("caller replacement", first_destination.read_text())
 
     def test_fixture_failure_preserves_caller_replacement(self) -> None:
@@ -1099,7 +1443,14 @@ class FixtureContractTests(unittest.TestCase):
             (root / "second.txt").write_text("second", encoding="utf-8")
             destination = root / ".codev/fixtures/race"
             calls = 0
-            def race_copy(source: Path, repository_fd: int, relative: Path, expected_identity: tuple[int, int], expected_digest: str) -> None:
+
+            def race_copy(
+                source: Path,
+                repository_fd: int,
+                relative: Path,
+                expected_identity: tuple[int, int],
+                expected_digest: str,
+            ) -> None:
                 nonlocal calls
                 calls += 1
                 if calls == 2:
@@ -1107,11 +1458,15 @@ class FixtureContractTests(unittest.TestCase):
                     destination.mkdir()
                     (destination / "caller.txt").write_text("caller", encoding="utf-8")
                     raise OSError("injected fixture failure")
-                real_write_fixture_file(source, repository_fd, relative, expected_identity, expected_digest)
+                real_write_fixture_file(
+                    source, repository_fd, relative, expected_identity, expected_digest
+                )
 
-            with patch("codev_workflow.eval._write_fixture_file", side_effect=race_copy):
-                with self.assertRaises(OSError):
-                    create_fixture("race", root, ["source.txt", "second.txt"])
+            with (
+                patch("codev_workflow.eval._write_fixture_file", side_effect=race_copy),
+                self.assertRaises(OSError),
+            ):
+                create_fixture("race", root, ["source.txt", "second.txt"])
             self.assertEqual("caller", (destination / "caller.txt").read_text())
 
     def test_fixture_source_replacement_cannot_copy_external_content(self) -> None:
@@ -1120,20 +1475,38 @@ class FixtureContractTests(unittest.TestCase):
             self._repo(root)
             external = root.parent / "external-secret.txt"
             external.write_text("external content", encoding="utf-8")
-            source = root / "source.txt"
 
-            def replace_source(source_path: Path, repository_fd: int, relative: Path, expected_identity: tuple[int, int], expected_digest: str) -> None:
+            def replace_source(
+                source_path: Path,
+                repository_fd: int,
+                relative: Path,
+                expected_identity: tuple[int, int],
+                expected_digest: str,
+            ) -> None:
                 source_path.unlink()
                 source_path.symlink_to(external)
-                real_write_fixture_file(source_path, repository_fd, relative, expected_identity, expected_digest)
+                real_write_fixture_file(
+                    source_path,
+                    repository_fd,
+                    relative,
+                    expected_identity,
+                    expected_digest,
+                )
 
-            with patch("codev_workflow.eval._write_fixture_file", side_effect=replace_source):
-                with self.assertRaises(EvaluationError):
-                    create_fixture("source-race", root, ["source.txt"])
+            with (
+                patch(
+                    "codev_workflow.eval._write_fixture_file",
+                    side_effect=replace_source,
+                ),
+                self.assertRaises(EvaluationError),
+            ):
+                create_fixture("source-race", root, ["source.txt"])
             self.assertEqual("external content", external.read_text())
             self.assertFalse((root / ".codev/fixtures/source-race").exists())
 
-    def test_directory_include_candidate_mutation_fails_without_partial_fixture(self) -> None:
+    def test_directory_include_candidate_mutation_fails_without_partial_fixture(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -1143,19 +1516,40 @@ class FixtureContractTests(unittest.TestCase):
             second = source_dir / "second.txt"
             first.write_text("first", encoding="utf-8")
             second.write_text("second", encoding="utf-8")
-            for name, mutate in (("add-race", lambda: (source_dir / "added.txt").write_text("added")), ("delete-race", second.unlink)):
+            for name, mutate in (
+                ("add-race", lambda: (source_dir / "added.txt").write_text("added")),
+                ("delete-race", second.unlink),
+            ):
                 calls = 0
 
-                def mutate_copy(source: Path, repository_fd: int | Path, relative: Path, expected_identity: tuple[int, int], expected_digest: str) -> None:
+                def mutate_copy(
+                    source: Path,
+                    repository_fd: int | Path,
+                    relative: Path,
+                    expected_identity: tuple[int, int],
+                    expected_digest: str,
+                    _mutate: Callable[[], object] = mutate,
+                ) -> None:
                     nonlocal calls
                     calls += 1
                     if calls == 1:
-                        mutate()
-                    real_write_fixture_file(source, repository_fd, relative, expected_identity, expected_digest)
+                        _mutate()
+                    real_write_fixture_file(
+                        source,
+                        repository_fd,
+                        relative,
+                        expected_identity,
+                        expected_digest,
+                    )
 
-                with patch("codev_workflow.eval._write_fixture_file", side_effect=mutate_copy):
-                    with self.assertRaises(EvaluationError):
-                        create_fixture(name, root, ["source-dir"])
+                with (
+                    patch(
+                        "codev_workflow.eval._write_fixture_file",
+                        side_effect=mutate_copy,
+                    ),
+                    self.assertRaises(EvaluationError),
+                ):
+                    create_fixture(name, root, ["source-dir"])
                 self.assertFalse((root / ".codev/fixtures" / name).exists())
                 if name == "add-race":
                     (source_dir / "added.txt").unlink()
@@ -1167,13 +1561,24 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             opencode = self._opencode(root)
             runner = root / "runner.py"
             log = root / "calls.jsonl"
-            runner.write_text(opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1), encoding="utf-8")
+            runner.write_text(
+                opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1),
+                encoding="utf-8",
+            )
             runner.chmod(runner.stat().st_mode | 0o111)
 
             def fail_judge_cleanup(path: Path) -> None:
@@ -1181,9 +1586,11 @@ class FixtureContractTests(unittest.TestCase):
                     raise OSError("injected cleanup failure")
                 real_remove(path)
 
-            with patch("codev_workflow.eval._remove", side_effect=fail_judge_cleanup):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(runner))
+            with (
+                patch("codev_workflow.eval._remove", side_effect=fail_judge_cleanup),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(runner))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["outcome"])
 
@@ -1192,13 +1599,24 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "raise SystemExit(1)"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "raise SystemExit(1)"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             log = root / "calls.jsonl"
             opencode = self._opencode(root)
             runner = root / "runner.py"
-            runner.write_text(opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1), encoding="utf-8")
+            runner.write_text(
+                opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1),
+                encoding="utf-8",
+            )
             runner.chmod(runner.stat().st_mode | 0o111)
             self.assertFalse(evaluate("sample", root, output, opencode=str(runner)))
             self.assertEqual(1, len(log.read_text().splitlines()))
@@ -1216,14 +1634,22 @@ class FixtureContractTests(unittest.TestCase):
             actor.write_text("#!/usr/bin/env python3\nprint('{}')\n", encoding="utf-8")
             actor.chmod(actor.stat().st_mode | 0o111)
 
-            def fail_actor(argv: list[str], cwd: Path, timeout: int, env: dict[str, str] | None = None, **kwargs: Any) -> Any:
+            def fail_actor(
+                argv: list[str],
+                cwd: Path,
+                timeout: int,
+                env: dict[str, str] | None = None,
+                **kwargs: Any,
+            ) -> Any:
                 if argv[0] == str(actor):
                     raise EvaluationError("actor launch failed")
                 return real_run(argv, cwd, timeout, env)
 
-            with patch("codev_workflow.eval._run", side_effect=fail_actor):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(actor))
+            with (
+                patch("codev_workflow.eval._run", side_effect=fail_actor),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["actor"]["status"])
             for name in ("actor-events.jsonl", "actor-output.txt"):
@@ -1236,24 +1662,41 @@ class FixtureContractTests(unittest.TestCase):
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
             command = [sys.executable, "-c", "pass"]
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": command, "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {"schema_version": 1, "command": command, "timeout_seconds": 5}
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor.py"
             actor.write_text("#!/usr/bin/env python3\nprint('{}')\n", encoding="utf-8")
             actor.chmod(actor.stat().st_mode | 0o111)
 
-            def fail_verifier(argv: list[str], cwd: Path, timeout: int, env: dict[str, str] | None = None, **kwargs: Any) -> Any:
+            def fail_verifier(
+                argv: list[str],
+                cwd: Path,
+                timeout: int,
+                env: dict[str, str] | None = None,
+                **kwargs: Any,
+            ) -> Any:
                 if argv == command:
                     raise EvaluationError("verifier launch failed")
                 return real_run(argv, cwd, timeout, env)
 
-            with patch("codev_workflow.eval._run", side_effect=fail_verifier):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(actor))
+            with (
+                patch("codev_workflow.eval._run", side_effect=fail_verifier),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["verifier"]["status"])
-            for name in ("actor-events.jsonl", "actor-output.txt", "verifier-stdout.txt", "verifier-stderr.txt"):
+            for name in (
+                "actor-events.jsonl",
+                "actor-output.txt",
+                "verifier-stdout.txt",
+                "verifier-stderr.txt",
+            ):
                 self.assertTrue((output / name).is_file())
                 self.assertIn(name, result["artifacts"].values())
 
@@ -1262,21 +1705,37 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor.py"
             actor.write_text("#!/usr/bin/env python3\nprint('{}')\n", encoding="utf-8")
             actor.chmod(actor.stat().st_mode | 0o111)
 
-            def fail_judge(argv: list[str], cwd: Path, timeout: int, env: dict[str, str] | None = None, **kwargs: Any) -> Any:
+            def fail_judge(
+                argv: list[str],
+                cwd: Path,
+                timeout: int,
+                env: dict[str, str] | None = None,
+                **kwargs: Any,
+            ) -> Any:
                 if argv[0] == str(actor) and "Review rubric" in argv[-1]:
                     raise EvaluationError("judge launch failed")
                 return real_run(argv, cwd, timeout, env)
 
-            with patch("codev_workflow.eval._run", side_effect=fail_judge):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(actor))
+            with (
+                patch("codev_workflow.eval._run", side_effect=fail_judge),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["judge"]["status"])
             for name in ("judge-events.jsonl", "judge-output.json"):
@@ -1287,11 +1746,14 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            create_fixture("sample", root, ["source.txt"])
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor-fail.py"
-            actor.write_text("#!/usr/bin/env python3\nprint('partial')\nraise SystemExit(3)\n", encoding="utf-8")
+            actor.write_text(
+                "#!/usr/bin/env python3\nprint('partial')\nraise SystemExit(3)\n",
+                encoding="utf-8",
+            )
             actor.chmod(actor.stat().st_mode | 0o111)
             self.assertFalse(evaluate("sample", root, output, opencode=str(actor)))
             result = json.loads((output / "result.json").read_text())
@@ -1310,7 +1772,9 @@ class FixtureContractTests(unittest.TestCase):
             output.mkdir()
             actor = root / "invalid-actor.py"
             actor.write_bytes(
-                b"#!/usr/bin/env python3\nimport sys\nsys.stdout.buffer.write(b'\\xff\\n')\n"
+                b"#!/usr/bin/env python3\n"
+                b"import sys\n"
+                b"sys.stdout.buffer.write(b'\\xff\\n')\n"
             )
             actor.chmod(actor.stat().st_mode | 0o111)
             with self.assertRaises(EvaluationError):
@@ -1345,7 +1809,9 @@ class FixtureContractTests(unittest.TestCase):
                     "schema_version": 1,
                     "verdict": "pass",
                     "summary": "ok",
-                    "findings": [{"criterion": "C1", "verdict": "pass", "evidence": "ok"}],
+                    "findings": [
+                        {"criterion": "C1", "verdict": "pass", "evidence": "ok"}
+                    ],
                 }
             )
             actor.write_text(
@@ -1405,7 +1871,12 @@ class FixtureContractTests(unittest.TestCase):
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor-timeout.py"
-            actor.write_text("#!/usr/bin/env python3\nprint('partial', flush=True)\nimport time; time.sleep(3)\n", encoding="utf-8")
+            actor.write_text(
+                "#!/usr/bin/env python3\n"
+                "print('partial', flush=True)\n"
+                "import time; time.sleep(3)\n",
+                encoding="utf-8",
+            )
             actor.chmod(actor.stat().st_mode | 0o111)
             self.assertFalse(evaluate("sample", root, output, opencode=str(actor)))
             result = json.loads((output / "result.json").read_text())
@@ -1420,13 +1891,24 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             runner = root / "runner.py"
             log = root / "calls.jsonl"
             malformed = self._opencode(root, judge=False)
-            runner.write_text(malformed.read_text().replace("sys.argv[1]", repr(str(log)), 1), encoding="utf-8")
+            runner.write_text(
+                malformed.read_text().replace("sys.argv[1]", repr(str(log)), 1),
+                encoding="utf-8",
+            )
             runner.chmod(runner.stat().st_mode | 0o111)
             with self.assertRaises(EvaluationError):
                 evaluate("sample", root, output, opencode=str(runner))
@@ -1441,23 +1923,38 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(json.dumps({"schema_version": 1, "command": [sys.executable, "-c", "pass"], "timeout_seconds": 5}))
+            (fixture / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             log = root / "calls.jsonl"
             opencode = self._opencode(root)
             runner = root / "runner.py"
-            runner.write_text(opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1), encoding="utf-8")
+            runner.write_text(
+                opencode.read_text().replace("sys.argv[1]", repr(str(log)), 1),
+                encoding="utf-8",
+            )
             runner.chmod(runner.stat().st_mode | 0o111)
 
-            def fake_git(git: str, args: list[str], cwd: Path, timeout: int = 60) -> Run:
+            def fake_git(
+                git: str, args: list[str], cwd: Path, timeout: int = 60
+            ) -> Run:
                 if args and args[0] == "diff":
                     return Run("", "diff unavailable", 1, False, 0.0)
                 return real_git(git, args, cwd, timeout)
 
-            with patch("codev_workflow.eval._git", side_effect=fake_git):
-                with self.assertRaises(EvaluationError):
-                    evaluate("sample", root, output, opencode=str(runner))
+            with (
+                patch("codev_workflow.eval._git", side_effect=fake_git),
+                self.assertRaises(EvaluationError),
+            ):
+                evaluate("sample", root, output, opencode=str(runner))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["outcome"])
             self.assertEqual("skipped", result["judge"]["status"])

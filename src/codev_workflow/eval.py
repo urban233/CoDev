@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import ctypes
 import errno
 import hashlib
@@ -13,6 +14,7 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -28,7 +30,9 @@ class EvaluationError(RuntimeError):
 
 EXCLUDED_NAMES = frozenset({".env", ".git", ".venv", "node_modules"})
 _SECRET_SUFFIXES = (".pem", ".key")
-_SECRET_NAMES = frozenset({".aws", "credentials", "credentials.json", "token", "token.json"})
+_SECRET_NAMES = frozenset(
+    {".aws", "credentials", "credentials.json", "token", "token.json"}
+)
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _JUDGE_FIELDS = {"schema_version", "verdict", "summary", "findings"}
 _COMMIT_MARKER = ".codev-eval-commit.json"
@@ -58,21 +62,26 @@ _URL_OUTPUT = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 def _secret_key(key: str) -> bool:
     parts: list[str] = []
     for segment in re.split(r"[_-]+", key):
-        parts.extend(re.findall(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+", segment) or [segment])
+        parts.extend(
+            re.findall(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+", segment) or [segment]
+        )
     parts = [part.lower() for part in parts]
     sensitive = {"password", "passwd", "token", "secret", "credential"}
     if any(part in sensitive for part in parts):
         return True
     return any(
-        left in {"api", "access", "auth", "private", "client", "aws"} and right in {"key", "token", "secret", "access"}
-        for left, right in zip(parts, parts[1:])
+        left in {"api", "access", "auth", "private", "client", "aws"}
+        and right in {"key", "token", "secret", "access"}
+        for left, right in zip(parts, parts[1:], strict=False)
     )
 
 
 def _sanitize_json_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: "[REDACTED_SECRET]" if isinstance(key, str) and _secret_key(key) else _sanitize_json_value(item)
+            key: "[REDACTED_SECRET]"
+            if isinstance(key, str) and _secret_key(key)
+            else _sanitize_json_value(item)
             for key, item in value.items()
         }
     if isinstance(value, list):
@@ -96,9 +105,19 @@ def _sanitize_json_string(value: str) -> str:
 
 def _sensitive_query_key(key: str) -> bool:
     normalized = re.sub(r"[^a-z0-9]", "", key.casefold())
-    if normalized in {"token", "password", "passwd", "secret", "key", "credential", "apikey"}:
+    if normalized in {
+        "token",
+        "password",
+        "passwd",
+        "secret",
+        "key",
+        "credential",
+        "apikey",
+    }:
         return True
-    return normalized.endswith(("token", "password", "passwd", "secret", "key", "credential")) and normalized not in {"monkey"}
+    return normalized.endswith(
+        ("token", "password", "passwd", "secret", "key", "credential")
+    ) and normalized not in {"monkey"}
 
 
 def _sanitize_url(value: str) -> str:
@@ -126,7 +145,9 @@ def _sanitize_url(value: str) -> str:
         (key, "[REDACTED_SECRET]" if _sensitive_query_key(key) else item)
         for key, item in parse_qsl(parsed.query, keep_blank_values=True)
     ]
-    return urlunsplit((parsed.scheme, netloc, parsed.path, urlencode(query), parsed.fragment))
+    return urlunsplit(
+        (parsed.scheme, netloc, parsed.path, urlencode(query), parsed.fragment)
+    )
 
 
 def _redact_urls(value: str) -> str:
@@ -150,7 +171,10 @@ def _safe_jsonl(value: str) -> str:
         events = [json.loads(line) for line in lines]
     except (json.JSONDecodeError, UnicodeDecodeError):
         return ""
-    return "".join(json.dumps(_sanitize_json_value(event), ensure_ascii=False) + "\n" for event in events)
+    return "".join(
+        json.dumps(_sanitize_json_value(event), ensure_ascii=False) + "\n"
+        for event in events
+    )
 
 
 def _safe_process_output(value: str) -> str:
@@ -205,7 +229,11 @@ def _json(path: Path) -> dict[str, Any]:
 
 def _strict(data: dict[str, Any], fields: set[str], path: Path) -> None:
     unknown = set(data) - fields
-    if unknown or type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
+    if (
+        unknown
+        or type(data.get("schema_version")) is not int
+        or data.get("schema_version") != 1
+    ):
         raise EvaluationError(f"invalid schema: {path}")
 
 
@@ -226,7 +254,7 @@ def _no_symlink(path: Path, boundary: Path) -> None:
     if ".." in relative.parts:
         raise EvaluationError(f"path is outside boundary: {path}")
     current = boundary
-    if os.name == "nt":
+    if sys.platform == "win32":
         _windows_reparse_safe(current)
     try:
         if stat.S_ISLNK(os.lstat(current).st_mode):
@@ -241,12 +269,12 @@ def _no_symlink(path: Path, boundary: Path) -> None:
             continue
         if stat.S_ISLNK(mode):
             raise EvaluationError(f"symlinks are not allowed: {current}")
-        if os.name == "nt":
+        if sys.platform == "win32":
             _windows_reparse_safe(current)
 
 
 def _windows_reparse_safe(path: Path) -> None:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     attributes = kernel32.GetFileAttributesW(str(path))
     if attributes != -1 and attributes & 0x00000400:
         raise EvaluationError(f"reparse points are not allowed: {path}")
@@ -294,7 +322,9 @@ def _redact_text(value: str) -> str:
                 if sanitized_line == parsed_line:
                     sanitized_lines.append(line)
                 else:
-                    sanitized_lines.append(json.dumps(sanitized_line, ensure_ascii=False) + ending)
+                    sanitized_lines.append(
+                        json.dumps(sanitized_line, ensure_ascii=False) + ending
+                    )
                     changed = True
             else:
                 sanitized_lines.append(line)
@@ -343,9 +373,19 @@ def _redact_diff(value: str) -> str:
 
 def _isolated_env() -> dict[str, str]:
     allowed = {
-        "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TMP", "TEMP",
-        "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-        "OPENCODE_API_KEY", "OPENCODE_AUTH_TOKEN", "OPENCODE_SERVER_PASSWORD",
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "OPENCODE_API_KEY",
+        "OPENCODE_AUTH_TOKEN",
+        "OPENCODE_SERVER_PASSWORD",
     }
     env = {key: value for key, value in os.environ.items() if key in allowed}
     env.update(
@@ -365,7 +405,9 @@ def _redact_value(value: Any) -> Any:
         return [_redact_value(item) for item in value]
     if isinstance(value, dict):
         return {
-            key: "[REDACTED_SECRET]" if isinstance(key, str) and _secret_key(key) else _redact_value(item)
+            key: "[REDACTED_SECRET]"
+            if isinstance(key, str) and _secret_key(key)
+            else _redact_value(item)
             for key, item in value.items()
         }
     return value
@@ -429,7 +471,9 @@ def _assert_file_snapshot(path: Path, fingerprint: tuple[int, int, int, int]) ->
         raise EvaluationError(f"fixture snapshot changed: {path}")
 
 
-def _assert_snapshot_digest(path: Path, fingerprint: tuple[int, int, int, int], digest: str) -> None:
+def _assert_snapshot_digest(
+    path: Path, fingerprint: tuple[int, int, int, int], digest: str
+) -> None:
     _assert_file_snapshot(path, fingerprint)
     try:
         current_digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -443,7 +487,16 @@ def validate_fixture(root: Path) -> Fixture:
     if not root.is_dir() or root.is_symlink():
         raise EvaluationError(f"fixture does not exist: {root}")
     _no_symlink(root, root.parent.parent.parent)
-    required = [root / name for name in ("fixture.json", "prompt.md", "rubric.md", "verifier.json", "repository")]
+    required = [
+        root / name
+        for name in (
+            "fixture.json",
+            "prompt.md",
+            "rubric.md",
+            "verifier.json",
+            "repository",
+        )
+    ]
     for path in required:
         if path.is_symlink() or (path.name != "repository" and not path.is_file()):
             raise EvaluationError(f"symlink is not allowed: {path}")
@@ -451,7 +504,17 @@ def validate_fixture(root: Path) -> Fixture:
     identity_text = identity_path.read_text(encoding="utf-8")
     _assert_safe_content(identity_text, identity_path)
     identity = _json(identity_path)
-    _strict(identity, {"schema_version", "name", "description", "actor_timeout_seconds", "judge_timeout_seconds"}, identity_path)
+    _strict(
+        identity,
+        {
+            "schema_version",
+            "name",
+            "description",
+            "actor_timeout_seconds",
+            "judge_timeout_seconds",
+        },
+        identity_path,
+    )
     name = identity.get("name")
     if not isinstance(name, str) or not name or name != root.name:
         raise EvaluationError("fixture name must match its directory")
@@ -475,7 +538,13 @@ def validate_fixture(root: Path) -> Fixture:
     verifier = _json(verifier_path)
     _strict(verifier, {"schema_version", "command", "timeout_seconds"}, verifier_path)
     command = verifier.get("command")
-    if not isinstance(command, list) or not command or any(not isinstance(item, str) or not item or "\x00" in item for item in command):
+    if (
+        not isinstance(command, list)
+        or not command
+        or any(
+            not isinstance(item, str) or not item or "\x00" in item for item in command
+        )
+    ):
         raise EvaluationError("verifier command must be a nonempty argv array")
     timeout = _positive_int(verifier.get("timeout_seconds"), "verifier timeout")
     repository = root / "repository"
@@ -490,7 +559,9 @@ def validate_fixture(root: Path) -> Fixture:
             try:
                 _scan_bytes(item.read_bytes(), item)
             except OSError as exc:
-                raise EvaluationError(f"repository seed content is not safe: {item}") from exc
+                raise EvaluationError(
+                    f"repository seed content is not safe: {item}"
+                ) from exc
     return Fixture(
         root,
         name,
@@ -535,9 +606,13 @@ def _source_identity(path: Path) -> tuple[int, int]:
         raise EvaluationError(f"fixture source changed during copy: {path}") from exc
 
 
-def _remove_owned_file(path: Path, identity: tuple[int, int], digest: str | None = None) -> None:
+def _remove_owned_file(
+    path: Path, identity: tuple[int, int], digest: str | None = None
+) -> None:
     try:
-        if _path_identity(path) == identity and (digest is None or hashlib.sha256(path.read_bytes()).hexdigest() == digest):
+        if _path_identity(path) == identity and (
+            digest is None or hashlib.sha256(path.read_bytes()).hexdigest() == digest
+        ):
             path.unlink()
     except FileNotFoundError:
         pass
@@ -557,17 +632,20 @@ def _private_owner_is_authenticated(private: Path, owner_path: Path) -> bool:
         owner_info = os.lstat(owner_path)
     except OSError:
         return False
-    if not stat.S_ISDIR(private_info.st_mode) or stat.S_ISLNK(private_info.st_mode) or not stat.S_ISREG(owner_info.st_mode) or stat.S_ISLNK(owner_info.st_mode):
+    if (
+        not stat.S_ISDIR(private_info.st_mode)
+        or stat.S_ISLNK(private_info.st_mode)
+        or not stat.S_ISREG(owner_info.st_mode)
+        or stat.S_ISLNK(owner_info.st_mode)
+    ):
         return False
     if private_info.st_mode & 0o077 or owner_info.st_mode & 0o077:
         return False
-    if os.name == "posix" and private_info.st_uid != os.getuid():
-        return False
-    return True
+    return not (sys.platform != "win32" and private_info.st_uid != os.getuid())
 
 
 def _secure_directory_fd(path: Path, boundary: Path) -> int | Path:
-    if os.name == "nt":
+    if sys.platform == "win32":
         current = boundary.absolute()
         for part in path.absolute().relative_to(current).parts:
             current /= part
@@ -576,16 +654,16 @@ def _secure_directory_fd(path: Path, boundary: Path) -> int | Path:
             _no_symlink(current, boundary)
         return current
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-        raise EvaluationError("fixture creation requires no-follow directory primitives")
+        raise EvaluationError(
+            "fixture creation requires no-follow directory primitives"
+        )
     relative = path.absolute().relative_to(boundary.absolute())
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     current_fd = os.open(boundary, flags)
     try:
         for part in relative.parts:
-            try:
+            with contextlib.suppress(FileExistsError):
                 os.mkdir(part, dir_fd=current_fd)
-            except FileExistsError:
-                pass
             next_fd = os.open(part, flags, dir_fd=current_fd)
             os.close(current_fd)
             current_fd = next_fd
@@ -595,33 +673,41 @@ def _secure_directory_fd(path: Path, boundary: Path) -> int | Path:
         raise
 
 
-def _secure_child_directory(parent_fd: int | Path, name: str, *, require_new: bool = False) -> int | Path:
+def _secure_child_directory(
+    parent_fd: int | Path, name: str, *, require_new: bool = False
+) -> int | Path:
     if isinstance(parent_fd, Path):
         child = parent_fd / name
         _no_symlink(child, parent_fd)
         try:
             child.mkdir(exist_ok=False)
-        except FileExistsError:
+        except FileExistsError as error:
             if require_new:
-                raise EvaluationError(f"fixture destination was created concurrently: {child}")
-            pass
+                raise EvaluationError(
+                    f"fixture destination was created concurrently: {child}"
+                ) from error
         if not child.is_dir() or child.is_symlink():
             raise EvaluationError(f"unsafe fixture destination: {child}")
         _no_symlink(child, parent_fd)
         return child
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    # parent_fd is only ever a POSIX dir_fd (int) here; the Path branch above
+    # handles Windows. mypy can't narrow that from the isinstance check alone.
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW  # type: ignore[attr-defined]
     try:
         os.mkdir(name, dir_fd=parent_fd)
-    except FileExistsError:
+    except FileExistsError as error:
         if require_new:
-            raise EvaluationError(f"fixture destination was created concurrently: {name}")
-        pass
+            raise EvaluationError(
+                f"fixture destination was created concurrently: {name}"
+            ) from error
     return os.open(name, flags, dir_fd=parent_fd)
 
 
 def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
-    handle = kernel32.CreateFileW(str(source), 0x80000000, 0x00000007, None, 3, 0x00200000, None)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.CreateFileW(
+        str(source), 0x80000000, 0x00000007, None, 3, 0x00200000, None
+    )
     if handle == -1 or kernel32.GetFileType(handle) != 1:
         if handle != -1:
             kernel32.CloseHandle(handle)
@@ -630,15 +716,17 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
     try:
         import msvcrt
 
-        file_descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY)  # type: ignore[attr-defined]
+        file_descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY)
         handle = -1
         source_info = os.fstat(file_descriptor)
         if not stat.S_ISREG(source_info.st_mode):
             raise EvaluationError(f"fixture source is not a regular file: {source}")
-        source_bytes = os.fdopen(file_descriptor, "rb").read()
+        source_bytes = b"".join(iter(lambda: os.read(file_descriptor, 1 << 20), b""))
         return source_bytes, (source_info.st_dev, source_info.st_ino)
     except (OSError, ValueError) as exc:
-        raise EvaluationError(f"fixture source could not be opened safely: {source}") from exc
+        raise EvaluationError(
+            f"fixture source could not be opened safely: {source}"
+        ) from exc
     finally:
         if file_descriptor != -1:
             os.close(file_descriptor)
@@ -646,17 +734,23 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
             kernel32.CloseHandle(handle)
 
 
-def _read_fixture_source(source: Path, expected_identity: tuple[int, int], expected_digest: str) -> bytes:
-    if os.name == "nt":
+def _read_fixture_source(
+    source: Path, expected_identity: tuple[int, int], expected_digest: str
+) -> bytes:
+    if sys.platform == "win32":
         source_bytes, opened_identity = _read_windows_source(source)
         source_info = os.stat(source, follow_symlinks=False)
     else:
         if not hasattr(os, "O_NOFOLLOW"):
-            raise EvaluationError("fixture source copying requires no-follow file primitives")
+            raise EvaluationError(
+                "fixture source copying requires no-follow file primitives"
+            )
         try:
             source_fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
         except OSError as exc:
-            raise EvaluationError(f"fixture source changed during copy: {source}") from exc
+            raise EvaluationError(
+                f"fixture source changed during copy: {source}"
+            ) from exc
         try:
             source_info = os.fstat(source_fd)
             chunks: list[bytes] = []
@@ -668,7 +762,11 @@ def _read_fixture_source(source: Path, expected_identity: tuple[int, int], expec
             source_bytes = b"".join(chunks)
         finally:
             os.close(source_fd)
-    actual_identity = opened_identity if os.name == "nt" else (source_info.st_dev, source_info.st_ino)
+    actual_identity = (
+        opened_identity
+        if sys.platform == "win32"
+        else (source_info.st_dev, source_info.st_ino)
+    )
     if not stat.S_ISREG(source_info.st_mode) or actual_identity != expected_identity:
         raise EvaluationError(f"fixture source changed during copy: {source}")
     if hashlib.sha256(source_bytes).hexdigest() != expected_digest:
@@ -677,7 +775,13 @@ def _read_fixture_source(source: Path, expected_identity: tuple[int, int], expec
     return source_bytes
 
 
-def _write_fixture_file(source: Path, repository_fd: int | Path, relative: Path, expected_identity: tuple[int, int], expected_digest: str) -> None:
+def _write_fixture_file(
+    source: Path,
+    repository_fd: int | Path,
+    relative: Path,
+    expected_identity: tuple[int, int],
+    expected_digest: str,
+) -> None:
     source_bytes = _read_fixture_source(source, expected_identity, expected_digest)
     if isinstance(repository_fd, Path):
         current = repository_fd
@@ -688,7 +792,9 @@ def _write_fixture_file(source: Path, repository_fd: int | Path, relative: Path,
             current = next_path
         destination = current / relative.name
         _no_symlink(destination, current)
-        destination_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        destination_fd = os.open(
+            destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+        )
         try:
             with os.fdopen(destination_fd, "wb") as handle:
                 handle.write(source_bytes)
@@ -703,7 +809,8 @@ def _write_fixture_file(source: Path, repository_fd: int | Path, relative: Path,
                 raise EvaluationError("invalid fixture directory handle")
             os.close(current_fd)
             current_fd = next_fd
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        # POSIX-only path, same reasoning as _secure_child_directory above.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW  # type: ignore[attr-defined]
         destination_fd = os.open(relative.name, flags, 0o600, dir_fd=current_fd)
         try:
             with os.fdopen(destination_fd, "wb") as handle:
@@ -744,7 +851,9 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
             except ValueError:
                 pass
             else:
-                raise EvaluationError("include directory contains the fixture destination")
+                raise EvaluationError(
+                    "include directory contains the fixture destination"
+                )
         candidates = [source, *source.rglob("*")] if source.is_dir() else [source]
         candidate_sets[source] = tuple(candidates)
         for candidate in candidates:
@@ -760,7 +869,9 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                     preflight_bytes = candidate.read_bytes()
                     _scan_bytes(preflight_bytes, candidate)
                 except OSError as exc:
-                    raise EvaluationError(f"include content is not safe: {candidate}") from exc
+                    raise EvaluationError(
+                        f"include content is not safe: {candidate}"
+                    ) from exc
                 source_identities[candidate] = _source_identity(candidate)
                 source_digests[candidate] = hashlib.sha256(preflight_bytes).hexdigest()
             if candidate.is_file():
@@ -768,9 +879,7 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 destination_key = relative.as_posix().casefold()
                 duplicate = destination_key in planned_destinations
                 if duplicate:
-                    raise EvaluationError(
-                        f"duplicate fixture destination: {relative}"
-                    )
+                    raise EvaluationError(f"duplicate fixture destination: {relative}")
                 planned_destinations.add(destination_key)
     parent = destination.parent
     if parent.exists() and (parent.is_symlink() or not parent.is_dir()):
@@ -781,7 +890,9 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
     try:
         destination_parent_fd = _secure_directory_fd(destination.parent, target)
         try:
-            destination_fd = _secure_child_directory(destination_parent_fd, destination.name, require_new=True)
+            destination_fd = _secure_child_directory(
+                destination_parent_fd, destination.name, require_new=True
+            )
         finally:
             if isinstance(destination_parent_fd, int):
                 os.close(destination_parent_fd)
@@ -796,35 +907,83 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 try:
                     current_candidates = tuple([source, *source.rglob("*")])
                 except OSError as exc:
-                    raise EvaluationError(f"directory include changed during copy: {source}") from exc
+                    raise EvaluationError(
+                        f"directory include changed during copy: {source}"
+                    ) from exc
                 if set(current_candidates) != set(candidate_sets[source]):
-                    raise EvaluationError(f"directory include changed during copy: {source}")
+                    raise EvaluationError(
+                        f"directory include changed during copy: {source}"
+                    )
                 for candidate in candidate_sets[source]:
                     if _source_identity(candidate) != candidate_identities[candidate]:
-                        raise EvaluationError(f"directory include entry changed during copy: {candidate}")
+                        raise EvaluationError(
+                            f"directory include entry changed during copy: {candidate}"
+                        )
                 for file in candidate_sets[source]:
                     try:
-                        if set([source, *source.rglob("*")]) != set(candidate_sets[source]):
-                            raise EvaluationError(f"directory include changed during copy: {source}")
+                        if set([source, *source.rglob("*")]) != set(
+                            candidate_sets[source]
+                        ):
+                            raise EvaluationError(
+                                f"directory include changed during copy: {source}"
+                            )
                     except OSError as exc:
-                        raise EvaluationError(f"directory include changed during copy: {source}") from exc
+                        raise EvaluationError(
+                            f"directory include changed during copy: {source}"
+                        ) from exc
                     if file.is_file() and not _is_secret_path(file.relative_to(target)):
                         _no_symlink(file, target)
-                        _write_fixture_file(file, repository_fd, file.relative_to(target), source_identities[file], source_digests[file])
+                        _write_fixture_file(
+                            file,
+                            repository_fd,
+                            file.relative_to(target),
+                            source_identities[file],
+                            source_digests[file],
+                        )
                 try:
                     if set([source, *source.rglob("*")]) != set(candidate_sets[source]):
-                        raise EvaluationError(f"directory include changed during copy: {source}")
+                        raise EvaluationError(
+                            f"directory include changed during copy: {source}"
+                        )
                 except OSError as exc:
-                    raise EvaluationError(f"directory include changed during copy: {source}") from exc
+                    raise EvaluationError(
+                        f"directory include changed during copy: {source}"
+                    ) from exc
             else:
                 if _source_identity(source) != candidate_identities[source]:
-                    raise EvaluationError(f"fixture source changed during copy: {source}")
-                _write_fixture_file(source, repository_fd, relative, source_identities[source], source_digests[source])
+                    raise EvaluationError(
+                        f"fixture source changed during copy: {source}"
+                    )
+                _write_fixture_file(
+                    source,
+                    repository_fd,
+                    relative,
+                    source_identities[source],
+                    source_digests[source],
+                )
         contract_files = {
-            "fixture.json": json.dumps({"schema_version": 1, "name": name, "description": "Describe the bounded scenario.", "actor_timeout_seconds": 600, "judge_timeout_seconds": 300}, indent=2) + "\n",
+            "fixture.json": json.dumps(
+                {
+                    "schema_version": 1,
+                    "name": name,
+                    "description": "Describe the bounded scenario.",
+                    "actor_timeout_seconds": 600,
+                    "judge_timeout_seconds": 300,
+                },
+                indent=2,
+            )
+            + "\n",
             "prompt.md": "# Prompt\n\n",
             "rubric.md": "# Rubric\n\n",
-            "verifier.json": json.dumps({"schema_version": 1, "command": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeout_seconds": 120}, indent=2) + "\n",
+            "verifier.json": json.dumps(
+                {
+                    "schema_version": 1,
+                    "command": ["python", "-m", "unittest", "discover", "-s", "tests"],
+                    "timeout_seconds": 120,
+                },
+                indent=2,
+            )
+            + "\n",
         }
         for filename, content in contract_files.items():
             if isinstance(destination_fd, Path):
@@ -833,7 +992,13 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 with contract_path.open("xb") as handle:
                     handle.write(content.encode())
             else:
-                fd = os.open(filename, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=destination_fd)
+                # POSIX-only path, same reasoning as _secure_child_directory above.
+                fd = os.open(
+                    filename,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,  # type: ignore[attr-defined]
+                    0o600,
+                    dir_fd=destination_fd,
+                )
                 with os.fdopen(fd, "wb") as handle:
                     handle.write(content.encode())
     except BaseException:
@@ -860,7 +1025,7 @@ class Run:
 def _stop(process: subprocess.Popen[Any]) -> None:
     """Bound process termination and isolate platform-specific signaling."""
     try:
-        if os.name == "posix":
+        if sys.platform != "win32":
             os.killpg(process.pid, signal.SIGTERM)
         else:
             subprocess.run(
@@ -874,23 +1039,39 @@ def _stop(process: subprocess.Popen[Any]) -> None:
     except (OSError, ProcessLookupError, subprocess.TimeoutExpired):
         pass
     try:
-        if os.name == "posix":
+        if sys.platform != "win32":
             os.killpg(process.pid, signal.SIGKILL)
         else:
             process.kill()
     except (OSError, ProcessLookupError):
         pass
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired):
         process.wait(timeout=1.0)
-    except subprocess.TimeoutExpired:
-        pass
 
 
-def _run(argv: list[str], cwd: Path, timeout: int, env: dict[str, str] | None = None, decode_errors: str = "replace") -> Run:
+def _run(
+    argv: list[str],
+    cwd: Path,
+    timeout: int,
+    env: dict[str, str] | None = None,
+    decode_errors: str = "replace",
+) -> Run:
     start = time.monotonic()
-    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+    flags = (
+        getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        if sys.platform == "win32"
+        else 0
+    )
     try:
-        process = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name == "posix", creationflags=flags)
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=sys.platform != "win32",
+            creationflags=flags,
+        )
     except (OSError, ValueError) as exc:
         raise EvaluationError(f"could not launch {argv[0]}") from exc
     try:
@@ -905,14 +1086,26 @@ def _run(argv: list[str], cwd: Path, timeout: int, env: dict[str, str] | None = 
         _stop(process)
         raise
     _stop(process)
-    return Run(_decode(raw_stdout, decode_errors), _decode(raw_stderr, decode_errors), process.returncode, False, time.monotonic() - start)
+    return Run(
+        _decode(raw_stdout, decode_errors),
+        _decode(raw_stderr, decode_errors),
+        process.returncode,
+        False,
+        time.monotonic() - start,
+    )
 
 
 def _git(git: str, args: list[str], cwd: Path, timeout: int = 60) -> Run:
     config = ["-c", "core.hooksPath="]
     if args and args[0] == "diff":
         config.extend(["-c", "diff.external=", "-c", "diff.trustExitCode=false"])
-    return _run([git, *config, *args], cwd, timeout, env=_isolated_env(), decode_errors="surrogateescape")
+    return _run(
+        [git, *config, *args],
+        cwd,
+        timeout,
+        env=_isolated_env(),
+        decode_errors="surrogateescape",
+    )
 
 
 def _capture_diff(git: str, cwd: Path, seed_commit: str) -> str:
@@ -926,7 +1119,18 @@ def _capture_diff(git: str, cwd: Path, seed_commit: str) -> str:
     ]
     pathspec = ["--", *safe_paths]
     if safe_paths:
-        diff = _git(git, ["diff", "--binary", "--no-ext-diff", "--no-textconv", seed_commit, *pathspec], cwd)
+        diff = _git(
+            git,
+            [
+                "diff",
+                "--binary",
+                "--no-ext-diff",
+                "--no-textconv",
+                seed_commit,
+                *pathspec,
+            ],
+            cwd,
+        )
         if diff.code != 0:
             raise EvaluationError(f"git diff phase failed: {diff.stderr}")
     else:
@@ -955,9 +1159,13 @@ def _capture_diff(git: str, cwd: Path, seed_commit: str) -> str:
         for key, format_spec in metadata:
             value = _git(git, ["show", "-s", f"--format={format_spec}", commit], cwd)
             if value.code != 0:
-                raise EvaluationError(f"git history metadata phase failed: {value.stderr}")
+                raise EvaluationError(
+                    f"git history metadata phase failed: {value.stderr}"
+                )
             metadata_value = cast(str, _sanitize_json_value(value.stdout.rstrip("\n")))
-            entry[key] = "[REDACTED_SECRET]" if _secret_key(metadata_value) else metadata_value
+            entry[key] = (
+                "[REDACTED_SECRET]" if _secret_key(metadata_value) else metadata_value
+            )
         history.append(entry)
     if safe_paths:
         status = _git(git, ["diff", "--name-status", "-z", seed_commit, *pathspec], cwd)
@@ -973,15 +1181,15 @@ def _capture_diff(git: str, cwd: Path, seed_commit: str) -> str:
         + _redact_diff(diff.stdout)
     )
     untracked_paths = sorted(
-        {
-            raw_path
-            for raw_path in untracked.stdout.split("\x00")
-            if raw_path
-        }
+        {raw_path for raw_path in untracked.stdout.split("\x00") if raw_path}
     )
     for raw_path in untracked_paths:
         relative = Path(raw_path)
-        if relative.is_absolute() or ".." in relative.parts or _is_secret_path(relative):
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or _is_secret_path(relative)
+        ):
             continue
         path = cwd / relative
         try:
@@ -1001,7 +1209,10 @@ def _valid_judge(value: Any) -> bool:
         return False
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         return False
-    if not isinstance(value["verdict"], str) or value["verdict"] not in {"pass", "fail"}:
+    if not isinstance(value["verdict"], str) or value["verdict"] not in {
+        "pass",
+        "fail",
+    }:
         return False
     if not isinstance(value["summary"], str) or not value["summary"].strip():
         return False
@@ -1046,11 +1257,21 @@ def _judge_json(raw: str) -> dict[str, Any]:
         if not isinstance(event_type, str):
             raise EvaluationError("judge event type is invalid")
         part = event.get("part")
-        if event_type in {"text", "assistant"} and isinstance(part, dict) and isinstance(part.get("text"), str):
+        if (
+            event_type in {"text", "assistant"}
+            and isinstance(part, dict)
+            and isinstance(part.get("text"), str)
+        ):
             outputs.append(part["text"])
         elif event_type == "text" and isinstance(event.get("text"), str):
             outputs.append(event["text"])
-        elif event_type not in {"step_start", "step_finish", "tool_use", "tool_result", "session"}:
+        elif event_type not in {
+            "step_start",
+            "step_finish",
+            "tool_use",
+            "tool_result",
+            "session",
+        }:
             raise EvaluationError("unrelated judge event")
     if len(outputs) != 1:
         raise EvaluationError("judge final output is not unique")
@@ -1082,7 +1303,9 @@ def _actor_artifacts(raw: str) -> tuple[str, str]:
                 output.append(part["text"])
             elif isinstance(event.get("text"), str):
                 output.append(event["text"])
-    event_stream = "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in sanitized_events)
+    event_stream = "".join(
+        json.dumps(event, ensure_ascii=False) + "\n" for event in sanitized_events
+    )
     return event_stream, "".join(output)
 
 
@@ -1107,28 +1330,31 @@ def _sync(path: Path) -> None:
 
 
 def _sync_directory(path: Path) -> None:
-    if os.name == "posix":
+    if sys.platform != "win32":
         descriptor = os.open(path, os.O_RDONLY)
         try:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-    elif os.name == "nt":
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    elif sys.platform == "win32":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         handle = kernel32.CreateFileW(
             str(path), 0xC0000000, 0x00000007, None, 3, 0x02000000, None
         )
         if handle == -1:
-            raise OSError(ctypes.get_last_error(), f"could not open directory: {path}")  # type: ignore[attr-defined]
+            raise OSError(ctypes.get_last_error(), f"could not open directory: {path}")
         try:
             if not kernel32.FlushFileBuffers(handle):
                 raise OSError(
-                    ctypes.get_last_error(), f"could not flush directory: {path}"  # type: ignore[attr-defined]
+                    ctypes.get_last_error(),
+                    f"could not flush directory: {path}",
                 )
         finally:
             kernel32.CloseHandle(handle)
     else:
-        raise EvaluationError(f"unsupported platform for durable publication: {os.name}")
+        raise EvaluationError(
+            f"unsupported platform for durable publication: {os.name}"
+        )
 
 
 def _safe_manifest_paths(output: Path, manifest: Any) -> set[str]:
@@ -1139,7 +1365,12 @@ def _safe_manifest_paths(output: Path, manifest: Any) -> set[str]:
         if not isinstance(item, dict) or not isinstance(item.get("path"), str):
             raise EvaluationError("invalid evidence artifact manifest entry")
         relative = Path(item["path"])
-        if relative.is_absolute() or not relative.parts or ".." in relative.parts or "." in relative.parts:
+        if (
+            relative.is_absolute()
+            or not relative.parts
+            or ".." in relative.parts
+            or "." in relative.parts
+        ):
             raise EvaluationError("unsafe evidence artifact path")
         if item["path"] in paths:
             raise EvaluationError("duplicate evidence artifact path")
@@ -1160,7 +1391,10 @@ def _validate_bundle(output: Path) -> None:
     marker = _json(marker_path)
     if set(marker) != {"schema_version", "bundle_id", "artifacts"}:
         raise EvaluationError("invalid evidence commit marker")
-    if type(marker.get("schema_version")) is not int or marker.get("schema_version") != 1:
+    if (
+        type(marker.get("schema_version")) is not int
+        or marker.get("schema_version") != 1
+    ):
         raise EvaluationError("invalid evidence commit marker")
     if not isinstance(marker.get("bundle_id"), str) or not marker["bundle_id"]:
         raise EvaluationError("invalid evidence bundle identifier")
@@ -1170,13 +1404,22 @@ def _validate_bundle(output: Path) -> None:
     for item in manifest_entries:
         if not isinstance(item, dict) or set(item) != {"path", "size", "sha256"}:
             raise EvaluationError("invalid evidence artifact manifest entry")
-        if not isinstance(item["path"], str) or type(item["size"]) is not int or item["size"] < 0 or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", item["sha256"]):
+        if (
+            not isinstance(item["path"], str)
+            or type(item["size"]) is not int
+            or item["size"] < 0
+            or not isinstance(item["sha256"], str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", item["sha256"])
+        ):
             raise EvaluationError("invalid evidence artifact manifest entry")
         path = output / item["path"]
         if not path.is_file():
             raise EvaluationError("evidence artifact is missing")
         data = path.read_bytes()
-        if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+        if (
+            len(data) != item["size"]
+            or hashlib.sha256(data).hexdigest() != item["sha256"]
+        ):
             raise EvaluationError("evidence artifact failed manifest validation")
     actual = {
         path.name
@@ -1193,14 +1436,22 @@ def _validate_recovery_manifest(output: Path, manifest: Any) -> set[str]:
     for item in cast(list[dict[str, Any]], manifest):
         if not isinstance(item, dict) or set(item) != {"path", "size", "sha256"}:
             raise EvaluationError("invalid recovery artifact manifest entry")
-        if type(item["size"]) is not int or item["size"] < 0 or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", item["sha256"]):
+        if (
+            type(item["size"]) is not int
+            or item["size"] < 0
+            or not isinstance(item["sha256"], str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", item["sha256"])
+        ):
             raise EvaluationError("invalid recovery artifact manifest entry")
         path = output / item["path"]
         if path.exists() or path.is_symlink():
             if path.is_symlink() or not path.is_file():
                 raise EvaluationError("recovery artifact is not an owned regular file")
             data = path.read_bytes()
-            if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+            if (
+                len(data) != item["size"]
+                or hashlib.sha256(data).hexdigest() != item["sha256"]
+            ):
                 raise EvaluationError("recovery artifact ownership validation failed")
     return paths
 
@@ -1215,7 +1466,9 @@ def _copy_seed_tree(source: Path, destination: Path) -> None:
         _no_symlink(entry, source)
         identity = _source_identity(entry)
         if entry.is_file():
-            data = _read_fixture_source(entry, identity, hashlib.sha256(entry.read_bytes()).hexdigest())
+            data = _read_fixture_source(
+                entry, identity, hashlib.sha256(entry.read_bytes()).hexdigest()
+            )
             expected[entry] = (identity, hashlib.sha256(data).hexdigest())
         elif entry.is_dir():
             expected[entry] = (identity, None)
@@ -1231,11 +1484,15 @@ def _copy_seed_tree(source: Path, destination: Path) -> None:
         target = destination / relative
         identity, digest = expected[entry]
         if _source_identity(entry) != identity:
-            raise EvaluationError(f"fixture repository entry changed during copy: {entry}")
+            raise EvaluationError(
+                f"fixture repository entry changed during copy: {entry}"
+            )
         if entry.is_dir():
             target.mkdir()
         else:
-            _write_fixture_file(entry, destination, relative, identity, cast(str, digest))
+            _write_fixture_file(
+                entry, destination, relative, identity, cast(str, digest)
+            )
 
 
 def _publish_artifact(source: Path, destination: Path) -> None:
@@ -1244,7 +1501,11 @@ def _publish_artifact(source: Path, destination: Path) -> None:
     except OSError as exc:
         if exc.errno != errno.EXDEV:
             raise
-        destination_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        destination_fd = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
         try:
             destination_handle = os.fdopen(destination_fd, "wb")
             destination_fd = -1
@@ -1289,10 +1550,14 @@ def _write_output(output: Path, files: dict[str, str]) -> None:
             path = stage / name
             path.write_bytes(_content_bytes(content))
             _sync(path)
-        owner_path.write_text(json.dumps(transaction, indent=2) + "\n", encoding="utf-8")
+        owner_path.write_text(
+            json.dumps(transaction, indent=2) + "\n", encoding="utf-8"
+        )
         owner_path.chmod(0o600)
         _sync(owner_path)
-        transaction_path.write_text(json.dumps(transaction, indent=2) + "\n", encoding="utf-8")
+        transaction_path.write_text(
+            json.dumps(transaction, indent=2) + "\n", encoding="utf-8"
+        )
         transaction_path.chmod(0o600)
         _sync(transaction_path)
         _sync_directory(stage)
@@ -1307,7 +1572,10 @@ def _write_output(output: Path, files: dict[str, str]) -> None:
         for item in manifest:
             path = output / item["path"]
             data = path.read_bytes()
-            if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+            if (
+                len(data) != item["size"]
+                or hashlib.sha256(data).hexdigest() != item["sha256"]
+            ):
                 raise EvaluationError("evidence manifest validation failed")
         marker_path = output / _COMMIT_MARKER
         marker = {"schema_version": 1, "bundle_id": bundle_id, "artifacts": manifest}
@@ -1332,7 +1600,11 @@ def _write_output(output: Path, files: dict[str, str]) -> None:
             for path, identity, digest in published:
                 _remove_owned_file(path, identity, digest)
             if marker_identity is not None:
-                _remove_owned_file(output / _COMMIT_MARKER, marker_identity, hashlib.sha256(marker_content.encode()).hexdigest())
+                _remove_owned_file(
+                    output / _COMMIT_MARKER,
+                    marker_identity,
+                    hashlib.sha256(marker_content.encode()).hexdigest(),
+                )
             shutil.rmtree(private, ignore_errors=True)
         raise
 
@@ -1360,7 +1632,9 @@ def _recover_output(output: Path) -> None:
                 owner_data = _json(owner_path)
             except EvaluationError:
                 continue
-            if owner_data.get("output") == str(output) and isinstance(owner_data.get("transaction_id"), str):
+            if owner_data.get("output") == str(output) and isinstance(
+                owner_data.get("transaction_id"), str
+            ):
                 candidates.append((private, owner_data["transaction_id"], owner_data))
     if not candidates:
         return
@@ -1375,18 +1649,36 @@ def _recover_output(output: Path) -> None:
             data = _json(owner_path)
         except EvaluationError:
             return
-    required = {"schema_version", "bundle_id", "transaction_id", "stage_id", "output", "artifacts", "owned_artifacts"}
+    required = {
+        "schema_version",
+        "bundle_id",
+        "transaction_id",
+        "stage_id",
+        "output",
+        "artifacts",
+        "owned_artifacts",
+    }
     try:
-        if set(data) != required or type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
+        if (
+            set(data) != required
+            or type(data.get("schema_version")) is not int
+            or data.get("schema_version") != 1
+        ):
             return
-        if data.get("transaction_id") != transaction_id or data.get("output") != str(output):
+        if data.get("transaction_id") != transaction_id or data.get("output") != str(
+            output
+        ):
             return
         if data.get("owned_artifacts") != data.get("artifacts"):
             return
         _validate_recovery_manifest(private, data["artifacts"])
         _validate_recovery_manifest(private, data["owned_artifacts"])
         stage_id = data.get("stage_id")
-        if not isinstance(stage_id, str) or Path(stage_id).name != stage_id or stage_id != "stage":
+        if (
+            not isinstance(stage_id, str)
+            or Path(stage_id).name != stage_id
+            or stage_id != "stage"
+        ):
             return
     except (EvaluationError, KeyError, TypeError, ValueError):
         return
@@ -1406,7 +1698,9 @@ def _recover_output(output: Path) -> None:
     except (EvaluationError, KeyError, TypeError, ValueError):
         return
     stage_paths = {item.name for item in stage.iterdir()}
-    artifact_paths = {item["path"] for item in cast(list[dict[str, Any]], data["artifacts"])}
+    artifact_paths = {
+        item["path"] for item in cast(list[dict[str, Any]], data["artifacts"])
+    }
     if not stage_paths <= artifact_paths:
         return
     commit_path = output / _COMMIT_MARKER
@@ -1416,7 +1710,10 @@ def _recover_output(output: Path) -> None:
             commit = _json(commit_path)
         except EvaluationError:
             return
-        if commit.get("bundle_id") != data["bundle_id"] or commit.get("artifacts") != data["artifacts"]:
+        if (
+            commit.get("bundle_id") != data["bundle_id"]
+            or commit.get("artifacts") != data["artifacts"]
+        ):
             return
     if not commit_path.exists():
         for item in data["owned_artifacts"]:
@@ -1436,7 +1733,9 @@ def _remove(path: Path) -> None:
         shutil.rmtree(path)
 
 
-def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: str = "opencode") -> bool:
+def evaluate(
+    name: str, target: Path, output: Path, git: str = "git", opencode: str = "opencode"
+) -> bool:
     target = target.resolve()
     fixture = validate_fixture(_fixture_path(target, name))
     try:
@@ -1447,11 +1746,23 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
         raise EvaluationError("output must be outside the target repository")
     if output.exists() and output.is_dir() and not output.is_symlink():
         _recover_output(output)
-    if not output.exists() or output.is_symlink() or not output.is_dir() or any(output.iterdir()):
+    if (
+        not output.exists()
+        or output.is_symlink()
+        or not output.is_dir()
+        or any(output.iterdir())
+    ):
         raise EvaluationError("output must be an existing empty directory")
     if shutil.which(git) is None or shutil.which(opencode) is None:
         raise EvaluationError("git and opencode must be available")
-    result: dict[str, Any] = {"schema_version": 1, "fixture": {"name": name, "path": str(Path(".codev") / "fixtures" / name)}, "actor": {"status": "skipped"}, "verifier": {"status": "skipped"}, "judge": {"status": "skipped"}, "artifacts": {}}
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "fixture": {"name": name, "path": str(Path(".codev") / "fixtures" / name)},
+        "actor": {"status": "skipped"},
+        "verifier": {"status": "skipped"},
+        "judge": {"status": "skipped"},
+        "artifacts": {},
+    }
     files: dict[str, str] = {}
     error: str | None = None
     with tempfile.TemporaryDirectory(prefix="codev-eval-") as temporary:
@@ -1460,7 +1771,13 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
         judge_dir: Path | None = None
         try:
             _copy_seed_tree(fixture.root / "repository", seed)
-            for args in (["init"], ["config", "user.email", "codev@example.invalid"], ["config", "user.name", "CoDev"], ["add", "."], ["commit", "-m", "seed"]):
+            for args in (
+                ["init"],
+                ["config", "user.email", "codev@example.invalid"],
+                ["config", "user.name", "CoDev"],
+                ["add", "."],
+                ["commit", "-m", "seed"],
+            ):
                 run = _git(git, list(args), seed)
                 if run.code != 0:
                     raise EvaluationError(f"git seed phase failed: {run.stderr}")
@@ -1468,18 +1785,53 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
             if commit.code != 0 or not commit.stdout.strip():
                 raise EvaluationError(f"git seed commit phase failed: {commit.stderr}")
             seed_commit = commit.stdout.strip()
-            run = _git(git, ["worktree", "add", "--detach", str(worktree), "HEAD"], seed)
+            run = _git(
+                git, ["worktree", "add", "--detach", str(worktree), "HEAD"], seed
+            )
             if run.code != 0:
                 raise EvaluationError(f"git worktree phase failed: {run.stderr}")
             files["actor-events.jsonl"] = ""
             files["actor-output.txt"] = ""
             try:
-                _assert_snapshot_digest(fixture.root / "prompt.md", fixture.prompt_fingerprint, fixture.prompt_digest)
-                actor = _run([opencode, "run", "--format", "json", "--dir", str(worktree), fixture.prompt.decode("utf-8")], worktree, fixture.actor_timeout, env=_isolated_env())
+                _assert_snapshot_digest(
+                    fixture.root / "prompt.md",
+                    fixture.prompt_fingerprint,
+                    fixture.prompt_digest,
+                )
+                actor = _run(
+                    [
+                        opencode,
+                        "run",
+                        "--format",
+                        "json",
+                        "--dir",
+                        str(worktree),
+                        fixture.prompt.decode("utf-8"),
+                    ],
+                    worktree,
+                    fixture.actor_timeout,
+                    env=_isolated_env(),
+                )
             except EvaluationError as exc:
-                result["actor"] = {"status": "error", "stdout": "", "stderr": str(exc), "exit_code": None, "duration_seconds": 0.0, "timeout": False}
+                result["actor"] = {
+                    "status": "error",
+                    "stdout": "",
+                    "stderr": str(exc),
+                    "exit_code": None,
+                    "duration_seconds": 0.0,
+                    "timeout": False,
+                }
                 raise
-            result["actor"] = {"status": "timeout" if actor.timed_out else ("completed" if actor.code == 0 else "failed"), "stdout": "", "stderr": "", "exit_code": actor.code, "duration_seconds": actor.duration, "timeout": actor.timed_out}
+            result["actor"] = {
+                "status": "timeout"
+                if actor.timed_out
+                else ("completed" if actor.code == 0 else "failed"),
+                "stdout": "",
+                "stderr": "",
+                "exit_code": actor.code,
+                "duration_seconds": actor.duration,
+                "timeout": actor.timed_out,
+            }
             continue_evaluation = actor.code == 0 and not actor.timed_out
             try:
                 actor_events, actor_output = _actor_artifacts(actor.stdout)
@@ -1498,13 +1850,34 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
                 files["verifier-stdout.txt"] = ""
                 files["verifier-stderr.txt"] = ""
                 try:
-                    verifier = _run(fixture.command, worktree, fixture.verifier_timeout, env=_isolated_env())
+                    verifier = _run(
+                        fixture.command,
+                        worktree,
+                        fixture.verifier_timeout,
+                        env=_isolated_env(),
+                    )
                 except EvaluationError as exc:
-                    result["verifier"] = {"status": "error", "stdout": "", "stderr": str(exc), "exit_code": None, "duration_seconds": 0.0, "timeout": False}
+                    result["verifier"] = {
+                        "status": "error",
+                        "stdout": "",
+                        "stderr": str(exc),
+                        "exit_code": None,
+                        "duration_seconds": 0.0,
+                        "timeout": False,
+                    }
                     raise
                 files["verifier-stdout.txt"] = _safe_process_output(verifier.stdout)
                 files["verifier-stderr.txt"] = _safe_process_output(verifier.stderr)
-                result["verifier"] = {"status": "passed" if verifier.code == 0 and not verifier.timed_out else ("timeout" if verifier.timed_out else "failed"), "stdout": "", "stderr": "", "exit_code": verifier.code, "duration_seconds": verifier.duration, "timeout": verifier.timed_out}
+                result["verifier"] = {
+                    "status": "passed"
+                    if verifier.code == 0 and not verifier.timed_out
+                    else ("timeout" if verifier.timed_out else "failed"),
+                    "stdout": "",
+                    "stderr": "",
+                    "exit_code": verifier.code,
+                    "duration_seconds": verifier.duration,
+                    "timeout": verifier.timed_out,
+                }
                 files["diff.patch"] = _capture_diff(git, worktree, seed_commit)
                 if verifier.code != 0 or verifier.timed_out:
                     result["outcome"] = "failed"
@@ -1513,23 +1886,59 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
                         _remove(worktree)
                         _remove(seed)
                     except OSError as exc:
-                        raise EvaluationError(f"cleanup before judge failed: {exc}") from exc
+                        raise EvaluationError(
+                            f"cleanup before judge failed: {exc}"
+                        ) from exc
                     judge_dir = base / "judge"
                     judge_dir.mkdir()
                     files["judge-events.jsonl"] = ""
                     files["judge-output.json"] = ""
-                    _assert_snapshot_digest(fixture.root / "rubric.md", fixture.rubric_fingerprint, fixture.rubric_digest)
+                    _assert_snapshot_digest(
+                        fixture.root / "rubric.md",
+                        fixture.rubric_fingerprint,
+                        fixture.rubric_digest,
+                    )
                     rubric = _redact_text(fixture.rubric.decode("utf-8"))
                     (judge_dir / "rubric.md").write_text(rubric, encoding="utf-8")
                     for filename, content in files.items():
                         (judge_dir / filename).write_bytes(_content_bytes(content))
                     try:
-                        judge = _run([opencode, "run", "--format", "json", "--dir", str(judge_dir), "Review rubric.md and observable artifacts. Return only the required judge JSON."], judge_dir, fixture.judge_timeout, env=_isolated_env())
+                        judge = _run(
+                            [
+                                opencode,
+                                "run",
+                                "--format",
+                                "json",
+                                "--dir",
+                                str(judge_dir),
+                                "Review rubric.md and observable artifacts. "
+                                "Return only the required judge JSON.",
+                            ],
+                            judge_dir,
+                            fixture.judge_timeout,
+                            env=_isolated_env(),
+                        )
                     except EvaluationError:
-                        result["judge"] = {"status": "error", "stdout": "", "stderr": "judge launch failed", "exit_code": None, "duration_seconds": 0.0, "timeout": False}
+                        result["judge"] = {
+                            "status": "error",
+                            "stdout": "",
+                            "stderr": "judge launch failed",
+                            "exit_code": None,
+                            "duration_seconds": 0.0,
+                            "timeout": False,
+                        }
                         raise
                     files["judge-events.jsonl"] = _safe_process_output(judge.stdout)
-                    result["judge"] = {"status": "timeout" if judge.timed_out else ("failed" if judge.code != 0 else "completed"), "stdout": "", "stderr": "", "exit_code": judge.code, "duration_seconds": judge.duration, "timeout": judge.timed_out}
+                    result["judge"] = {
+                        "status": "timeout"
+                        if judge.timed_out
+                        else ("failed" if judge.code != 0 else "completed"),
+                        "stdout": "",
+                        "stderr": "",
+                        "exit_code": judge.code,
+                        "duration_seconds": judge.duration,
+                        "timeout": judge.timed_out,
+                    }
                     if judge.timed_out or judge.code != 0:
                         raise EvaluationError("judge phase failed")
                     try:
@@ -1537,10 +1946,16 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
                     except EvaluationError:
                         result["judge"]["status"] = "malformed"
                         raise
-                    files["judge-output.json"] = json.dumps(_sanitize_json_value(parsed), indent=2) + "\n"
-                    result["judge"]["status"] = "passed" if parsed["verdict"] == "pass" else "failed"
+                    files["judge-output.json"] = (
+                        json.dumps(_sanitize_json_value(parsed), indent=2) + "\n"
+                    )
+                    result["judge"]["status"] = (
+                        "passed" if parsed["verdict"] == "pass" else "failed"
+                    )
                     result["judge"]["verdict"] = parsed["verdict"]
-                    result["outcome"] = "passed" if parsed["verdict"] == "pass" else "failed"
+                    result["outcome"] = (
+                        "passed" if parsed["verdict"] == "pass" else "failed"
+                    )
         except (EvaluationError, OSError) as exc:
             error = str(exc)
             result["outcome"] = "error"
@@ -1562,10 +1977,18 @@ def evaluate(name: str, target: Path, output: Path, git: str = "git", opencode: 
     result.setdefault("outcome", "error")
     if error:
         result["error"] = error
-    result["artifacts"] = {key.replace("-", "_").replace(".jsonl", "").replace(".txt", "").replace(".patch", ""): key for key in files}
+    result["artifacts"] = {
+        key.replace("-", "_")
+        .replace(".jsonl", "")
+        .replace(".txt", "")
+        .replace(".patch", ""): key
+        for key in files
+    }
     safe_files = {name: content for name, content in files.items()}
     safe_result = cast(dict[str, Any], _sanitize_json_value(_redact_value(result)))
-    _write_output(output, {**safe_files, "result.json": json.dumps(safe_result, indent=2) + "\n"})
+    _write_output(
+        output, {**safe_files, "result.json": json.dumps(safe_result, indent=2) + "\n"}
+    )
     if result["outcome"] == "error":
         raise EvaluationError("evaluation infrastructure failed; see result.json")
     return bool(result["outcome"] == "passed")

@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "command": ["python3", "check_review.py"],
+  "timeout_seconds": 60
+}

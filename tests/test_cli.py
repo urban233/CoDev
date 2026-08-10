@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-from codev_workflow.cli import main
+from codev_workflow.cli import _apply_deprecated_aliases, main
 
 
 class CliTests(unittest.TestCase):
@@ -182,6 +183,427 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(0, main(["check", "--target", str(target)]))
             self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
+
+    def test_work_lifecycle_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            findings_path = target / "findings.json"
+            findings_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "f1",
+                            "location": "a.py:1",
+                            "category": "correctness",
+                            "blocking": True,
+                            "rank": 1,
+                            "summary": "off-by-one",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            evidence_path = target / "evidence.json"
+            evidence_path.write_text(
+                json.dumps({"delivered": "fixed the off-by-one"}), encoding="utf-8"
+            )
+
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "start",
+                            "--id",
+                            "item-1",
+                            "--base",
+                            "base-sha",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "record",
+                            "--id",
+                            "item-1",
+                            "--round",
+                            "1",
+                            "--role",
+                            "reviewer",
+                            "--head",
+                            "base-sha",
+                            "--findings",
+                            str(findings_path),
+                            "--decision",
+                            "CHANGES_REQUIRED",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "check",
+                            "--id",
+                            "item-1",
+                            "--head",
+                            "base-sha",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "record",
+                            "--id",
+                            "item-1",
+                            "--round",
+                            "2",
+                            "--role",
+                            "builder",
+                            "--head",
+                            "head-2",
+                            "--evidence",
+                            str(evidence_path),
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(["work", "status", "--id", "item-1", "--target", str(target)]),
+                )
+                self.assertEqual(
+                    0, main(["work", "log", "--id", "item-1", "--target", str(target)])
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "close",
+                            "--id",
+                            "item-1",
+                            "--outcome",
+                            "escalated",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+
+    def test_work_check_repeated_finding_exits_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            finding = [
+                {
+                    "id": "f1",
+                    "location": "a.py:1",
+                    "category": "correctness",
+                    "blocking": True,
+                    "rank": 1,
+                    "summary": "off-by-one",
+                }
+            ]
+            findings_path = target / "findings.json"
+            findings_path.write_text(json.dumps(finding), encoding="utf-8")
+            evidence_path = target / "evidence.json"
+            evidence_path.write_text(
+                json.dumps({"delivered": "attempted a fix"}), encoding="utf-8"
+            )
+
+            with redirect_stdout(StringIO()):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--max-rounds",
+                        "5",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                for round_number in (1, 2):
+                    if round_number > 1:
+                        main(
+                            [
+                                "work",
+                                "record",
+                                "--id",
+                                "item-1",
+                                "--round",
+                                str(round_number),
+                                "--role",
+                                "builder",
+                                "--head",
+                                "base-sha",
+                                "--evidence",
+                                str(evidence_path),
+                                "--target",
+                                str(target),
+                            ]
+                        )
+                    main(
+                        [
+                            "work",
+                            "record",
+                            "--id",
+                            "item-1",
+                            "--round",
+                            str(round_number),
+                            "--role",
+                            "reviewer",
+                            "--head",
+                            "base-sha",
+                            "--findings",
+                            str(findings_path),
+                            "--decision",
+                            "CHANGES_REQUIRED",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+                errors = StringIO()
+                with redirect_stderr(errors):
+                    code = main(
+                        [
+                            "work",
+                            "check",
+                            "--id",
+                            "item-1",
+                            "--head",
+                            "base-sha",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            self.assertEqual(1, code)
+
+    def test_status_reports_bundle_health_adapters_and_work_items(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(
+                    [
+                        "init",
+                        "--target",
+                        str(target),
+                        "--agent-platform",
+                        "codex",
+                    ]
+                )
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(["status", "--target", str(target), "--json"])
+            self.assertEqual(0, code)
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["healthy"])
+            self.assertEqual(["codex"], payload["adapters"])
+            self.assertEqual(1, payload["work_items_in_progress"])
+            self.assertNotIn("python_version", payload)
+
+    def test_status_verbose_adds_environment_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        ["status", "--target", str(target), "--verbose", "--json"]
+                    )
+            self.assertEqual(0, code)
+            payload = json.loads(output.getvalue())
+            self.assertIn("python_version", payload)
+            self.assertIn("system", payload)
+
+    def test_doctor_alias_forwards_to_verbose_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                output = StringIO()
+                with redirect_stdout(output), redirect_stderr(StringIO()):
+                    code = main(["doctor", "--target", str(target)])
+            self.assertEqual(0, code)
+            self.assertIn("Python", output.getvalue())
+
+    def test_adapter_list_and_add_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                listing = StringIO()
+                with redirect_stdout(listing):
+                    main(["adapter", "list", "--target", str(target), "--json"])
+                self.assertEqual(["codex"], json.loads(listing.getvalue()))
+
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "adapter",
+                            "add",
+                            "antigravity",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                listing_after = StringIO()
+                with redirect_stdout(listing_after):
+                    main(["adapter", "list", "--target", str(target), "--json"])
+            self.assertEqual(
+                ["antigravity", "codex"], sorted(json.loads(listing_after.getvalue()))
+            )
+            self.assertTrue((target / ".agents/agents/reviewer.md").is_file())
+
+    def test_adapter_verify_passes_on_a_fresh_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        [
+                            "adapter",
+                            "verify",
+                            "codex",
+                            "--target",
+                            str(target),
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(0, code)
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["ok"])
+            self.assertEqual(3, len(payload["findings"]))
+
+    def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+            (target / ".codex/agents/orchestrator.toml").write_text(
+                'name = "orchestrator"\n', encoding="utf-8"
+            )
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(["adapter", "verify", "codex", "--target", str(target)])
+            self.assertEqual(1, code)
+            self.assertIn("FAILED", output.getvalue())
+
+    def test_config_set_get_list_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "config",
+                            "set",
+                            "model",
+                            "anthropic/claude",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                get_output = StringIO()
+                with redirect_stdout(get_output):
+                    code = main(
+                        ["config", "get", "model", "--target", str(target), "--json"]
+                    )
+                self.assertEqual(0, code)
+                self.assertEqual(
+                    {"value": "anthropic/claude", "source": "project"},
+                    json.loads(get_output.getvalue()),
+                )
+
+                list_output = StringIO()
+                with redirect_stdout(list_output):
+                    main(["config", "list", "--target", str(target), "--json"])
+            self.assertEqual(
+                {"model": {"value": "anthropic/claude", "source": "project"}},
+                json.loads(list_output.getvalue()),
+            )
+
+    def test_config_get_missing_key_returns_one(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with redirect_stdout(StringIO()):
+                code = main(
+                    ["config", "get", "missing", "--target", directory, "--json"]
+                )
+            self.assertEqual(1, code)
+
+    def test_self_version_and_update(self) -> None:
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(0, main(["self", "version"]))
+            self.assertEqual(0, main(["self", "update"]))
+        self.assertIn("CoDev", output.getvalue())
+        self.assertIn("upgrade", output.getvalue().lower())
+
+    def test_deprecated_aliases_rewrite_to_new_command_forms(self) -> None:
+        self.assertEqual(
+            ["eval", "fixture", "create", "name", "--target", "T"],
+            _apply_deprecated_aliases(["fixture", "create", "name", "--target", "T"]),
+        )
+        self.assertEqual(
+            ["eval", "run", "name", "--target", "T"],
+            _apply_deprecated_aliases(["eval", "name", "--target", "T"]),
+        )
+        self.assertEqual(
+            ["status", "--target", "T"],
+            _apply_deprecated_aliases(["check", "--target", "T"]),
+        )
+        self.assertEqual(
+            ["status", "--verbose", "--target", "T"],
+            _apply_deprecated_aliases(["doctor", "--target", "T"]),
+        )
+
+    def test_new_command_forms_pass_through_unchanged(self) -> None:
+        self.assertEqual(
+            ["eval", "run", "name"], _apply_deprecated_aliases(["eval", "run", "name"])
+        )
+        self.assertEqual(
+            ["eval", "fixture", "create", "name"],
+            _apply_deprecated_aliases(["eval", "fixture", "create", "name"]),
+        )
+        self.assertEqual(["status"], _apply_deprecated_aliases(["status"]))
+        self.assertEqual([], _apply_deprecated_aliases([]))
 
 
 if __name__ == "__main__":

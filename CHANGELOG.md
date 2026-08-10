@@ -5,12 +5,41 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Add layered configuration (`codev config get|set|list`, flags > env >
+  project > global > default) via `.codev/config.toml`.
+- Add a `codev work start|record|check|close|status|log` lifecycle subsystem
+  that tracks builder/reviewer correction rounds as state instead of prose,
+  enforcing the round cap, repeated-blocking-finding detection, and coverage
+  completeness by exit code. See `docs/adr/0001-work-lifecycle-invariant.md`.
+- Add `codev status`, `codev adapter list|add|verify`, and `codev self
+  version|update`. `adapter verify` checks that an installed platform adapter
+  still references the `codev work` lifecycle wiring, hasn't regressed to the
+  retired P0-P3 finding scale, and doesn't grant unrestricted shell execution;
+  the same check runs in CI against the shipped bundle for all four platforms.
+- Add a seven-fixture seeded-defect corpus (`.codev/fixtures/seeded-defect-*`,
+  one per review dimension) and `scripts/run_seeded_defect_suite.py` to
+  measure reviewer recall empirically instead of assuming the coverage
+  checklist is followed. A new scheduled `live-eval` CI job runs the suite
+  against a live OpenCode actor and gates `prepare-release`; its OpenCode
+  installation/authentication step is a placeholder pending this project's
+  actual CI credentials.
+
 ### Changed
 - Default programming-language selection to `none`, omit language-specific audit
   skills unless requested, and render the OpenCode code-audit agent from a
   language-aware template.
 - Add the language-aware code-audit agent to the Junie, Codex, and Antigravity
   adapters.
+- Replace the reviewer's P0–P3 severity scale with a ranked, binary
+  `blocking` finding model and a mandatory per-dimension coverage record, in
+  `review-change` and all four platform reviewer agents.
+- Narrow the "no CoDev process runs during a build" invariant so `codev work`
+  commands may run during a build session (ADR-0001).
+- Deprecate `codev check`, `codev doctor`, `codev fixture create`, and bare
+  `codev eval <name>` in favor of `codev status`, `codev status --verbose`,
+  `codev eval fixture create`, and `codev eval run <name>`; the old forms
+  still work and print a warning.
 
 ## [0.1.7] - 09.08.2026
 

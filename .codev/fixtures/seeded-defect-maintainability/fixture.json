@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "seeded-defect-maintainability",
+  "description": "Actor reviews a helper with a deeply nested pyramid instead of guard clauses; verifier checks the defect was flagged as blocking.",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}
