@@ -14,7 +14,9 @@ work. Use the applicable repository skill:
   comments; and
 - `clean-code-review` for a focused Clean Code, GoF, and Python smell scan; and
 - `critique-review` for precise, read-only suggested diffs from review findings; and
-- `launch-product` for readiness, rollout, rollback, and learning.
+- `launch-product` for readiness, rollout, rollback, and learning; and
+- `design-skill-eval` for designing and scaffolding a new evaluation fixture
+  for an installed skill's performance corpus.
 
 Use the lightest safe path. Inspect the repository before prescribing code
 mechanics, keep changes small, run proportionate validation, and stop for

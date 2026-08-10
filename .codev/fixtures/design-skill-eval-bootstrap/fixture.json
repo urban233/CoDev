@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "design-skill-eval-bootstrap",
+  "description": "Actor uses (or reinvents without) design-skill-eval's guidance to scaffold a new eval fixture for a toy greet-user skill; verifier checks the produced fixture validates, is correctly tagged, and never names the skill under test in its prompt.",
+  "skill": "design-skill-eval",
+  "category": "fixture_scaffolding",
+  "actor_timeout_seconds": 900,
+  "judge_timeout_seconds": 300
+}
