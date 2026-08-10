@@ -10,7 +10,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 EXPECTED_SKILLS = {
     "specify-project": [
         "assets/specification.template.md",
@@ -75,11 +74,15 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
     text = skill_file.read_text(encoding="utf-8")
     metadata = parse_frontmatter(text, skill_file, errors)
     if set(metadata) != {"name", "description"}:
-        errors.append(f"{skill_file}: frontmatter must contain only name and description")
+        errors.append(
+            f"{skill_file}: frontmatter must contain only name and description"
+        )
     if metadata.get("name") != name:
         errors.append(f"{skill_file}: name must match directory {name!r}")
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) or len(name) > 64:
-        errors.append(f"{skill_file}: name must be hyphen-case and at most 64 characters")
+        errors.append(
+            f"{skill_file}: name must be hyphen-case and at most 64 characters"
+        )
     description = metadata.get("description", "")
     if len(description) < 80:
         errors.append(f"{skill_file}: description is too short to trigger reliably")
@@ -202,7 +205,8 @@ def main() -> int:
     print(
         "Workflow validation passed: "
         f"{len(EXPECTED_SKILLS)} skills, {len(EXPECTED_GUIDES)} guides, and "
-        f"{len(EXPECTED_HANDBOOKS)} handbooks, plus {scenario_count} behavioral scenarios"
+        f"{len(EXPECTED_HANDBOOKS)} handbooks, plus "
+        f"{scenario_count} behavioral scenarios"
     )
     return 0
 

@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 CATALOG_RELATIVE = Path("evals/development-workflow/scenarios.json")
 ALLOWED_OBSERVERS = {"human", "harness", "independent-ai"}
 
@@ -122,7 +121,10 @@ def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
                 "criteria": {
                     criterion: {
                         "passed": False,
-                        "evidence": "replace with an observable tool call, artifact, stop, or output",
+                        "evidence": (
+                            "replace with an observable tool call, artifact, "
+                            "stop, or output"
+                        ),
                     }
                     for criterion in scenario["required_criteria"]
                 },
@@ -149,9 +151,7 @@ def evaluate_results(
         messages.append("observer must be an object")
     else:
         if observer.get("kind") not in ALLOWED_OBSERVERS:
-            messages.append(
-                "observer.kind must be human, harness, or independent-ai"
-            )
+            messages.append("observer.kind must be human, harness, or independent-ai")
         if not isinstance(observer.get("name"), str) or not observer["name"].strip():
             messages.append("observer.name must be non-empty")
         if observer.get("independent_of_agent") is not True:
@@ -233,7 +233,9 @@ def self_test(catalog: dict[str, Any]) -> list[str]:
     for result in passing["results"]:
         for observation in result["criteria"].values():
             observation["passed"] = True
-            observation["evidence"] = "synthetic observable evidence for scorer self-test"
+            observation["evidence"] = (
+                "synthetic observable evidence for scorer self-test"
+            )
     pass_evaluation = evaluate_results(catalog, passing)
     errors: list[str] = []
     if not pass_evaluation.passed:

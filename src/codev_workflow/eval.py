@@ -722,7 +722,9 @@ def _private_owner_is_authenticated(private: Path, owner_path: Path) -> bool:
         or stat.S_ISLNK(owner_info.st_mode)
     ):
         return False
-    if private_info.st_mode & 0o077 or owner_info.st_mode & 0o077:
+    if sys.platform != "win32" and (
+        private_info.st_mode & 0o077 or owner_info.st_mode & 0o077
+    ):
         return False
     return not (sys.platform != "win32" and private_info.st_uid != os.getuid())
 
@@ -1209,6 +1211,8 @@ def _run(
     env: dict[str, str] | None = None,
     decode_errors: str = "replace",
 ) -> Run:
+    if sys.platform == "win32" and argv[0].lower().endswith(".py"):
+        argv = [sys.executable, *argv]
     argv = _windows_batch_safe_argv(argv)
     start = time.monotonic()
     flags = (
@@ -1240,13 +1244,14 @@ def _run(
         _stop(process)
         raise
     _stop(process)
-    return Run(
+    result = Run(
         _decode(raw_stdout, decode_errors),
         _decode(raw_stderr, decode_errors),
         process.returncode,
         False,
         time.monotonic() - start,
     )
+    return result
 
 
 def _git(git: str, args: list[str], cwd: Path, timeout: int = 60) -> Run:
@@ -1973,6 +1978,8 @@ def evaluate(
     # which is the common case for npm-installed CLIs.
     resolved_git = shutil.which(git)
     resolved_opencode = shutil.which(opencode)
+    if resolved_opencode is None and Path(opencode).is_file():
+        resolved_opencode = str(Path(opencode).resolve())
     if resolved_git is None or resolved_opencode is None:
         raise EvaluationError("git and opencode must be available")
     git = _resolve_windows_shim(resolved_git)

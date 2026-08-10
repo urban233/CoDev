@@ -82,7 +82,7 @@ class FixtureContractTests(unittest.TestCase):
             kernel32.CreateFileW.return_value = 123
             kernel32.FlushFileBuffers.return_value = True
             with (
-                patch("codev_workflow.eval.os.name", "nt"),
+                patch("codev_workflow.eval.sys.platform", "win32"),
                 patch(
                     "codev_workflow.eval.ctypes.WinDLL",
                     return_value=kernel32,
@@ -192,7 +192,7 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             with (
-                patch("codev_workflow.eval.os.name", "nt"),
+                patch("codev_workflow.eval.sys.platform", "win32"),
                 patch(
                     "codev_workflow.eval._read_windows_source",
                     return_value=(
@@ -234,7 +234,7 @@ class FixtureContractTests(unittest.TestCase):
             root = Path(directory)
             self._repo(root)
             with (
-                patch("codev_workflow.eval.os.name", "nt"),
+                patch("codev_workflow.eval.sys.platform", "win32"),
                 patch(
                     "codev_workflow.eval._read_windows_source",
                     side_effect=EvaluationError("reparse point rejected"),
@@ -529,6 +529,7 @@ class FixtureContractTests(unittest.TestCase):
                 self.assertTrue(evaluate("sample", root, output, opencode=str(phase)))
             self.assertEqual("local change", protected.read_text())
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_successful_phase_cleanup_terminates_child_processes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1219,6 +1220,7 @@ class FixtureContractTests(unittest.TestCase):
             self.assertEqual(["run", "--format", "json"], calls[0]["argv"][:3])
             self.assertNotIn(str(root), calls[1]["cwd"])
 
+    @unittest.skipUnless(os.name == "posix", "uses POSIX-only pathspec syntax")
     def test_diff_evidence_includes_actor_commit_and_untracked_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1837,8 +1839,12 @@ class FixtureContractTests(unittest.TestCase):
             )
             actor.chmod(actor.stat().st_mode | 0o111)
             self.assertTrue(evaluate("sample", root, output, opencode=str(actor)))
-            self.assertIn("\ufffd", (output / "verifier-stdout.txt").read_text())
-            self.assertIn("\ufffd", (output / "verifier-stderr.txt").read_text())
+            self.assertIn(
+                "\ufffd", (output / "verifier-stdout.txt").read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "\ufffd", (output / "verifier-stderr.txt").read_text(encoding="utf-8")
+            )
 
     def test_invalid_utf8_judge_output_is_structured_and_safe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1870,7 +1876,9 @@ class FixtureContractTests(unittest.TestCase):
                 evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("malformed", result["judge"]["status"])
-            self.assertIn("\ufffd", (output / "judge-events.jsonl").read_text())
+            self.assertIn(
+                "\ufffd", (output / "judge-events.jsonl").read_text(encoding="utf-8")
+            )
 
     def test_timed_out_actor_with_partial_output_is_completed_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
