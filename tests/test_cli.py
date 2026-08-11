@@ -307,6 +307,39 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
+    def test_work_escalate_and_escalations_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "escalate",
+                            "--id",
+                            "item-1",
+                            "--trigger",
+                            "stop_round_cap",
+                            "--cause",
+                            "round 2 of 2 for phase 'inner'",
+                            "--phase",
+                            "inner",
+                            "--round",
+                            "2",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(
+                    0, main(["work", "escalations", "--target", str(target)])
+                )
+        self.assertIn("item-1", output.getvalue())
+        self.assertIn("stop_round_cap", output.getvalue())
+
     def test_work_check_repeated_finding_exits_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -509,7 +542,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            self.assertEqual(3, len(payload["findings"]))
+            self.assertEqual(10, len(payload["findings"]))
 
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

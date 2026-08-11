@@ -13,6 +13,7 @@ from typing import Any
 
 from codev_workflow import __version__
 from codev_workflow import config as config_module
+from codev_workflow import git_ops as git_ops_module
 from codev_workflow import work as work_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -33,7 +34,6 @@ from codev_workflow.installer import (
     plan_update,
 )
 from codev_workflow.work import (
-    DEFAULT_MAX_ROUNDS,
     VALID_DECISIONS,
     VALID_OUTCOMES,
     WorkError,
@@ -227,7 +227,12 @@ def _parser() -> argparse.ArgumentParser:
     w_start = work_commands.add_parser("start", help="open a new work item")
     w_start.add_argument("--id", required=True)
     w_start.add_argument("--base", required=True, help="base git snapshot")
-    w_start.add_argument("--max-rounds", type=int, default=DEFAULT_MAX_ROUNDS)
+    w_start.add_argument(
+        "--max-rounds",
+        type=int,
+        default=None,
+        help="applies to both phases; defaults to 2/2",
+    )
     w_start.add_argument("--target", type=_target, default=Path.cwd())
 
     w_record = work_commands.add_parser(
@@ -272,6 +277,77 @@ def _parser() -> argparse.ArgumentParser:
     w_log = work_commands.add_parser("log", help="print one work item's round history")
     w_log.add_argument("--id", required=True)
     w_log.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_triage = work_commands.add_parser(
+        "triage",
+        help="record the human's address/defer disposition for one outer-loop round",
+    )
+    w_triage.add_argument("--id", required=True)
+    w_triage.add_argument("--round", type=int, required=True)
+    w_triage.add_argument(
+        "--triage", type=_target, required=True, help="JSON triage payload file"
+    )
+    w_triage.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_escalate = work_commands.add_parser(
+        "escalate",
+        help="append one local, gitignored escalation record",
+    )
+    w_escalate.add_argument("--id", required=True)
+    w_escalate.add_argument("--trigger", required=True)
+    w_escalate.add_argument("--cause", required=True)
+    w_escalate.add_argument("--phase", choices=("inner", "outer"))
+    w_escalate.add_argument("--round", type=int, dest="round_number")
+    w_escalate.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_escalations = work_commands.add_parser(
+        "escalations", help="print recorded escalations, most projects skim this"
+    )
+    w_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
+    w_escalations.add_argument("--target", type=_target, default=Path.cwd())
+
+    git_parser = commands.add_parser(
+        "git", help="guarded git/GitHub mutation for one work item's own branch"
+    )
+    git_commands = git_parser.add_subparsers(dest="git_command", required=True)
+
+    g_branch = git_commands.add_parser(
+        "branch", help="create the work item's own branch from a base snapshot"
+    )
+    g_branch.add_argument("--id", required=True)
+    g_branch.add_argument("--base", required=True, help="base git snapshot")
+    g_branch.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_commit = git_commands.add_parser(
+        "commit", help="commit outstanding changes on the work item's own branch"
+    )
+    g_commit.add_argument("--id", required=True)
+    g_commit.add_argument("--message", required=True)
+    g_commit.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_push = git_commands.add_parser(
+        "push", help="push the work item's own branch, never the default branch"
+    )
+    g_push.add_argument("--id", required=True)
+    g_push.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_open_pr = git_commands.add_parser(
+        "open-pr",
+        help="open a draft PR once codev work check reports ok_ready_for_pr",
+    )
+    g_open_pr.add_argument("--id", required=True)
+    g_open_pr.add_argument("--title", required=True)
+    g_open_pr.add_argument("--body", help="literal PR body text")
+    g_open_pr.add_argument("--body-file", type=_target, help="path to a PR body file")
+    g_open_pr.add_argument("--base", help="defaults to the repository's default branch")
+    g_open_pr.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_mark_ready = git_commands.add_parser(
+        "mark-ready",
+        help="regenerate the PR body from round-state and mark it ready for review",
+    )
+    g_mark_ready.add_argument("--id", required=True)
+    g_mark_ready.add_argument("--target", type=_target, default=Path.cwd())
     return parser
 
 
@@ -545,15 +621,77 @@ def _run_work_command(args: argparse.Namespace) -> int:
             print("No open work items.")
         else:
             for item in summaries:
+                phase = item["current_phase"]
                 print(
                     f"{item['work_item_id']}: {item['status']} "
-                    f"(round {item['current_round']}/{item['max_rounds']}, "
+                    f"(round {item['current_round']} [{phase}]/"
+                    f"{item['max_rounds'][phase]}, "
                     f"latest decision: {item['latest_decision']})"
                 )
         return 0
 
     if args.work_command == "log":
         print(work_module.log_text(args.id, target=target), end="")
+        return 0
+
+    if args.work_command == "triage":
+        triage = work_module.load_json_file(args.triage)
+        work_module.record_triage(args.id, args.round, triage, target=target)
+        print(f"Recorded triage for round {args.round} of {args.id}")
+        return 0
+
+    if args.work_command == "escalate":
+        work_module.record_escalation(
+            args.id,
+            args.trigger,
+            args.cause,
+            target=target,
+            phase=args.phase,
+            round_number=args.round_number,
+        )
+        print(f"Recorded escalation for {args.id}: {args.trigger}")
+        return 0
+
+    if args.work_command == "escalations":
+        print(work_module.escalations_text(target=target, since=args.since), end="")
+        return 0
+
+    return 2
+
+
+def _run_git_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+    if args.git_command == "branch":
+        branch = git_ops_module.create_branch(args.id, args.base, target=target)
+        print(f"Created branch {branch} for {args.id}")
+        return 0
+
+    if args.git_command == "commit":
+        head = git_ops_module.commit(args.id, args.message, target=target)
+        print(f"Committed {head} on {args.id}'s branch")
+        return 0
+
+    if args.git_command == "push":
+        git_ops_module.push(args.id, target=target)
+        print(f"Pushed {args.id}'s branch")
+        return 0
+
+    if args.git_command == "open-pr":
+        if args.body_file is not None:
+            body = args.body_file.read_text(encoding="utf-8")
+        elif args.body is not None:
+            body = args.body
+        else:
+            raise git_ops_module.GitOpsError("either --body or --body-file is required")
+        url = git_ops_module.open_pr(
+            args.id, args.title, body, target=target, base=args.base
+        )
+        print(url)
+        return 0
+
+    if args.git_command == "mark-ready":
+        git_ops_module.mark_ready(args.id, target=target)
+        print(f"Marked {args.id}'s pull request ready for review")
         return 0
 
     return 2
@@ -677,12 +815,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_self_command(args)
         if args.command == "work":
             return _run_work_command(args)
+        if args.command == "git":
+            return _run_git_command(args)
     except (
         CoDevError,
         EvaluationError,
         WorkError,
         ConfigError,
         AdapterVerificationError,
+        git_ops_module.GitOpsError,
     ) as error:
         print(f"codev: {error}", file=sys.stderr)
         return 2

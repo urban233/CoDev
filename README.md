@@ -196,6 +196,7 @@ is versioned with the repository and appears in Junie’s `/` command list.
 ```text
 my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
+├── .gitignore                        # a managed block ignoring the local escalation log
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
 ├── .agents/agents/                   # Antigravity workflow and audit agents
 ├── .codex/agents/                     # Codex workflow and audit agents

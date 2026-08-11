@@ -18,6 +18,8 @@ LEGACY_LOCK_SCHEMA_VERSION = 1
 LOCK_PATH = PurePosixPath(".codev/lock.json")
 AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
+GITIGNORE_START = "# codev:start"
+GITIGNORE_END = "# codev:end"
 VALID_PLATFORMS = frozenset({"antigravity", "codex", "junie", "opencode"})
 VALID_PROGRAMMING_LANGUAGES = frozenset({"none", "python", "typescript", "all"})
 AUDIT_SKILL_PREFIXES = {
@@ -71,6 +73,11 @@ keep changes bounded and reviewable, run proportionate validation, and stop for
 material decisions instead of inventing them. Humans retain authority for
 acceptance, merge, deployment, migration, publication, and rollout expansion.
 <!-- codev:end -->"""
+
+GITIGNORE_BLOCK = """# codev:start
+# CoDev local escalation log (ADR-0003) -- not shared or committed.
+.codev/work/escalations.jsonl
+# codev:end"""
 
 
 class CoDevError(RuntimeError):
@@ -346,21 +353,25 @@ def _remove_empty_parent_dirs(path: Path, target: Path) -> None:
         current = current.parent
 
 
-def _agent_block_from(text: str) -> str | None:
-    start = text.find(AGENTS_START)
-    end = text.find(AGENTS_END)
+def _marked_block_from(
+    text: str, label: str, start_marker: str, end_marker: str
+) -> str | None:
+    start = text.find(start_marker)
+    end = text.find(end_marker)
     if start < 0 and end < 0:
         return None
     if start < 0 or end < start:
-        raise CoDevError("AGENTS.md contains incomplete CoDev markers")
-    end += len(AGENTS_END)
-    if text.find(AGENTS_START, start + len(AGENTS_START)) >= 0:
-        raise CoDevError("AGENTS.md contains more than one CoDev block")
+        raise CoDevError(f"{label} contains incomplete CoDev markers")
+    end += len(end_marker)
+    if text.find(start_marker, start + len(start_marker)) >= 0:
+        raise CoDevError(f"{label} contains more than one CoDev block")
     return text[start:end]
 
 
-def _with_agent_block(text: str, block: str) -> str:
-    current = _agent_block_from(text)
+def _with_marked_block(
+    text: str, block: str, label: str, start_marker: str, end_marker: str
+) -> str:
+    current = _marked_block_from(text, label, start_marker, end_marker)
     newline = "\r\n" if "\r\n" in text else "\n"
     rendered = block.replace("\n", newline)
     if current is None:
@@ -371,8 +382,10 @@ def _with_agent_block(text: str, block: str) -> str:
     return text.replace(current, rendered, 1)
 
 
-def _without_agent_block(text: str) -> str:
-    current = _agent_block_from(text)
+def _without_marked_block(
+    text: str, label: str, start_marker: str, end_marker: str
+) -> str:
+    current = _marked_block_from(text, label, start_marker, end_marker)
     if current is None:
         return text
     start = text.find(current)
@@ -385,6 +398,74 @@ def _without_agent_block(text: str) -> str:
     if suffix.startswith(newline):
         suffix = suffix[len(newline) :]
     return prefix + suffix
+
+
+def _agent_block_from(text: str) -> str | None:
+    return _marked_block_from(text, "AGENTS.md", AGENTS_START, AGENTS_END)
+
+
+def _with_agent_block(text: str, block: str) -> str:
+    return _with_marked_block(text, block, "AGENTS.md", AGENTS_START, AGENTS_END)
+
+
+def _without_agent_block(text: str) -> str:
+    return _without_marked_block(text, "AGENTS.md", AGENTS_START, AGENTS_END)
+
+
+def _gitignore_block_from(text: str) -> str | None:
+    return _marked_block_from(text, ".gitignore", GITIGNORE_START, GITIGNORE_END)
+
+
+def _with_gitignore_block(text: str, block: str) -> str:
+    return _with_marked_block(text, block, ".gitignore", GITIGNORE_START, GITIGNORE_END)
+
+
+def _without_gitignore_block(text: str) -> str:
+    return _without_marked_block(text, ".gitignore", GITIGNORE_START, GITIGNORE_END)
+
+
+def _sync_gitignore_block(target: Path, old_hash: str | None, plan: Plan) -> None:
+    """Add, update, or leave alone the managed `.gitignore` block.
+
+    `old_hash` is the hash recorded in the lock file, or None when this
+    integration has never been recorded for this install (a fresh `init`,
+    or an `update` of an install that predates this feature) -- in both
+    cases an absent or matching block is integrated fresh rather than
+    treated as a conflict.
+    """
+    path = target / ".gitignore"
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    try:
+        current = _gitignore_block_from(existing)
+    except CoDevError as error:
+        plan.operations.append(Operation("conflict", ".gitignore", str(error)))
+        return
+    new_hash = _block_hash(GITIGNORE_BLOCK)
+    if current is None:
+        if old_hash is not None:
+            plan.operations.append(
+                Operation("conflict", ".gitignore", "managed ignore block is missing")
+            )
+            return
+        plan.writes[path] = _with_gitignore_block(existing, GITIGNORE_BLOCK).encode(
+            "utf-8"
+        )
+        plan.operations.append(
+            Operation("integrate", ".gitignore", "append escalation-log ignore rule")
+        )
+        return
+    current_hash = _block_hash(current)
+    if current_hash == new_hash:
+        plan.operations.append(Operation("keep", ".gitignore", "ignore rule current"))
+    elif old_hash is not None and current_hash == old_hash:
+        plan.operations.append(Operation("update", ".gitignore", "ignore block"))
+        plan.writes[path] = _with_gitignore_block(existing, GITIGNORE_BLOCK).encode(
+            "utf-8"
+        )
+    else:
+        plan.operations.append(
+            Operation("conflict", ".gitignore", "different CoDev block exists")
+        )
 
 
 def _prepare_opencode(
@@ -498,6 +579,7 @@ def _new_lock(
         "files": {path: _sha256(files[path]) for path in sorted(files)},
         "integrations": {
             "agents_block_hash": _block_hash(AGENTS_BLOCK),
+            "gitignore_block_hash": _block_hash(GITIGNORE_BLOCK),
             "opencode_default_agent_managed": default_agent_managed,
             "opencode_agent_hashes": dict(sorted(managed_opencode_agents.items())),
             "opencode_schema_managed": opencode_schema_managed,
@@ -557,6 +639,8 @@ def plan_init(
             plan.operations.append(
                 Operation("conflict", "AGENTS.md", "different CoDev block exists")
             )
+
+    _sync_gitignore_block(target, None, plan)
 
     default_agent_managed = False
     managed_opencode_agents: dict[str, str] = {}
@@ -727,6 +811,11 @@ def plan_update(
     if not isinstance(old_block_hash, str):
         raise CoDevError("lock file has no valid AGENTS.md block hash")
     _replace_agent_block_for_update(target, old_block_hash, plan)
+
+    old_gitignore_hash = integrations.get("gitignore_block_hash")
+    if old_gitignore_hash is not None and not isinstance(old_gitignore_hash, str):
+        raise CoDevError("lock file has an invalid gitignore block hash")
+    _sync_gitignore_block(target, old_gitignore_hash, plan)
 
     default_managed = bool(integrations.get("opencode_default_agent_managed"))
     schema_managed = bool(integrations.get("opencode_schema_managed"))
@@ -902,6 +991,35 @@ def plan_remove(target: Path) -> Plan:
                         )
                     )
 
+    gitignore_path = target / ".gitignore"
+    if gitignore_path.exists():
+        try:
+            gitignore_block = _gitignore_block_from(
+                gitignore_path.read_text(encoding="utf-8")
+            )
+        except CoDevError as error:
+            plan.operations.append(Operation("conflict", ".gitignore", str(error)))
+        else:
+            expected_gitignore_hash = integrations.get("gitignore_block_hash")
+            if gitignore_block is not None and isinstance(expected_gitignore_hash, str):
+                if _block_hash(gitignore_block) != expected_gitignore_hash:
+                    plan.operations.append(
+                        Operation(
+                            "conflict",
+                            ".gitignore",
+                            "managed ignore block was modified",
+                        )
+                    )
+                else:
+                    plan.writes[gitignore_path] = _without_gitignore_block(
+                        gitignore_path.read_text(encoding="utf-8")
+                    ).encode("utf-8")
+                    plan.operations.append(
+                        Operation(
+                            "integrate", ".gitignore", "remove managed ignore block"
+                        )
+                    )
+
     selected = normalize_platforms(lock.get("platforms", []))
     if "opencode" in selected:
         try:
@@ -975,6 +1093,24 @@ def check_project(target: Path) -> CheckResult:
                 issues.append("AGENTS.md has no managed CoDev block")
             elif _block_hash(block) != integrations.get("agents_block_hash"):
                 issues.append("the managed AGENTS.md block has local changes")
+
+    gitignore_hash = integrations.get("gitignore_block_hash")
+    if isinstance(gitignore_hash, str):
+        gitignore_path = target / ".gitignore"
+        if not gitignore_path.is_file():
+            issues.append(".gitignore is missing its managed CoDev block")
+        else:
+            try:
+                gitignore_block = _gitignore_block_from(
+                    gitignore_path.read_text(encoding="utf-8")
+                )
+            except CoDevError as error:
+                issues.append(str(error))
+            else:
+                if gitignore_block is None:
+                    issues.append(".gitignore has no managed CoDev block")
+                elif _block_hash(gitignore_block) != gitignore_hash:
+                    issues.append("the managed .gitignore block has local changes")
 
     managed_opencode_agents = integrations.get("opencode_agent_hashes", {})
     if not isinstance(managed_opencode_agents, dict) or not all(

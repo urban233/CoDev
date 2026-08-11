@@ -3,6 +3,103 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** `round-state.json` moves to schema version 2 (ADR-0002,
+  ADR-0003). `codev work` round-state now supports a self-healing inner loop
+  ending in a `READY_FOR_OUTER_LOOP` reviewer decision and a phase-tagged
+  outer loop with a human-triage step, per work item:
+  - New `READY_FOR_OUTER_LOOP` reviewer decision, exempt from the full
+    coverage-completeness gate (`_incomplete_coverage`), and a new
+    `ok_ready_for_pr` `codev work check` outcome.
+  - Findings gain an optional `expansion_reason` (`regression` or
+    `newly_discovered_critical`); a blocking finding introduced after a
+    phase's first round with no `expansion_reason` now stops with
+    `stop_scope_expansion` rather than silently expanding the round's scope.
+  - Round entries are tagged `"phase": "inner" | "outer"`. `max_rounds`
+    becomes phase-scoped (`{"inner": 2, "outer": 2}` by default); `start`
+    still accepts a plain int, applied to both phases. The round cap and
+    repeated-finding checks are now phase-local.
+  - `REQUIRED_COVERAGE_DIMENSIONS`'s combined
+    `security_privacy_data_concurrency_compatibility` key splits into
+    `security_privacy_data_compatibility` and a new standalone
+    `concurrency` key.
+  - New `codev work triage` records the human's `address`/`defer`
+    disposition for each blocking finding in an outer-loop round; deferring
+    a blocking finding requires a non-empty `override_reason`. A new
+    `ok_waiting_on_triage` check outcome gates opening the outer phase's
+    correction round until triage is recorded.
+  - No migration path: a v1 `round-state.json` is rejected by the existing
+    version guard. Pre-1.0, consistent with this project's existing
+    breaking-change policy.
+
+### Added
+- Add `codev git branch|commit|push|open-pr|mark-ready` (ADR-0002,
+  ADR-0003): a guarded mutation surface so a work item's inner/outer loop
+  can create its own branch, commit, push, and land a pull request without
+  agents ever holding raw `git commit`/`git push`/`gh pr create` permission.
+  Mechanically enforces, not by agent-prompt convention: operates only on
+  the one branch it created for a work item, refuses any target resolving
+  to the repository's default branch, never accepts or constructs a
+  force-push flag, and independently re-verifies `codev work check` returns
+  `ok_ready_for_pr`/`ok_approve` before `open-pr`/`mark-ready` proceed,
+  rather than trusting the caller already checked. `open-pr` always creates
+  a draft PR; `mark-ready` regenerates the PR body from the work item's
+  round-state (via `codev work log`'s formatting) before converting it out
+  of draft.
+- Add `codev work escalate` / `codev work escalations [--since DATE]`
+  (ADR-0003): a local, gitignored, append-only escalation log
+  (`.codev/work/escalations.jsonl`) recording every human escalation --
+  round-cap hit, drift, repeated finding, scope expansion, missing
+  evidence, a pre-build critical interrupt, or a human overriding a
+  blocking finding during triage -- with cause, phase, and round. Written
+  explicitly by the caller; `codev work check` stays read-only and never
+  logs as a side effect. Not yet done: `codev init`/`update` don't manage
+  this entry in a target repository's `.gitignore` the way they already do
+  for `AGENTS.md` -- tracked as follow-up work.
+- Add a `lightweight-reviewer` role to all four platform adapters (ADR-0002):
+  a narrow, fast inner-loop check -- correctness and intent-match against
+  the work item, plus independent re-verification of the builder's reported
+  validation -- distinct from the full-dimension `reviewer`, which remains
+  available for other uses (e.g. `pr-review`). `orchestrator` no longer
+  requires human plan-approval before every delegated build by default; it
+  proceeds unless the existing "Stop conditions" or "Risk overrides size"
+  categories apply, checked cheaply by path/diff-shape before any judgment
+  call. On a clean pass it now creates the work item's branch, commits,
+  pushes, and opens a draft pull request through the new `codev git`
+  surface automatically -- merge remains the only human-gated step. Updated
+  `docs/for-ai/ai-agent-guidelines.md`'s "Three-agent Build execution" and
+  all four `orchestrator`/`builder`/`reviewer` bundle files to match, and
+  extended `codev adapter verify` to require `lightweight-reviewer` and a
+  `codev git open-pr` reference on every orchestrator, and to flag a raw
+  `"git push*"`/`"git commit*": allow` permission as a retired pattern now
+  that the guarded surface exists.
+- Add a human-triggered `outer-loop-runner` role and five specialist
+  reviewer roles (ADR-0003) to all four platform adapters:
+  `correctness-tests-specialist`, `security-data-specialist`,
+  `concurrency-specialist`, `architecture-maintainability-specialist`, and
+  `rollout-specialist`, each scoped to a disjoint set of `codev work`'s
+  coverage dimensions and none of them recording state directly. The
+  `outer-loop-runner` fetches a pull request and gates on CI status before
+  dispatching any specialist, merges their findings and coverage into one
+  round, presents blocking findings to the human for an `address`/`defer`
+  triage via `codev work triage`, drives the one permitted correction round
+  scoped to only the selected findings, and lands the change with
+  `codev git mark-ready` on approval. Updated
+  `docs/for-ai/ai-agent-guidelines.md` with a matching "Outer-loop
+  execution" section and `review-change`'s dimension list to give
+  concurrency its own numbered item. Extended `codev adapter verify` to
+  verify all ten roles per platform.
+- `codev init`/`update`/`remove` now manage a small marked block in the
+  target repository's `.gitignore` (create it if absent, merge into
+  existing content otherwise) ignoring `.codev/work/escalations.jsonl`,
+  the same safely-merged pattern already used for `AGENTS.md`. Backward
+  compatible with installs that predate this: a missing block and no
+  recorded hash integrate cleanly on the next `update` rather than
+  conflicting. `codev status`/`check_project` flags a tampered block only
+  for installs that already have one recorded.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
