@@ -20,6 +20,7 @@ from codev_workflow.work import (
     record_reviewer,
     record_triage,
     start,
+    triage_note,
 )
 
 FULL_COVERAGE = {
@@ -43,9 +44,51 @@ class StartTests(unittest.TestCase):
                     "current_phase": "inner",
                     "max_rounds": {"inner": 2, "outer": 2},
                     "latest_decision": None,
+                    "link_ref": None,
+                    "summary": None,
+                    "owner": None,
                 },
                 summary,
             )
+
+    def test_start_accepts_link_summary_and_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                link_ref="docs/codev/work/item-1/implementation-plan.md",
+                summary="Fix the thing",
+                owner="octocat",
+            )
+            summary = describe("item-1", target=target)
+            self.assertEqual(
+                "docs/codev/work/item-1/implementation-plan.md", summary["link_ref"]
+            )
+            self.assertEqual("Fix the thing", summary["summary"])
+            self.assertEqual("octocat", summary["owner"])
+
+    def test_start_rejects_empty_link(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(WorkError),
+        ):
+            start("item-1", "base-sha", target=Path(directory), link_ref="   ")
+
+    def test_start_rejects_empty_summary(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(WorkError),
+        ):
+            start("item-1", "base-sha", target=Path(directory), summary="")
+
+    def test_start_rejects_empty_owner(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(WorkError),
+        ):
+            start("item-1", "base-sha", target=Path(directory), owner="")
 
     def test_start_refuses_duplicate_id(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -460,6 +503,31 @@ class LogTextTests(unittest.TestCase):
         self.assertIn("BLOCKING", text)
         self.assertIn("a.py:1", text)
 
+    def test_log_includes_summary_link_and_owner_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                link_ref="https://github.com/o/r/issues/1",
+                summary="Fix the thing",
+                owner="octocat",
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn("summary: Fix the thing", text)
+        self.assertIn("link: https://github.com/o/r/issues/1", text)
+        self.assertIn("owner: octocat", text)
+
+    def test_log_omits_summary_link_and_owner_when_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            text = log_text("item-1", target=target)
+        self.assertNotIn("summary:", text)
+        self.assertNotIn("link:", text)
+        self.assertNotIn("owner:", text)
+
 
 def _blocking_finding(
     location: str, category: str, rank: int = 1, expansion_reason: str | None = None
@@ -697,9 +765,13 @@ class ScopeExpansionTests(unittest.TestCase):
 
 class TriageTests(unittest.TestCase):
     def _to_outer_round_one_with_findings(
-        self, target: Path, findings: list[dict[str, object]]
+        self,
+        target: Path,
+        findings: list[dict[str, object]],
+        *,
+        owner: str | None = None,
     ) -> None:
-        start("item-1", "base-sha", target=target)
+        start("item-1", "base-sha", target=target, owner=owner)
         record_reviewer(
             "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
         )
@@ -863,6 +935,103 @@ class TriageTests(unittest.TestCase):
             )
             with self.assertRaises(WorkError):
                 record_builder("item-1", 3, "head-3", {}, target=target)
+
+    def test_record_triage_stores_by(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")]
+            )
+            finding_id = "f-a.py:1-concurrency"
+            record_triage(
+                "item-1",
+                2,
+                {"dispositions": {finding_id: {"disposition": "address"}}},
+                target=target,
+                by="octocat",
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn("triage (by octocat):", text)
+
+    def test_record_triage_rejects_empty_by(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")]
+            )
+            finding_id = "f-a.py:1-concurrency"
+            with self.assertRaises(WorkError):
+                record_triage(
+                    "item-1",
+                    2,
+                    {"dispositions": {finding_id: {"disposition": "address"}}},
+                    target=target,
+                    by="   ",
+                )
+
+    def test_triage_note_when_by_matches_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")], owner="octocat"
+            )
+            finding_id = "f-a.py:1-concurrency"
+            record_triage(
+                "item-1",
+                2,
+                {"dispositions": {finding_id: {"disposition": "address"}}},
+                target=target,
+                by="octocat",
+            )
+            note = triage_note("item-1", target=target)
+            text = log_text("item-1", target=target)
+        self.assertEqual(
+            "note: octocat both owns this work item and triaged this round", note
+        )
+        self.assertIn(note, text)
+
+    def test_triage_note_none_when_by_differs_from_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")], owner="octocat"
+            )
+            finding_id = "f-a.py:1-concurrency"
+            record_triage(
+                "item-1",
+                2,
+                {"dispositions": {finding_id: {"disposition": "address"}}},
+                target=target,
+                by="someone-else",
+            )
+            note = triage_note("item-1", target=target)
+        self.assertIsNone(note)
+
+    def test_triage_note_none_when_no_owner_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")]
+            )
+            finding_id = "f-a.py:1-concurrency"
+            record_triage(
+                "item-1",
+                2,
+                {"dispositions": {finding_id: {"disposition": "address"}}},
+                target=target,
+                by="octocat",
+            )
+            note = triage_note("item-1", target=target)
+        self.assertIsNone(note)
+
+    def test_triage_note_none_before_any_triage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round_one_with_findings(
+                target, [_blocking_finding("a.py:1", "concurrency")], owner="octocat"
+            )
+            note = triage_note("item-1", target=target)
+        self.assertIsNone(note)
 
     def test_outer_round_cap_is_two_not_one(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

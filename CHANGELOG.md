@@ -99,6 +99,49 @@ Semantic Versioning.
   recorded hash integrate cleanly on the next `update` rather than
   conflicting. `codev status`/`check_project` flags a tampered block only
   for installs that already have one recorded.
+- Add `--link`, `--summary`, `--owner`, and `--github-issue` to `codev work
+  start`, and `--by` to `codev work triage` (ADR-0004): purely additive,
+  optional traceability and identity fields on `round-state.json` -- no
+  `ROUND_SCHEMA_VERSION` bump. `--owner`/`--by` default to a new
+  `git_ops.detect_identity()` (the authenticated `gh` login, falling back to
+  local git config, never fabricated) rather than requiring the human to
+  type identity every time; `--github-issue N` populates `--link`/`--summary`
+  from a read-only `gh issue view` unless given explicitly. `codev work
+  check` now prints a non-blocking note when the same identity both owns a
+  work item and triaged it, mirroring `plan-delivery`'s existing "owners do
+  not approve their own changes" guidance with a data hook instead of only
+  documentation.
+- `define-product`, `design-solution`, `plan-delivery`, and `build-change`
+  now default their planning-artifact locations under a common
+  `docs/codev/` prefix (ADR-0004) -- `docs/codev/features/`,
+  `docs/codev/product/`, `docs/codev/design/`, `docs/codev/delivery/`, and a
+  new `docs/codev/work/<work-item-id>/implementation-plan.md`, keyed by the
+  same id `codev work start` uses, closing the traceability gap for the one
+  planning artifact that is genuinely 1:1 with a single work item. Each
+  skill's existing instruction to defer to an established repository
+  convention instead of forcing its own structure is unchanged, so an
+  already-adopted repository's existing paths are unaffected.
+- Add `codev git issue-create` (ADR-0004): the one operation in the guarded
+  `codev git` surface with no work-item precondition, since pushing a
+  delivery-plan work item to GitHub happens before `codev work start` exists
+  for it. Takes explicit `--title`/`--body` (never parses a delivery plan's
+  Markdown); an optional, repeatable `--path` prints a best-effort
+  CODEOWNERS-suggested assignee without ever forwarding it as `--assignee`
+  automatically. `codev git open-pr` separately appends `Closes #N` to the
+  generated PR body when a work item's `--link` is a GitHub issue URL for
+  the same repository, closing the loop for free on merge.
+- Add `codev codeowners init` (ADR-0004): a one-shot local scaffold of a
+  starter `.github/CODEOWNERS`, refusing rather than overwriting if one
+  already exists at any of the three locations GitHub reads. Unlike
+  `AGENTS.md` and the `.gitignore` block, it is not a managed integration --
+  no `lock.json` entry, no hash tracked -- and is intended to be run
+  directly by a human during repository setup, the same as `codev init`
+  itself.
+- `codev status --verbose` now reports non-blocking work-in-progress counts
+  per owner and changed-file overlaps between concurrently open work items
+  (ADR-0004), surfacing `plan-delivery`'s existing WIP guidance and the
+  residual collision risk that small, fast-merging changes shrink but do not
+  eliminate -- informational only, never a gate.
 
 ## [0.2.0] - 2026-08-11
 

@@ -647,5 +647,55 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
 
 
+class CodeownersInitTests(unittest.TestCase):
+    def test_writes_a_starter_file_under_dot_github(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "src").mkdir()
+            (target / "docs").mkdir()
+            (target / ".git").mkdir()
+            destination = installer.codeowners_init(target)
+            self.assertEqual(target / ".github" / "CODEOWNERS", destination)
+            text = destination.read_text(encoding="utf-8")
+        self.assertIn("CODEOWNERS", text)
+        self.assertIn("# src/  @your-team-here", text)
+        self.assertIn("# docs/  @your-team-here", text)
+        self.assertNotIn(".git/", text)
+
+    def test_refuses_when_a_codeowners_file_already_exists_at_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "CODEOWNERS").write_text("* @someone\n", encoding="utf-8")
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+
+    def test_refuses_when_a_codeowners_file_already_exists_under_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "docs").mkdir()
+            (target / "docs" / "CODEOWNERS").write_text(
+                "* @someone\n", encoding="utf-8"
+            )
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+
+    def test_never_overwrites_an_existing_dot_github_codeowners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / ".github").mkdir()
+            existing = target / ".github" / "CODEOWNERS"
+            existing.write_text("* @someone\n", encoding="utf-8")
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+            self.assertEqual("* @someone\n", existing.read_text(encoding="utf-8"))
+
+    def test_placeholder_line_when_no_top_level_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            destination = installer.codeowners_init(target)
+            text = destination.read_text(encoding="utf-8")
+        self.assertIn("# path/pattern  @your-team-here", text)
+
+
 if __name__ == "__main__":
     unittest.main()

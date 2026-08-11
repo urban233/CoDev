@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codev_workflow.cli import _apply_deprecated_aliases, _format_snapshot_report, main
+from codev_workflow.work import CheckResult
 
 
 class CliTests(unittest.TestCase):
@@ -220,6 +221,8 @@ class CliTests(unittest.TestCase):
                             "item-1",
                             "--base",
                             "base-sha",
+                            "--owner",
+                            "test-owner",
                             "--target",
                             str(target),
                         ]
@@ -307,6 +310,346 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
+    def test_work_start_github_issue_populates_link_and_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            issue = {"title": "Fix the thing", "url": "https://github.com/o/r/issues/7"}
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.fetch_issue", return_value=issue
+                ) as fetch_issue,
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--github-issue",
+                        "7",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            fetch_issue.assert_called_once_with(7, target=target.resolve())
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
+            self.assertEqual("Fix the thing", state["summary"])
+
+    def test_work_start_explicit_summary_wins_over_github_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            issue = {"title": "Issue title", "url": "https://github.com/o/r/issues/7"}
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.fetch_issue", return_value=issue
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--github-issue",
+                        "7",
+                        "--summary",
+                        "My own summary",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("My own summary", state["summary"])
+
+    def test_work_start_owner_defaults_to_detected_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="octocat",
+                ) as detect_identity,
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            detect_identity.assert_called_once_with(target=target.resolve())
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("octocat", state["owner"])
+
+    def test_work_triage_by_defaults_to_detected_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            triage_path = target / "triage.json"
+            triage_path.write_text(json.dumps({"dispositions": {}}), encoding="utf-8")
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="octocat",
+                ) as detect_identity,
+                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "work",
+                        "triage",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "2",
+                        "--triage",
+                        str(triage_path),
+                        "--target",
+                        str(target),
+                    ]
+                )
+            detect_identity.assert_called_once_with(target=target.resolve())
+            record_triage.assert_called_once_with(
+                "item-1",
+                2,
+                {"dispositions": {}},
+                target=target.resolve(),
+                by="octocat",
+            )
+
+    def test_work_triage_explicit_by_skips_detection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            triage_path = target / "triage.json"
+            triage_path.write_text(json.dumps({"dispositions": {}}), encoding="utf-8")
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity"
+                ) as detect_identity,
+                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "work",
+                        "triage",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "2",
+                        "--triage",
+                        str(triage_path),
+                        "--by",
+                        "explicit-triager",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            detect_identity.assert_not_called()
+            record_triage.assert_called_once_with(
+                "item-1",
+                2,
+                {"dispositions": {}},
+                target=target.resolve(),
+                by="explicit-triager",
+            )
+
+    def test_work_check_prints_triage_note(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.work_module.check",
+                    return_value=CheckResult(True, "ok_continue", "proceed"),
+                ),
+                patch(
+                    "codev_workflow.cli.work_module.triage_note",
+                    return_value=(
+                        "note: octocat both owns this work item and triaged this round"
+                    ),
+                ),
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        [
+                            "work",
+                            "check",
+                            "--id",
+                            "item-1",
+                            "--head",
+                            "head-sha",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("note: octocat", output.getvalue())
+
+    def test_work_check_omits_note_when_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.work_module.check",
+                    return_value=CheckResult(True, "ok_continue", "proceed"),
+                ),
+                patch("codev_workflow.cli.work_module.triage_note", return_value=None),
+                redirect_stdout(StringIO()) as output,
+            ):
+                main(
+                    [
+                        "work",
+                        "check",
+                        "--id",
+                        "item-1",
+                        "--head",
+                        "head-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertNotIn("note:", output.getvalue())
+
+    def test_git_issue_create_prints_codeowners_suggestion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.suggest_owners",
+                    return_value=["@pydev"],
+                ) as suggest_owners,
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_issue",
+                    return_value="https://github.com/o/r/issues/9",
+                ) as create_issue,
+                redirect_stdout(StringIO()) as output,
+            ):
+                code = main(
+                    [
+                        "git",
+                        "issue-create",
+                        "--title",
+                        "Fix the thing",
+                        "--body",
+                        "details",
+                        "--path",
+                        "src/app.py",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            suggest_owners.assert_called_once_with(
+                ["src/app.py"], target=target.resolve()
+            )
+            create_issue.assert_called_once_with(
+                "Fix the thing", "details", target=target.resolve(), assignees=[]
+            )
+            self.assertIn("@pydev", output.getvalue())
+            self.assertIn("https://github.com/o/r/issues/9", output.getvalue())
+
+    def test_git_issue_create_forwards_assignees_and_skips_suggestion_lookup(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.suggest_owners"
+                ) as suggest_owners,
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_issue",
+                    return_value="https://github.com/o/r/issues/9",
+                ) as create_issue,
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "git",
+                        "issue-create",
+                        "--title",
+                        "Fix the thing",
+                        "--body",
+                        "details",
+                        "--assignee",
+                        "alice",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            suggest_owners.assert_not_called()
+            create_issue.assert_called_once_with(
+                "Fix the thing",
+                "details",
+                target=target.resolve(),
+                assignees=["alice"],
+            )
+
+    def test_git_issue_create_requires_body_or_body_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            errors = StringIO()
+            with redirect_stderr(errors):
+                code = main(
+                    [
+                        "git",
+                        "issue-create",
+                        "--title",
+                        "Fix the thing",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("--body", errors.getvalue())
+
+    def test_codeowners_init_writes_and_reports_the_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(["codeowners", "init", "--target", str(target)])
+            self.assertEqual(0, code)
+            self.assertTrue((target / ".github" / "CODEOWNERS").is_file())
+            self.assertIn(".github", output.getvalue())
+            self.assertIn("CODEOWNERS", output.getvalue())
+
+    def test_codeowners_init_refuses_when_one_already_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "CODEOWNERS").write_text("* @someone\n", encoding="utf-8")
+            errors = StringIO()
+            with redirect_stderr(errors):
+                code = main(["codeowners", "init", "--target", str(target)])
+            self.assertEqual(2, code)
+            self.assertIn("already exists", errors.getvalue())
+
     def test_work_escalate_and_escalations_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -371,6 +714,8 @@ class CliTests(unittest.TestCase):
                         "base-sha",
                         "--max-rounds",
                         "5",
+                        "--owner",
+                        "test-owner",
                         "--target",
                         str(target),
                     ]
@@ -452,6 +797,8 @@ class CliTests(unittest.TestCase):
                         "item-1",
                         "--base",
                         "base-sha",
+                        "--owner",
+                        "test-owner",
                         "--target",
                         str(target),
                     ]
@@ -480,6 +827,96 @@ class CliTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertIn("python_version", payload)
             self.assertIn("system", payload)
+
+    def test_status_verbose_reports_owner_wip_and_changed_file_overlaps(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--owner",
+                        "alice",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-2",
+                        "--base",
+                        "base-sha",
+                        "--owner",
+                        "bob",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            with patch(
+                "codev_workflow.cli.git_ops_module.changed_files",
+                side_effect=lambda work_item_id, target: ["shared.py"],
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(["status", "--target", str(target), "--verbose"])
+            self.assertEqual(0, code)
+            text = output.getvalue()
+            self.assertIn("Work in progress by owner:", text)
+            self.assertIn("alice: 1", text)
+            self.assertIn("bob: 1", text)
+            self.assertIn("Changed-file overlaps", text)
+            self.assertIn("item-1 & item-2", text)
+            self.assertIn("shared.py", text)
+
+    def test_status_verbose_json_includes_owner_and_overlap_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--owner",
+                        "alice",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            with patch(
+                "codev_workflow.cli.git_ops_module.changed_files", return_value=[]
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    main(["status", "--target", str(target), "--verbose", "--json"])
+            payload = json.loads(output.getvalue())
+            self.assertEqual({"alice": 1}, payload["work_items_in_progress_by_owner"])
+            self.assertEqual([], payload["changed_file_overlaps"])
+
+    def test_status_without_verbose_omits_owner_and_overlap_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                output = StringIO()
+                with redirect_stdout(output):
+                    main(["status", "--target", str(target), "--json"])
+            payload = json.loads(output.getvalue())
+            self.assertNotIn("work_items_in_progress_by_owner", payload)
+            self.assertNotIn("changed_file_overlaps", payload)
 
     def test_doctor_alias_forwards_to_verbose_status(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

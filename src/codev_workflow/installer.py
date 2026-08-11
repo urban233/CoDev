@@ -79,6 +79,34 @@ GITIGNORE_BLOCK = """# codev:start
 .codev/work/escalations.jsonl
 # codev:end"""
 
+CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
+_CODEOWNERS_EXCLUDED_DIRS = frozenset(
+    {
+        ".git",
+        ".codev",
+        ".github",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "dist",
+        "build",
+        ".idea",
+        ".vscode",
+    }
+)
+CODEOWNERS_HEADER = """\
+# CODEOWNERS -- routes GitHub review requests, and with a branch-protection
+# rule, required approval, by path. The last matching pattern wins, the
+# same as .gitignore. See
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# <pattern>  <@user-or-team> [<@user-or-team> ...]
+"""
+
 
 class CoDevError(RuntimeError):
     """Raised when an installation cannot be evaluated safely."""
@@ -339,6 +367,37 @@ def _atomic_write(path: Path, content: bytes) -> None:
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def codeowners_init(target: Path) -> Path:
+    """Scaffold a starter `.github/CODEOWNERS`. Refuses if one already exists.
+
+    Unlike AGENTS.md and the .gitignore block, this is not a managed
+    integration: no lock.json entry, no hash tracked, and codev
+    update/remove have no awareness of it once written. It is intended to
+    be run directly by a human during repository setup, the same as
+    `codev init` itself, not invoked by an agent mid-workflow.
+    """
+    target = target.resolve()
+    for relative in CODEOWNERS_LOCATIONS:
+        if (target / Path(relative)).is_file():
+            raise CoDevError(
+                f"a CODEOWNERS file already exists at {relative}; refusing to "
+                "overwrite it"
+            )
+    top_level_dirs = sorted(
+        entry.name
+        for entry in target.iterdir()
+        if entry.is_dir() and entry.name not in _CODEOWNERS_EXCLUDED_DIRS
+    )
+    lines = [CODEOWNERS_HEADER.rstrip("\n")]
+    if top_level_dirs:
+        lines.extend(f"# {name}/  @your-team-here" for name in top_level_dirs)
+    else:
+        lines.append("# path/pattern  @your-team-here")
+    destination = target / ".github" / "CODEOWNERS"
+    _atomic_write(destination, ("\n".join(lines) + "\n").encode("utf-8"))
+    return destination
 
 
 def _remove_empty_parent_dirs(path: Path, target: Path) -> None:

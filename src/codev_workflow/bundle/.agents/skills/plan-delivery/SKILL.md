@@ -17,8 +17,8 @@ baseline, even when an external tracker holds routine, high-churn status.
 
 For an explicit request to create or update a delivery plan, create or update
 the plan in the repository. Default to
-`docs/delivery/<milestone-slug>.md`; use an established equivalent location
-when the project already has one. Start from
+`docs/codev/delivery/<milestone-slug>.md`; use an established equivalent
+location when the project already has one. Start from
 `assets/delivery-plan.template.md` when creating a new plan.
 
 An initial request to *show* or frame a milestone without creating a plan may

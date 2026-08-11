@@ -154,14 +154,25 @@ def _normalize_max_rounds(max_rounds: int | dict[str, int] | None) -> dict[str, 
     raise WorkError("max_rounds must be an int or a {'inner': int, 'outer': int} dict")
 
 
+def _validate_optional_text(field_name: str, value: str | None) -> None:
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise WorkError(f"{field_name} must be non-empty text when provided")
+
+
 def start(
     work_item_id: str,
     base_snapshot: str,
     *,
     target: Path,
     max_rounds: int | dict[str, int] | None = None,
+    link_ref: str | None = None,
+    summary: str | None = None,
+    owner: str | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
+    _validate_optional_text("link_ref", link_ref)
+    _validate_optional_text("summary", summary)
+    _validate_optional_text("owner", owner)
     path = _work_item_path(target, work_item_id)
     if path.exists():
         raise WorkError(f"work item {work_item_id!r} already exists at {path}")
@@ -173,6 +184,9 @@ def start(
         "current_round": 1,
         "rounds": [{"round": 1, "phase": "inner", "builder": None, "reviewer": None}],
         "status": "in_progress",
+        "link_ref": link_ref,
+        "summary": summary,
+        "owner": owner,
     }
     _save(work_item_id, state, target=target)
     return path
@@ -400,7 +414,9 @@ def record_triage(
     triage: Any,
     *,
     target: Path,
+    by: str | None = None,
 ) -> None:
+    _validate_optional_text("by", by)
     state = _load(work_item_id, target=target)
     _ensure_in_progress(state)
     round_entry = _round_slot(state, round_number)
@@ -417,8 +433,30 @@ def record_triage(
         )
     if round_entry.get("triage") is not None:
         raise WorkError(f"round {round_number} already has a recorded triage")
-    round_entry["triage"] = _validate_triage(triage, reviewer["findings"])
+    validated = _validate_triage(triage, reviewer["findings"])
+    validated["by"] = by
+    round_entry["triage"] = validated
     _save(work_item_id, state, target=target)
+
+
+def _triage_owner_note(owner: str | None, triage: dict[str, Any] | None) -> str | None:
+    if not owner or triage is None:
+        return None
+    by = triage.get("by")
+    if by and by == owner:
+        return f"note: {owner} both owns this work item and triaged this round"
+    return None
+
+
+def triage_note(work_item_id: str, *, target: Path) -> str | None:
+    """The same-person owner/triager note for the work item's latest round.
+
+    Informational only -- callers print this alongside `check`'s result, it
+    is never a new check() outcome and never affects the exit code.
+    """
+    state = _load(work_item_id, target=target)
+    latest = state["rounds"][-1]
+    return _triage_owner_note(state.get("owner"), latest.get("triage"))
 
 
 def _blocking_set(round_entry: dict[str, Any]) -> set[tuple[str, str]]:
@@ -596,6 +634,9 @@ def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
         "current_phase": latest["phase"],
         "max_rounds": state["max_rounds"],
         "latest_decision": reviewer["decision"] if reviewer is not None else None,
+        "link_ref": state.get("link_ref"),
+        "summary": state.get("summary"),
+        "owner": state.get("owner"),
     }
 
 
@@ -616,6 +657,15 @@ def log_text(work_item_id: str, *, target: Path) -> str:
         f"work item {state['work_item_id']} - {state['status']} "
         f"(round {state['current_round']}/{state['max_rounds']})"
     ]
+    summary = state.get("summary")
+    if summary:
+        lines.append(f"summary: {summary}")
+    link_ref = state.get("link_ref")
+    if link_ref:
+        lines.append(f"link: {link_ref}")
+    owner = state.get("owner")
+    if owner:
+        lines.append(f"owner: {owner}")
     for round_entry in state["rounds"]:
         lines.append(f"round {round_entry['round']}:")
         lines.append(f"  phase: {round_entry['phase']}")
@@ -637,7 +687,8 @@ def log_text(work_item_id: str, *, target: Path) -> str:
                 )
         triage = round_entry.get("triage")
         if triage is not None:
-            lines.append("  triage:")
+            by = triage.get("by")
+            lines.append(f"  triage (by {by}):" if by else "  triage:")
             for finding_id, entry in sorted(triage["dispositions"].items()):
                 reason = (
                     f" ({entry['override_reason']})"
@@ -645,6 +696,9 @@ def log_text(work_item_id: str, *, target: Path) -> str:
                     else ""
                 )
                 lines.append(f"    {finding_id}: {entry['disposition']}{reason}")
+            owner_note = _triage_owner_note(state.get("owner"), triage)
+            if owner_note:
+                lines.append(f"  {owner_note}")
     return "\n".join(lines) + "\n"
 
 
