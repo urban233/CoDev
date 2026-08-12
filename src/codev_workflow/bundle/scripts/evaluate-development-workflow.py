@@ -17,6 +17,8 @@ ALLOWED_OBSERVERS = {"human", "harness", "independent-ai"}
 
 @dataclass(frozen=True)
 class Evaluation:
+    """Represent the result of evaluating one workflow observation set."""
+
     passed: bool
     earned: int
     possible: int
@@ -24,6 +26,17 @@ class Evaluation:
 
 
 def read_json(path: Path) -> Any:
+    """Read and decode a JSON document.
+
+    Args:
+        path: JSON file to read.
+
+    Returns:
+        The decoded JSON value.
+
+    Raises:
+        ValueError: If the file is missing or contains invalid JSON.
+    """
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
@@ -33,6 +46,14 @@ def read_json(path: Path) -> Any:
 
 
 def validate_catalog(catalog: Any) -> list[str]:
+    """Validate the structure and references in an evaluation catalog.
+
+    Args:
+        catalog: Decoded catalog data to validate.
+
+    Returns:
+        Validation error messages, or an empty list when the catalog is valid.
+    """
     errors: list[str] = []
     if not isinstance(catalog, dict):
         return ["catalog root must be an object"]
@@ -47,7 +68,9 @@ def validate_catalog(catalog: Any) -> list[str]:
         for name, description in criteria.items():
             if not isinstance(name, str) or not name.replace("_", "").isalnum():
                 errors.append(f"invalid criterion name: {name!r}")
-            if not isinstance(description, str) or len(description.strip()) < 20:
+            if not isinstance(description, str) or len(
+                description.strip()
+            ) < 20:
                 errors.append(f"criterion {name!r} needs a useful description")
 
     scenarios = catalog.get("scenarios")
@@ -72,8 +95,12 @@ def validate_catalog(catalog: Any) -> list[str]:
             location = scenario_id
 
         for field in ("title", "prompt", "fixture"):
-            if not isinstance(scenario.get(field), str) or not scenario[field].strip():
-                errors.append(f"{location}: {field} must be non-empty text")
+            if not isinstance(scenario.get(field), str) or not scenario[
+                field
+            ].strip():
+                errors.append(
+                    f"{location}: {field} must be non-empty text"
+                )
 
         routes = scenario.get("accepted_routes")
         if (
@@ -82,15 +109,21 @@ def validate_catalog(catalog: Any) -> list[str]:
             or any(
                 not isinstance(route, list)
                 or not route
-                or any(not isinstance(skill, str) or not skill for skill in route)
+                or any(
+                    not isinstance(skill, str) or not skill for skill in route
+                )
                 for route in routes
             )
         ):
-            errors.append(f"{location}: accepted_routes must contain skill arrays")
+            errors.append(
+                f"{location}: accepted_routes must contain skill arrays"
+            )
 
         required = scenario.get("required_criteria")
         if not isinstance(required, list) or not required:
-            errors.append(f"{location}: required_criteria must be a non-empty array")
+            errors.append(
+                f"{location}: required_criteria must be a non-empty array"
+            )
             continue
         if len(required) != len(set(required)):
             errors.append(f"{location}: required_criteria contains duplicates")
@@ -107,6 +140,14 @@ def validate_catalog(catalog: Any) -> list[str]:
 
 
 def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
+    """Create an empty observation template for every catalog scenario.
+
+    Args:
+        catalog: Validated evaluation catalog.
+
+    Returns:
+        A JSON-compatible observation template.
+    """
     return {
         "catalog_schema_version": catalog["schema_version"],
         "run_id": "replace-with-run-id",
@@ -122,7 +163,10 @@ def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
                 "criteria": {
                     criterion: {
                         "passed": False,
-                        "evidence": "replace with an observable tool call, artifact, stop, or output",
+                        "evidence": (
+                            "replace with an observable tool call, artifact, "
+                            "stop, or output"
+                        ),
                     }
                     for criterion in scenario["required_criteria"]
                 },
@@ -136,13 +180,25 @@ def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
 def evaluate_results(
     catalog: dict[str, Any], results: Any, *, allow_partial: bool = False
 ) -> Evaluation:
+    """Score observed workflow results against a validated catalog.
+
+    Args:
+        catalog: Validated evaluation catalog.
+        results: Decoded observation results to score.
+        allow_partial: Whether missing scenario results are permitted.
+
+    Returns:
+        The earned score, possible score, and any validation messages.
+    """
     messages: list[str] = []
     earned = 0
     possible = 0
     if not isinstance(results, dict):
         return Evaluation(False, 0, 0, ["results root must be an object"])
     if results.get("catalog_schema_version") != catalog["schema_version"]:
-        messages.append("results catalog_schema_version does not match the catalog")
+        messages.append(
+            "results catalog_schema_version does not match the catalog"
+        )
 
     observer = results.get("observer")
     if not isinstance(observer, dict):
@@ -152,10 +208,14 @@ def evaluate_results(
             messages.append(
                 "observer.kind must be human, harness, or independent-ai"
             )
-        if not isinstance(observer.get("name"), str) or not observer["name"].strip():
+        if not isinstance(observer.get("name"), str) or not observer[
+            "name"
+        ].strip():
             messages.append("observer.name must be non-empty")
         if observer.get("independent_of_agent") is not True:
-            messages.append("the observer must be independent of the agent under test")
+            messages.append(
+                "the observer must be independent of the agent under test"
+            )
 
     raw_results = results.get("results")
     if not isinstance(raw_results, list):
@@ -165,7 +225,9 @@ def evaluate_results(
 
     by_id: dict[str, dict[str, Any]] = {}
     for item in raw_results:
-        if not isinstance(item, dict) or not isinstance(item.get("scenario_id"), str):
+        if not isinstance(item, dict) or not isinstance(
+            item.get("scenario_id"), str
+        ):
             messages.append("every result needs a string scenario_id")
             continue
         scenario_id = item["scenario_id"]
@@ -176,10 +238,14 @@ def evaluate_results(
     scenarios = {scenario["id"]: scenario for scenario in catalog["scenarios"]}
     unknown = set(by_id) - set(scenarios)
     if unknown:
-        messages.append("unknown scenario results: " + ", ".join(sorted(unknown)))
+        messages.append(
+            "unknown scenario results: " + ", ".join(sorted(unknown))
+        )
     missing = set(scenarios) - set(by_id)
     if missing and not allow_partial:
-        messages.append("missing scenario results: " + ", ".join(sorted(missing)))
+        messages.append(
+            "missing scenario results: " + ", ".join(sorted(missing))
+        )
 
     for scenario_id, scenario in scenarios.items():
         item = by_id.get(scenario_id)
@@ -191,7 +257,8 @@ def evaluate_results(
             earned += 1
         else:
             messages.append(
-                f"{scenario_id}: route {route!r} is not accepted; expected one of "
+                f"{scenario_id}: route {route!r} is not accepted; expected "
+                "one of "
                 f"{scenario['accepted_routes']!r}"
             )
 
@@ -202,17 +269,22 @@ def evaluate_results(
         extras = set(observations) - set(scenario["required_criteria"])
         if extras:
             messages.append(
-                f"{scenario_id}: unexpected criteria: {', '.join(sorted(extras))}"
+                f"{scenario_id}: unexpected criteria: "
+                f"{', '.join(sorted(extras))}"
             )
         for criterion in scenario["required_criteria"]:
             possible += 1
             observation = observations.get(criterion)
             if not isinstance(observation, dict):
-                messages.append(f"{scenario_id}/{criterion}: observation is missing")
+                messages.append(
+                    f"{scenario_id}/{criterion}: observation is missing"
+                )
                 continue
             evidence = observation.get("evidence")
             if not isinstance(evidence, str) or not evidence.strip():
-                messages.append(f"{scenario_id}/{criterion}: evidence is required")
+                messages.append(
+                    f"{scenario_id}/{criterion}: evidence is required"
+                )
                 continue
             if observation.get("passed") is True:
                 earned += 1
@@ -221,19 +293,33 @@ def evaluate_results(
                     f"{scenario_id}/{criterion}: failed — {evidence.strip()}"
                 )
             else:
-                messages.append(f"{scenario_id}/{criterion}: passed must be boolean")
+                messages.append(
+                    f"{scenario_id}/{criterion}: passed must be boolean"
+                )
 
-    return Evaluation(not messages and earned == possible, earned, possible, messages)
+    return Evaluation(
+        not messages and earned == possible, earned, possible, messages
+    )
 
 
 def self_test(catalog: dict[str, Any]) -> list[str]:
+    """Verify that the evaluator accepts and rejects known fixtures.
+
+    Args:
+        catalog: Validated evaluation catalog.
+
+    Returns:
+        Self-test error messages, or an empty list when all checks pass.
+    """
     passing = result_template(catalog)
     passing["run_id"] = "evaluator-self-test"
     passing["observer"]["name"] = "deterministic-fixture"
     for result in passing["results"]:
         for observation in result["criteria"].values():
             observation["passed"] = True
-            observation["evidence"] = "synthetic observable evidence for scorer self-test"
+            observation["evidence"] = (
+                "synthetic observable evidence for scorer self-test"
+            )
     pass_evaluation = evaluate_results(catalog, passing)
     errors: list[str] = []
     if not pass_evaluation.passed:
@@ -266,8 +352,15 @@ def self_test(catalog: dict[str, Any]) -> list[str]:
 
 
 def main() -> int:
+    """Run catalog validation, template generation, or result scoring.
+
+    Returns:
+        Zero when the requested operation succeeds, otherwise one.
+    """
     parser = argparse.ArgumentParser(
-        description="Validate workflow scenarios or score externally observed runs."
+        description=(
+            "Validate workflow scenarios or score externally observed runs."
+        )
     )
     parser.add_argument(
         "--repo",
@@ -309,7 +402,8 @@ def main() -> int:
         target = args.write_template.resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
-            json.dumps(result_template(catalog), indent=2) + "\n", encoding="utf-8"
+            json.dumps(result_template(catalog), indent=2) + "\n",
+            encoding="utf-8",
         )
         print(f"Wrote observation template: {target}")
         return 0
@@ -334,7 +428,8 @@ def main() -> int:
             catalog, results, allow_partial=args.allow_partial
         )
         print(
-            f"Workflow behavioral score: {evaluation.earned}/{evaluation.possible} "
+            f"Workflow behavioral score: {evaluation.earned}/"
+            f"{evaluation.possible} "
             f"checks ({len(catalog['scenarios'])} catalog scenarios)"
         )
         for message in evaluation.messages:
@@ -343,7 +438,8 @@ def main() -> int:
 
     print(
         "Workflow evaluation catalog passed: "
-        f"{len(catalog['scenarios'])} scenarios and {len(catalog['criteria'])} criteria"
+        f"{len(catalog['scenarios'])} scenarios and "
+        f"{len(catalog['criteria'])} criteria"
     )
     return 0
 

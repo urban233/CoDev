@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the repository's human-AI development workflow without dependencies."""
+"""Validate the repository's human-AI workflow without dependencies."""
 
 from __future__ import annotations
 
@@ -43,7 +43,19 @@ EVALUATION_SCRIPT = "scripts/evaluate-development-workflow.py"
 EVALUATION_CATALOG = "evals/development-workflow/scenarios.json"
 
 
-def parse_frontmatter(text: str, path: Path, errors: list[str]) -> dict[str, str]:
+def parse_frontmatter(
+    text: str, path: Path, errors: list[str]
+) -> dict[str, str]:
+    """Parse skill metadata and append malformed-line errors.
+
+    Args:
+        text: Skill file text containing YAML-like frontmatter.
+        path: Skill file path used in error messages.
+        errors: Mutable list receiving validation errors.
+
+    Returns:
+        Parsed frontmatter fields.
+    """
     lines = text.splitlines()
     if not lines or lines[0] != "---":
         errors.append(f"{path}: missing opening YAML delimiter")
@@ -64,7 +76,17 @@ def parse_frontmatter(text: str, path: Path, errors: list[str]) -> dict[str, str
     return result
 
 
-def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) -> None:
+def validate_skill(
+    root: Path, name: str, assets: list[str], errors: list[str]
+) -> None:
+    """Validate one skill and its required supporting assets.
+
+    Args:
+        root: Root directory containing installed skills.
+        name: Skill directory name.
+        assets: Relative asset paths required by the skill.
+        errors: Mutable list receiving validation errors.
+    """
     skill_dir = root / name
     skill_file = skill_dir / "SKILL.md"
     if not skill_file.is_file():
@@ -74,16 +96,26 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
     text = skill_file.read_text(encoding="utf-8")
     metadata = parse_frontmatter(text, skill_file, errors)
     if set(metadata) != {"name", "description"}:
-        errors.append(f"{skill_file}: frontmatter must contain only name and description")
+        errors.append(
+            f"{skill_file}: frontmatter must contain only name and description"
+        )
     if metadata.get("name") != name:
-        errors.append(f"{skill_file}: name must match directory {name!r}")
+        errors.append(
+            f"{skill_file}: name must match directory {name!r}"
+        )
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) or len(name) > 64:
-        errors.append(f"{skill_file}: name must be hyphen-case and at most 64 characters")
+        errors.append(
+            f"{skill_file}: name must be hyphen-case and at most 64 characters"
+        )
     description = metadata.get("description", "")
     if len(description) < 80:
-        errors.append(f"{skill_file}: description is too short to trigger reliably")
+        errors.append(
+            f"{skill_file}: description is too short to trigger reliably"
+        )
     if len(description) > 1024 or "<" in description or ">" in description:
-        errors.append(f"{skill_file}: description violates skill metadata limits")
+        errors.append(
+            f"{skill_file}: description violates skill metadata limits"
+        )
     if len(text.splitlines()) > 500:
         errors.append(f"{skill_file}: exceeds the 500-line skill budget")
     if re.search(r"\b(TODO|TBD)\b", text, re.IGNORECASE):
@@ -107,6 +139,12 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
 
 
 def validate_guides(repo: Path, errors: list[str]) -> None:
+    """Validate that required guides reference every installed skill.
+
+    Args:
+        repo: Bundle repository root.
+        errors: Mutable list receiving validation errors.
+    """
     guides = [repo / relative for relative in EXPECTED_GUIDES]
     for guide in guides:
         if not guide.is_file():
@@ -119,6 +157,12 @@ def validate_guides(repo: Path, errors: list[str]) -> None:
 
 
 def validate_handbooks(repo: Path, errors: list[str]) -> None:
+    """Validate required handbook contents when handbook expectations exist.
+
+    Args:
+        repo: Bundle repository root.
+        errors: Mutable list receiving validation errors.
+    """
     handbook_root = repo / "docs" / "handbooks"
     for name in EXPECTED_HANDBOOKS:
         handbook = handbook_root / name
@@ -136,6 +180,15 @@ def validate_handbooks(repo: Path, errors: list[str]) -> None:
 
 
 def validate_evaluations(repo: Path, errors: list[str]) -> int:
+    """Validate the behavioral evaluation catalog and scorer.
+
+    Args:
+        repo: Bundle repository root.
+        errors: Mutable list receiving validation errors.
+
+    Returns:
+        Number of scenarios in the valid catalog, or zero on failure.
+    """
     script = repo / EVALUATION_SCRIPT
     catalog = repo / EVALUATION_CATALOG
     if not script.is_file():
@@ -174,6 +227,11 @@ def validate_evaluations(repo: Path, errors: list[str]) -> int:
 
 
 def main() -> int:
+    """Validate installed skills, guides, handbooks, and evaluations.
+
+    Returns:
+        Zero when all repository checks pass, otherwise one.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--repo",
@@ -201,7 +259,8 @@ def main() -> int:
     print(
         "Workflow validation passed: "
         f"{len(EXPECTED_SKILLS)} skills, {len(EXPECTED_GUIDES)} guides, and "
-        f"{len(EXPECTED_HANDBOOKS)} handbooks, plus {scenario_count} behavioral scenarios"
+        f"{len(EXPECTED_HANDBOOKS)} handbooks, plus "
+        f"{scenario_count} behavioral scenarios"
     )
     return 0
 
