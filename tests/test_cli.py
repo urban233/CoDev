@@ -310,6 +310,96 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
+    def test_work_reopen_after_close_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "start",
+                            "--id",
+                            "item-1",
+                            "--base",
+                            "base-sha",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "close",
+                            "--id",
+                            "item-1",
+                            "--outcome",
+                            "escalated",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+
+            errors = StringIO()
+            with redirect_stderr(errors):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("codev work reopen", errors.getvalue())
+
+            out = StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "reopen",
+                            "--id",
+                            "item-1",
+                            "--head",
+                            "new-head",
+                            "--reason",
+                            "human approved continuing after escalation",
+                            "--by",
+                            "octocat",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "check",
+                            "--id",
+                            "item-1",
+                            "--head",
+                            "new-head",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+            self.assertIn("Reopened work item item-1", out.getvalue())
+
     def test_work_start_github_issue_populates_link_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

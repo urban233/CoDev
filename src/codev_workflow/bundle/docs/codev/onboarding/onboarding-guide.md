@@ -3,8 +3,9 @@
 *Start here.* This is the short version — what CoDev does, the mental model
 behind it, and what a day of work actually looks like. For the full
 technical map (every command, skill, and agent), see the CoDev project's
-`docs/product-map.md`. For worked walkthroughs, see
-[examples.md](examples.md).
+`docs/product-map.md`. For a command-led daily workflow, see
+[normal-development-workflow.md](normal-development-workflow.md). For worked
+walkthroughs, see [examples.md](examples.md).
 
 ## The problem
 
@@ -108,6 +109,8 @@ discovering the mismatch after both branches are done.
 
 ## Where to go next
 
+- Commands for a normal work item:
+  [Normal Development Workflow](normal-development-workflow.md)
 - Worked walkthroughs, start to finish: [examples.md](examples.md)
 - The full command/skill/agent reference: `docs/product-map.md`
 - How the bundle installs and updates: `docs/architecture.md`

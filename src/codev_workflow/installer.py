@@ -803,12 +803,44 @@ def plan_update(
     if not valid_entries:
         raise CoDevError("lock file contains an invalid managed-file entry")
 
+    # A file whose bundle path changed (e.g. a relocation like ai-agent-
+    # guidelines.md's move to .codev/for-ai/) looks identical, from this old
+    # path's point of view, to a file upstream genuinely removed: neither
+    # exists in new_files under the old name. Distinguish them by content
+    # hash so a clean rename deletes the stale copy instead of leaving an
+    # orphaned duplicate that nothing manages or updates again.
+    new_hashes: dict[str, str] = {
+        new_relative: _sha256(new_content)
+        for new_relative, new_content in new_files.items()
+    }
+    moved_to_by_old_hash: dict[str, list[str]] = {}
+    for new_relative, new_hash in new_hashes.items():
+        moved_to_by_old_hash.setdefault(new_hash, []).append(new_relative)
+
     plan = Plan()
     for relative in sorted(set(old_files) | set(new_files)):
         destination = target / Path(relative)
         old_hash = old_files.get(relative)
         content = new_files.get(relative)
         if content is None:
+            candidates = moved_to_by_old_hash.get(old_hash, []) if old_hash else []
+            if len(candidates) == 1 and destination.is_file():
+                if _sha256(destination.read_bytes()) == old_hash:
+                    plan.deletions.add(destination)
+                    plan.operations.append(
+                        Operation("remove", relative, f"relocated to {candidates[0]}")
+                    )
+                    continue
+                plan.operations.append(
+                    Operation(
+                        "retire",
+                        relative,
+                        f"relocated to {candidates[0]} upstream, but this copy "
+                        "has local changes; retained here for manual "
+                        "reconciliation",
+                    )
+                )
+                continue
             audit_language = _audit_skill_language(relative)
             if audit_language is not None and audit_language != selected_language:
                 if not destination.is_file():

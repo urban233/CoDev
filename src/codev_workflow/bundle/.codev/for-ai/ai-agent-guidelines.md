@@ -184,9 +184,12 @@ ready, with no inner-loop round recorded at all.
 3. **Builder** executes only the accepted plan. It may edit and test, but it
    cannot invoke other agents, alter accepted authority, commit, push, merge,
    publish, deploy, migrate data, or expand rollout. It returns an evidence
-   receipt with exact base and head snapshots and records it with `codev work
-   record --role builder`. The orchestrator commits the result with
-   `codev git commit`.
+   receipt with the exact base snapshot, validation, deviations, and
+   limitations — not a head snapshot, since it never commits and so cannot
+   know one. The orchestrator commits the result with `codev git commit`,
+   then records the builder's round with `codev work record --role builder`
+   against that exact resulting head. The builder never records its own
+   evidence.
 4. Orchestrator verifies the evidence receipt is complete, then invokes
    **lightweight-reviewer** in a *fresh* task with the exact snapshot and
    work item. This pass is deliberately narrow: correctness and intent-match
@@ -210,9 +213,12 @@ ready, with no inner-loop round recorded at all.
      reversible and has no effect on production; it is not the same
      authority as merge. A finding instead gets recorded with `codev work
      record --role reviewer --decision CHANGES_REQUIRED`, exactly like any
-     other reviewer round, and routed back to the builder under the same
-     round cap — the pull request does not open until a later audit comes
-     back clean.
+     other reviewer round, against the round that just converged. Because
+     that round's decision was `READY_FOR_OUTER_LOOP`, this opens the outer
+     phase's round 1, not another inner round — record a triage disposition
+     for each finding with `codev work triage` before routing it back to the
+     builder, the same human-triage gate every other outer-loop round uses.
+     The pull request does not open until a later audit comes back clean.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
      round's first pass, or the snapshot drifted — it records the escalation
@@ -300,6 +306,27 @@ when:
 Ordinary defects discovered mid-implementation are not stop conditions — fix
 them as part of the current pair-engineering loop and note them in the
 evidence receipt.
+
+## Recovering a stuck work item
+
+`codev work start` refuses to reuse an id once its state file exists at all
+— closed or not — and `codev work check` treats a round cap or a snapshot
+mismatch (`stop_drift`) as a hard stop by design. Those guards protect the
+evidence trail; they are correct, not a bug to route around by hand-editing
+`.codev/work/<id>/round-state.json` or restarting under a new id and losing
+the item's history.
+
+When a human decides recovery is warranted — the round cap was genuinely
+too low, an approved change (a triaged fix, a pre-PR audit remediation)
+landed after the item converged or closed, or a closed item should
+continue — `codev work reopen --id <id> --head <current-head> --reason
+<text>` re-baselines the item onto that head and opens one fresh, empty
+round so the ordinary builder/reviewer flow can resume. It never edits a
+previously recorded round's evidence, and every call is appended to the
+item's `reopens` history, visible in `codev work log`. Treat this exactly
+like any other item above: present the stuck state and propose reopening as
+the recommendation, do not run it on your own initiative because a round
+merely looks stuck.
 
 ## Completion
 

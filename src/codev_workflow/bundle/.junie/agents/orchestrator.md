@@ -64,12 +64,15 @@ applies as written. Two other cases:
    conditions, and the current round number. Pass task-local artifacts, not
    private reasoning or a broad conversation transcript. Instruct the builder
    to record its evidence with `codev work record --role builder`.
-6. When the builder returns, verify that its evidence receipt identifies an
-   exact head snapshot, actual validation, deviations, limitations, and
-   changed files, and that it recorded that evidence with `codev work
-   record`. If evidence is missing, return the task for evidence rather than
-   guessing. Commit the result — `codev git commit --id <work-item-id>
-   --message <summary>`.
+6. When the builder returns, verify that its evidence receipt identifies
+   actual validation, deviations, limitations, and changed files. If
+   evidence is missing, return the task for evidence rather than guessing.
+   Commit the result — `codev git commit --id <work-item-id> --message
+   <summary>` — then record the builder's round against the exact resulting
+   head: `codev work record --id <work-item-id> --round <round> --role
+   builder --head <commit-head-sha> --evidence <evidence.json>`. The builder
+   never records its own evidence: without commit permission it cannot know
+   the exact head its changes will land on.
 7. Invoke `lightweight-reviewer` in a fresh task with the exact base-to-head
    snapshot and work item. This pass is deliberately narrow — correctness and
    intent-match against the work item, plus independent re-verification that
@@ -90,10 +93,17 @@ applies as written. Two other cases:
      the outer loop's specialist review. This is automatic: opening a pull
      request is fully reversible and has no effect on production, unlike
      merge. If `code-audit` reports findings, record them with `codev work
-     record --role reviewer --decision CHANGES_REQUIRED` exactly like any
-     other reviewer round and route them to `builder` for the next round —
-     do not push or open a pull request until a later `code-audit` pass
-     comes back clean.
+     record --role reviewer --decision CHANGES_REQUIRED` against the round
+     that just reached `ok_ready_for_pr` — exactly like any other reviewer
+     round. Because that round's decision was `READY_FOR_OUTER_LOOP`, this
+     opens the outer phase's round 1, not another inner round, which needs a
+     triage disposition for each finding before a correction round can open
+     — record one: `codev work triage --id <work-item-id> --round <round>
+     --triage <triage.json>` (these are mechanical style findings the human
+     already authorized by installing the audit skill, so triage here is
+     normally a fast pass, not a fresh judgment call). Then route the
+     finding to `builder` for the next round — do not push or open a pull
+     request until a later `code-audit` pass comes back clean.
    - On any other nonzero exit — round cap reached, a repeated blocking
      finding, scope quietly expanded past the round's first pass, an
      incomplete coverage record, or drift since the last recorded snapshot —

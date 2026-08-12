@@ -30,16 +30,18 @@ information:
 
 - **Delivered:** outcome and behavior;
 - **Changed:** files and components;
-- **Base/head snapshot:** exact values;
+- **Base snapshot:** exact value;
 - **Validation actually run:** commands and outcomes;
 - **Acceptance evidence:** criterion mapped to evidence;
 - **Scope deviations:** none or explicitly accepted deviations;
 - **Known limitations:** risks and follow-up; and
 - **Review state:** `AWAITING INDEPENDENT REVIEW`.
 
-Record this evidence with `codev work record --id <work-item-id> --round
-<round> --role builder --head <head-sha> --evidence <evidence.json>` before
-returning it in the conversation.
+Do not call `codev work record` yourself and do not commit. You have no
+commit permission, so you cannot know the exact head your uncommitted
+changes will land on: the orchestrator commits your diff with `codev git
+commit`, then records this evidence with `codev work record --role builder`
+against that exact resulting head.
 
 Do not invoke another agent, approve the change, commit, push, merge, publish,
 deploy, migrate data, or expand rollout.

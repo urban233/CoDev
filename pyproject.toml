@@ -52,6 +52,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 codev_workflow = [
   "bundle/AGENTS.md",
+  "bundle/.codev/for-ai/*.md",
   "bundle/.agents/skills/*/SKILL.md",
   "bundle/.agents/skills/*/agents/*.yaml",
   "bundle/.agents/skills/*/assets/*",
@@ -67,8 +68,7 @@ codev_workflow = [
   "bundle/.junie/agents/*.md.template",
   "bundle/.junie/commands/*.md",
   "bundle/docs/*.md",
-  "bundle/docs/for-ai/*.md",
-  "bundle/docs/for-human/*.md",
+  "bundle/docs/codev/onboarding/*.md",
   "bundle/docs/handbooks/*.md",
   "bundle/evals/development-workflow/*.json",
   "bundle/scripts/*.py",

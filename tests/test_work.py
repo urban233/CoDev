@@ -19,6 +19,7 @@ from codev_workflow.work import (
     record_escalation,
     record_reviewer,
     record_triage,
+    reopen,
     start,
     triage_note,
 )
@@ -526,6 +527,165 @@ class CloseTests(unittest.TestCase):
             start("item-1", "base-sha", target=target)
             with self.assertRaises(WorkError):
                 close("item-1", "maybe", target=target)
+
+
+class ReopenTests(unittest.TestCase):
+    def test_reopen_missing_item_raises(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(WorkError),
+        ):
+            reopen("item-1", "new-head", "human approved", target=Path(directory))
+
+    def test_reopen_rejects_empty_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            with self.assertRaises(WorkError):
+                reopen("item-1", "   ", "human approved", target=target)
+
+    def test_reopen_rejects_empty_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            with self.assertRaises(WorkError):
+                reopen("item-1", "new-head", "", target=target)
+
+    def test_reopen_closed_item_returns_to_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            close("item-1", "escalated", target=target)
+            reopen("item-1", "new-head", "human approved a manual fix", target=target)
+            summary = describe("item-1", target=target)
+        self.assertEqual("in_progress", summary["status"])
+
+    def test_reopen_rebaselines_base_snapshot_and_clears_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-1", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            self.assertFalse(check("item-1", "drifted-head", target=target).ok)
+            reopen(
+                "item-1",
+                "drifted-head",
+                "approved post-convergence fix",
+                target=target,
+            )
+            result = check("item-1", "drifted-head", target=target)
+        self.assertTrue(result.ok)
+        self.assertEqual("ok_waiting_on_reviewer", result.reason)
+
+    def test_reopen_after_ready_for_outer_loop_opens_outer_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-1", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            reopen(
+                "item-1", "new-head", "approved fix after convergence", target=target
+            )
+            summary = describe("item-1", target=target)
+        self.assertEqual("outer", summary["current_phase"])
+        self.assertEqual(2, summary["current_round"])
+
+    def test_reopen_otherwise_continues_same_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "head1",
+                [_blocking_finding("a.py", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            reopen(
+                "item-1",
+                "new-head",
+                "human authorized one more inner round",
+                target=target,
+            )
+            summary = describe("item-1", target=target)
+        self.assertEqual("inner", summary["current_phase"])
+
+    def test_reopen_can_raise_max_rounds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, max_rounds=1)
+            reopen("item-1", "new-head", "cap was too low", target=target, max_rounds=3)
+            summary = describe("item-1", target=target)
+        self.assertEqual({"inner": 3, "outer": 3}, summary["max_rounds"])
+
+    def test_reopen_rejects_lowering_max_rounds_below_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, max_rounds=2)
+            record_builder("item-1", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "head1",
+                [_blocking_finding("a.py", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_builder("item-1", 2, "head2", {}, target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "head2",
+                [_blocking_finding("a.py", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            with self.assertRaises(WorkError):
+                reopen(
+                    "item-1",
+                    "head3",
+                    "trying to shrink the cap",
+                    target=target,
+                    max_rounds=1,
+                )
+
+    def test_reopen_records_history_visible_in_log(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            close("item-1", "escalated", target=target)
+            reopen(
+                "item-1",
+                "new-head",
+                "human approved continuing after escalation",
+                target=target,
+                by="octocat",
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn("reopened by octocat after round 1", text)
+        self.assertIn("human approved continuing after escalation", text)
+
+    def test_reopen_does_not_mutate_previous_round_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head1", {"note": "original"}, target=target)
+            record_reviewer(
+                "item-1", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            reopen("item-1", "new-head", "approved fix", target=target)
+            text = log_text("item-1", target=target)
+        self.assertIn("builder @ head1", text)
+        self.assertIn("reviewer @ head1: READY_FOR_OUTER_LOOP", text)
 
 
 class DescribeAllTests(unittest.TestCase):

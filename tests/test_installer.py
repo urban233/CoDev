@@ -599,6 +599,51 @@ class InstallerTests(unittest.TestCase):
         installer.apply_plan(self.target, plan)
         self.assertTrue(installer.check_project(self.target).ok)
 
+    def test_update_removes_stale_file_when_upstream_renames_it(self) -> None:
+        self.install(("codex",))
+        current_bundle = installer._bundle_files(("codex",))
+        old_path = ".codev/for-ai/ai-agent-guidelines.md"
+        new_path = "docs/renamed/ai-agent-guidelines.md"
+        renamed_bundle = dict(current_bundle)
+        renamed_bundle[new_path] = renamed_bundle.pop(old_path)
+
+        with patch.object(installer, "_bundle_files", return_value=renamed_bundle):
+            plan = installer.plan_update(self.target)
+
+        remove_ops = [op for op in plan.operations if op.path == old_path]
+        self.assertEqual(1, len(remove_ops))
+        self.assertEqual("remove", remove_ops[0].kind)
+        self.assertIn(new_path, remove_ops[0].detail)
+        add_ops = [op for op in plan.operations if op.path == new_path]
+        self.assertEqual(1, len(add_ops))
+        self.assertEqual("add", add_ops[0].kind)
+
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / old_path).exists())
+        self.assertTrue((self.target / new_path).is_file())
+
+    def test_update_retires_renamed_file_with_local_changes_instead_of_deleting(
+        self,
+    ) -> None:
+        self.install(("codex",))
+        current_bundle = installer._bundle_files(("codex",))
+        old_path = ".codev/for-ai/ai-agent-guidelines.md"
+        new_path = "docs/renamed/ai-agent-guidelines.md"
+        renamed_bundle = dict(current_bundle)
+        renamed_bundle[new_path] = renamed_bundle.pop(old_path)
+
+        local_file = self.target / old_path
+        local_file.write_bytes(local_file.read_bytes() + b"\nlocal note\n")
+
+        with patch.object(installer, "_bundle_files", return_value=renamed_bundle):
+            plan = installer.plan_update(self.target)
+
+        ops = [op for op in plan.operations if op.path == old_path]
+        self.assertEqual(1, len(ops))
+        self.assertEqual("retire", ops[0].kind)
+        self.assertIn(new_path, ops[0].detail)
+        self.assertNotIn(local_file, plan.deletions)
+
     def test_check_reports_managed_file_drift(self) -> None:
         self.install(("codex",))
         skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"

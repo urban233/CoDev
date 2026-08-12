@@ -163,12 +163,14 @@ Semantic Versioning.
   opening a pull request, in addition to its existing standalone
   human-approval-gated form. A clean pass proceeds to `codev git
   push`/`open-pr` as before; a finding is recorded with `codev work record
-  --role reviewer --decision CHANGES_REQUIRED` and routed to `builder` under
-  the inner loop's existing round cap, rather than `code-audit` self-applying
-  a fix -- there is no human present in that turn to grant Phase 2's
-  approval. `audit-google-python-style`/`audit-google-typescript-style` are
-  unchanged; only who invokes `code-audit` and what happens with its
-  findings changed, not the skills it dispatches to.
+  --role reviewer --decision CHANGES_REQUIRED` and, since this opens the
+  outer phase's round 1 (not another inner round -- see the round-cap/triage
+  correction under Fixed below), routed to `builder` only after a `codev
+  work triage` pass, rather than `code-audit` self-applying a fix -- there
+  is no human present in that turn to grant Phase 2's approval.
+  `audit-google-python-style`/`audit-google-typescript-style` are unchanged;
+  only who invokes `code-audit` and what happens with its findings changed,
+  not the skills it dispatches to.
 - Add `--entry {takeover,direct-review}` to `codev work start` (ADR-0006):
   purely additive, optional -- omitted means today's implicit cold start,
   unchanged, no `ROUND_SCHEMA_VERSION` bump. `takeover` marks a work item
@@ -186,6 +188,72 @@ Semantic Versioning.
   command was considered and dropped in the same ADR -- GitHub's own Issues
   list, populated via `codev git issue-create` (ADR-0004), already serves
   that need.
+- Add `codev work reopen --id <id> --head <head> --reason <text>
+  [--max-rounds N] [--by <identity>]` (ADR-0007): a human-authorized
+  recovery path for a work item `codev work check` reports as stuck --
+  closed, round-capped, or drifted -- none of which previously had any
+  supported way back. Unlike `start`, works regardless of `status`. Requires
+  a non-empty `reason` (no default), re-baselines `base_snapshot` to `head`,
+  and appends exactly one new, empty round -- it never edits a previously
+  recorded round's builder/reviewer entry. `max_rounds` may only be raised,
+  never lowered below rounds already recorded for a phase. Every call is
+  appended to a new, additive `reopens` list on `round-state.json` (no
+  `ROUND_SCHEMA_VERSION` bump) and printed by `codev work log`. `start`'s
+  duplicate-id error and `_round_slot`'s round-cap error now name it
+  directly.
+
+### Fixed
+- `builder` (all four platforms) was instructed to call `codev work record
+  --role builder --head <head-sha>` before returning, while denied commit
+  permission and only `orchestrator` commits, afterward (`orchestrator.md`
+  step 6). The only head that existed at record time was therefore the
+  pre-existing base commit, not the head the builder's own uncommitted
+  changes would produce -- so `codev work check` reported `stop_drift` on
+  the very next check after the orchestrator's commit, on the ordinary path,
+  not as an edge case (ADR-0007). `builder.md` no longer records its own
+  evidence or reports a head snapshot; `orchestrator.md` (all four
+  platforms) and `.codev/for-ai/ai-agent-guidelines.md` now commit first and
+  record the builder's round immediately after, against the commit's actual
+  resulting head.
+- `code-audit.md.template` and `orchestrator.md` (all four platforms)
+  described a post-`ok_ready_for_pr` `code-audit` finding as routing to
+  `builder` "under the inner loop's existing round cap." Mechanically false:
+  `_round_slot` always transitions to the outer phase after a
+  `READY_FOR_OUTER_LOOP` decision, and an outer-phase `CHANGES_REQUIRED`
+  round requires `codev work triage` before the next round can open --
+  neither file mentioned it, so following the documented path hit an
+  undocumented `WorkError` (ADR-0007). Corrected in `orchestrator.md` and
+  `ai-agent-guidelines.md`, which are now the single source of truth for
+  this transition; `code-audit.md.template` no longer restates it.
+- `codev update` orphaned a bundle file whenever upstream relocated it (for
+  example `docs/for-ai/ai-agent-guidelines.md` moving to `.codev/for-ai/`):
+  `plan_update` could not distinguish a rename from a genuine removal, since
+  both simply have no entry in the new bundle under the old path, so it
+  always "retired" (left in place, unmanaged) the stale copy instead of
+  removing it -- meaning a repository could end up with two diverging
+  copies, with not-yet-updated role files still pointing at the abandoned
+  one. `plan_update` now matches an old-only path against the new bundle by
+  content hash: an unmodified local copy that moved to exactly one new path
+  is now deleted (`remove`, detail names the new path) instead of retained;
+  a copy with local edits is still retired, with a message identifying
+  where upstream moved it, so nothing is silently discarded.
+- `.codev/for-ai/ai-agent-guidelines.md` and every file under
+  `docs/codev/onboarding/` were silently missing from every real (built,
+  non-editable) install -- `pipx`/`uv tool install`, not `uv run` against a
+  source checkout -- even though `codev update`'s logic (the fix above) was
+  otherwise correct. Root cause: `[tool.setuptools.package-data]` in
+  `pyproject.toml` is a hand-maintained glob allowlist that never got
+  updated for the `docs/for-ai` -> `.codev/for-ai` relocation or the new
+  `docs/codev/onboarding/` layout, so `_walk_bundle()` found these files
+  from an editable checkout (which reads the source tree directly) but the
+  built wheel never packaged them at all. `codev update`/`init` against a
+  real install therefore reported "No changes." for these files instead of
+  adding them, with no error. Fixed the glob list, and added
+  `scripts/verify_release.verify_bundle_packaging`: a new release-check step
+  that inspects the actual built wheel's contents against
+  `src/codev_workflow/bundle/` and fails release verification if any bundle
+  file has no matching package-data glob, so this class of drift can't ship
+  silently again.
 
 ### Removed
 - Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
