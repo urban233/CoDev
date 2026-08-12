@@ -219,7 +219,7 @@ def evaluate_results(
 
     raw_results = results.get("results")
     if not isinstance(raw_results, list):
-        return Evaluation(False, 0, 0, messages + ["results must be an array"])
+        return Evaluation(False, 0, 0, [*messages, "results must be an array"])
     if not raw_results:
         messages.append("results must contain at least one observed scenario")
 
