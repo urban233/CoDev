@@ -386,6 +386,16 @@ def push(work_item_id: str, *, target: Path) -> None:
     _run_git(["push", "-u", "origin", branch], cwd=target)
 
 
+def _existing_pr_url(branch: str, *, target: Path) -> str | None:
+    """Read-only: the URL of an already-open PR for this branch, if any."""
+    try:
+        return _run_gh(
+            ["pr", "view", branch, "--json", "url", "-q", ".url"], cwd=target
+        )
+    except GitOpsError:
+        return None
+
+
 def open_pr(
     work_item_id: str,
     title: str,
@@ -397,13 +407,32 @@ def open_pr(
     branch = _ensure_on_own_branch(work_item_id, target=target)
     head = current_head(target)
     result = work.check(work_item_id, head, target=target)
-    if result.reason != "ok_ready_for_pr":
+    description = work.describe(work_item_id, target=target)
+    # ok_ready_for_pr is produced exactly once, at the inner-to-outer
+    # transition -- it never recurs. An item can reach the outer phase
+    # without ever passing through it (codev work reopen recovering
+    # straight into the outer phase, or a direct-review entry), so once
+    # there, any non-stop check() result is eligible too: the guard that
+    # actually matters is "no pull request already exists" below, checked
+    # against GitHub itself rather than inferred from round-state alone.
+    eligible = result.ok and (
+        result.reason == "ok_ready_for_pr" or description["current_phase"] == "outer"
+    )
+    if not eligible:
         raise GitOpsError(
             "refusing to open a pull request: codev work check returned "
-            f"{result.reason!r}, not ok_ready_for_pr ({result.message})"
+            f"{result.reason!r} ({result.message}); a pull request may only be "
+            "opened at the ok_ready_for_pr checkpoint, or for an item already in "
+            "the outer phase with none yet"
+        )
+    existing = _existing_pr_url(branch, target=target)
+    if existing is not None:
+        raise GitOpsError(
+            f"refusing to open a pull request: {branch!r} already has one open "
+            f"at {existing} -- use `codev git mark-ready` instead"
         )
     resolved_base = base or default_branch(target)
-    link_ref = work.describe(work_item_id, target=target).get("link_ref")
+    link_ref = description.get("link_ref")
     issue_number = _closes_issue_number(link_ref, target=target)
     final_body = f"{body}\n\nCloses #{issue_number}" if issue_number else body
     return _run_gh(

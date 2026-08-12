@@ -328,6 +328,15 @@ like any other item above: present the stuck state and propose reopening as
 the recommendation, do not run it on your own initiative because a round
 merely looks stuck.
 
+A reopened item can land directly in the outer phase (when the round it
+reopened from had decided `READY_FOR_OUTER_LOOP`), skipping the inner
+loop's own bridge into a pull request. `codev git open-pr` accounts for
+this: it accepts any non-stop `codev work check` result once the item is in
+the outer phase, not only `ok_ready_for_pr`, provided the branch has no
+pull request yet — so if outer-loop review reaches `ok_approve` with none
+open, run `codev git open-pr` once to create it before `codev git
+mark-ready`, which still requires that pull request to already exist.
+
 ## Completion
 
 **For a code change**, return: delivered behavior, files/components changed,

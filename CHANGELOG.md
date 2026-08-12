@@ -254,6 +254,25 @@ Semantic Versioning.
   `src/codev_workflow/bundle/` and fails release verification if any bundle
   file has no matching package-data glob, so this class of drift can't ship
   silently again.
+- `codev git open-pr` required `codev work check` to return exactly
+  `ok_ready_for_pr`, a result `check()` only ever produces once, at the
+  inner-to-outer transition. An item recovered straight into the outer
+  phase with `codev work reopen` (ADR-0007) skips that transition entirely,
+  so once outer-loop review reached `ok_approve` there was no supported way
+  left to open the pull request at all: `open-pr` refused (wrong
+  checkpoint) and `mark-ready` also couldn't help, since `gh pr edit`/`gh
+  pr ready` need a pull request that was never created. `open_pr` now
+  checks GitHub directly for an existing pull request on the branch
+  (`gh pr view`) instead of inferring readiness from one specific
+  historical `check()` reason: it refuses only when a pull request already
+  exists (duplicate) or `check()` reports a hard stop, and otherwise
+  accepts `ok_ready_for_pr` or any outer-phase state with no pull request
+  yet. `orchestrator.md`'s automatic PR-open behavior is unchanged -- it
+  still only triggers at `ok_ready_for_pr` in the normal flow; this only
+  removes a false refusal in the recovery path. `outer-loop-runner.md` and
+  `ai-agent-guidelines.md` (all platforms) now document running `open-pr`
+  before `mark-ready` when a reopened item reaches `ok_approve` with no
+  pull request yet.
 
 ### Removed
 - Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven

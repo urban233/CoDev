@@ -97,7 +97,12 @@ round.
 On `ok_approve`, run `codev git mark-ready --id <work-item-id>` — it
 regenerates the pull request's body from the work item's full round-state,
 including every deferred or overridden finding with its reason, and converts
-the draft out of draft. This is not merge authority; it only makes the PR
+the draft out of draft. If no pull request exists yet for this item (for
+example, it was recovered into the outer phase with `codev work reopen` and
+never went through the inner loop's own bridge step), run `codev git
+open-pr --id <work-item-id> --title <title> --body <body>` first — it
+accepts this state too, not only the original `ok_ready_for_pr` checkpoint
+— then `mark-ready`. This is not merge authority; it only makes the PR
 visibly ready for the human's own holistic review. Report the PR link,
 the final evidence, and any residual risks. Never approve or merge it
 yourself.

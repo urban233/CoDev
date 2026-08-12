@@ -163,6 +163,24 @@ def _run_capture(args: list[str], *, cwd: Path) -> str:
     return completed.stdout
 
 
+def _gh_no_existing_pr(
+    pr_create_url: str = "https://github.com/o/r/pull/1",
+    repo_view: str | None = None,
+):
+    """A `_run_gh` side_effect: no PR exists yet for any branch queried."""
+
+    def fake(args: list[str], *, cwd: Path) -> str:
+        if args[:2] == ["pr", "view"]:
+            raise git_ops.GitOpsError("no pull requests found")
+        if args[:2] == ["repo", "view"]:
+            if repo_view is None:
+                raise AssertionError("unexpected repo view call")
+            return repo_view
+        return pr_create_url
+
+    return fake
+
+
 class OpenPrTests(unittest.TestCase):
     def _repo_ready_for_pr(self, target: Path) -> str:
         base = _init_repo(target)
@@ -191,17 +209,102 @@ class OpenPrTests(unittest.TestCase):
             target = Path(directory)
             self._repo_ready_for_pr(target)
             with patch.object(
-                git_ops, "_run_gh", return_value="https://github.com/o/r/pull/1"
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
             ) as run_gh:
                 url = git_ops.open_pr(
                     "item-1", "title", "body", target=target, base="main"
                 )
-            command = run_gh.call_args.args[0]
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            command = create_call.args[0]
         self.assertEqual("https://github.com/o/r/pull/1", url)
         self.assertIn("--draft", command)
         self.assertNotIn("--force", command)
         self.assertNotIn("-f", command)
         self.assertIn("codev/item-1", command)
+
+    def test_refuses_when_a_pr_already_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+
+            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
+                if args[:2] == ["pr", "view"]:
+                    return "https://github.com/o/r/pull/9"
+                raise AssertionError(f"unexpected call: {args}")
+
+            with (
+                patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh,
+                self.assertRaises(git_ops.GitOpsError) as context,
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
+            self.assertIn("already has one open", str(context.exception))
+            self.assertIn("mark-ready", str(context.exception))
+            self.assertFalse(
+                any(
+                    call.args[0][:2] == ["pr", "create"]
+                    for call in run_gh.call_args_list
+                )
+            )
+
+    def test_refuses_on_a_hard_stop_even_in_the_outer_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.reopen(
+                "item-1", "some-head-not-matching-real-git", "recovered", target=target
+            )
+            with (
+                patch.object(git_ops, "_run_gh") as run_gh,
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
+            run_gh.assert_not_called()
+
+    def test_opens_a_pr_for_an_outer_phase_item_with_none_yet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.reopen("item-1", base, "recovered into the outer phase", target=target)
+            work.record_reviewer(
+                "item-1",
+                2,
+                base,
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            self.assertEqual(
+                "ok_approve", work.check("item-1", base, target=target).reason
+            )
+
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+            ) as run_gh:
+                url = git_ops.open_pr(
+                    "item-1", "title", "body", target=target, base="main"
+                )
+            self.assertEqual("https://github.com/o/r/pull/1", url)
+            pr_view_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "view"]
+            )
+        self.assertEqual("codev/item-1", pr_view_call.args[0][2])
 
     def test_appends_closes_issue_when_link_ref_matches_same_repo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -218,12 +321,9 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
-            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
-                if args[:2] == ["repo", "view"]:
-                    return "o/r"
-                return "https://github.com/o/r/pull/1"
-
-            with patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh:
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
+            ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
             pr_create_call = next(
                 call
@@ -248,12 +348,9 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
-            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
-                if args[:2] == ["repo", "view"]:
-                    return "o/r"
-                return "https://github.com/o/r/pull/1"
-
-            with patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh:
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
+            ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
             pr_create_call = next(
                 call
@@ -280,12 +377,16 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             with patch.object(
-                git_ops, "_run_gh", return_value="https://github.com/o/r/pull/1"
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
             ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
-            self.assertEqual(1, run_gh.call_count)
-            body_index = run_gh.call_args.args[0].index("--body") + 1
-        self.assertEqual("body", run_gh.call_args.args[0][body_index])
+            pr_create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            body_index = pr_create_call.args[0].index("--body") + 1
+        self.assertEqual("body", pr_create_call.args[0][body_index])
 
 
 class CreateIssueTests(unittest.TestCase):
