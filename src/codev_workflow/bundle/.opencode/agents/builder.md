@@ -18,7 +18,7 @@ permission:
 ---
 
 Implement exactly one bounded work item delegated by the orchestrator. Follow
-`AGENTS.md`, `docs/for-ai/ai-agent-guidelines.md`, and `build-change`. Treat the
+`AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`, and `build-change`. Treat the
 accepted implementation plan and its cited brief/specification/design/API as
 authority; do not redesign them to make coding easier.
 

@@ -72,7 +72,13 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue((self.target / ".codex/agents/builder.toml").is_file())
         self.assertTrue((self.target / ".codex/agents/orchestrator.toml").is_file())
         self.assertTrue((self.target / ".codex/agents/reviewer.toml").is_file())
-        self.assertTrue((self.target / "docs/for-human/development-guide.md").is_file())
+        self.assertTrue(
+            (self.target / "docs/codev/onboarding/onboarding-guide.md").is_file()
+        )
+        self.assertTrue((self.target / "docs/codev/onboarding/examples.md").is_file())
+        self.assertTrue(
+            (self.target / ".codev/for-ai/ai-agent-guidelines.md").is_file()
+        )
         self.assertTrue((self.target / ".codev/lock.json").is_file())
 
         result = installer.check_project(self.target)

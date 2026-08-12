@@ -17,16 +17,25 @@
 ![GitHub issues](https://img.shields.io/github/issues/urban233/CoDev?style=flat-square)
 
 CoDev installs a small, production-minded collaboration system into any Git
-repository. It helps a developer and AI move through four understandable steps:
-**Understand, Build, Review, and Ship**. It supports bounded three-agent
-execution without turning product development into an unattended coding loop.
+repository. A developer and AI move through four steps — **Understand,
+Build, Review, Ship** — plus two that only show up when the work actually
+needs them: **Specify** for a genuinely new product, **Launch** for a real
+rollout decision. Review is layered, not a single pass: a fast correctness
+check after each build, an automatic style and maintainability gate
+immediately before a pull request opens, and five parallel specialist
+reviewers once it's open. It supports bounded three-agent execution without
+turning product development into an unattended coding loop.
 
 ## Why CoDev
 
 - One workflow for solo developers and multi-developer teams.
 - Repository-grounded plans instead of invented APIs or architecture.
-- A bounded builder and an independent, read-only reviewer.
+- A bounded builder, an automatic pre-PR audit gate, and five parallel
+  specialist reviewers — not just one read-only pass.
 - Human authority over material decisions, merge, deployment, and rollout.
+- A general-purpose skill-evaluation harness — measure whether a skill
+  (CoDev's own, or one you wrote) actually helps, empirically, rather than
+  just trusting that it does.
 - Versioned, conflict-aware installation across existing repositories.
 - No runtime dependency in the software being built.
 
@@ -89,12 +98,14 @@ managed file becomes a visible conflict; CoDev never silently replaces it.
 | Command | Purpose |
 |---|---|
 | `codev init` / `diff` / `update` / `remove` | Install, preview, apply, or remove the bundle |
-| `codev status [--verbose] [--json]` | Bundle health, installed adapters, and open work items in one place |
+| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open work items, WIP-per-owner and changed-file overlap |
 | `codev adapter list` / `codev adapter add <platform>` | Show or add one platform adapter to an existing install |
 | `codev adapter verify <platform>` | Check one installed adapter's structural conformance (lifecycle wiring present, no unrestricted shell access, no retired patterns) |
 | `codev config get\|set\|list [--global]` | Read or write layered configuration (flags > env > project > global > default) |
-| `codev work start\|record\|check\|close\|status\|log` | Track builder/reviewer round state for one work item — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
-| `codev eval fixture create` / `codev eval run` | Create and run local skill-evaluation fixtures |
+| `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
+| `codev work start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations` | Track one work item's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
+| `codev git issue-create\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` alone has no work-item precondition |
+| `codev eval fixture create\|run` / `codev eval snapshot run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode |
 | `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |
 
 `codev check`, `codev doctor`, `codev fixture create`, and bare `codev eval
@@ -199,14 +210,15 @@ my-project/
 ├── .gitignore                        # a managed block ignoring the local escalation log
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
 ├── .agents/agents/                   # Antigravity workflow and audit agents
-├── .codex/agents/                     # Codex workflow and audit agents
+├── .codex/agents/                    # Codex workflow and audit agents
 ├── .opencode/agents/                 # OpenCode workflow and audit agents
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
 ├── .junie/agents/                    # Junie subagents
-├── docs/                             # AI guidance and human delivery guide
+├── .codev/for-ai/                    # the AI's operating contract -- not for casual browsing
+├── .codev/lock.json                  # installed version and source hashes
+├── docs/codev/onboarding/            # the human onboarding guide and worked examples
 ├── evals/development-workflow/       # behavioral scenarios
-├── scripts/                          # deterministic validators
-└── .codev/lock.json                # installed version and source hashes
+└── scripts/                          # deterministic validators
 ```
 
 Use `--agent-platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
@@ -216,9 +228,12 @@ Use `--agent-platform opencode`, `--agent-platform junie`, or
 `--agent-platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
 
-The human delivery guide is installed at `docs/for-human/development-guide.md`.
-The cookbook, prompt templates, and detailed handbooks are maintained as
-dedicated Wiki pages.
+The onboarding guide is installed at
+`docs/codev/onboarding/onboarding-guide.md`, with worked examples alongside
+it at `docs/codev/onboarding/examples.md`. The AI's own operating contract
+lives at `.codev/for-ai/ai-agent-guidelines.md` — read by agents every
+session, not meant for a human to browse day to day. The cookbook, prompt
+templates, and detailed handbooks are maintained as dedicated Wiki pages.
 
 To add an adapter to an existing installation, pass it to `update`, for example
 `codev update --agent-platform junie`. Use `diff --agent-platform junie` to preview the
@@ -241,8 +256,9 @@ The Codex adapter follows its official workspace location:
 
 Read [Architecture](docs/architecture.md) for the distribution model,
 [Product Map](docs/product-map.md) for what CoDev actually is once
-installed — phases, skills, agents, and how they're invoked,
-[Adoption](docs/adoption.md) for rollout guidance, and
+installed — phases, skills, agents, and how they're invoked, the
+[Architecture Decision Records](docs/adr/) for why specific mechanisms
+exist, [Adoption](docs/adoption.md) for rollout guidance, and
 [Brand](docs/brand.md) for the visual and writing system.
 
 ## Development

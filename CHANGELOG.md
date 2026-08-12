@@ -6,6 +6,22 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Changed
+- Relocate `docs/for-ai/ai-agent-guidelines.md` to `.codev/for-ai/ai-agent-guidelines.md`:
+  it is read by agents, not browsed by humans, so it now lives under the same
+  dot-directory as the rest of CoDev's own operational state
+  (`.codev/lock.json`, `.codev/work/`, `.codev/fixtures/`) instead of the
+  human-facing `docs/` tree. Every reference across all four platforms'
+  `orchestrator`/`builder`/`outer-loop-runner` files, `AGENTS.md`, and
+  `scripts/validate-development-workflow.py`'s `EXPECTED_GUIDES` updated to
+  match.
+- Replace `docs/for-human/development-guide.md` with
+  `docs/codev/onboarding/onboarding-guide.md` and a new
+  `docs/codev/onboarding/examples.md`, joining `docs/codev/`'s existing
+  planning-artifact convention (ADR-0004). Shorter, and illustrated with
+  worked bio- and cheminformatics scenarios (a BED-to-VCF coordinate bug, a
+  SMILES canonicalization gap, a variant-annotation contract for parallel
+  development, a docking-score cache race caught by the outer loop, a
+  toxicity-model staged rollout) instead of abstract description alone.
 - **Breaking:** `round-state.json` moves to schema version 2 (ADR-0002,
   ADR-0003). `codev work` round-state now supports a self-healing inner loop
   ending in a `READY_FOR_OUTER_LOOP` reviewer decision and a phase-tagged

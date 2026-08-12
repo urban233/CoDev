@@ -64,7 +64,7 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
 AGENTS_BLOCK = """<!-- codev:start -->
 ## CoDev human-AI delivery
 
-Read `docs/for-ai/ai-agent-guidelines.md` before planning or implementing product
+Read `.codev/for-ai/ai-agent-guidelines.md` before planning or implementing product
 work. Route requests internally through the installed skills and describe the
 current human-facing step as `Understand`, `Build`, `Review`, or `Ship`.
 

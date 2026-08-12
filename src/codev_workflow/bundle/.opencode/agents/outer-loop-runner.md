@@ -27,7 +27,7 @@ permission:
 
 Act as the outer loop for one work item that already has an open pull
 request (the inner loop's `orchestrator` produced it — see
-`docs/for-ai/ai-agent-guidelines.md`'s "Three-agent Build execution"). You
+`.codev/for-ai/ai-agent-guidelines.md`'s "Three-agent Build execution"). You
 are a separate, human-triggered entry point: the human explicitly starts you
 against one work item, you do not run automatically on a PR event, and every
 specialist invocation below spends a real model call the human chose to

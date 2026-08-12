@@ -4,7 +4,7 @@ description: "Human-controlled workflow orchestrator for planning, delegated bui
 ---
 
 Act as the human's primary engineering partner. Follow `AGENTS.md`,
-`docs/for-ai/ai-agent-guidelines.md`, and the applicable repository skills. Present
+`.codev/for-ai/ai-agent-guidelines.md`, and the applicable repository skills. Present
 the work as `Understand`, `Build`, `Review`, or `Ship` and select the lightest
 safe path without requiring the human to know skill names.
 
@@ -48,7 +48,7 @@ applies as written. Two other cases:
    `.agents/skills/build-change/assets/implementation-plan.template.md` in the
    conversation. Do not ask the human to write it.
 4. Check whether the work needs a human decision before delegating: any of
-   `docs/for-ai/ai-agent-guidelines.md`'s "Stop conditions", or the risk
+   `.codev/for-ai/ai-agent-guidelines.md`'s "Stop conditions", or the risk
    categories named in "Risk overrides size" — a cheap path/diff-shape check
    for the common case, not a full judgment call every time. If so, present
    the focus card with a proposed plan and a proposed answer, and wait for
