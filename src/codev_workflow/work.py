@@ -161,6 +161,11 @@ def _validate_optional_text(field_name: str, value: str | None) -> None:
         raise WorkError(f"{field_name} must be non-empty text when provided")
 
 
+def _validate_required_text(field_name: str, value: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise WorkError(f"{field_name} must be non-empty text")
+
+
 def start(
     work_item_id: str,
     base_snapshot: str,
@@ -182,7 +187,11 @@ def start(
         )
     path = _work_item_path(target, work_item_id)
     if path.exists():
-        raise WorkError(f"work item {work_item_id!r} already exists at {path}")
+        raise WorkError(
+            f"work item {work_item_id!r} already exists at {path}; to continue "
+            "it (after a close, a round-cap stop, or drift) use `codev work "
+            "reopen`, not `start`"
+        )
     # direct-review has nothing for the inner loop to do -- round 1 opens
     # straight into the outer phase so the first `codev work record` lands on
     # it directly, instead of the inner-to-outer transition `_round_slot`
@@ -252,7 +261,8 @@ def _round_slot(state: dict[str, Any], round_number: int) -> dict[str, Any]:
     if _phase_round_count(rounds, phase) + 1 > state["max_rounds"][phase]:
         raise WorkError(
             f"cannot open round {round_number}: max_rounds for phase {phase!r} is "
-            f"{state['max_rounds'][phase]}"
+            f"{state['max_rounds'][phase]}; a human may continue this item with "
+            "`codev work reopen`, optionally raising the cap"
         )
     new_round: dict[str, Any] = {
         "round": round_number,
@@ -650,6 +660,94 @@ def close(work_item_id: str, outcome: str, *, target: Path) -> None:
     _save(work_item_id, state, target=target)
 
 
+def reopen(
+    work_item_id: str,
+    head: str,
+    reason: str,
+    *,
+    target: Path,
+    max_rounds: int | dict[str, int] | None = None,
+    by: str | None = None,
+) -> Path:
+    """Human-authorized recovery for a work item `check` reports as stuck.
+
+    `start` refuses to reuse an id once its state file exists at all, and
+    `_round_slot` mechanically refuses to open a round beyond `max_rounds` --
+    both correctly protect the normal flow, but together with drift
+    detection they leave no path back for a closed item, an exhausted round
+    cap, or an approved change committed after the last recorded snapshot
+    (a pre-PR audit fix, for example). This is the deliberate escape hatch:
+    it works regardless of `status`, never touches a previously recorded
+    round's builder/reviewer entry, and only re-baselines `base_snapshot` to
+    `head` and appends one fresh, empty round so the ordinary
+    builder/reviewer/`codev work record` flow can resume from there. Every
+    call is appended to `reopens` so the recovery is as visible as the
+    history it continues -- see docs/adr/0007-work-item-recovery.md.
+
+    Callers (agents) must treat this the same as any other hard-to-reverse
+    action: only run it on an explicit human decision, never on your own
+    initiative because a round looked stuck.
+    """
+    _validate_required_text("head", head)
+    _validate_required_text("reason", reason)
+    _validate_optional_text("by", by)
+    state = _load(work_item_id, target=target)
+
+    resolved_max_rounds = state["max_rounds"]
+    if max_rounds is not None:
+        resolved_max_rounds = _normalize_max_rounds(max_rounds)
+        for phase in PHASES:
+            done = _phase_round_count(state["rounds"], phase)
+            if resolved_max_rounds[phase] < done:
+                raise WorkError(
+                    f"max_rounds[{phase!r}] ({resolved_max_rounds[phase]}) is "
+                    f"below the {done} round(s) already recorded for that phase"
+                )
+
+    previous_status = state["status"]
+    previous = state["rounds"][-1]
+    reviewer = previous["reviewer"]
+    if (
+        reviewer is not None
+        and reviewer["decision"] == "READY_FOR_OUTER_LOOP"
+        and previous["phase"] == "inner"
+    ):
+        next_phase = "outer"
+    else:
+        next_phase = previous["phase"]
+
+    new_round_number = previous["round"] + 1
+    state["rounds"].append(
+        {
+            "round": new_round_number,
+            "phase": next_phase,
+            "builder": None,
+            "reviewer": None,
+        }
+    )
+    state["current_round"] = new_round_number
+    state["base_snapshot"] = head
+    state["max_rounds"] = resolved_max_rounds
+    state["status"] = "in_progress"
+    state.pop("outcome", None)
+    state.setdefault("reopens", []).append(
+        {
+            "timestamp": _utc_now_iso(),
+            "previous_status": previous_status,
+            "from_round": previous["round"],
+            "to_round": new_round_number,
+            "phase": next_phase,
+            "head": head,
+            "reason": reason,
+            "by": by,
+            "max_rounds": resolved_max_rounds,
+        }
+    )
+    path = _work_item_path(target, work_item_id)
+    _save(work_item_id, state, target=target)
+    return path
+
+
 def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
     state = _load(work_item_id, target=target)
     latest = state["rounds"][-1]
@@ -730,6 +828,13 @@ def log_text(work_item_id: str, *, target: Path) -> str:
             owner_note = _triage_owner_note(state.get("owner"), triage)
             if owner_note:
                 lines.append(f"  {owner_note}")
+    for reopen_record in state.get("reopens", []):
+        by = reopen_record.get("by")
+        by_suffix = f" by {by}" if by else ""
+        lines.append(
+            f"reopened{by_suffix} after round {reopen_record['from_round']} "
+            f"(was {reopen_record['previous_status']}): {reopen_record['reason']}"
+        )
     return "\n".join(lines) + "\n"
 
 

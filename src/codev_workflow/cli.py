@@ -304,6 +304,32 @@ def _parser() -> argparse.ArgumentParser:
     w_close.add_argument("--outcome", choices=VALID_OUTCOMES, required=True)
     w_close.add_argument("--target", type=_target, default=Path.cwd())
 
+    w_reopen = work_commands.add_parser(
+        "reopen",
+        help=(
+            "human-authorized recovery for a work item stuck behind a round "
+            "cap, drift, or a close -- never run without an explicit human "
+            "decision"
+        ),
+    )
+    w_reopen.add_argument("--id", required=True)
+    w_reopen.add_argument(
+        "--head", required=True, help="current git snapshot to re-baseline onto"
+    )
+    w_reopen.add_argument(
+        "--reason", required=True, help="why this recovery is authorized"
+    )
+    w_reopen.add_argument(
+        "--max-rounds",
+        type=int,
+        default=None,
+        help="optionally raise the round cap; applies to both phases",
+    )
+    w_reopen.add_argument(
+        "--by", default=None, help="defaults to the detected local/gh identity"
+    )
+    w_reopen.add_argument("--target", type=_target, default=Path.cwd())
+
     w_status = work_commands.add_parser(
         "status", help="show one or all open work items"
     )
@@ -748,6 +774,21 @@ def _run_work_command(args: argparse.Namespace) -> int:
     if args.work_command == "close":
         work_module.close(args.id, args.outcome, target=target)
         print(f"Closed work item {args.id} as {args.outcome}")
+        return 0
+
+    if args.work_command == "reopen":
+        by = args.by
+        if by is None:
+            by = git_ops_module.detect_identity(target=target)
+        path = work_module.reopen(
+            args.id,
+            args.head,
+            args.reason,
+            target=target,
+            max_rounds=args.max_rounds,
+            by=by,
+        )
+        print(f"Reopened work item {args.id} at {path}")
         return 0
 
     if args.work_command == "status":

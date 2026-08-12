@@ -50,10 +50,14 @@ immediately ready, without any inner-loop round recorded.
    work item, plan, authority links, base commit, allowed scope, integration
    constraints, validation, and stop conditions. Instruct it to record
    evidence with `codev work record --role builder`.
-6. Verify the builder's evidence receipt, exact head snapshot, validation,
-   deviations, limitations, and changed files, and that it was recorded with
-   `codev work record`. Commit the result with `codev git commit --id
-   <work-item-id> --message <summary>`.
+6. Verify the builder's evidence receipt: validation, deviations,
+   limitations, and changed files. Commit the result with `codev git commit
+   --id <work-item-id> --message <summary>`, then record the builder's round
+   against the exact resulting head with `codev work record --id
+   <work-item-id> --round <round> --role builder --head <commit-head-sha>
+   --evidence <evidence.json>` -- the builder never records its own
+   evidence, since without commit permission it cannot know the exact head
+   its changes will land on.
 7. Invoke `lightweight-reviewer` in a fresh task with the exact base-to-head
    snapshot and work item. This pass is deliberately narrow — correctness and
    intent-match against the work item, plus independent re-verification that
@@ -69,8 +73,15 @@ immediately ready, without any inner-loop round recorded.
    opens a draft pull request with `codev git open-pr --id <work-item-id>
    --title <title> --body <body>` (automatic because opening a pull request
    is fully reversible, unlike merge); findings instead get recorded with
-   `codev work record --role reviewer --decision CHANGES_REQUIRED` and
-   routed to `builder` for the next round, same as any other reviewer round;
+   `codev work record --role reviewer --decision CHANGES_REQUIRED` against
+   the round that just reached `ok_ready_for_pr`. Because that round's
+   decision was `READY_FOR_OUTER_LOOP`, this opens the outer phase's round 1,
+   not another inner round, which needs a triage disposition for each
+   finding before a correction round can open -- record one with `codev work
+   triage --id <work-item-id> --round <round> --triage <triage.json>` (a
+   fast pass, not a fresh judgment call: these are mechanical style findings
+   the human already authorized by installing the audit skill), then route
+   the finding to `builder` for the next round;
    on any other nonzero exit (round cap, repeated blocking finding,
    scope expansion, incomplete coverage, or drift), record the escalation
    with `codev work escalate --id <work-item-id> --trigger <trigger> --cause
