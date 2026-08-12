@@ -63,6 +63,8 @@ VALID_ESCALATION_TRIGGERS = (
 
 VALID_OUTCOMES = ("approved", "abandoned", "escalated")
 
+VALID_ENTRY_MODES = ("takeover", "direct-review")
+
 
 class WorkError(Exception):
     """Raised for invalid work-item state or lifecycle transitions."""
@@ -168,25 +170,38 @@ def start(
     link_ref: str | None = None,
     summary: str | None = None,
     owner: str | None = None,
+    entry: str | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
     _validate_optional_text("link_ref", link_ref)
     _validate_optional_text("summary", summary)
     _validate_optional_text("owner", owner)
+    if entry is not None and entry not in VALID_ENTRY_MODES:
+        raise WorkError(
+            f"entry must be null or one of {VALID_ENTRY_MODES}, got {entry!r}"
+        )
     path = _work_item_path(target, work_item_id)
     if path.exists():
         raise WorkError(f"work item {work_item_id!r} already exists at {path}")
+    # direct-review has nothing for the inner loop to do -- round 1 opens
+    # straight into the outer phase so the first `codev work record` lands on
+    # it directly, instead of the inner-to-outer transition `_round_slot`
+    # normally requires a READY_FOR_OUTER_LOOP decision to create.
+    initial_phase = "outer" if entry == "direct-review" else "inner"
     state: dict[str, Any] = {
         "round_schema_version": ROUND_SCHEMA_VERSION,
         "work_item_id": work_item_id,
         "base_snapshot": base_snapshot,
         "max_rounds": resolved_max_rounds,
         "current_round": 1,
-        "rounds": [{"round": 1, "phase": "inner", "builder": None, "reviewer": None}],
+        "rounds": [
+            {"round": 1, "phase": initial_phase, "builder": None, "reviewer": None}
+        ],
         "status": "in_progress",
         "link_ref": link_ref,
         "summary": summary,
         "owner": owner,
+        "entry": entry,
     }
     _save(work_item_id, state, target=target)
     return path
@@ -528,6 +543,18 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
     rounds: list[dict[str, Any]] = state["rounds"]
     latest = rounds[-1]
 
+    if (
+        state.get("entry") == "direct-review"
+        and latest["builder"] is None
+        and latest["reviewer"] is None
+    ):
+        return CheckResult(
+            True,
+            "ok_ready_for_pr",
+            "direct-review entry: human-authored work is already complete, no "
+            "inner-loop round is required before opening a pull request",
+        )
+
     if latest["reviewer"] is not None:
         expected_head = latest["reviewer"]["head_snapshot"]
     elif latest["builder"] is not None:
@@ -637,6 +664,7 @@ def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
         "link_ref": state.get("link_ref"),
         "summary": state.get("summary"),
         "owner": state.get("owner"),
+        "entry": state.get("entry"),
     }
 
 
@@ -666,6 +694,9 @@ def log_text(work_item_id: str, *, target: Path) -> str:
     owner = state.get("owner")
     if owner:
         lines.append(f"owner: {owner}")
+    entry = state.get("entry")
+    if entry:
+        lines.append(f"entry: {entry}")
     for round_entry in state["rounds"]:
         lines.append(f"round {round_entry['round']}:")
         lines.append(f"  phase: {round_entry['phase']}")

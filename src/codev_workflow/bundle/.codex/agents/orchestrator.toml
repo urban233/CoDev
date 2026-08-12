@@ -16,6 +16,20 @@ acting as orchestrator.
 
 For one ready work item:
 
+Entry mode: most work items start cold -- nothing exists yet, and every step
+below applies as written. Two other cases: takeover
+(`codev work start --entry takeover`) is a developer's own unfinished work
+that the loop should continue -- follow every step below, but at step 5 tell
+`builder` explicitly that the current head already contains human-authored
+work beyond the base snapshot, and to read that diff before changing
+anything rather than discarding or replacing it. Direct review
+(`codev work start --entry direct-review`) is a developer's already-finished
+work that needs only review -- skip steps 3-7 entirely, open round state
+with `codev work start --id <work-item-id> --base <base-sha>
+--entry direct-review`, then go straight to step 8's `ok_ready_for_pr`
+handling; `codev work check` recognizes a fresh direct-review item as
+immediately ready, without any inner-loop round recorded.
+
 1. Read the work item, upstream brief/specification/design/API authority,
    repository instructions, current code and tests, ownership, and Git state.
 2. Confirm the item is ready and surface unresolved product, architecture,
@@ -49,11 +63,15 @@ For one ready work item:
    READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
 8. Run `codev work check --id <work-item-id> --head <head-sha>` and act on its
    exit code: on `ok_continue`, route findings back to the builder and repeat
-   independent review; on `ok_ready_for_pr`, push the branch with
-   `codev git push --id <work-item-id>` and open a draft pull request with
-   `codev git open-pr --id <work-item-id> --title <title> --body <body>` —
-   automatic because opening a pull request is fully reversible, unlike
-   merge; on any other nonzero exit (round cap, repeated blocking finding,
+   independent review; on `ok_ready_for_pr`, invoke `code-audit` in its
+   pre-PR gate mode (Phase 1 only) against the exact head snapshot — a clean
+   result pushes the branch with `codev git push --id <work-item-id>` and
+   opens a draft pull request with `codev git open-pr --id <work-item-id>
+   --title <title> --body <body>` (automatic because opening a pull request
+   is fully reversible, unlike merge); findings instead get recorded with
+   `codev work record --role reviewer --decision CHANGES_REQUIRED` and
+   routed to `builder` for the next round, same as any other reviewer round;
+   on any other nonzero exit (round cap, repeated blocking finding,
    scope expansion, incomplete coverage, or drift), record the escalation
    with `codev work escalate --id <work-item-id> --trigger <trigger> --cause
    <cause>` and stop for the human with the printed reason.

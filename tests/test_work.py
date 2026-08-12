@@ -47,6 +47,7 @@ class StartTests(unittest.TestCase):
                     "link_ref": None,
                     "summary": None,
                     "owner": None,
+                    "entry": None,
                 },
                 summary,
             )
@@ -68,6 +69,37 @@ class StartTests(unittest.TestCase):
             )
             self.assertEqual("Fix the thing", summary["summary"])
             self.assertEqual("octocat", summary["owner"])
+
+    def test_start_accepts_entry_takeover_and_keeps_inner_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="takeover")
+            summary = describe("item-1", target=target)
+        self.assertEqual("takeover", summary["entry"])
+        self.assertEqual("inner", summary["current_phase"])
+
+    def test_start_accepts_entry_direct_review_and_opens_outer_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="direct-review")
+            summary = describe("item-1", target=target)
+        self.assertEqual("direct-review", summary["entry"])
+        self.assertEqual("outer", summary["current_phase"])
+
+    def test_start_default_entry_is_none_and_inner_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            summary = describe("item-1", target=target)
+        self.assertIsNone(summary["entry"])
+        self.assertEqual("inner", summary["current_phase"])
+
+    def test_start_rejects_invalid_entry(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(WorkError),
+        ):
+            start("item-1", "base-sha", target=Path(directory), entry="bogus")
 
     def test_start_rejects_empty_link(self) -> None:
         with (
@@ -258,6 +290,41 @@ class CheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
+            result = check("item-1", "base-sha", target=target)
+        self.assertEqual(
+            CheckResult(True, "ok_waiting_on_reviewer", result.message), result
+        )
+
+    def test_direct_review_entry_is_ready_for_pr_without_a_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="direct-review")
+            # A human's finished branch is already beyond base -- this would
+            # be stop_drift for a cold-start item, but direct-review has no
+            # inner-loop evidence to drift against.
+            result = check("item-1", "humans-finished-commit", target=target)
+        self.assertEqual(CheckResult(True, "ok_ready_for_pr", result.message), result)
+
+    def test_direct_review_entry_with_recorded_round_behaves_normally(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="direct-review")
+            record_reviewer(
+                "item-1",
+                1,
+                "humans-finished-commit",
+                [self._blocking_finding("a.py:1", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            result = check("item-1", "humans-finished-commit", target=target)
+        self.assertEqual("ok_waiting_on_triage", result.reason)
+
+    def test_takeover_entry_waits_on_reviewer_like_cold_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="takeover")
             result = check("item-1", "base-sha", target=target)
         self.assertEqual(
             CheckResult(True, "ok_waiting_on_reviewer", result.message), result

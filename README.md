@@ -240,6 +240,8 @@ The Codex adapter follows its official workspace location:
 5. **Safe to adopt.** Existing instructions and OpenCode settings are preserved.
 
 Read [Architecture](docs/architecture.md) for the distribution model,
+[Product Map](docs/product-map.md) for what CoDev actually is once
+installed — phases, skills, agents, and how they're invoked,
 [Adoption](docs/adoption.md) for rollout guidance, and
 [Brand](docs/brand.md) for the visual and writing system.
 

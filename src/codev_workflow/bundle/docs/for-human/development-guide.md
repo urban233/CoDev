@@ -63,14 +63,14 @@ same four human-facing steps. You do not need to name a skill or memorize the
 internal routing — describe what you want in plain language, and the AI
 resolves it to the right step and the right internal skill
 (`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
-`build-change`, `review-change`, `pr-review`, `clean-code-review`, `critique-review`,
+`build-change`, `review-change`, `pr-review`, `critique-review`,
 `launch-product`, `design-skill-eval`).
 
 | Step | Question it answers | Deepens into |
 |---|---|---|
 | **Understand** | What are we building, and what must be decided before code is safe to write? | `design-solution` for shared architecture; `plan-delivery` for multi-developer coordination |
 | **Build** | What is the smallest change that delivers this, with evidence it works? | interactive pairing, or bounded delegation to a `builder` subagent |
-| **Review** | Is this exact change correct, safe, and consistent with what we agreed? | a fresh, read-only reviewer pass; `clean-code-review` for a maintainability-focused scan |
+| **Review** | Is this exact change correct, safe, and consistent with what we agreed? | a fresh, read-only reviewer pass; an automatic `code-audit` style and maintainability gate runs before every pull request opens |
 | **Ship** | Are we ready to expose this to real users, and how do we find out if it's working? | staged rollout, observation, and a decision to expand, hold, or roll back |
 
 A small, local, reversible fix can go **Understand → Build → Review → Ship**
@@ -139,8 +139,7 @@ reconstructable record matters.
 Every code change gets an **independent human review** — the person who wrote
 it, human or AI, does not approve it. For normal- or higher-risk work, add a
 fresh AI review (`review-change`) as a second, independent pass before the
-human looks at it; use `clean-code-review` alongside it when maintainability
-and idiom matter as much as correctness. If a review turns up a concrete,
+human looks at it. If a review turns up a concrete,
 bounded fix, `critique-review` will draft the exact suggested diff — but it
 never applies it. An explicit handoff to `build-change`, or the developer
 applying it directly, is required before the correction lands, and the

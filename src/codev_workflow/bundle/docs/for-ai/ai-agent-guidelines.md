@@ -34,7 +34,6 @@ through. Most changes do not need them.
 |---|---|
 | Local, low-risk, obvious fix | `build-change`, then `review-change` if risk warrants |
 | Existing GitHub Pull Request review | `pr-review` |
-| Maintainability / Clean Code / GoF / Python-smell scan | `clean-code-review`, alongside `review-change` — it does not replace correctness or security review |
 | A review or presubmit finding needs a concrete patch | `critique-review` — drafts a diff only; requires an explicit developer or `build-change` handoff before anything is modified, then a fresh `review-change` |
 | Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |
 | Greenfield product or whole-product redesign | `specify-project` — one continuous, recommendation-led interview producing a single canonical `SPECIFICATION.md`; never duplicate its facts into a separate brief and design |
@@ -154,6 +153,16 @@ Where the platform provides repository-local subagents, keep the human in one
 `orchestrator` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
+Most work items start cold, and every numbered step below applies as
+written. Two other entry modes (`codev work start --entry <mode>`): a
+**takeover** item already has unfinished human commits beyond its base
+snapshot — follow every step below, but tell `builder` at step 3 to read
+that existing diff before changing anything and continue it rather than
+replace it. A **direct-review** item is already-finished human work that
+needs only review — skip straight to step 5's `ok_ready_for_pr` handling;
+`codev work check` recognizes a fresh `direct-review` item as immediately
+ready, with no inner-loop round recorded at all.
+
 1. **Orchestrator** reads authority and repository evidence, confirms the
    work item is ready, presents the focus card, and produces the
    implementation plan (using `.agents/skills/build-change/assets/
@@ -192,11 +201,18 @@ agents — but never the authority checkpoints.
      actionable findings back to the builder without asking the human to
      relay them, then reinvokes the lightweight reviewer on the corrected
      snapshot.
-   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it pushes the branch with
-     `codev git push` and opens a draft pull request with `codev git
-     open-pr` — the bridge into the outer loop's specialist review. This is
-     automatic because opening a pull request is fully reversible and has no
-     effect on production; it is not the same authority as merge.
+   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it invokes `code-audit`
+     in its pre-PR gate mode — audit and plan only, never the self-apply
+     phase — against the exact head snapshot. A clean result pushes the
+     branch with `codev git push` and opens a draft pull request with
+     `codev git open-pr` — the bridge into the outer loop's specialist
+     review. This is automatic because opening a pull request is fully
+     reversible and has no effect on production; it is not the same
+     authority as merge. A finding instead gets recorded with `codev work
+     record --role reviewer --decision CHANGES_REQUIRED`, exactly like any
+     other reviewer round, and routed back to the builder under the same
+     round cap — the pull request does not open until a later audit comes
+     back clean.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
      round's first pass, or the snapshot drifted — it records the escalation

@@ -142,6 +142,50 @@ Semantic Versioning.
   (ADR-0004), surfacing `plan-delivery`'s existing WIP guidance and the
   residual collision risk that small, fast-merging changes shrink but do not
   eliminate -- informational only, never a gate.
+- `code-audit` gains a second invocation mode (ADR-0005): `orchestrator` now
+  invokes it automatically, audit-and-plan phase only, immediately before
+  opening a pull request, in addition to its existing standalone
+  human-approval-gated form. A clean pass proceeds to `codev git
+  push`/`open-pr` as before; a finding is recorded with `codev work record
+  --role reviewer --decision CHANGES_REQUIRED` and routed to `builder` under
+  the inner loop's existing round cap, rather than `code-audit` self-applying
+  a fix -- there is no human present in that turn to grant Phase 2's
+  approval. `audit-google-python-style`/`audit-google-typescript-style` are
+  unchanged; only who invokes `code-audit` and what happens with its
+  findings changed, not the skills it dispatches to.
+- Add `--entry {takeover,direct-review}` to `codev work start` (ADR-0006):
+  purely additive, optional -- omitted means today's implicit cold start,
+  unchanged, no `ROUND_SCHEMA_VERSION` bump. `takeover` marks a work item
+  whose branch already carries unfinished human commits beyond `--base`;
+  round 1 still opens in the inner phase, and `orchestrator`'s three-agent
+  protocol (all four platforms) now tells `builder` to read that existing
+  diff and continue it rather than replace it. `direct-review` marks a work
+  item as already finished by a human; round 1 opens directly in the outer
+  phase instead of inner, and `codev work check` now recognizes a fresh
+  `direct-review` item (no builder or reviewer recorded yet) as immediately
+  `ok_ready_for_pr` -- previously this exact state (`head` already beyond
+  `base_snapshot` with nothing recorded) would have been reported as
+  `stop_drift`. `describe`/`log_text` surface the new `entry` field
+  alongside `owner`/`summary`/`link_ref`. A guided `codev work next`
+  command was considered and dropped in the same ADR -- GitHub's own Issues
+  list, populated via `codev git issue-create` (ADR-0004), already serves
+  that need.
+
+### Removed
+- Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
+  content (Clean Code principles, Gang-of-Four missing-pattern signals,
+  design smells) was a different kind of thing from
+  `architecture-maintainability-specialist`'s holistic judgment of the same
+  named territory (architecture, scope, and maintainability) -- rather than
+  keep it as a separate, always-manual skill, its language-agnostic material
+  moves directly into that specialist's prompt across all four platforms,
+  replacing previously vague "clarity, structure" language with citable,
+  named criteria. Its Python-specific hazard IDs are dropped outright, not
+  relocated -- `audit-google-python-style`'s existing supplemental checker
+  already covers equivalent ground. `review-change`'s description gains one
+  clarifying sentence: now that the outer loop covers a CoDev-built work
+  item with an open PR, it is explicitly the zero-ceremony path for a diff
+  with neither.
 
 ## [0.2.0] - 2026-08-11
 

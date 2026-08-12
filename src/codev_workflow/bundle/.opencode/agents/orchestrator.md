@@ -36,6 +36,26 @@ acting as orchestrator.
 
 For one ready work item:
 
+### Entry mode
+
+Most work items start cold — nothing exists yet, and every step below
+applies as written. Two other cases:
+
+- **Takeover** (`codev work start --entry takeover`): a developer already
+  wrote some of this work by hand, unfinished, and wants the loop to
+  continue it. Follow every step below, but at step 5, tell `builder`
+  explicitly that the current head already contains human-authored work
+  beyond the base snapshot — instruct it to read that diff before changing
+  anything, and continue it rather than silently discarding or replacing
+  it.
+- **Direct review** (`codev work start --entry direct-review`): a
+  developer's work is already finished and needs only review — there is
+  nothing left for `builder` to do. Skip steps 3–7 entirely. Open round
+  state with `codev work start --id <work-item-id> --base <base-sha>
+  --entry direct-review`, then go straight to step 8's `ok_ready_for_pr`
+  handling — `codev work check` recognizes a fresh `direct-review` item as
+  immediately ready, without any inner-loop round recorded.
+
 1. Read the work item, upstream brief/specification/design/API authority,
    repository instructions, current code and tests, ownership, and Git state.
 2. Confirm the item is ready. Return unresolved product questions to
@@ -79,12 +99,18 @@ For one ready work item:
    yourself.
    - On `ok_continue`, send the findings and original accepted plan back to
      `builder` for the next round; do not let the reviewer edit.
-   - On `ok_ready_for_pr`, push the branch — `codev git push --id
+   - On `ok_ready_for_pr`, invoke `code-audit` in its pre-PR gate mode
+     (Phase 1 only) against the exact head snapshot. If it reports no
+     findings that need a change, push the branch — `codev git push --id
      <work-item-id>` — and open a draft pull request — `codev git open-pr
      --id <work-item-id> --title <title> --body <body>` — the bridge into
      the outer loop's specialist review. This is automatic: opening a pull
      request is fully reversible and has no effect on production, unlike
-     merge.
+     merge. If `code-audit` reports findings, record them with `codev work
+     record --role reviewer --decision CHANGES_REQUIRED` exactly like any
+     other reviewer round and route them to `builder` for the next round —
+     do not push or open a pull request until a later `code-audit` pass
+     comes back clean.
    - On any other nonzero exit — round cap reached, a repeated blocking
      finding, scope quietly expanded past the round's first pass, an
      incomplete coverage record, or drift since the last recorded snapshot —

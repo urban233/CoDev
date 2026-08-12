@@ -406,6 +406,85 @@ class CliTests(unittest.TestCase):
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("octocat", state["owner"])
 
+    def test_work_start_entry_takeover_stays_in_inner_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--entry",
+                        "takeover",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("takeover", state["entry"])
+            self.assertEqual("inner", state["rounds"][0]["phase"])
+
+    def test_work_start_entry_direct_review_opens_outer_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--entry",
+                        "direct-review",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("direct-review", state["entry"])
+            self.assertEqual("outer", state["rounds"][0]["phase"])
+
+    def test_work_start_rejects_unknown_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--entry",
+                        "bogus",
+                        "--target",
+                        str(target),
+                    ]
+                )
+
     def test_work_triage_by_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

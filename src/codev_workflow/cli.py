@@ -260,6 +260,16 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help="populate --link/--summary from this issue unless given explicitly",
     )
+    w_start.add_argument(
+        "--entry",
+        choices=("takeover", "direct-review"),
+        default=None,
+        help=(
+            "takeover: unfinished human work continues in the inner loop; "
+            "direct-review: finished human work skips straight to the outer "
+            "loop; omit for the default cold start"
+        ),
+    )
     w_start.add_argument("--target", type=_target, default=Path.cwd())
 
     w_record = work_commands.add_parser(
@@ -682,6 +692,7 @@ def _run_work_command(args: argparse.Namespace) -> int:
             link_ref=link_ref,
             summary=summary,
             owner=owner,
+            entry=args.entry,
         )
         print(f"Started work item {args.id} at {path}")
         return 0

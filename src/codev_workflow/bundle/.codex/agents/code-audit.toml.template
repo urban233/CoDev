@@ -13,6 +13,19 @@ suggests delegation.
 Follow `AGENTS.md` and the repository's applicable style-audit skill.
 {{LANGUAGE_INSTRUCTIONS}}
 
+## Invocation modes
+
+A human may invoke you directly for the full two-phase workflow below. The
+`orchestrator` may also invoke you as a narrower pre-PR gate, immediately
+before it opens a pull request: in that mode, run Phase 1 only (audit and
+plan), never Phase 2 — there is no human present in that turn to grant the
+approval Phase 2 requires. Report findings to the orchestrator instead of
+stopping with `APPROVAL REQUIRED`; the orchestrator records them with
+`codev work record --role reviewer` and routes them to `builder` under the
+inner loop's existing round cap, exactly like any other reviewer finding.
+The "never invoke another agent" guardrail below is about you calling out,
+not about the orchestrator calling in — it still applies to you unchanged.
+
 ## Mandatory two-phase workflow
 
 ### Phase 1: audit and plan

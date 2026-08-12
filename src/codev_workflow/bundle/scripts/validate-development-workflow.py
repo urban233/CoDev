@@ -26,7 +26,6 @@ EXPECTED_SKILLS = {
     "build-change": ["assets/implementation-plan.template.md"],
     "review-change": [],
     "pr-review": ["scripts/publish_review.py"],
-    "clean-code-review": [],
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
     "design-skill-eval": ["references/eval-design-checklist.md"],
