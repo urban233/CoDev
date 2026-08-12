@@ -225,6 +225,18 @@ Semantic Versioning.
   undocumented `WorkError` (ADR-0007). Corrected in `orchestrator.md` and
   `ai-agent-guidelines.md`, which are now the single source of truth for
   this transition; `code-audit.md.template` no longer restates it.
+- `codev update` orphaned a bundle file whenever upstream relocated it (for
+  example `docs/for-ai/ai-agent-guidelines.md` moving to `.codev/for-ai/`):
+  `plan_update` could not distinguish a rename from a genuine removal, since
+  both simply have no entry in the new bundle under the old path, so it
+  always "retired" (left in place, unmanaged) the stale copy instead of
+  removing it -- meaning a repository could end up with two diverging
+  copies, with not-yet-updated role files still pointing at the abandoned
+  one. `plan_update` now matches an old-only path against the new bundle by
+  content hash: an unmodified local copy that moved to exactly one new path
+  is now deleted (`remove`, detail names the new path) instead of retained;
+  a copy with local edits is still retired, with a message identifying
+  where upstream moved it, so nothing is silently discarded.
 
 ### Removed
 - Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
