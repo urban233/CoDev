@@ -9,9 +9,11 @@ import re
 import subprocess
 import sys
 import tomllib
+import zipfile
 from pathlib import Path
 
 VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+_BUNDLE_PREFIX = "codev_workflow/bundle/"
 
 
 def _release_commands(root: Path) -> list[tuple[str, list[str]]]:
@@ -69,6 +71,49 @@ def _run_check(root: Path, name: str, command: list[str]) -> None:
     )
 
 
+def verify_bundle_packaging(root: Path) -> None:
+    """Every file under src/codev_workflow/bundle/ must be inside the built
+    wheel.
+
+    [tool.setuptools.package-data] is a hand-maintained glob allowlist in
+    pyproject.toml, not a mirror of the bundle directory automatically kept
+    in sync. A bundle file with no matching glob is silently dropped from a
+    real (non-editable) install -- an editable install reads the source
+    tree directly via importlib.resources and never notices the gap. This
+    caught a real drift once (see docs/adr/0007-work-item-recovery.md's
+    follow-up): the docs/for-ai -> .codev/for-ai relocation and the
+    docs/codev/onboarding/ restructuring both landed without updating the
+    glob list.
+    """
+    bundle_root = root / "src" / "codev_workflow" / "bundle"
+    expected = {
+        path.relative_to(bundle_root).as_posix()
+        for path in bundle_root.rglob("*")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and not path.name.endswith(".pyc")
+    }
+    if not expected:
+        return
+    wheels = sorted((root / "dist").glob("*.whl"))
+    if not wheels:
+        raise ValueError("bundle packaging check could not run: no wheel in dist/")
+    wheel_path = wheels[-1]
+    with zipfile.ZipFile(wheel_path) as archive:
+        packaged = {
+            name[len(_BUNDLE_PREFIX) :]
+            for name in archive.namelist()
+            if name.startswith(_BUNDLE_PREFIX) and not name.endswith("/")
+        }
+    missing = sorted(expected - packaged)
+    if missing:
+        raise ValueError(
+            f"bundle files missing from the built wheel ({wheel_path.name}) -- "
+            "update [tool.setuptools.package-data] in pyproject.toml: "
+            + ", ".join(missing)
+        )
+
+
 def run_release_checks(root: Path) -> None:
     """Run the deterministic checks required by the release CI pipeline."""
 
@@ -78,6 +123,7 @@ def run_release_checks(root: Path) -> None:
     distributions = sorted((root / "dist").glob("*"))
     if not distributions:
         raise ValueError("distribution metadata check could not run: dist is empty")
+    verify_bundle_packaging(root)
     _run_check(
         root,
         "distribution metadata check",

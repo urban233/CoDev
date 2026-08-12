@@ -237,6 +237,23 @@ Semantic Versioning.
   is now deleted (`remove`, detail names the new path) instead of retained;
   a copy with local edits is still retired, with a message identifying
   where upstream moved it, so nothing is silently discarded.
+- `.codev/for-ai/ai-agent-guidelines.md` and every file under
+  `docs/codev/onboarding/` were silently missing from every real (built,
+  non-editable) install -- `pipx`/`uv tool install`, not `uv run` against a
+  source checkout -- even though `codev update`'s logic (the fix above) was
+  otherwise correct. Root cause: `[tool.setuptools.package-data]` in
+  `pyproject.toml` is a hand-maintained glob allowlist that never got
+  updated for the `docs/for-ai` -> `.codev/for-ai` relocation or the new
+  `docs/codev/onboarding/` layout, so `_walk_bundle()` found these files
+  from an editable checkout (which reads the source tree directly) but the
+  built wheel never packaged them at all. `codev update`/`init` against a
+  real install therefore reported "No changes." for these files instead of
+  adding them, with no error. Fixed the glob list, and added
+  `scripts/verify_release.verify_bundle_packaging`: a new release-check step
+  that inspects the actual built wheel's contents against
+  `src/codev_workflow/bundle/` and fails release verification if any bundle
+  file has no matching package-data glob, so this class of drift can't ship
+  silently again.
 
 ### Removed
 - Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
