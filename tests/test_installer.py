@@ -658,7 +658,7 @@ class CodeownersInitTests(unittest.TestCase):
             (target / "docs").mkdir()
             (target / ".git").mkdir()
             destination = installer.codeowners_init(target)
-            self.assertEqual(target / ".github" / "CODEOWNERS", destination)
+            self.assertEqual(target.resolve() / ".github" / "CODEOWNERS", destination)
             text = destination.read_text(encoding="utf-8")
         self.assertIn("CODEOWNERS", text)
         self.assertIn("# src/  @your-team-here", text)
