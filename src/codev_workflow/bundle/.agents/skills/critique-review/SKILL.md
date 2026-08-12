@@ -27,7 +27,8 @@ hand off, but do not become the reviewer or silently become the implementer.
 
 Accept one or more of:
 
-- a `review-change` or `clean-code-review` finding;
+- a `review-change` finding, an outer-loop specialist finding, or a
+  `code-audit` pre-PR gate finding;
 - a presubmit, lint, static-analysis, or test failure; or
 - a developer-supplied review comment tied to an exact file and line.
 

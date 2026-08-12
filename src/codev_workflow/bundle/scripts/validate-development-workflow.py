@@ -26,7 +26,6 @@ EXPECTED_SKILLS = {
     "build-change": ["assets/implementation-plan.template.md"],
     "review-change": [],
     "pr-review": ["scripts/publish_review.py"],
-    "clean-code-review": [],
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
     "design-skill-eval": ["references/eval-design-checklist.md"],
@@ -36,8 +35,8 @@ EXPECTED_HANDBOOKS: list[str] = []
 
 EXPECTED_GUIDES = [
     "AGENTS.md",
-    "docs/for-human/development-guide.md",
-    "docs/for-ai/ai-agent-guidelines.md",
+    "docs/codev/onboarding/onboarding-guide.md",
+    ".codev/for-ai/ai-agent-guidelines.md",
 ]
 
 EVALUATION_SCRIPT = "scripts/evaluate-development-workflow.py"

@@ -1,6 +1,6 @@
 # Human-AI Development Policy
 
-Read `docs/for-ai/ai-agent-guidelines.md` before planning or implementing product
+Read `.codev/for-ai/ai-agent-guidelines.md` before planning or implementing product
 work. Use the applicable repository skill:
 
 - `specify-project` for a recommendation-led greenfield or whole-product
@@ -12,7 +12,6 @@ work. Use the applicable repository skill:
 - `review-change` for an independent, read-only code review; and
 - `pr-review` for an exact GitHub Pull Request review with validated inline
   comments; and
-- `clean-code-review` for a focused Clean Code, GoF, and Python smell scan; and
 - `critique-review` for precise, read-only suggested diffs from review findings; and
 - `launch-product` for readiness, rollout, rollback, and learning; and
 - `design-skill-eval` for designing and scaffolding a new evaluation fixture
@@ -27,11 +26,6 @@ Do not require developers to choose a skill. Route their request internally and
 describe the current human-facing step as `Understand`, `Build`, `Review`, or
 `Ship`; insert design or delivery planning only when risk or coordination needs
 it.
-
-Use `clean-code-review` as an optional specialist pass for requests about code
-smells, maintainability, Clean Code practices, GoF signals, or Python-specific
-hazards. It complements `review-change` and does not replace correctness,
-security, regression, or release review.
 
 Use `pr-review` only for an existing GitHub Pull Request. It reviews the exact
 PR head and can prepare or explicitly publish a pending GitHub review with

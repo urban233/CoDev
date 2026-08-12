@@ -36,7 +36,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         self.assertFalse(any(path.endswith(".template") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(14, len(skills))
+        self.assertEqual(13, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/design-skill-eval/SKILL.md").is_file()
@@ -46,9 +46,6 @@ class InstallerTests(unittest.TestCase):
                 self.target
                 / ".agents/skills/design-skill-eval/references/eval-design-checklist.md"
             ).is_file()
-        )
-        self.assertTrue(
-            (self.target / ".agents/skills/clean-code-review/SKILL.md").is_file()
         )
         self.assertTrue(
             (self.target / ".agents/skills/critique-review/SKILL.md").is_file()
@@ -75,7 +72,13 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue((self.target / ".codex/agents/builder.toml").is_file())
         self.assertTrue((self.target / ".codex/agents/orchestrator.toml").is_file())
         self.assertTrue((self.target / ".codex/agents/reviewer.toml").is_file())
-        self.assertTrue((self.target / "docs/for-human/development-guide.md").is_file())
+        self.assertTrue(
+            (self.target / "docs/codev/onboarding/onboarding-guide.md").is_file()
+        )
+        self.assertTrue((self.target / "docs/codev/onboarding/examples.md").is_file())
+        self.assertTrue(
+            (self.target / ".codev/for-ai/ai-agent-guidelines.md").is_file()
+        )
         self.assertTrue((self.target / ".codev/lock.json").is_file())
 
         result = installer.check_project(self.target)
@@ -209,10 +212,17 @@ class InstallerTests(unittest.TestCase):
         agents = sorted((self.target / ".codex" / "agents").glob("*.toml"))
         self.assertEqual(
             [
+                "architecture-maintainability-specialist.toml",
                 "builder.toml",
                 "code-audit.toml",
+                "concurrency-specialist.toml",
+                "correctness-tests-specialist.toml",
+                "lightweight-reviewer.toml",
                 "orchestrator.toml",
+                "outer-loop-runner.toml",
                 "reviewer.toml",
+                "rollout-specialist.toml",
+                "security-data-specialist.toml",
             ],
             [path.name for path in agents],
         )
@@ -231,10 +241,17 @@ class InstallerTests(unittest.TestCase):
 
         self.assertEqual(
             {
+                ".codex/agents/architecture-maintainability-specialist.toml",
                 ".codex/agents/builder.toml",
                 ".codex/agents/code-audit.toml",
+                ".codex/agents/concurrency-specialist.toml",
+                ".codex/agents/correctness-tests-specialist.toml",
+                ".codex/agents/lightweight-reviewer.toml",
                 ".codex/agents/orchestrator.toml",
+                ".codex/agents/outer-loop-runner.toml",
                 ".codex/agents/reviewer.toml",
+                ".codex/agents/rollout-specialist.toml",
+                ".codex/agents/security-data-specialist.toml",
             },
             {path for path in codex_files if path.startswith(".codex/")},
         )
@@ -331,6 +348,95 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(installer.AGENTS_START, merged)
         self.assertIn(installer.AGENTS_END, merged)
         self.assertFalse((self.target / ".opencode").exists())
+
+    def test_init_creates_gitignore_with_managed_block(self) -> None:
+        self.install(("codex",))
+
+        gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn(installer.GITIGNORE_START, gitignore)
+        self.assertIn(installer.GITIGNORE_END, gitignore)
+        self.assertIn(".codev/work/escalations.jsonl", gitignore)
+        lock = json.loads((self.target / ".codev" / "lock.json").read_text())
+        self.assertIn("gitignore_block_hash", lock["integrations"])
+
+    def test_init_preserves_existing_gitignore_content(self) -> None:
+        original = "node_modules/\n*.log\n"
+        (self.target / ".gitignore").write_text(original, encoding="utf-8")
+
+        self.install(("codex",))
+
+        merged = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertTrue(merged.startswith(original.rstrip()))
+        self.assertIn("node_modules/", merged)
+        self.assertIn(installer.GITIGNORE_START, merged)
+
+    def test_init_conflicts_on_different_gitignore_block(self) -> None:
+        (self.target / ".gitignore").write_text(
+            f"{installer.GITIGNORE_START}\nsomething-else\n{installer.GITIGNORE_END}\n",
+            encoding="utf-8",
+        )
+
+        plan = installer.plan_init(self.target, ("codex",), "none")
+
+        self.assertTrue(any(item.path == ".gitignore" for item in plan.conflicts))
+
+    def test_update_integrates_gitignore_for_a_prior_install(self) -> None:
+        self.install(("codex",))
+        # Simulate an install that predates the gitignore integration: no
+        # block in the file, and no record of it in the lock file.
+        (self.target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+        lock_path = self.target / ".codev" / "lock.json"
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock["integrations"].pop("gitignore_block_hash")
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("node_modules/", gitignore)
+        self.assertIn(installer.GITIGNORE_START, gitignore)
+        updated_lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertIn("gitignore_block_hash", updated_lock["integrations"])
+
+    def test_update_rejects_modified_gitignore_block(self) -> None:
+        self.install(("codex",))
+        gitignore_path = self.target / ".gitignore"
+        text = gitignore_path.read_text(encoding="utf-8")
+        gitignore_path.write_text(
+            text.replace("escalations.jsonl", "tampered"), encoding="utf-8"
+        )
+
+        plan = installer.plan_update(self.target)
+
+        self.assertTrue(any(item.path == ".gitignore" for item in plan.conflicts))
+
+    def test_remove_removes_managed_gitignore_block_and_preserves_other_content(
+        self,
+    ) -> None:
+        (self.target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+        self.install(("codex",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("node_modules/", gitignore)
+        self.assertNotIn(installer.GITIGNORE_START, gitignore)
+        self.assertNotIn("escalations.jsonl", gitignore)
+
+    def test_check_project_flags_tampered_gitignore_block(self) -> None:
+        self.install(("codex",))
+        gitignore_path = self.target / ".gitignore"
+        text = gitignore_path.read_text(encoding="utf-8")
+        gitignore_path.write_text(text.replace("escalations.jsonl", "tampered"))
+
+        result = installer.check_project(self.target)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("gitignore" in issue.lower() for issue in result.issues))
 
     def test_init_preserves_existing_opencode_default(self) -> None:
         config_path = self.target / ".opencode" / "opencode.json"
@@ -542,6 +648,56 @@ class InstallerTests(unittest.TestCase):
         plan = installer.plan_update(self.target)
 
         self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
+
+
+class CodeownersInitTests(unittest.TestCase):
+    def test_writes_a_starter_file_under_dot_github(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "src").mkdir()
+            (target / "docs").mkdir()
+            (target / ".git").mkdir()
+            destination = installer.codeowners_init(target)
+            self.assertEqual(target.resolve() / ".github" / "CODEOWNERS", destination)
+            text = destination.read_text(encoding="utf-8")
+        self.assertIn("CODEOWNERS", text)
+        self.assertIn("# src/  @your-team-here", text)
+        self.assertIn("# docs/  @your-team-here", text)
+        self.assertNotIn(".git/", text)
+
+    def test_refuses_when_a_codeowners_file_already_exists_at_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "CODEOWNERS").write_text("* @someone\n", encoding="utf-8")
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+
+    def test_refuses_when_a_codeowners_file_already_exists_under_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "docs").mkdir()
+            (target / "docs" / "CODEOWNERS").write_text(
+                "* @someone\n", encoding="utf-8"
+            )
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+
+    def test_never_overwrites_an_existing_dot_github_codeowners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / ".github").mkdir()
+            existing = target / ".github" / "CODEOWNERS"
+            existing.write_text("* @someone\n", encoding="utf-8")
+            with self.assertRaises(installer.CoDevError):
+                installer.codeowners_init(target)
+            self.assertEqual("* @someone\n", existing.read_text(encoding="utf-8"))
+
+    def test_placeholder_line_when_no_top_level_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            destination = installer.codeowners_init(target)
+            text = destination.read_text(encoding="utf-8")
+        self.assertIn("# path/pattern  @your-team-here", text)
 
 
 if __name__ == "__main__":

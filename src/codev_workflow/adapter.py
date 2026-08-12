@@ -14,38 +14,64 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+_OUTER_LOOP_ROLES = (
+    "outer-loop-runner",
+    "correctness-tests-specialist",
+    "security-data-specialist",
+    "concurrency-specialist",
+    "architecture-maintainability-specialist",
+    "rollout-specialist",
+)
+
+
+def _role_paths(directory: str, extension: str) -> dict[str, str]:
+    paths = {
+        "orchestrator": f"{directory}/orchestrator.{extension}",
+        "builder": f"{directory}/builder.{extension}",
+        "reviewer": f"{directory}/reviewer.{extension}",
+        "lightweight-reviewer": f"{directory}/lightweight-reviewer.{extension}",
+    }
+    for role in _OUTER_LOOP_ROLES:
+        paths[role] = f"{directory}/{role}.{extension}"
+    return paths
+
+
 ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
-    "opencode": {
-        "orchestrator": ".opencode/agents/orchestrator.md",
-        "builder": ".opencode/agents/builder.md",
-        "reviewer": ".opencode/agents/reviewer.md",
-    },
-    "codex": {
-        "orchestrator": ".codex/agents/orchestrator.toml",
-        "builder": ".codex/agents/builder.toml",
-        "reviewer": ".codex/agents/reviewer.toml",
-    },
-    "junie": {
-        "orchestrator": ".junie/agents/orchestrator.md",
-        "builder": ".junie/agents/builder.md",
-        "reviewer": ".junie/agents/reviewer.md",
-    },
-    "antigravity": {
-        "orchestrator": ".agents/agents/orchestrator.md",
-        "builder": ".agents/agents/builder.md",
-        "reviewer": ".agents/agents/reviewer.md",
-    },
+    "opencode": _role_paths(".opencode/agents", "md"),
+    "codex": _role_paths(".codex/agents", "toml"),
+    "junie": _role_paths(".junie/agents", "md"),
+    "antigravity": _role_paths(".agents/agents", "md"),
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
-    "orchestrator": ("codev work start", "codev work check"),
+    "orchestrator": ("codev work start", "codev work check", "codev git open-pr"),
     "builder": ("codev work record",),
     "reviewer": ("codev work record",),
+    "lightweight-reviewer": ("codev work record",),
+    "outer-loop-runner": (
+        "codev work record",
+        "codev work triage",
+        "codev git mark-ready",
+    ),
+    "correctness-tests-specialist": ("expansion_reason",),
+    "security-data-specialist": ("expansion_reason",),
+    "concurrency-specialist": ("expansion_reason",),
+    "architecture-maintainability-specialist": ("expansion_reason",),
+    "rollout-specialist": ("expansion_reason",),
 }
 
 _FORBIDDEN_MARKERS: tuple[str, ...] = ("P0 through P3",)
 
 _UNRESTRICTED_BASH_MARKERS: tuple[str, ...] = ('"*": allow', "'*': allow")
+
+# ADR-0002: raw git/GitHub mutation must stay denied everywhere; `codev git`
+# is the only guarded path to committing, pushing, or opening a pull request.
+_RAW_MUTATION_MARKERS: tuple[str, ...] = (
+    '"git push*": allow',
+    "'git push*': allow",
+    '"git commit*": allow',
+    "'git commit*': allow",
+)
 
 
 class AdapterVerificationError(Exception):
@@ -100,6 +126,12 @@ def verify_adapter(platform: str, *, target: Path) -> VerificationResult:
         for marker in _UNRESTRICTED_BASH_MARKERS:
             if marker in text:
                 problems.append(f"grants unrestricted shell execution: {marker!r}")
+        for marker in _RAW_MUTATION_MARKERS:
+            if marker in text:
+                problems.append(
+                    f"grants raw git mutation instead of the guarded `codev git` "
+                    f"surface: {marker!r}"
+                )
 
         findings.append(RoleFinding(role, relative, not problems, tuple(problems)))
 

@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Independently review a pull request, commit, patch, or working-tree diff for correctness, regressions, security, test quality, maintainability, scope, and conformance to an accepted brief or design. Use when a developer requests code review, a second AI pass, pre-merge assurance, or an evidence-based quality gate. Review only the exact supplied snapshot and do not modify code unless explicitly asked afterward.
+description: Independently review a pull request, commit, patch, or working-tree diff for correctness, regressions, security, test quality, maintainability, scope, and conformance to an accepted brief or design. Use when a developer requests code review, a second AI pass, pre-merge assurance, or an evidence-based quality gate. Review only the exact supplied snapshot and do not modify code unless explicitly asked afterward. Its natural home is a diff with no work item and no open pull request — once a CoDev-built work item has an open PR, the outer loop's specialist review covers this same ground automatically.
 ---
 
 # Review Change
@@ -20,12 +20,14 @@ identify the limitation instead of guessing.
 Prioritize:
 
 1. incorrect or missing required behavior;
-2. security, privacy, permission, data-loss, concurrency, and compatibility risk;
-3. error handling and material edge cases;
-4. test quality, missing tests, and weakened or misleading tests;
-5. architecture/API conformance and unnecessary scope;
-6. maintainability, clarity, documentation, and repository conventions; and
-7. rollout, monitoring, migration, and rollback concerns.
+2. security, privacy, permission, data-loss, and compatibility risk;
+3. concurrency and race-condition risk — shared state, lock ordering, async
+   correctness — as its own concern, not folded into the item above;
+4. error handling and material edge cases;
+5. test quality, missing tests, and weakened or misleading tests;
+6. architecture/API conformance and unnecessary scope;
+7. maintainability, clarity, documentation, and repository conventions; and
+8. rollout, monitoring, migration, and rollback concerns.
 
 Passing checks are evidence, not proof. Rerun proportionate checks when useful
 and authorized. Prefer a few representative integration tests at important

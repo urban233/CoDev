@@ -3,6 +3,206 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- Relocate `docs/for-ai/ai-agent-guidelines.md` to `.codev/for-ai/ai-agent-guidelines.md`:
+  it is read by agents, not browsed by humans, so it now lives under the same
+  dot-directory as the rest of CoDev's own operational state
+  (`.codev/lock.json`, `.codev/work/`, `.codev/fixtures/`) instead of the
+  human-facing `docs/` tree. Every reference across all four platforms'
+  `orchestrator`/`builder`/`outer-loop-runner` files, `AGENTS.md`, and
+  `scripts/validate-development-workflow.py`'s `EXPECTED_GUIDES` updated to
+  match.
+- Replace `docs/for-human/development-guide.md` with
+  `docs/codev/onboarding/onboarding-guide.md` and a new
+  `docs/codev/onboarding/examples.md`, joining `docs/codev/`'s existing
+  planning-artifact convention (ADR-0004). Shorter, and illustrated with
+  worked bio- and cheminformatics scenarios (a BED-to-VCF coordinate bug, a
+  SMILES canonicalization gap, a variant-annotation contract for parallel
+  development, a docking-score cache race caught by the outer loop, a
+  toxicity-model staged rollout) instead of abstract description alone.
+- **Breaking:** `round-state.json` moves to schema version 2 (ADR-0002,
+  ADR-0003). `codev work` round-state now supports a self-healing inner loop
+  ending in a `READY_FOR_OUTER_LOOP` reviewer decision and a phase-tagged
+  outer loop with a human-triage step, per work item:
+  - New `READY_FOR_OUTER_LOOP` reviewer decision, exempt from the full
+    coverage-completeness gate (`_incomplete_coverage`), and a new
+    `ok_ready_for_pr` `codev work check` outcome.
+  - Findings gain an optional `expansion_reason` (`regression` or
+    `newly_discovered_critical`); a blocking finding introduced after a
+    phase's first round with no `expansion_reason` now stops with
+    `stop_scope_expansion` rather than silently expanding the round's scope.
+  - Round entries are tagged `"phase": "inner" | "outer"`. `max_rounds`
+    becomes phase-scoped (`{"inner": 2, "outer": 2}` by default); `start`
+    still accepts a plain int, applied to both phases. The round cap and
+    repeated-finding checks are now phase-local.
+  - `REQUIRED_COVERAGE_DIMENSIONS`'s combined
+    `security_privacy_data_concurrency_compatibility` key splits into
+    `security_privacy_data_compatibility` and a new standalone
+    `concurrency` key.
+  - New `codev work triage` records the human's `address`/`defer`
+    disposition for each blocking finding in an outer-loop round; deferring
+    a blocking finding requires a non-empty `override_reason`. A new
+    `ok_waiting_on_triage` check outcome gates opening the outer phase's
+    correction round until triage is recorded.
+  - No migration path: a v1 `round-state.json` is rejected by the existing
+    version guard. Pre-1.0, consistent with this project's existing
+    breaking-change policy.
+
+### Added
+- Add `codev git branch|commit|push|open-pr|mark-ready` (ADR-0002,
+  ADR-0003): a guarded mutation surface so a work item's inner/outer loop
+  can create its own branch, commit, push, and land a pull request without
+  agents ever holding raw `git commit`/`git push`/`gh pr create` permission.
+  Mechanically enforces, not by agent-prompt convention: operates only on
+  the one branch it created for a work item, refuses any target resolving
+  to the repository's default branch, never accepts or constructs a
+  force-push flag, and independently re-verifies `codev work check` returns
+  `ok_ready_for_pr`/`ok_approve` before `open-pr`/`mark-ready` proceed,
+  rather than trusting the caller already checked. `open-pr` always creates
+  a draft PR; `mark-ready` regenerates the PR body from the work item's
+  round-state (via `codev work log`'s formatting) before converting it out
+  of draft.
+- Add `codev work escalate` / `codev work escalations [--since DATE]`
+  (ADR-0003): a local, gitignored, append-only escalation log
+  (`.codev/work/escalations.jsonl`) recording every human escalation --
+  round-cap hit, drift, repeated finding, scope expansion, missing
+  evidence, a pre-build critical interrupt, or a human overriding a
+  blocking finding during triage -- with cause, phase, and round. Written
+  explicitly by the caller; `codev work check` stays read-only and never
+  logs as a side effect. Not yet done: `codev init`/`update` don't manage
+  this entry in a target repository's `.gitignore` the way they already do
+  for `AGENTS.md` -- tracked as follow-up work.
+- Add a `lightweight-reviewer` role to all four platform adapters (ADR-0002):
+  a narrow, fast inner-loop check -- correctness and intent-match against
+  the work item, plus independent re-verification of the builder's reported
+  validation -- distinct from the full-dimension `reviewer`, which remains
+  available for other uses (e.g. `pr-review`). `orchestrator` no longer
+  requires human plan-approval before every delegated build by default; it
+  proceeds unless the existing "Stop conditions" or "Risk overrides size"
+  categories apply, checked cheaply by path/diff-shape before any judgment
+  call. On a clean pass it now creates the work item's branch, commits,
+  pushes, and opens a draft pull request through the new `codev git`
+  surface automatically -- merge remains the only human-gated step. Updated
+  `docs/for-ai/ai-agent-guidelines.md`'s "Three-agent Build execution" and
+  all four `orchestrator`/`builder`/`reviewer` bundle files to match, and
+  extended `codev adapter verify` to require `lightweight-reviewer` and a
+  `codev git open-pr` reference on every orchestrator, and to flag a raw
+  `"git push*"`/`"git commit*": allow` permission as a retired pattern now
+  that the guarded surface exists.
+- Add a human-triggered `outer-loop-runner` role and five specialist
+  reviewer roles (ADR-0003) to all four platform adapters:
+  `correctness-tests-specialist`, `security-data-specialist`,
+  `concurrency-specialist`, `architecture-maintainability-specialist`, and
+  `rollout-specialist`, each scoped to a disjoint set of `codev work`'s
+  coverage dimensions and none of them recording state directly. The
+  `outer-loop-runner` fetches a pull request and gates on CI status before
+  dispatching any specialist, merges their findings and coverage into one
+  round, presents blocking findings to the human for an `address`/`defer`
+  triage via `codev work triage`, drives the one permitted correction round
+  scoped to only the selected findings, and lands the change with
+  `codev git mark-ready` on approval. Updated
+  `docs/for-ai/ai-agent-guidelines.md` with a matching "Outer-loop
+  execution" section and `review-change`'s dimension list to give
+  concurrency its own numbered item. Extended `codev adapter verify` to
+  verify all ten roles per platform.
+- `codev init`/`update`/`remove` now manage a small marked block in the
+  target repository's `.gitignore` (create it if absent, merge into
+  existing content otherwise) ignoring `.codev/work/escalations.jsonl`,
+  the same safely-merged pattern already used for `AGENTS.md`. Backward
+  compatible with installs that predate this: a missing block and no
+  recorded hash integrate cleanly on the next `update` rather than
+  conflicting. `codev status`/`check_project` flags a tampered block only
+  for installs that already have one recorded.
+- Add `--link`, `--summary`, `--owner`, and `--github-issue` to `codev work
+  start`, and `--by` to `codev work triage` (ADR-0004): purely additive,
+  optional traceability and identity fields on `round-state.json` -- no
+  `ROUND_SCHEMA_VERSION` bump. `--owner`/`--by` default to a new
+  `git_ops.detect_identity()` (the authenticated `gh` login, falling back to
+  local git config, never fabricated) rather than requiring the human to
+  type identity every time; `--github-issue N` populates `--link`/`--summary`
+  from a read-only `gh issue view` unless given explicitly. `codev work
+  check` now prints a non-blocking note when the same identity both owns a
+  work item and triaged it, mirroring `plan-delivery`'s existing "owners do
+  not approve their own changes" guidance with a data hook instead of only
+  documentation.
+- `define-product`, `design-solution`, `plan-delivery`, and `build-change`
+  now default their planning-artifact locations under a common
+  `docs/codev/` prefix (ADR-0004) -- `docs/codev/features/`,
+  `docs/codev/product/`, `docs/codev/design/`, `docs/codev/delivery/`, and a
+  new `docs/codev/work/<work-item-id>/implementation-plan.md`, keyed by the
+  same id `codev work start` uses, closing the traceability gap for the one
+  planning artifact that is genuinely 1:1 with a single work item. Each
+  skill's existing instruction to defer to an established repository
+  convention instead of forcing its own structure is unchanged, so an
+  already-adopted repository's existing paths are unaffected.
+- Add `codev git issue-create` (ADR-0004): the one operation in the guarded
+  `codev git` surface with no work-item precondition, since pushing a
+  delivery-plan work item to GitHub happens before `codev work start` exists
+  for it. Takes explicit `--title`/`--body` (never parses a delivery plan's
+  Markdown); an optional, repeatable `--path` prints a best-effort
+  CODEOWNERS-suggested assignee without ever forwarding it as `--assignee`
+  automatically. `codev git open-pr` separately appends `Closes #N` to the
+  generated PR body when a work item's `--link` is a GitHub issue URL for
+  the same repository, closing the loop for free on merge.
+- Add `codev codeowners init` (ADR-0004): a one-shot local scaffold of a
+  starter `.github/CODEOWNERS`, refusing rather than overwriting if one
+  already exists at any of the three locations GitHub reads. Unlike
+  `AGENTS.md` and the `.gitignore` block, it is not a managed integration --
+  no `lock.json` entry, no hash tracked -- and is intended to be run
+  directly by a human during repository setup, the same as `codev init`
+  itself.
+- `codev status --verbose` now reports non-blocking work-in-progress counts
+  per owner and changed-file overlaps between concurrently open work items
+  (ADR-0004), surfacing `plan-delivery`'s existing WIP guidance and the
+  residual collision risk that small, fast-merging changes shrink but do not
+  eliminate -- informational only, never a gate.
+- `code-audit` gains a second invocation mode (ADR-0005): `orchestrator` now
+  invokes it automatically, audit-and-plan phase only, immediately before
+  opening a pull request, in addition to its existing standalone
+  human-approval-gated form. A clean pass proceeds to `codev git
+  push`/`open-pr` as before; a finding is recorded with `codev work record
+  --role reviewer --decision CHANGES_REQUIRED` and routed to `builder` under
+  the inner loop's existing round cap, rather than `code-audit` self-applying
+  a fix -- there is no human present in that turn to grant Phase 2's
+  approval. `audit-google-python-style`/`audit-google-typescript-style` are
+  unchanged; only who invokes `code-audit` and what happens with its
+  findings changed, not the skills it dispatches to.
+- Add `--entry {takeover,direct-review}` to `codev work start` (ADR-0006):
+  purely additive, optional -- omitted means today's implicit cold start,
+  unchanged, no `ROUND_SCHEMA_VERSION` bump. `takeover` marks a work item
+  whose branch already carries unfinished human commits beyond `--base`;
+  round 1 still opens in the inner phase, and `orchestrator`'s three-agent
+  protocol (all four platforms) now tells `builder` to read that existing
+  diff and continue it rather than replace it. `direct-review` marks a work
+  item as already finished by a human; round 1 opens directly in the outer
+  phase instead of inner, and `codev work check` now recognizes a fresh
+  `direct-review` item (no builder or reviewer recorded yet) as immediately
+  `ok_ready_for_pr` -- previously this exact state (`head` already beyond
+  `base_snapshot` with nothing recorded) would have been reported as
+  `stop_drift`. `describe`/`log_text` surface the new `entry` field
+  alongside `owner`/`summary`/`link_ref`. A guided `codev work next`
+  command was considered and dropped in the same ADR -- GitHub's own Issues
+  list, populated via `codev git issue-create` (ADR-0004), already serves
+  that need.
+
+### Removed
+- Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
+  content (Clean Code principles, Gang-of-Four missing-pattern signals,
+  design smells) was a different kind of thing from
+  `architecture-maintainability-specialist`'s holistic judgment of the same
+  named territory (architecture, scope, and maintainability) -- rather than
+  keep it as a separate, always-manual skill, its language-agnostic material
+  moves directly into that specialist's prompt across all four platforms,
+  replacing previously vague "clarity, structure" language with citable,
+  named criteria. Its Python-specific hazard IDs are dropped outright, not
+  relocated -- `audit-google-python-style`'s existing supplemental checker
+  already covers equivalent ground. `review-change`'s description gains one
+  clarifying sentence: now that the outer loop covers a CoDev-built work
+  item with an open PR, it is explicitly the zero-ceremony path for a diff
+  with neither.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added

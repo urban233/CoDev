@@ -13,6 +13,7 @@ from typing import Any
 
 from codev_workflow import __version__
 from codev_workflow import config as config_module
+from codev_workflow import git_ops as git_ops_module
 from codev_workflow import work as work_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -27,13 +28,13 @@ from codev_workflow.installer import (
     _read_lock,
     apply_plan,
     check_project,
+    codeowners_init,
     format_plan,
     plan_init,
     plan_remove,
     plan_update,
 )
 from codev_workflow.work import (
-    DEFAULT_MAX_ROUNDS,
     VALID_DECISIONS,
     VALID_OUTCOMES,
     WorkError,
@@ -219,6 +220,17 @@ def _parser() -> argparse.ArgumentParser:
         "update", help="show how to upgrade the installed codev tool"
     )
 
+    codeowners_parser = commands.add_parser(
+        "codeowners", help="scaffold a starter CODEOWNERS file; run directly by a human"
+    )
+    codeowners_commands = codeowners_parser.add_subparsers(
+        dest="codeowners_command", required=True
+    )
+    codeowners_init_parser = codeowners_commands.add_parser(
+        "init", help="write .github/CODEOWNERS; refuses if one already exists"
+    )
+    codeowners_init_parser.add_argument("--target", type=_target, default=Path.cwd())
+
     work = commands.add_parser(
         "work", help="track builder/reviewer round state for one work item"
     )
@@ -227,7 +239,37 @@ def _parser() -> argparse.ArgumentParser:
     w_start = work_commands.add_parser("start", help="open a new work item")
     w_start.add_argument("--id", required=True)
     w_start.add_argument("--base", required=True, help="base git snapshot")
-    w_start.add_argument("--max-rounds", type=int, default=DEFAULT_MAX_ROUNDS)
+    w_start.add_argument(
+        "--max-rounds",
+        type=int,
+        default=None,
+        help="applies to both phases; defaults to 2/2",
+    )
+    w_start.add_argument(
+        "--link", default=None, help="pointer to the artifact authorizing this work"
+    )
+    w_start.add_argument(
+        "--summary", default=None, help="one-line human-readable description"
+    )
+    w_start.add_argument(
+        "--owner", default=None, help="defaults to the detected local/gh identity"
+    )
+    w_start.add_argument(
+        "--github-issue",
+        type=int,
+        default=None,
+        help="populate --link/--summary from this issue unless given explicitly",
+    )
+    w_start.add_argument(
+        "--entry",
+        choices=("takeover", "direct-review"),
+        default=None,
+        help=(
+            "takeover: unfinished human work continues in the inner loop; "
+            "direct-review: finished human work skips straight to the outer "
+            "loop; omit for the default cold start"
+        ),
+    )
     w_start.add_argument("--target", type=_target, default=Path.cwd())
 
     w_record = work_commands.add_parser(
@@ -272,6 +314,104 @@ def _parser() -> argparse.ArgumentParser:
     w_log = work_commands.add_parser("log", help="print one work item's round history")
     w_log.add_argument("--id", required=True)
     w_log.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_triage = work_commands.add_parser(
+        "triage",
+        help="record the human's address/defer disposition for one outer-loop round",
+    )
+    w_triage.add_argument("--id", required=True)
+    w_triage.add_argument("--round", type=int, required=True)
+    w_triage.add_argument(
+        "--triage", type=_target, required=True, help="JSON triage payload file"
+    )
+    w_triage.add_argument(
+        "--by", default=None, help="defaults to the detected local/gh identity"
+    )
+    w_triage.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_escalate = work_commands.add_parser(
+        "escalate",
+        help="append one local, gitignored escalation record",
+    )
+    w_escalate.add_argument("--id", required=True)
+    w_escalate.add_argument("--trigger", required=True)
+    w_escalate.add_argument("--cause", required=True)
+    w_escalate.add_argument("--phase", choices=("inner", "outer"))
+    w_escalate.add_argument("--round", type=int, dest="round_number")
+    w_escalate.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_escalations = work_commands.add_parser(
+        "escalations", help="print recorded escalations, most projects skim this"
+    )
+    w_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
+    w_escalations.add_argument("--target", type=_target, default=Path.cwd())
+
+    git_parser = commands.add_parser(
+        "git", help="guarded git/GitHub mutation for one work item's own branch"
+    )
+    git_commands = git_parser.add_subparsers(dest="git_command", required=True)
+
+    g_issue_create = git_commands.add_parser(
+        "issue-create",
+        help=(
+            "push a delivery-plan work item to GitHub as an issue; "
+            "has no work-item precondition, runs before codev work start"
+        ),
+    )
+    g_issue_create.add_argument("--title", required=True)
+    g_issue_create.add_argument("--body", help="literal issue body text")
+    g_issue_create.add_argument(
+        "--body-file", type=_target, help="path to an issue body file"
+    )
+    g_issue_create.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        dest="paths",
+        help="repeatable; prints a CODEOWNERS-suggested assignee, never applied",
+    )
+    g_issue_create.add_argument(
+        "--assignee", action="append", default=[], dest="assignees"
+    )
+    g_issue_create.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_branch = git_commands.add_parser(
+        "branch", help="create the work item's own branch from a base snapshot"
+    )
+    g_branch.add_argument("--id", required=True)
+    g_branch.add_argument("--base", required=True, help="base git snapshot")
+    g_branch.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_commit = git_commands.add_parser(
+        "commit", help="commit outstanding changes on the work item's own branch"
+    )
+    g_commit.add_argument("--id", required=True)
+    g_commit.add_argument("--message", required=True)
+    g_commit.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_push = git_commands.add_parser(
+        "push", help="push the work item's own branch, never the default branch"
+    )
+    g_push.add_argument("--id", required=True)
+    g_push.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_open_pr = git_commands.add_parser(
+        "open-pr",
+        help="open a draft PR once codev work check reports ok_ready_for_pr",
+    )
+    g_open_pr.add_argument("--id", required=True)
+    g_open_pr.add_argument("--title", required=True)
+    g_open_pr.add_argument("--body", help="literal PR body text")
+    g_open_pr.add_argument("--body-file", type=_target, help="path to a PR body file")
+    g_open_pr.add_argument("--base", help="defaults to the repository's default branch")
+    g_open_pr.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_mark_ready = git_commands.add_parser(
+        "mark-ready",
+        help="regenerate the PR body from round-state and mark it ready for review",
+    )
+    g_mark_ready.add_argument("--id", required=True)
+    g_mark_ready.add_argument("--target", type=_target, default=Path.cwd())
     return parser
 
 
@@ -308,6 +448,37 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
     return argv
 
 
+def _in_progress_owner_counts(work_items: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in work_items:
+        if item["status"] != "in_progress":
+            continue
+        owner = item.get("owner")
+        if not owner:
+            continue
+        counts[owner] = counts.get(owner, 0) + 1
+    return counts
+
+
+def _changed_file_overlaps(
+    work_items: list[dict[str, Any]], *, target: Path
+) -> list[dict[str, list[str]]]:
+    in_progress_ids = [
+        item["work_item_id"] for item in work_items if item["status"] == "in_progress"
+    ]
+    changed = {
+        item_id: set(git_ops_module.changed_files(item_id, target=target))
+        for item_id in in_progress_ids
+    }
+    overlaps: list[dict[str, list[str]]] = []
+    for index, first in enumerate(in_progress_ids):
+        for second in in_progress_ids[index + 1 :]:
+            shared = sorted(changed[first] & changed[second])
+            if shared:
+                overlaps.append({"work_items": [first, second], "paths": shared})
+    return overlaps
+
+
 def _run_status_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     result = check_project(target)
@@ -324,9 +495,15 @@ def _run_status_command(args: argparse.Namespace) -> int:
         "adapters": platforms,
         "work_items_in_progress": in_progress,
     }
+    owner_counts: dict[str, int] = {}
+    overlaps: list[dict[str, list[str]]] = []
     if args.verbose:
         payload["python_version"] = platform.python_version()
         payload["system"] = platform.system()
+        owner_counts = _in_progress_owner_counts(work_items)
+        overlaps = _changed_file_overlaps(work_items, target=target)
+        payload["work_items_in_progress_by_owner"] = owner_counts
+        payload["changed_file_overlaps"] = overlaps
 
     if args.json:
         print(json.dumps(payload))
@@ -342,6 +519,16 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 print(f"  - {issue}")
         print(f"Adapters: {', '.join(platforms) if platforms else 'none'}")
         print(f"Work items in progress: {in_progress}")
+        if args.verbose and owner_counts:
+            print("Work in progress by owner:")
+            for owner, count in sorted(owner_counts.items()):
+                print(f"  {owner}: {count}")
+        if args.verbose and overlaps:
+            print("Changed-file overlaps between concurrently open work items:")
+            for overlap in overlaps:
+                items = " & ".join(overlap["work_items"])
+                paths = ", ".join(overlap["paths"])
+                print(f"  {items}: {paths}")
     return 0 if result.ok else 1
 
 
@@ -475,11 +662,37 @@ def _run_self_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _run_codeowners_command(args: argparse.Namespace) -> int:
+    if args.codeowners_command == "init":
+        destination = codeowners_init(args.target.resolve())
+        print(f"Wrote a starter CODEOWNERS file at {destination}")
+        return 0
+    return 2
+
+
 def _run_work_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     if args.work_command == "start":
+        link_ref = args.link
+        summary = args.summary
+        if args.github_issue is not None:
+            issue = git_ops_module.fetch_issue(args.github_issue, target=target)
+            if link_ref is None:
+                link_ref = issue["url"]
+            if summary is None:
+                summary = issue["title"]
+        owner = args.owner
+        if owner is None:
+            owner = git_ops_module.detect_identity(target=target)
         path = work_module.start(
-            args.id, args.base, target=target, max_rounds=args.max_rounds
+            args.id,
+            args.base,
+            target=target,
+            max_rounds=args.max_rounds,
+            link_ref=link_ref,
+            summary=summary,
+            owner=owner,
+            entry=args.entry,
         )
         print(f"Started work item {args.id} at {path}")
         return 0
@@ -527,6 +740,9 @@ def _run_work_command(args: argparse.Namespace) -> int:
             )
         else:
             print(f"{result.reason}: {result.message}")
+            note = work_module.triage_note(args.id, target=target)
+            if note:
+                print(note)
         return 0 if result.ok else 1
 
     if args.work_command == "close":
@@ -545,15 +761,97 @@ def _run_work_command(args: argparse.Namespace) -> int:
             print("No open work items.")
         else:
             for item in summaries:
+                phase = item["current_phase"]
                 print(
                     f"{item['work_item_id']}: {item['status']} "
-                    f"(round {item['current_round']}/{item['max_rounds']}, "
+                    f"(round {item['current_round']} [{phase}]/"
+                    f"{item['max_rounds'][phase]}, "
                     f"latest decision: {item['latest_decision']})"
                 )
         return 0
 
     if args.work_command == "log":
         print(work_module.log_text(args.id, target=target), end="")
+        return 0
+
+    if args.work_command == "triage":
+        triage = work_module.load_json_file(args.triage)
+        by = args.by
+        if by is None:
+            by = git_ops_module.detect_identity(target=target)
+        work_module.record_triage(args.id, args.round, triage, target=target, by=by)
+        print(f"Recorded triage for round {args.round} of {args.id}")
+        return 0
+
+    if args.work_command == "escalate":
+        work_module.record_escalation(
+            args.id,
+            args.trigger,
+            args.cause,
+            target=target,
+            phase=args.phase,
+            round_number=args.round_number,
+        )
+        print(f"Recorded escalation for {args.id}: {args.trigger}")
+        return 0
+
+    if args.work_command == "escalations":
+        print(work_module.escalations_text(target=target, since=args.since), end="")
+        return 0
+
+    return 2
+
+
+def _run_git_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+    if args.git_command == "issue-create":
+        if args.body_file is not None:
+            body = args.body_file.read_text(encoding="utf-8")
+        elif args.body is not None:
+            body = args.body
+        else:
+            raise git_ops_module.GitOpsError("either --body or --body-file is required")
+        if args.paths:
+            suggested = git_ops_module.suggest_owners(args.paths, target=target)
+            if suggested:
+                print(f"Suggested owners (from CODEOWNERS): {', '.join(suggested)}")
+        url = git_ops_module.create_issue(
+            args.title, body, target=target, assignees=args.assignees
+        )
+        print(url)
+        return 0
+
+    if args.git_command == "branch":
+        branch = git_ops_module.create_branch(args.id, args.base, target=target)
+        print(f"Created branch {branch} for {args.id}")
+        return 0
+
+    if args.git_command == "commit":
+        head = git_ops_module.commit(args.id, args.message, target=target)
+        print(f"Committed {head} on {args.id}'s branch")
+        return 0
+
+    if args.git_command == "push":
+        git_ops_module.push(args.id, target=target)
+        print(f"Pushed {args.id}'s branch")
+        return 0
+
+    if args.git_command == "open-pr":
+        if args.body_file is not None:
+            body = args.body_file.read_text(encoding="utf-8")
+        elif args.body is not None:
+            body = args.body
+        else:
+            raise git_ops_module.GitOpsError("either --body or --body-file is required")
+        url = git_ops_module.open_pr(
+            args.id, args.title, body, target=target, base=args.base
+        )
+        print(url)
+        return 0
+
+    if args.git_command == "mark-ready":
+        git_ops_module.mark_ready(args.id, target=target)
+        print(f"Marked {args.id}'s pull request ready for review")
         return 0
 
     return 2
@@ -675,14 +973,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_config_command(args)
         if args.command == "self":
             return _run_self_command(args)
+        if args.command == "codeowners":
+            return _run_codeowners_command(args)
         if args.command == "work":
             return _run_work_command(args)
+        if args.command == "git":
+            return _run_git_command(args)
     except (
         CoDevError,
         EvaluationError,
         WorkError,
         ConfigError,
         AdapterVerificationError,
+        git_ops_module.GitOpsError,
     ) as error:
         print(f"codev: {error}", file=sys.stderr)
         return 2

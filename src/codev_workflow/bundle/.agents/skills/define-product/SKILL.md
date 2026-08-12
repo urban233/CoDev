@@ -59,9 +59,9 @@ experiment rather than pretending the product is ready for engineering.
 
 ## 4. Save and accept the brief
 
-For a feature, write `docs/features/<slug>/brief.md`. For a product, write
-`docs/product/<slug>/brief.md`. Adapt to an existing repository convention
-instead of creating a parallel structure.
+For a feature, write `docs/codev/features/<slug>/brief.md`. For a product,
+write `docs/codev/product/<slug>/brief.md`. Adapt to an existing repository
+convention instead of creating a parallel structure.
 
 Set `Status: Draft` until the human confirms the outcome, scope, non-goals, and
 success measures. Then set `Status: Accepted`. Git history is the revision

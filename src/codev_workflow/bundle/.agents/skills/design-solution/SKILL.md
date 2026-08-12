@@ -59,9 +59,9 @@ Prefer a thin end-to-end path that can be tested early.
 
 ## 5. Review and accept
 
-Save product designs under `docs/design/` or feature-local designs under
-`docs/features/<slug>/design.md`, following repository conventions. Name an
-owner and required domain reviewers. Keep open questions visible.
+Save product designs under `docs/codev/design/` or feature-local designs under
+`docs/codev/features/<slug>/design.md`, following repository conventions. Name
+an owner and required domain reviewers. Keep open questions visible.
 
 Mark the design `Accepted` only after material decisions are resolved and the
 human confirms it is safe to plan against. Git history records revisions.

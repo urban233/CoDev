@@ -34,7 +34,6 @@ through. Most changes do not need them.
 |---|---|
 | Local, low-risk, obvious fix | `build-change`, then `review-change` if risk warrants |
 | Existing GitHub Pull Request review | `pr-review` |
-| Maintainability / Clean Code / GoF / Python-smell scan | `clean-code-review`, alongside `review-change` — it does not replace correctness or security review |
 | A review or presubmit finding needs a concrete patch | `critique-review` — drafts a diff only; requires an explicit developer or `build-change` handoff before anything is modified, then a fresh `review-change` |
 | Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |
 | Greenfield product or whole-product redesign | `specify-project` — one continuous, recommendation-led interview producing a single canonical `SPECIFICATION.md`; never duplicate its facts into a separate brief and design |
@@ -154,40 +153,118 @@ Where the platform provides repository-local subagents, keep the human in one
 `orchestrator` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
+Most work items start cold, and every numbered step below applies as
+written. Two other entry modes (`codev work start --entry <mode>`): a
+**takeover** item already has unfinished human commits beyond its base
+snapshot — follow every step below, but tell `builder` at step 3 to read
+that existing diff before changing anything and continue it rather than
+replace it. A **direct-review** item is already-finished human work that
+needs only review — skip straight to step 5's `ok_ready_for_pr` handling;
+`codev work check` recognizes a fresh `direct-review` item as immediately
+ready, with no inner-loop round recorded at all.
+
 1. **Orchestrator** reads authority and repository evidence, confirms the
    work item is ready, presents the focus card, and produces the
    implementation plan (using `.agents/skills/build-change/assets/
    implementation-plan.template.md` for delegated, multi-session, cross-
    component, or normal/higher-risk work). It never edits product code
-   itself. It opens the work item's round state with `codev work start`.
-2. The human approves the plan and grants permission to delegate.
+   itself. It creates the work item's own branch with `codev git branch` and
+   opens round state with `codev work start`. Raw `git commit`/`git push`/
+   `gh pr create` stay denied to every agent; `codev git` is the only path
+   to mutating the repository or GitHub, and it enforces mechanically what
+   this document only used to ask for by convention.
+2. Before delegating, check whether the work needs a human decision first:
+   any of the "Stop conditions" below, or the risk categories named in "Risk
+   overrides size" — a cheap path/diff-shape check for the common case, not
+   a full judgment call every time. If so, present the focus card with a
+   proposed plan and a proposed answer, and wait for the human's one
+   decision. Otherwise proceed directly to delegation. Approval before every
+   delegated build is not the default; it is reserved for work that is
+   actually material or risky.
 3. **Builder** executes only the accepted plan. It may edit and test, but it
    cannot invoke other agents, alter accepted authority, commit, push, merge,
    publish, deploy, migrate data, or expand rollout. It returns an evidence
    receipt with exact base and head snapshots and records it with `codev work
-   record --role builder`.
+   record --role builder`. The orchestrator commits the result with
+   `codev git commit`.
 4. Orchestrator verifies the evidence receipt is complete, then invokes
-   **reviewer** in a *fresh* task with the exact snapshot, work item,
-   accepted plan, authority, and evidence. The reviewer is read-only, never
-   fixes its own findings, and records its findings and coverage record with
-   `codev work record --role reviewer`.
+   **lightweight-reviewer** in a *fresh* task with the exact snapshot and
+   work item. This pass is deliberately narrow: correctness and intent-match
+   against the work item, plus independent re-verification that the
+   builder's reported validation actually passes — the full dimension set is
+   the outer loop's job, not this pass's. It records its round with
+   `codev work record --role reviewer --decision
+   READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
 5. Orchestrator runs `codev work check` and acts on its exit code instead of
-   judging convergence itself. On success, it routes actionable findings back
-   to the builder without asking the human to relay them, then reinvokes the
-   reviewer on the corrected snapshot. On any nonzero exit — the round cap is
-   reached, a blocking finding repeats a prior round's, the coverage record is
-   incomplete, or the snapshot drifted — it hands the item to the human with
-   the printed reason and a recommendation, the same as when the accepted plan
-   must change materially, work collides, or safe validation is unavailable.
-6. Once the loop ends, close the item with `codev work close`. Return the
-   final evidence receipt, reviewer decision, and residual risks. Stop before
-   commit or merge.
+   judging convergence itself.
+   - On `ok_continue` (`CHANGES REQUIRED`, under the round cap), it routes
+     actionable findings back to the builder without asking the human to
+     relay them, then reinvokes the lightweight reviewer on the corrected
+     snapshot.
+   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it invokes `code-audit`
+     in its pre-PR gate mode — audit and plan only, never the self-apply
+     phase — against the exact head snapshot. A clean result pushes the
+     branch with `codev git push` and opens a draft pull request with
+     `codev git open-pr` — the bridge into the outer loop's specialist
+     review. This is automatic because opening a pull request is fully
+     reversible and has no effect on production; it is not the same
+     authority as merge. A finding instead gets recorded with `codev work
+     record --role reviewer --decision CHANGES_REQUIRED`, exactly like any
+     other reviewer round, and routed back to the builder under the same
+     round cap — the pull request does not open until a later audit comes
+     back clean.
+   - On any other nonzero exit — the round cap is reached, a blocking
+     finding repeats a prior round's, scope quietly expanded past the
+     round's first pass, or the snapshot drifted — it records the escalation
+     with `codev work escalate` and hands the item to the human with the
+     printed reason and a recommendation, the same as when the accepted plan
+     must change materially, work collides, or safe validation is
+     unavailable.
+6. Once a pull request opens, the outer loop's specialist review and human
+   triage continue the same work item; close it with `codev work close` only
+   once that concludes. Return the final evidence receipt, reviewer
+   decision, and residual risks. Stop before merge, publish, deploy,
+   migration, or rollout expansion — never before opening the pull request
+   itself.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders
 in the same worktree; if the platform lacks subagents, one interactive builder
 performs implementation, but review still runs in a fresh context with human
 approval before merge.
+
+## Outer-loop execution
+
+Where the platform provides repository-local subagents, a separate,
+human-triggered `outer-loop-runner` takes a work item with an open pull
+request from there to a human-ready review. It is a distinct entry point,
+not a continuation of the inner-loop `orchestrator` conversation — the
+human starts it deliberately, and every specialist invocation inside it
+spends a model call the human chose to authorize.
+
+1. Fetch the pull request's metadata, diff, and CI check status; stop and
+   report if checks are red or still running rather than spending any
+   specialist's budget on a PR that does not build.
+2. Dispatch five specialist reviewers in parallel, each scoped to a
+   disjoint set of `codev work`'s coverage dimensions and none of them
+   recording state themselves: correctness/error-handling/test-quality,
+   security/privacy/data/compatibility, concurrency, architecture/
+   maintainability, and rollout.
+3. Merge their findings and coverage into one round and record it with
+   `codev work record --role reviewer`, then act on `codev work check`'s
+   exit code exactly as the inner loop does.
+4. On `ok_waiting_on_triage`, present the blocking findings to the human
+   with one question — which should be addressed now — and record the
+   answer with `codev work triage` before anything else happens. Deferring
+   a blocking finding requires a stated reason.
+5. The one permitted correction round fixes only the findings the human
+   selected, then re-verifies only those findings with only the specialists
+   that own them — not a fresh full pass. Any other nonzero exit records an
+   escalation with `codev work escalate` and stops for the human.
+6. On `ok_approve`, `codev git mark-ready` regenerates the pull request's
+   body from the work item's full round-state — including every deferred
+   finding and its reason — and takes it out of draft. This is not merge
+   authority.
 
 ## Artifact authority
 
@@ -229,7 +306,9 @@ evidence receipt.
 **For a code change**, return: delivered behavior, files/components changed,
 exact validation actually run, acceptance evidence mapped to criteria, scope
 deviations (or none), known limitations, and review state. Stop before
-commit or merge.
+commit or merge — except the three-agent Build execution path above, which
+may open a draft pull request automatically; merge still stops for the
+human.
 
 **For a release**, report: readiness, the exact artifact/configuration under
 consideration, current exposure, success/health evidence, rollback readiness,

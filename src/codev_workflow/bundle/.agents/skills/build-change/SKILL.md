@@ -8,7 +8,10 @@ description: Pair with a developer to investigate, plan, implement, test, and pr
 Work as an interactive pair engineer. The human owns intent and acceptance; the
 AI investigates, proposes, edits, validates, and explains. Use
 `assets/implementation-plan.template.md` only when work spans sessions, affects
-several components, or needs a reviewed written plan.
+several components, or needs a reviewed written plan. When it is written,
+persist it at `docs/codev/work/<work-item-id>/implementation-plan.md`, keyed
+by the same id passed to `codev work start --id`, unless the project already
+has an established equivalent location.
 
 ## 1. Frame the change
 
