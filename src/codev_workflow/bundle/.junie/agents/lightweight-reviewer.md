@@ -16,6 +16,13 @@ This pass is deliberately narrow, not a substitute for full review:
    self-reported validation.
 2. Confirm the diff plausibly implements what the work item asked and
    contains no obvious defect.
+3. When `docs/codev/work/<work-item-id>/implementation-plan.md` exists,
+   confirm its `Status:` line and Completion Evidence agree with this exact
+   head and decision — not still `Draft` or otherwise stale while the diff
+   claims delivery. A mismatch is a blocking `maintainability` finding on
+   *this* round, same as any other defect: cheap to fix here, before the
+   phase transitions, rather than caught late as a full outer-phase round
+   with mandatory human triage.
 
 Do not review security/privacy, data loss, concurrency, compatibility,
 architecture, scope, maintainability, or rollout — those belong entirely to

@@ -6,6 +6,17 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `lightweight-reviewer` (all four platforms) now checks that an
+  implementation plan's `Status:` line and Completion Evidence agree with
+  the round's actual head and decision before returning `READY FOR OUTER
+  LOOP`, and treats a mismatch as a normal blocking finding on the cheap
+  inner round rather than something that slips through to be caught late as
+  an expensive outer-phase round with mandatory human triage. Neither
+  planning template previously tied its `Status:` field to anything that
+  would trigger an update: `build-change`'s evidence-receipt step now
+  updates it alongside Completion Evidence, and `plan-delivery` now states an
+  explicit trigger for moving a delivery plan's own document state from
+  `Draft` to `Accepted` once its open decisions are resolved.
 - `record_reviewer` now rejects `READY_FOR_OUTER_LOOP` on a round whose phase
   is already `"outer"` (ADR-0017) instead of silently accepting it and
   producing a state `_round_slot` later refuses to build on. Traced to a real

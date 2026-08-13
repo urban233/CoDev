@@ -35,7 +35,11 @@ Before updating an existing plan, inspect its current content and the Git
 working tree. Do not silently overwrite a locally changed plan; surface the
 conflict and ask for direction. Preserve the plan's document state using only
 `Draft`, `Accepted`, `Active`, or `Superseded`; Git history is its revision
-record.
+record. `Draft` is not a resting state: once every row in "Risks and
+discovery" tied to a Decision point has a recorded human answer, that is the
+point to move the document state to `Accepted` — say so and ask, rather than
+leaving a plan the team is already acting on marked as if it were still
+unresolved.
 
 ## 1. Verify planning inputs
 

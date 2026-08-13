@@ -86,6 +86,12 @@ Return a compact evidence receipt:
 - **Known limitations:** risks and follow-up work; and
 - **Review state:** independent review status and rollout implications.
 
+When a written implementation plan exists for this work item, update its
+`Status:` line to match this Completion Evidence in the same edit — a plan
+that still says `Draft` while its own Completion Evidence claims delivery is
+a stale artifact, not a harmless formality; independent review checks for
+exactly this mismatch.
+
 For normal or higher-risk work, invoke `review-change` in a fresh context when
 available. The implementing AI never declares its own work approved. The human
 must inspect the diff and explicitly authorize commit, merge, publication, or
