@@ -5,6 +5,8 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-13
+
 ### Changed
 - Relocate `docs/for-ai/ai-agent-guidelines.md` to `.codev/for-ai/ai-agent-guidelines.md`:
   it is read by agents, not browsed by humans, so it now lives under the same
