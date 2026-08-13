@@ -29,7 +29,9 @@ for that one finding only, before finalizing it. Record the round --
 `codev work record --id <work-item-id> --round <round> --role reviewer
 --head <head-sha> --findings <drafted.json> --coverage <only the
 dimension(s) a comment-named specialist actually verified, if any -- omit
-the rest, do not hand-assemble history> --decision CHANGES_REQUIRED` --
+the rest, do not hand-assemble history> --selection <an empty specialist
+list, unless a comment named one that actually ran> --decision
+CHANGES_REQUIRED` --
 then immediately triage every drafted finding as `address`: the human's
 own instruction to fix these comments is the authorization, not a separate
 decision to collect. Report the interpreted findings in the same turn, so
@@ -57,10 +59,25 @@ is still outstanding before this reaches merge-readiness.
 1. Fetch and gate. Fetch the PR's current metadata, diff, and CI check
    status — reuse `.agents/skills/pr-review/scripts/publish_review.py
    --fetch` and the `github-actions-ci-results` skill; do not re-invent
-   fetching. If checks are red or still running, stop here and report that
-   plainly. Do not spend any specialist's budget on a PR that does not even
-   build yet. A human may explicitly override this gate for a specific
-   reason; do not skip it silently on your own judgment.
+   fetching. If checks are red (not merely pending): fetch the failing job's
+   diagnostic via `github-actions-ci-results` and dispatch `builder` once,
+   scoped only to that failure, then push and re-check CI status -- one
+   bounded attempt, never a second. If checks are now green, continue below.
+   If they are still red, or were only pending to begin with, stop here and
+   report plainly -- do not spend any specialist's budget on a PR that does
+   not even build. A human may explicitly override the CI gate itself for a
+   specific reason; do not skip it silently on your own judgment. Before
+   dispatching anything further, run `codev work check --id <work-item-id>
+   --head <head-sha>` and act on its exit code: on `ok_outer_loop_needs_reopen`
+   -- this item already has a recorded outer round and a further one cannot
+   be recorded as-is -- confirm with the human that re-entering the outer
+   loop is actually intended, not unexamined drift since the last review,
+   then run `codev work reopen --id <work-item-id> --head <head-sha>
+   --reason <text>` before continuing (never call `reopen` on your own
+   initiative without that confirmation); on any other `ok_*` outcome,
+   continue to step 2; on any `stop_*` outcome, record the escalation and
+   stop for the human, the same as every other stop condition in this
+   protocol.
 2. Select and dispatch specialists. Once checks are green (or explicitly
    overridden), present the five specialists as a numbered list, each with
    the dimension(s) it owns, and ask which to run this pass -- numbers (for
@@ -85,7 +102,9 @@ is still outstanding before this reaches merge-readiness.
    specialists in parallel, each with the exact PR diff, work item, and
    relevant authority. Each returns findings and a coverage verdict for
    only the dimensions it owns; none of them call `codev work record`
-   themselves.
+   themselves. Note exactly which specialists actually ran -- durable
+   evidence of what was dispatched, not just what was asked -- for step 3's
+   `--selection`.
 3. Merge and record. Merge the dispatched specialists' findings into one
    ranked list and their coverage verdicts into one coverage manifest --
    covering whichever of `correctness`, `security_privacy_data_compatibility`,
@@ -98,7 +117,10 @@ is still outstanding before this reaches merge-readiness.
    could not complete, otherwise `READY_FOR_HUMAN_APPROVAL`. Record it --
    `codev work record --id <work-item-id> --round <round> --role reviewer
    --head <head-sha> --findings <merged-findings.json> --coverage
-   <merged-coverage.json> --decision <decision>` -- then run `codev work
+   <merged-coverage.json> --selection <selection.json> --decision
+   <decision>` -- `--selection` names the specialists step 2 actually
+   dispatched (an empty list for the comment-sourced entry above, unless it
+   named one) -- then run `codev work
    check --id <work-item-id> --head <head-sha>` and act on its exit code,
    not your own judgment of convergence.
 4. Human triage. `codev work check` signals a human decision is needed here

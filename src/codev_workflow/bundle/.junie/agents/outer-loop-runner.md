@@ -32,8 +32,9 @@ comments instead of running a fresh specialist pass:
 - Record the round — `codev work record --id <work-item-id> --round
   <round> --role reviewer --head <head-sha> --findings <drafted.json>
   --coverage <only the dimension(s) a comment-named specialist actually
-  verified, if any — omit the rest, do not hand-assemble history> --decision
-  CHANGES_REQUIRED` — then immediately triage every drafted finding as
+  verified, if any — omit the rest, do not hand-assemble history> --selection
+  <an empty specialist list, unless a comment named one that actually ran>
+  --decision CHANGES_REQUIRED` — then immediately triage every drafted finding as
   `address`: the human's own instruction to fix these comments is the
   authorization, not a separate decision to collect. Report the
   interpreted findings in the same turn, so a misread comment surfaces
@@ -63,11 +64,29 @@ comments instead of running a fresh specialist pass:
 
 Fetch the PR's current metadata, diff, and CI check status — reuse
 `.agents/skills/pr-review/scripts/publish_review.py --fetch` and the
-`github-actions-ci-results` skill; do not re-invent fetching. If checks are
-red or still running, stop here and report that plainly. Do not spend any
-specialist's budget on a PR that does not even build yet. A human may
-explicitly override this gate for a specific reason; do not skip it silently
-on your own judgment.
+`github-actions-ci-results` skill; do not re-invent fetching.
+
+If checks are red (not merely pending): fetch the failing job's diagnostic
+via `github-actions-ci-results` and dispatch `builder` once, scoped only to
+that failure, then push and re-check CI status — one bounded attempt, never
+a second. If checks are now green, continue below. If they are still red, or
+were only pending to begin with, stop here and report plainly — do not spend
+any specialist's budget on a PR that does not even build. A human may
+explicitly override the CI gate itself for a specific reason; do not skip it
+silently on your own judgment.
+
+Before dispatching anything further, run `codev work check --id
+<work-item-id> --head <head-sha>` and act on its exit code:
+
+- `ok_outer_loop_needs_reopen` — this item already has a recorded outer round
+  and a further one cannot be recorded as-is. Confirm with the human that
+  re-entering the outer loop is actually intended — not unexamined drift
+  since the last review — then run `codev work reopen --id <work-item-id>
+  --head <head-sha> --reason <text>` before continuing. Never call `reopen`
+  on your own initiative without that confirmation.
+- Any other `ok_*` outcome — continue to step 2.
+- Any `stop_*` outcome — record the escalation and stop for the human, the
+  same as every other stop condition in this protocol.
 
 ## 2. Select and dispatch specialists
 
@@ -102,7 +121,9 @@ never presented as if it had been verified.
 Invoke the selected specialists in parallel, each with the exact PR diff,
 work item, and relevant authority. Each returns findings and a coverage
 verdict for only the dimensions it owns; none of them call `codev work
-record` themselves.
+record` themselves. Note exactly which specialists actually ran — durable
+evidence of what was dispatched, not just what was asked — for step 3's
+`--selection`.
 
 ## 3. Merge and record
 
@@ -119,9 +140,11 @@ narrow correction round. Decide the round's overall decision:
 complete, otherwise `READY_FOR_HUMAN_APPROVAL`. Record it — `codev work
 record --id <work-item-id> --round <round> --role reviewer --head
 <head-sha> --findings <merged-findings.json> --coverage
-<merged-coverage.json> --decision <decision>` — then run `codev work check
---id <work-item-id> --head <head-sha>` and act on its exit code, not your
-own judgment of convergence.
+<merged-coverage.json> --selection <selection.json> --decision <decision>` —
+`--selection` names the specialists step 2 actually dispatched (an empty
+list for the comment-sourced entry above, unless it named one) — then run
+`codev work check --id <work-item-id> --head <head-sha>` and act on its exit
+code, not your own judgment of convergence.
 
 ## 4. Human triage
 

@@ -64,6 +64,8 @@ _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
         "codev work record",
         "codev work triage",
         "codev work waive",
+        "codev work reopen",
+        "--selection",
         "codev git mark-ready",
     ),
     "correctness-tests-specialist": ("expansion_reason",),

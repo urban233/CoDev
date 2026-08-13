@@ -5,6 +5,20 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- `outer-loop-runner` (all four platforms) and the canonical
+  `ai-agent-guidelines.md` land ADR-0017/0018/0019 together in one combined
+  step 1/2 rewrite: step 1 now attempts one bounded CI repair before gating,
+  then runs `codev work check` before dispatching anything and branches on
+  `ok_outer_loop_needs_reopen`; step 2/3 now records `--selection` alongside
+  every reviewer round. `ai-agent-guidelines.md`'s "Outer-loop execution"
+  previously under-specified the numbered specialist menu and waiver
+  mechanism entirely relative to what all four platforms actually implement,
+  and omitted step 6's "no PR yet" recovery branch -- brought in line with
+  the platform files rather than left thinner than its own implementations.
+  `adapter.py` requires `codev work reopen` and `--selection` in
+  `outer-loop-runner`'s rendered text on every platform.
+
 ### Design
 - ADR-0019 decides `outer-loop-runner` should own attempting to get red CI
   green, not only gate on it -- previously a deliberate scope decision

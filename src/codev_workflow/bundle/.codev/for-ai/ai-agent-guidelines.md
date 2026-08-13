@@ -272,17 +272,32 @@ still requires complete eight-dimension coverage; this entry alone does
 not produce that on a PR the five specialists have never reviewed, and
 `codev work check` says so by name when it isn't complete.
 
-1. Fetch the pull request's metadata, diff, and CI check status; stop and
-   report if checks are red or still running rather than spending any
-   specialist's budget on a PR that does not build.
-2. Dispatch five specialist reviewers in parallel, each scoped to a
-   disjoint set of `codev work`'s coverage dimensions and none of them
-   recording state themselves: correctness/error-handling/test-quality,
+1. Fetch the pull request's metadata, diff, and CI check status. On red
+   (not merely pending) checks, attempt one bounded repair: fetch the
+   failing job's diagnostic, dispatch `builder` once scoped only to that
+   failure, push, and re-check -- one attempt, never a second, falling
+   through to stop-and-report if checks are still not green. Before
+   dispatching any specialist, run `codev work check` and act on its exit
+   code: on `ok_outer_loop_needs_reopen` (this item already has a recorded
+   outer round and a further one cannot be recorded as-is), confirm with the
+   human that re-entering is actually intended -- not unexamined drift --
+   then run `codev work reopen` before continuing; on any `stop_*` outcome,
+   record the escalation and stop for the human.
+2. Present the five specialist reviewers as a numbered list, each with the
+   coverage dimension(s) it owns (correctness/error-handling/test-quality,
    security/privacy/data/compatibility, concurrency, architecture/
-   maintainability, and rollout.
+   maintainability, rollout), and ask which to dispatch this pass -- numbers
+   or `all`. Weigh a skipped one against the actual diff before accepting
+   the selection; the human's answer wins regardless. Immediately once
+   selection is final, offer a `codev work waive --dimension` for each
+   dimension whose specialist was not selected, with a reason -- never on
+   your own initiative. Dispatch only the selected specialists in parallel,
+   none of them recording state themselves.
 3. Merge their findings and coverage into one round and record it with
-   `codev work record --role reviewer`, then act on `codev work check`'s
-   exit code exactly as the inner loop does.
+   `codev work record --role reviewer --selection <selection.json>` (naming
+   which specialists actually ran, distinct from what was merely asked),
+   then act on `codev work check`'s exit code exactly as the inner loop
+   does.
 4. On `ok_waiting_on_triage`, present the blocking findings to the human
    with one question — which should be addressed now — and record the
    answer with `codev work triage` before anything else happens. Deferring
@@ -299,10 +314,16 @@ not produce that on a PR the five specialists have never reviewed, and
    findings with only the specialists that own them — not a fresh full
    pass. Any other nonzero exit records an escalation with `codev work
    escalate` and stops for the human.
-6. On `ok_approve` or `ok_approve_with_deferrals`, `codev git mark-ready`
-   regenerates the pull request's body from the work item's full
-   round-state — including every deferred finding and its reason — and
-   takes it out of draft. This is not merge authority.
+6. On `ok_approve` or `ok_approve_with_deferrals`: if no pull request exists
+   yet for this item (for example, it was recovered into the outer phase
+   with `codev work reopen` and never went through the inner loop's own
+   bridge step), run `codev git open-pr` first -- never pass `--body`, it
+   generates the description from the work item's own evidence -- it
+   accepts this state too, not only the original `ok_ready_for_pr`
+   checkpoint. Then `codev git mark-ready` regenerates the pull request's
+   body from the work item's full round-state — including every deferred
+   finding and its reason — and takes it out of draft. This is not merge
+   authority.
 
 ## Artifact authority
 
