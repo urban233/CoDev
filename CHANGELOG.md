@@ -5,6 +5,8 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-13
+
 ### Changed
 - `outer-loop-runner` (all four platforms) and the canonical
   `ai-agent-guidelines.md` land ADR-0017/0018/0019 together in one combined
