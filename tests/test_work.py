@@ -2013,6 +2013,125 @@ class EscalationLogTests(unittest.TestCase):
         self.assertIn("finding at b.py:9 not in round 1", text)
 
 
+class SpecialistSelectionTests(unittest.TestCase):
+    """docs/adr/0018-specialist-selection-audit-record.md: an optional,
+    validated audit record of which outer-loop specialists actually ran a
+    round -- deliberately optional (mirroring `coverage`), since a
+    comment-sourced round (ADR-0010) legitimately dispatches none of the
+    five."""
+
+    def _to_outer_round(self, target: Path) -> None:
+        start("item-1", "base-sha", target=target)
+        record_reviewer(
+            "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+        )
+        record_builder("item-1", 2, "head-2", {}, target=target)
+
+    def test_accepts_a_valid_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            record_reviewer(
+                "item-1",
+                2,
+                "head-2",
+                [],
+                {},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+                specialist_selection={
+                    "specialists": [
+                        "correctness-tests-specialist",
+                        "rollout-specialist",
+                    ]
+                },
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn(
+            "specialists: correctness-tests-specialist, rollout-specialist", text
+        )
+
+    def test_accepts_an_empty_selection_for_a_comment_sourced_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            record_reviewer(
+                "item-1",
+                2,
+                "head-2",
+                [],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+                specialist_selection={"specialists": []},
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn("specialists: none", text)
+
+    def test_omitted_selection_renders_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            record_reviewer(
+                "item-1", 2, "head-2", [], {}, "CHANGES_REQUIRED", target=target
+            )
+            text = log_text("item-1", target=target)
+        self.assertNotIn("specialists:", text)
+
+    def test_rejects_unknown_specialist_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            with self.assertRaises(WorkError):
+                record_reviewer(
+                    "item-1",
+                    2,
+                    "head-2",
+                    [],
+                    {},
+                    "CHANGES_REQUIRED",
+                    target=target,
+                    specialist_selection={"specialists": ["not-a-real-specialist"]},
+                )
+
+    def test_rejects_a_repeated_specialist_name(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            with self.assertRaises(WorkError):
+                record_reviewer(
+                    "item-1",
+                    2,
+                    "head-2",
+                    [],
+                    {},
+                    "CHANGES_REQUIRED",
+                    target=target,
+                    specialist_selection={
+                        "specialists": [
+                            "rollout-specialist",
+                            "rollout-specialist",
+                        ]
+                    },
+                )
+
+    def test_rejects_non_object_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._to_outer_round(target)
+            with self.assertRaises(WorkError):
+                record_reviewer(
+                    "item-1",
+                    2,
+                    "head-2",
+                    [],
+                    {},
+                    "CHANGES_REQUIRED",
+                    target=target,
+                    specialist_selection=["rollout-specialist"],
+                )
+
+
 class PrDescriptionTests(unittest.TestCase):
     def test_renders_a_waived_dimension_distinctly_from_passed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

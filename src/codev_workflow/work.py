@@ -65,6 +65,16 @@ VALID_OUTCOMES = ("approved", "abandoned", "escalated")
 
 VALID_ENTRY_MODES = ("takeover", "direct-review")
 
+# ADR-0018: the outer loop's five specialist reviewers, by name -- reused to
+# validate a round's optional `specialist_selection` audit record.
+SPECIALIST_NAMES = (
+    "correctness-tests-specialist",
+    "security-data-specialist",
+    "concurrency-specialist",
+    "architecture-maintainability-specialist",
+    "rollout-specialist",
+)
+
 
 class WorkError(Exception):
     """Raised for invalid work-item state or lifecycle transitions."""
@@ -344,6 +354,26 @@ def _validate_coverage(raw: Any) -> dict[str, Any]:
     return validated
 
 
+def _validate_specialist_selection(raw: Any) -> dict[str, Any]:
+    """ADR-0018: an audit record of which outer-loop specialists actually
+    ran this round -- `specialists` may be empty (a comment-sourced entry,
+    ADR-0010, dispatches none of the five), but every named entry must be a
+    real specialist, named at most once."""
+    if not isinstance(raw, dict):
+        raise WorkError("specialist_selection must be a JSON object")
+    specialists = raw.get("specialists")
+    if not isinstance(specialists, list) or not all(
+        isinstance(name, str) for name in specialists
+    ):
+        raise WorkError("specialist_selection.specialists must be a list of strings")
+    unknown = [name for name in specialists if name not in SPECIALIST_NAMES]
+    if unknown:
+        raise WorkError(f"specialist_selection names unknown specialist(s): {unknown}")
+    if len(set(specialists)) != len(specialists):
+        raise WorkError("specialist_selection.specialists must not repeat a name")
+    return {"specialists": list(specialists)}
+
+
 def record_builder(
     work_item_id: str,
     round_number: int,
@@ -377,6 +407,7 @@ def record_reviewer(
     decision: str,
     *,
     target: Path,
+    specialist_selection: Any = None,
 ) -> None:
     if decision not in VALID_DECISIONS:
         raise WorkError(
@@ -409,12 +440,17 @@ def record_reviewer(
             "next sequential round, or `codev work reopen` if this item is "
             "in a terminal state"
         )
-    round_entry["reviewer"] = {
+    reviewer_entry: dict[str, Any] = {
         "head_snapshot": head_snapshot,
         "findings": _validate_findings(findings),
         "coverage": _validate_coverage(coverage) if coverage else {},
         "decision": decision,
     }
+    if specialist_selection is not None:
+        reviewer_entry["specialist_selection"] = _validate_specialist_selection(
+            specialist_selection
+        )
+    round_entry["reviewer"] = reviewer_entry
     _save(work_item_id, state, target=target)
 
 
@@ -1017,6 +1053,10 @@ def log_text(work_item_id: str, *, target: Path) -> str:
             lines.append(
                 f"  reviewer @ {reviewer['head_snapshot']}: {reviewer['decision']}"
             )
+            selection = reviewer.get("specialist_selection")
+            if selection is not None:
+                names = ", ".join(selection["specialists"]) or "none"
+                lines.append(f"  specialists: {names}")
             for finding in sorted(reviewer["findings"], key=lambda item: item["rank"]):
                 marker = "BLOCKING" if finding["blocking"] else "non-blocking"
                 expansion = finding.get("expansion_reason")

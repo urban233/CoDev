@@ -295,6 +295,11 @@ def _parser() -> argparse.ArgumentParser:
     w_record.add_argument(
         "--coverage", type=_target, help="reviewer: JSON coverage-manifest file"
     )
+    w_record.add_argument(
+        "--selection",
+        type=_target,
+        help="reviewer, outer phase: JSON specialist-selection audit file",
+    )
     w_record.add_argument("--decision", choices=VALID_DECISIONS)
     w_record.add_argument("--target", type=_target, default=Path.cwd())
 
@@ -799,6 +804,9 @@ def _run_work_command(args: argparse.Namespace) -> int:
             coverage = (
                 work_module.load_json_file(args.coverage) if args.coverage else {}
             )
+            selection = (
+                work_module.load_json_file(args.selection) if args.selection else None
+            )
             work_module.record_reviewer(
                 args.id,
                 args.round,
@@ -807,6 +815,7 @@ def _run_work_command(args: argparse.Namespace) -> int:
                 coverage,
                 args.decision,
                 target=target,
+                specialist_selection=selection,
             )
         print(f"Recorded round {args.round} ({args.role}) for {args.id}")
         return 0

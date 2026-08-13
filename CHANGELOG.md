@@ -5,6 +5,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- `codev work record --role reviewer` gains an optional `--selection
+  <file.json>` flag recording which of the outer loop's five specialists
+  actually ran a round (ADR-0018) -- a saved session showed the model
+  skipping `outer-loop-runner`'s numbered specialist menu (ADR-0016)
+  entirely. `codev` cannot gate dispatching a subagent, so this cannot force
+  the pause itself; it makes the omission visible and durable in `codev work
+  log` instead of only inferable after the fact. Deliberately optional, like
+  `--coverage`: a comment-sourced round (ADR-0010) legitimately dispatches
+  none of the five.
+
 ### Fixed
 - `lightweight-reviewer` (all four platforms) now checks that an
   implementation plan's `Status:` line and Completion Evidence agree with
