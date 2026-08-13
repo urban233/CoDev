@@ -6,6 +6,17 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `record_reviewer` now rejects `READY_FOR_OUTER_LOOP` on a round whose phase
+  is already `"outer"` (ADR-0017) instead of silently accepting it and
+  producing a state `_round_slot` later refuses to build on. Traced to a real
+  incident where this exact corrupted shape -- reached via a legitimate
+  human-authorized `reopen` -- blocked a genuine five-specialist outer-loop
+  pass (six blocking findings, including an SSRF hole) from ever being
+  recorded; the findings survived only in a saved chat transcript.
+  `check()` gains `ok_outer_loop_needs_reopen` as a distinct, defense-in-depth
+  signal for any round-state already in this shape, and the write-once guard
+  messages on `record_builder`/`record_reviewer` now name `codev work
+  reopen` as the fix instead of leaving the caller to work it out.
 - `codev git issue-create` and `codev work start --github-issue` are now
   actually referenced by the workflow that was always meant to call them.
   ADR-0004 built the full feature (issue creation, `--github-issue`

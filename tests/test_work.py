@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -874,6 +875,11 @@ class ReadyForOuterLoopTests(unittest.TestCase):
         self.assertIn("round 2:\n  phase: outer", text)
 
     def test_ready_for_outer_loop_from_outer_phase_rejected(self) -> None:
+        """ADR-0017: this decision only means "hand off to the outer loop",
+        and only from an inner-phase round -- recording it on a round that is
+        already `"outer"` (round 2 here, opened by round 1's own
+        READY_FOR_OUTER_LOOP) is rejected at the write site, before it can
+        produce a state `_round_slot` would later refuse to build on."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
@@ -881,17 +887,71 @@ class ReadyForOuterLoopTests(unittest.TestCase):
                 "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             record_builder("item-1", 2, "head-2", {}, target=target)
+            with self.assertRaises(WorkError) as raised:
+                record_reviewer(
+                    "item-1",
+                    2,
+                    "head-2",
+                    [],
+                    {},
+                    "READY_FOR_OUTER_LOOP",
+                    target=target,
+                )
+        self.assertIn("already in the outer phase", str(raised.exception))
+
+    def test_ok_outer_loop_needs_reopen_for_a_pre_existing_corrupted_state(
+        self,
+    ) -> None:
+        """ADR-0017: defense in depth for a round-state.json that already
+        carries the corrupted shape this same ADR's write-site guard now
+        prevents from being created -- `record_reviewer` refuses it going
+        forward, so this constructs it directly on disk, the same shape a
+        pre-fix session (the real incident this ADR closes) actually
+        produced."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
             record_reviewer(
-                "item-1",
-                2,
-                "head-2",
-                [],
-                {},
-                "READY_FOR_OUTER_LOOP",
-                target=target,
+                "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
-            with self.assertRaises(WorkError):
-                record_builder("item-1", 3, "head-3", {}, target=target)
+            record_builder("item-1", 2, "head-2", {}, target=target)
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["rounds"][-1]["reviewer"] = {
+                "head_snapshot": "head-2",
+                "findings": [],
+                "coverage": {},
+                "decision": "READY_FOR_OUTER_LOOP",
+            }
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+
+            result = check("item-1", "head-2", target=target)
+        self.assertEqual(
+            CheckResult(True, "ok_outer_loop_needs_reopen", result.message), result
+        )
+        self.assertIn("codev work reopen", result.message)
+
+    def test_record_reviewer_write_once_message_names_the_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1", 1, "base-sha", [], {}, "CHANGES_REQUIRED", target=target
+            )
+            with self.assertRaises(WorkError) as raised:
+                record_reviewer(
+                    "item-1", 1, "base-sha", [], {}, "CHANGES_REQUIRED", target=target
+                )
+        self.assertIn("codev work reopen", str(raised.exception))
+
+    def test_record_builder_write_once_message_names_the_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "base-sha", {}, target=target)
+            with self.assertRaises(WorkError) as raised:
+                record_builder("item-1", 1, "base-sha", {}, target=target)
+        self.assertIn("codev work reopen", str(raised.exception))
 
 
 class ScopeExpansionTests(unittest.TestCase):

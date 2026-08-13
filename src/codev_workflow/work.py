@@ -358,7 +358,12 @@ def record_builder(
         raise WorkError("builder evidence must be a JSON object")
     round_entry = _round_slot(state, round_number)
     if round_entry["builder"] is not None:
-        raise WorkError(f"round {round_number} already has a recorded builder entry")
+        raise WorkError(
+            f"round {round_number} already has a recorded builder entry; to "
+            "record a correction, target a new round instead -- the next "
+            "sequential round, or `codev work reopen` if this item is in a "
+            "terminal state"
+        )
     round_entry["builder"] = {"head_snapshot": head_snapshot, "evidence": evidence}
     _save(work_item_id, state, target=target)
 
@@ -380,8 +385,30 @@ def record_reviewer(
     state = _load(work_item_id, target=target)
     _ensure_in_progress(state)
     round_entry = _round_slot(state, round_number)
+    if decision == "READY_FOR_OUTER_LOOP" and round_entry["phase"] != "inner":
+        # ADR-0017: this decision means exactly one thing -- "hand off to the
+        # outer loop" -- and only means it coming from an inner-phase round.
+        # Recording it on a round that is already `"outer"` (reachable after
+        # a human-authorized `reopen` back into the outer phase) produces a
+        # state `_round_slot` will then refuse to build on: the very next
+        # attempt to open a round raises "READY_FOR_OUTER_LOOP is only a
+        # valid transition from the inner phase". Reject it here, at the
+        # write site, instead of letting that corrupted state be recorded at
+        # all -- see `check()`'s `ok_outer_loop_needs_reopen` for the
+        # matching upfront signal, and the escaped incident this closes.
+        raise WorkError(
+            f"round {round_number} is already in the outer phase; "
+            "READY_FOR_OUTER_LOOP only means an inner-phase hand-off to the "
+            "outer loop -- record READY_FOR_HUMAN_APPROVAL, "
+            "CHANGES_REQUIRED, or BLOCKED_BY_MISSING_EVIDENCE instead"
+        )
     if round_entry["reviewer"] is not None:
-        raise WorkError(f"round {round_number} already has a recorded reviewer entry")
+        raise WorkError(
+            f"round {round_number} already has a recorded reviewer entry; to "
+            "re-review after a correction, record a new round instead -- the "
+            "next sequential round, or `codev work reopen` if this item is "
+            "in a terminal state"
+        )
     round_entry["reviewer"] = {
         "head_snapshot": head_snapshot,
         "findings": _validate_findings(findings),
@@ -745,6 +772,23 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
         )
 
     if decision == "READY_FOR_OUTER_LOOP":
+        if latest["phase"] == "outer":
+            # ADR-0017: defense-in-depth for a round-state.json already in
+            # this shape (record_reviewer now refuses to create it fresh).
+            # This is not the normal inner-to-outer hand-off signal reused --
+            # it is a distinct case that needs a distinct answer: recording
+            # another round here will hit `_round_slot`'s "READY_FOR_OUTER_
+            # LOOP is only a valid transition from the inner phase" raise.
+            return CheckResult(
+                True,
+                "ok_outer_loop_needs_reopen",
+                f"round {latest['round']}: already in the outer phase with "
+                "READY_FOR_OUTER_LOOP recorded -- confirm with the human "
+                "that re-entering the outer loop is actually intended (not "
+                "unexamined drift), then run `codev work reopen` before "
+                "dispatching specialists or recording anything; a further "
+                "round cannot be recorded here as-is",
+            )
         return CheckResult(
             True,
             "ok_ready_for_pr",
