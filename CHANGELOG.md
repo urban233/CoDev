@@ -5,6 +5,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- `orchestrator` and `outer-loop-runner` (all four platforms) no longer
+  hardcode `--body <body>` on `codev git open-pr`. ADR-0014 already made
+  omitting `--body`/`--body-file` fall back to `work.pr_description()` at the
+  CLI layer, but every prompted call site kept supplying a literal body
+  placeholder, which made that fallback structurally unreachable and left
+  agents hand-composing PR descriptions instead -- traced directly to a real
+  session's "utter ugly" PR body. `adapter.py` gains a
+  `_HANDWRITTEN_PR_BODY_MARKERS` forbidden-marker check so this cannot
+  silently regress on any platform again.
+
 ## [0.2.1] - 2026-08-13
 
 ### Changed

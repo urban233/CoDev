@@ -81,6 +81,13 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
     "'git commit*': allow",
 )
 
+# ADR-0014: `codev git open-pr` generates a PR description from the work
+# item's own recorded evidence and coverage when no `--body`/`--body-file` is
+# given -- an agent hardcoding a body placeholder here defeats that fallback
+# and produces hand-composed prose instead, the exact regression this guards
+# against.
+_HANDWRITTEN_PR_BODY_MARKERS: tuple[str, ...] = ("--body <body>",)
+
 
 class AdapterVerificationError(Exception):
     """Raised when a platform cannot be verified at all."""
@@ -139,6 +146,12 @@ def verify_adapter(platform: str, *, target: Path) -> VerificationResult:
                 problems.append(
                     f"grants raw git mutation instead of the guarded `codev git` "
                     f"surface: {marker!r}"
+                )
+        for marker in _HANDWRITTEN_PR_BODY_MARKERS:
+            if marker in text:
+                problems.append(
+                    f"hardcodes a PR body placeholder instead of relying on "
+                    f"`codev git open-pr`'s own generated description: {marker!r}"
                 )
 
         findings.append(RoleFinding(role, relative, not problems, tuple(problems)))

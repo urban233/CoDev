@@ -111,6 +111,26 @@ class VerifyAdapterTests(unittest.TestCase):
             any("guarded `codev git` surface" in p for p in orchestrator.problems)
         )
 
+    def test_handwritten_pr_body_placeholder_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            for role, relative in ADAPTER_ROLE_PATHS["opencode"].items():
+                path = target / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                content = (
+                    "codev work start codev work check codev work record "
+                    "codev git open-pr"
+                )
+                if role == "orchestrator":
+                    content += (
+                        " -- open-pr --id <work-item-id> --title <title> --body <body>"
+                    )
+                path.write_text(content, encoding="utf-8")
+            result = verify_adapter("opencode", target=target)
+        orchestrator = {f.role: f for f in result.findings}["orchestrator"]
+        self.assertFalse(orchestrator.ok)
+        self.assertTrue(any("PR body placeholder" in p for p in orchestrator.problems))
+
     def test_lightweight_reviewer_role_is_verified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

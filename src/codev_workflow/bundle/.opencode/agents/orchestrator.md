@@ -125,12 +125,15 @@ applies as written. Two other cases:
      `builder` for the next round; do not let the reviewer edit.
    - On `ok_ready_for_pr`, push the branch — `codev git push --id
      <work-item-id>` — and open a draft pull request — `codev git open-pr
-     --id <work-item-id> --title <title> --body <body>` — the bridge into
-     the outer loop's specialist review. This is automatic: opening a pull
-     request is fully reversible and has no effect on production, unlike
-     merge. Mechanical style and documentation issues were already resolved
-     at step 7, before this round was ever recorded, so nothing pre-PR
-     spends any of the outer phase's round cap.
+     --id <work-item-id> --title <title>` — the bridge into the outer loop's
+     specialist review. Never pass `--body`: omitting it generates the PR
+     description from the work item's own recorded evidence and coverage,
+     which is always more accurate and more consistent than hand-composed
+     prose. This is automatic: opening a pull request is fully reversible
+     and has no effect on production, unlike merge. Mechanical style and
+     documentation issues were already resolved at step 7, before this round
+     was ever recorded, so nothing pre-PR spends any of the outer phase's
+     round cap.
    - On any other nonzero exit — round cap reached, a repeated blocking
      finding, scope quietly expanded past the round's first pass, an
      incomplete coverage record, or drift since the last recorded snapshot —
