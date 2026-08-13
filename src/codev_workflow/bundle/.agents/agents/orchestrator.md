@@ -67,7 +67,9 @@ applies as written. Two other cases:
    path to mutating the repository or GitHub.
 5. Create the work item's own branch — `codev git branch --id <work-item-id>
    --base <base-sha>` — open its round state — `codev work start --id
-   <work-item-id> --base <base-sha>` — then use Antigravity's
+   <work-item-id> --base <base-sha>`, adding `--github-issue <N>` when the
+   work item has a linked GitHub issue, so the eventual pull request closes
+   it automatically — then use Antigravity's
    `invoke_subagent` capability to start `builder` with the accepted work
    item and implementation plan, exact authority links, base commit, allowed
    scope, integration constraints, validation, stop conditions, and the

@@ -51,7 +51,12 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
-    "orchestrator": ("codev work start", "codev work check", "codev git open-pr"),
+    "orchestrator": (
+        "codev work start",
+        "codev work check",
+        "codev git open-pr",
+        "--github-issue",
+    ),
     "builder": ("codev work record",),
     "reviewer": ("codev work record",),
     "lightweight-reviewer": ("codev work record",),

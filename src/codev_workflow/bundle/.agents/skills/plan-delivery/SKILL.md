@@ -173,6 +173,15 @@ do not duplicate the full document unless the user asks.
 
 ## Handoff
 
+Before implementation starts on a ready item, and only when the project
+actually tracks issues on GitHub, push it with `codev git issue-create
+--title <title> --body <body> [--path <glob>]...` (`--path` suggests owners
+from an existing `CODEOWNERS` when one exists) and record the returned issue
+URL back in the plan's own Status/tracker column. This is what
+`codev work start --github-issue N` and `codev git open-pr`'s automatic
+`Closes #N` depend on; a project with no GitHub issue tracker in use skips
+this step and the plan entry alone remains the required authority.
+
 Give each developer only their work item, relevant brief/design/API links,
-integration constraints, and acceptance criteria. Start `build-change` for the
-next ready item.
+integration constraints, and acceptance criteria (including the recorded
+issue URL, when one exists). Start `build-change` for the next ready item.

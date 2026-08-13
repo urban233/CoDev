@@ -81,7 +81,9 @@ applies as written. Two other cases:
    approval before every delegated build is not the default.
 5. Create the work item's own branch — `codev git branch --id <work-item-id>
    --base <base-sha>` — open its round state — `codev work start --id
-   <work-item-id> --base <base-sha>` — then invoke `builder` with the
+   <work-item-id> --base <base-sha>`, adding `--github-issue <N>` when the
+   work item has a linked GitHub issue, so the eventual pull request closes
+   it automatically — then invoke `builder` with the
    accepted work item and implementation plan, exact authority links, base
    commit, allowed scope, integration constraints, validation, stop
    conditions, and the current round number. Pass task-local artifacts, not

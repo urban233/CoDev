@@ -6,6 +6,18 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
+- `codev git issue-create` and `codev work start --github-issue` are now
+  actually referenced by the workflow that was always meant to call them.
+  ADR-0004 built the full feature (issue creation, `--github-issue`
+  resolution, `codev git open-pr`'s automatic `Closes #N`) and explicitly
+  flagged wiring it into `plan-delivery` and `orchestrator` as a follow-up --
+  "Not done as part of this ADR." It stayed undone: no agent prompt on any
+  platform referenced `issue-create` at all. `plan-delivery`'s Handoff now
+  pushes a ready item as an issue before implementation starts;
+  `orchestrator` (all four platforms) and the canonical
+  `.codev/for-ai/ai-agent-guidelines.md` now start work items with
+  `--github-issue <N>` when one exists. `adapter.py` gains `--github-issue`
+  as a required marker for `orchestrator`.
 - `orchestrator` and `outer-loop-runner` (all four platforms) no longer
   hardcode `--body <body>` on `codev git open-pr`. ADR-0014 already made
   omitting `--body`/`--body-file` fall back to `work.pr_description()` at the

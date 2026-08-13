@@ -169,7 +169,10 @@ ready, with no inner-loop round recorded at all.
    implementation-plan.template.md` for delegated, multi-session, cross-
    component, or normal/higher-risk work). It never edits product code
    itself. It creates the work item's own branch with `codev git branch` and
-   opens round state with `codev work start`. Raw `git commit`/`git push`/
+   opens round state with `codev work start`, adding `--github-issue <N>`
+   when the work item has a linked GitHub issue (pushed earlier via
+   `codev git issue-create`, per `plan-delivery`'s Handoff) so the eventual
+   pull request closes it automatically. Raw `git commit`/`git push`/
    `gh pr create` stay denied to every agent; `codev git` is the only path
    to mutating the repository or GitHub, and it enforces mechanically what
    this document only used to ask for by convention.

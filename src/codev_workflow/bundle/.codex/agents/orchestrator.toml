@@ -50,7 +50,9 @@ exact resulting head, without any inner-loop round recorded.
    path to mutating the repository or GitHub.
 5. Create the work item's own branch with `codev git branch --id
    <work-item-id> --base <base-sha>`, run `codev work start --id
-   <work-item-id> --base <base-sha>`, then invoke `builder` with the accepted
+   <work-item-id> --base <base-sha>` (add `--github-issue <N>` when the work
+   item has a linked GitHub issue, so the eventual pull request closes it
+   automatically), then invoke `builder` with the accepted
    work item, plan, authority links, base commit, allowed scope, integration
    constraints, validation, and stop conditions. Instruct it to return its
    evidence receipt for the orchestrator to record; the builder never calls
