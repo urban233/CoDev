@@ -5,6 +5,16 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Design
+- ADR-0019 decides `outer-loop-runner` should own attempting to get red CI
+  green, not only gate on it -- previously a deliberate scope decision
+  (ADR-0003), not a bug, but a real gap against the self-healing precedent
+  ADR-0002 and ADR-0015 already established elsewhere in this system. One
+  bounded attempt (`github-actions-ci-results` diagnostic, one scoped
+  `builder` dispatch, re-check), falling through to today's stop-and-report
+  otherwise. Prompt implementation lands together with ADR-0017/0018's own
+  `outer-loop-runner` step 1/2 changes in one combined edit.
+
 ### Added
 - `codev work record --role reviewer` gains an optional `--selection
   <file.json>` flag recording which of the outer loop's five specialists
