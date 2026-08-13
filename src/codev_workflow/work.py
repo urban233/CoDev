@@ -174,12 +174,14 @@ def start(
     max_rounds: int | dict[str, int] | None = None,
     link_ref: str | None = None,
     summary: str | None = None,
+    description: str | None = None,
     owner: str | None = None,
     entry: str | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
     _validate_optional_text("link_ref", link_ref)
     _validate_optional_text("summary", summary)
+    _validate_optional_text("description", description)
     _validate_optional_text("owner", owner)
     if entry is not None and entry not in VALID_ENTRY_MODES:
         raise WorkError(
@@ -209,6 +211,7 @@ def start(
         "status": "in_progress",
         "link_ref": link_ref,
         "summary": summary,
+        "description": description,
         "owner": owner,
         "entry": entry,
     }
@@ -495,6 +498,13 @@ def _blocking_set(round_entry: dict[str, Any]) -> set[tuple[str, str]]:
     }
 
 
+def _triaged_finding_ids(round_entry: dict[str, Any]) -> set[str]:
+    triage = round_entry.get("triage")
+    if triage is None:
+        return set()
+    return set(triage["dispositions"])
+
+
 def _find_repeated_blocking_finding(
     rounds: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
@@ -507,8 +517,15 @@ def _find_repeated_blocking_finding(
         if round_entry["phase"] != phase:
             continue
         seen |= _blocking_set(round_entry)
+    # A finding the human has already triaged on this round -- address or
+    # defer, either way an explicit decision -- is resolved, not repeated:
+    # otherwise a deferred finding would keep tripping this check forever,
+    # since it necessarily also appeared blocking in an earlier round.
+    triaged = _triaged_finding_ids(latest)
     latest_findings = cast(list[dict[str, Any]], latest["reviewer"]["findings"])
     for finding in latest_findings:
+        if finding["id"] in triaged:
+            continue
         if finding["blocking"] and (finding["location"], finding["category"]) in seen:
             return finding
     return None
@@ -525,9 +542,15 @@ def _find_scope_expansion(rounds: list[dict[str, Any]]) -> dict[str, Any] | None
     if len(phase_rounds) < 2 or phase_rounds[0] is latest:
         return None
     baseline = _blocking_set(phase_rounds[0])
+    # Same reasoning as _find_repeated_blocking_finding: a triaged finding
+    # (address or defer) has already had its one required human look: this
+    # guard exists to force that look, not to survive it forever.
+    triaged = _triaged_finding_ids(latest)
     latest_findings = cast(list[dict[str, Any]], latest["reviewer"]["findings"])
     for finding in latest_findings:
         if not finding["blocking"]:
+            continue
+        if finding["id"] in triaged:
             continue
         if (finding["location"], finding["category"]) in baseline:
             continue
@@ -537,15 +560,78 @@ def _find_scope_expansion(rounds: list[dict[str, Any]]) -> dict[str, Any] | None
     return None
 
 
+def _all_blocking_deferred(
+    findings: list[dict[str, Any]], triage: dict[str, Any]
+) -> bool:
+    dispositions = triage["dispositions"]
+    return all(
+        dispositions[finding["id"]]["disposition"] == "defer"
+        for finding in findings
+        if finding["blocking"]
+    )
+
+
 def _incomplete_coverage(coverage: dict[str, Any]) -> list[str]:
     missing = []
     for dimension in REQUIRED_COVERAGE_DIMENSIONS:
         entry = coverage.get(dimension)
         if entry is None:
             missing.append(f"{dimension}: missing")
+        elif entry.get("waived"):
+            continue
         elif not entry.get("passed"):
             missing.append(f"{dimension}: not passed")
     return missing
+
+
+def _effective_coverage(state: dict[str, Any]) -> dict[str, Any]:
+    """Coverage as of the latest round, filled in from history.
+
+    A round only needs to record the dimensions it actually re-verified --
+    the recording agent must not hand-assemble a merged manifest from prior
+    rounds' prose, a step earlier revisions of this workflow required and
+    that turned out to be exactly the kind of bookkeeping agents get wrong
+    under load. For every dimension the latest round's own coverage is
+    silent on, this walks the round history in order and keeps the most
+    recent verdict recorded for it, including a `reopen` recovery's
+    surviving prior rounds. A later round's entry for a dimension always
+    wins over an earlier one, so a dimension that regresses stays failing
+    until something re-verifies it -- carry-forward never resurrects a
+    stale pass.
+
+    A human-authorized waiver (`waive()`) participates in the same
+    round-ordered merge, interleaved by the round it was recorded at: a
+    later round's real verdict for a dimension -- pass or fail -- always
+    overrides an earlier waiver, and a later waiver can just as validly
+    override an earlier failing verdict (a human revisiting a finding and
+    deciding it doesn't matter). Within the same round, an actual recorded
+    verdict wins over a waiver for that same dimension, on the assumption
+    that real verification is always more authoritative than a waiver
+    recorded in passing at that round's start.
+    """
+    rounds: list[dict[str, Any]] = state["rounds"]
+    waivers_by_round: dict[int, list[dict[str, Any]]] = {}
+    for waiver in state.get("coverage_waivers", []):
+        waivers_by_round.setdefault(waiver["round"], []).append(waiver)
+
+    round_numbers = sorted(
+        {round_entry["round"] for round_entry in rounds} | set(waivers_by_round)
+    )
+    rounds_by_number = {round_entry["round"]: round_entry for round_entry in rounds}
+
+    merged: dict[str, Any] = {}
+    for round_number in round_numbers:
+        for waiver in waivers_by_round.get(round_number, []):
+            merged[waiver["dimension"]] = {
+                "waived": True,
+                "reason": waiver["reason"],
+                "by": waiver.get("by"),
+            }
+        round_entry = rounds_by_number.get(round_number)
+        reviewer = round_entry.get("reviewer") if round_entry else None
+        if reviewer is not None:
+            merged.update(reviewer["coverage"])
+    return merged
 
 
 def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
@@ -589,6 +675,13 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
 
     decision = reviewer["decision"]
     if decision == "CHANGES_REQUIRED":
+        phase = latest["phase"]
+        triage_hint = (
+            " -- codev work triage may address or defer it (with a reason) to "
+            "resolve this"
+            if phase == "outer"
+            else ""
+        )
         expansion = _find_scope_expansion(rounds)
         if expansion is not None:
             return CheckResult(
@@ -596,7 +689,8 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
                 "stop_scope_expansion",
                 f"finding at {expansion['location']} ({expansion['category']}) was "
                 "not raised in this phase's first round and carries no "
-                "expansion_reason: treat as scope creep, escalate to the human",
+                f"expansion_reason: treat as scope creep, escalate to the human"
+                f"{triage_hint}",
             )
         repeat = _find_repeated_blocking_finding(rounds)
         if repeat is not None:
@@ -605,9 +699,39 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
                 "stop_repeated_finding",
                 f"finding at {repeat['location']} ({repeat['category']}) was already "
                 "raised as blocking in an earlier round: same root cause, escalate "
-                "to the human",
+                f"to the human{triage_hint}",
             )
-        phase = latest["phase"]
+        if phase == "outer":
+            triage = latest.get("triage")
+            if triage is None:
+                return CheckResult(
+                    True,
+                    "ok_waiting_on_triage",
+                    f"round {latest['round']}: findings recorded, waiting on the "
+                    "human to triage which are addressed this round",
+                )
+            if _all_blocking_deferred(reviewer["findings"], triage):
+                # Every blocking finding was explicitly deferred -- nothing is
+                # left for a builder to do, so there is nothing to spend the
+                # round cap on. The round's own decision stays CHANGES_REQUIRED
+                # (an honest record of what the specialists found); this is a
+                # distinct, later verdict about what happens next, exactly like
+                # every other CHANGES_REQUIRED sub-case above.
+                missing = _incomplete_coverage(_effective_coverage(state))
+                if missing:
+                    return CheckResult(
+                        False,
+                        "stop_incomplete_coverage",
+                        "coverage manifest incomplete or failing: "
+                        + ", ".join(missing),
+                    )
+                return CheckResult(
+                    True,
+                    "ok_approve_with_deferrals",
+                    f"round {latest['round']}: every blocking finding was triaged "
+                    "as defer, nothing left to build -- ready to present to the "
+                    "human with the deferred findings on record",
+                )
         phase_round_count = _phase_round_count(rounds, phase)
         if phase_round_count >= state["max_rounds"][phase]:
             return CheckResult(
@@ -615,13 +739,6 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
                 "stop_round_cap",
                 f"round {phase_round_count} of {state['max_rounds'][phase]} for "
                 f"phase {phase!r}: stop and escalate to the human",
-            )
-        if phase == "outer" and latest.get("triage") is None:
-            return CheckResult(
-                True,
-                "ok_waiting_on_triage",
-                f"round {latest['round']}: findings recorded, waiting on the human "
-                "to triage which are addressed this round",
             )
         return CheckResult(
             True, "ok_continue", f"round {latest['round'] + 1} may begin"
@@ -636,7 +753,7 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
         )
 
     if decision == "READY_FOR_HUMAN_APPROVAL":
-        missing = _incomplete_coverage(reviewer["coverage"])
+        missing = _incomplete_coverage(_effective_coverage(state))
         if missing:
             return CheckResult(
                 False,
@@ -748,6 +865,55 @@ def reopen(
     return path
 
 
+def waive(
+    work_item_id: str,
+    dimension: str,
+    reason: str,
+    *,
+    target: Path,
+    by: str | None = None,
+) -> Path:
+    """Human-authorized: this coverage dimension will not be run for this
+    work item, instead of leaving it to eventually be covered by some round.
+
+    Modeled on `reopen`'s append-only pattern, not `record_triage`'s
+    single-slot-per-round one -- `waive` is meant to be callable multiple
+    times, across different dimensions and different rounds, the same way
+    `reopen` is callable multiple times across an item's life.
+
+    Deliberately distinct from a passing coverage entry (no `passed` key):
+    `_effective_coverage` folds waivers into the same most-recent-wins merge
+    as real coverage verdicts, but `codev work log` and `pr_description()`
+    always render a waiver as "waived", never as "passed" -- this system
+    never claims something was verified when a human decided not to run it.
+
+    Callers (agents) must treat this the same as any other hard-to-reverse
+    scope decision: only run it on an explicit human choice, never on your
+    own initiative because a specialist looked skippable.
+    """
+    if dimension not in REQUIRED_COVERAGE_DIMENSIONS:
+        raise WorkError(
+            f"unknown coverage dimension: {dimension!r}; expected one of "
+            f"{REQUIRED_COVERAGE_DIMENSIONS}"
+        )
+    _validate_required_text("reason", reason)
+    _validate_optional_text("by", by)
+    state = _load(work_item_id, target=target)
+    _ensure_in_progress(state)
+    state.setdefault("coverage_waivers", []).append(
+        {
+            "timestamp": _utc_now_iso(),
+            "round": state["current_round"],
+            "dimension": dimension,
+            "reason": reason,
+            "by": by,
+        }
+    )
+    path = _work_item_path(target, work_item_id)
+    _save(work_item_id, state, target=target)
+    return path
+
+
 def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
     state = _load(work_item_id, target=target)
     latest = state["rounds"][-1]
@@ -761,6 +927,7 @@ def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
         "latest_decision": reviewer["decision"] if reviewer is not None else None,
         "link_ref": state.get("link_ref"),
         "summary": state.get("summary"),
+        "description": state.get("description"),
         "owner": state.get("owner"),
         "entry": state.get("entry"),
     }
@@ -835,6 +1002,84 @@ def log_text(work_item_id: str, *, target: Path) -> str:
             f"reopened{by_suffix} after round {reopen_record['from_round']} "
             f"(was {reopen_record['previous_status']}): {reopen_record['reason']}"
         )
+    for waiver in state.get("coverage_waivers", []):
+        by = waiver.get("by")
+        by_suffix = f" by {by}" if by else ""
+        lines.append(
+            f"waived{by_suffix} at round {waiver['round']}: {waiver['dimension']} "
+            f"-- {waiver['reason']}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+_DIMENSION_LABELS: dict[str, str] = {
+    "correctness": "correctness",
+    "security_privacy_data_compatibility": "security, privacy, data, and compatibility",
+    "concurrency": "concurrency",
+    "error_handling": "error handling",
+    "test_quality": "test quality",
+    "architecture_scope": "architecture and scope",
+    "maintainability": "maintainability",
+    "rollout": "rollout",
+}
+
+
+def pr_description(work_item_id: str, *, target: Path) -> str:
+    """A human-readable pull request body, self-contained without the repo's
+    own docs -- distinct from log_text()'s round-by-round evidence log, which
+    stays the audit trail (`codev work log`) and is never embedded here.
+
+    Draws on `description` (falling back to `summary` for a small item that
+    never needed the fuller text) for the why/what, and the item's coverage
+    manifest for a prose validation summary -- both already recorded by the
+    time an item reaches `open-pr`/`mark-ready`, so this needs no new input.
+    """
+    state = _load(work_item_id, target=target)
+    rounds: list[dict[str, Any]] = state["rounds"]
+    lines: list[str] = []
+
+    narrative = state.get("description") or state.get("summary")
+    lines.append(narrative if narrative else f"Work item {state['work_item_id']}.")
+    lines.append("")
+
+    lines.append("## Validation")
+    latest_reviewer = rounds[-1]["reviewer"]
+    if latest_reviewer is None:
+        lines.append("Review is still in progress.")
+    else:
+        coverage = _effective_coverage(state)
+        missing = _incomplete_coverage(coverage)
+        all_passed = not missing and all(
+            coverage.get(dimension, {}).get("passed")
+            for dimension in REQUIRED_COVERAGE_DIMENSIONS
+        )
+        if all_passed:
+            lines.append(
+                f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} review dimensions pass."
+            )
+        else:
+            for dimension in REQUIRED_COVERAGE_DIMENSIONS:
+                label = _DIMENSION_LABELS.get(dimension, dimension)
+                entry = coverage.get(dimension)
+                if entry is None:
+                    lines.append(f"- {label}: not yet reviewed")
+                elif entry.get("waived"):
+                    reason = entry.get("reason", "")
+                    by = entry.get("by")
+                    by_suffix = f" (by {by})" if by else ""
+                    lines.append(f"- {label}: waived{by_suffix} -- {reason}")
+                elif entry.get("passed"):
+                    lines.append(f"- {label}: passed")
+                else:
+                    lines.append(f"- {label}: not passed")
+    lines.append("")
+
+    tracking = f"Work item: {state['work_item_id']}"
+    link_ref = state.get("link_ref")
+    if link_ref:
+        tracking += f" ({link_ref})"
+    lines.append(tracking)
+    lines.append(f"Full review history: `codev work log --id {state['work_item_id']}`")
     return "\n".join(lines) + "\n"
 
 

@@ -51,6 +51,66 @@ Semantic Versioning.
     breaking-change policy.
 
 ### Added
+- Add `codev work waive` and human-selectable specialist dispatch in
+  `outer-loop-runner` (ADR-0016, all four platforms): `outer-loop-runner`
+  now presents the five specialists as a numbered list and dispatches only
+  the ones selected, pushing back with its own reasoning (never blocking)
+  when it judges a skipped one relevant to the actual diff. Immediately
+  after selection, any dimension left uncovered can be waived on the spot
+  with a required reason (`codev work waive --id --dimension --reason
+  [--by]`) instead of only ever being deferred to a later round.
+  `_effective_coverage` folds waivers into its existing round-ordered,
+  most-recent-wins coverage merge (ADR-0011) -- a later real specialist
+  verdict always overrides an earlier waiver, and vice versa. A waiver is
+  never recorded or rendered as `passed`; `codev work log` and
+  `pr_description()` (ADR-0014) always show it distinctly.
+- Add `code-audit-gate`, a new always-autonomous subagent, to all four
+  platform adapters (ADR-0015): `code-audit`'s automatic pre-PR invocation
+  mode is retired in favor of this dedicated agent, since that mode never
+  used the human-approval gate that keeps `code-audit` itself `mode:
+  primary` — audit-only, no approval to grant. `orchestrator` now dispatches
+  it between the builder's round and `lightweight-reviewer`, self-fixing
+  style/documentation issues directly and resolving before the reviewer
+  round is ever recorded, so a pre-PR cleanup pass can no longer exhaust the
+  outer phase's round cap before the five specialists run even once (a real
+  failure mode in the old routing, traced and fixed). `orchestrator`'s final
+  step now names `outer-loop-runner` explicitly as the human-triggered next
+  action instead of leaving the hand-off implicit; OpenCode's
+  `permission.task` allow-list gains `code-audit-gate` (the agent it can
+  actually task-dispatch, unlike the old `mode: primary` `code-audit`,
+  which the allow-list never actually covered).
+- Add `--description` to `codev work start` and a new
+  `work.pr_description()` formatter (ADR-0014): `codev git mark-ready` no
+  longer overwrites the pull request body with `codev work log`'s
+  mechanical, round-by-round evidence dump -- it now regenerates a
+  self-contained prose description (why/what, a plain-language validation
+  summary per review dimension, a link to the full evidence trail) that a
+  reviewer can read without opening any of the repository's own docs.
+  `codev git open-pr` falls back to the same formatter when neither
+  `--body` nor `--body-file` is given, instead of requiring one.
+  `codev work log`'s own output is completely unchanged -- the evidence
+  trail stays linked from the PR body, never embedded in it.
+- Add a `git.pr_base` config key (ADR-0013): `codev git open-pr` now
+  resolves it (via the existing layered `codev config` mechanism) before
+  falling back to the repository's actual default branch, so a repository
+  that doesn't PR directly into its default branch no longer needs every
+  caller to pass `--base` explicitly to avoid opening against the wrong
+  branch. An explicit `--base` still wins. Also fixes a latent bug this key
+  was the first to trigger: `codev config set` wrote dotted keys (e.g.
+  `git.pr_base`) unquoted, which TOML parses as a nested table rather than
+  one literal key, so they never round-tripped back through `codev config
+  get`/`resolve` at all.
+- Add `--paths`/`--staged`/`--round`/`--evidence` to `codev git commit`
+  (ADR-0012): `--paths`/`--staged` scope the commit instead of the always-on
+  `git add -A`, so concurrent unrelated worktree changes (most often
+  CoDev's own workflow files) no longer have to ride into a product commit
+  with no way to avoid it -- the default now refuses a commit when the
+  dirty worktree mixes `.codev/lock.json`-managed paths with anything else,
+  pointing at `--paths`/`--staged` instead of silently combining them.
+  `--round`/`--evidence` (given together) atomically records the builder's
+  round via `codev work record --role builder` against the commit's actual
+  resulting head in the same call, removing the manual repair step
+  ADR-0007's session needed when that second call used a stale head.
 - Add `codev git branch|commit|push|open-pr|mark-ready` (ADR-0002,
   ADR-0003): a guarded mutation surface so a work item's inner/outer loop
   can create its own branch, commit, push, and land a pull request without
@@ -201,6 +261,39 @@ Semantic Versioning.
   `ROUND_SCHEMA_VERSION` bump) and printed by `codev work log`. `start`'s
   duplicate-id error and `_round_slot`'s round-cap error now name it
   directly.
+- `outer-loop-runner` (all four platforms) gains a comment-sourced entry
+  mode (ADR-0010): human-triggered, fetches a PR's existing `comments`/
+  `reviews` (`publish_review.py --fetch`) instead of dispatching the five
+  specialists fresh, drafts a finding directly from each actionable
+  comment -- trusting its content, not independently re-verifying it,
+  unless the comment itself names a specialist -- records and auto-triages
+  every drafted finding as `address` (the human's own request to fix these
+  comments is the authorization), then corrects and verifies with the
+  inner loop's fast `lightweight-reviewer` standard rather than a full
+  specialist pass. No `work.py`/`git_ops.py` change: `_round_slot`,
+  `record_triage`, and the coverage gate already operate generically on
+  whatever produced a round's findings. `ok_approve` still requires
+  complete eight-dimension coverage, now explicitly carried forward from
+  whichever round most recently established each dimension (an unstated
+  assumption the existing narrow-correction path already relied on;
+  written down for both paths in the same change). `critique-review`'s
+  accepted inputs drop the developer-supplied review comment case, now
+  strictly better served by this entry for any work item with an open PR.
+- Coverage carry-forward (ADR-0008, ADR-0010) is now mechanized instead of
+  agent-executed prose (ADR-0011): `codev work check` computes an
+  *effective* coverage manifest from a work item's full round history —
+  the most recent round to establish each dimension wins — instead of
+  reading only the latest round's own coverage dict. A round now only
+  needs to record the dimension(s) it actually re-verified; `check` fills
+  in the rest and names exactly what's still missing when coverage is
+  genuinely incomplete. `record_reviewer` still stores exactly what it is
+  given, so the per-round audit trail is unchanged; only the completeness
+  check reads across history. Fixes a real failure mode: a narrow
+  post-approval correction (a PR-comment fix, for example) that only
+  re-verified one or two dimensions used to report `stop_incomplete_
+  coverage` for dimensions a much earlier round had already established,
+  because carrying that forward correctly was previously the recording
+  agent's responsibility to get right by hand every time.
 
 ### Fixed
 - `builder` (all four platforms) was instructed to call `codev work record
@@ -273,6 +366,46 @@ Semantic Versioning.
   `ai-agent-guidelines.md` (all platforms) now document running `open-pr`
   before `mark-ready` when a reopened item reaches `ok_approve` with no
   pull request yet.
+- `OPENCODE_AGENT_CONFIGS` in `installer.py` -- the allowlist that gets
+  merged into a target repository's `.opencode/opencode.json` -- only ever
+  registered `orchestrator`, `code-audit`, `builder`, and `reviewer`. It was
+  never updated as `lightweight-reviewer`, `outer-loop-runner`, and the five
+  outer-loop specialists were added to the bundle (ADR-0002, ADR-0003): the
+  agent `.md` files were installed to `.opencode/agents/`, but nothing told
+  OpenCode's config they existed, so OpenCode could not offer
+  `outer-loop-runner` as a selectable primary agent even though its own
+  file correctly declares `mode: primary`. Same root cause, same fix shape,
+  as the `[tool.setuptools.package-data]` drift above: a hand-maintained
+  allowlist silently fell behind a growing bundle. Added the seven missing
+  entries and a regression test (`test_every_bundled_opencode_agent_is_registered`)
+  that fails whenever a bundled `.opencode/agents/*.md` file has no matching
+  `OPENCODE_AGENT_CONFIGS` entry.
+- A triaged blocking finding could not resolve `stop_scope_expansion` or
+  `stop_repeated_finding` (ADR-0008): `check()` evaluated those guards
+  unconditionally, before ever consulting the round's triage, so deferring
+  a newly surfaced but non-critical finding -- Google's own documented
+  practice for exactly this situation -- had no working path; even a
+  triage-only fix would still have dead-ended on the outer phase's round
+  cap, which is exhausted by definition whenever scope expansion fires on
+  the one permitted correction round. `_find_scope_expansion` and
+  `_find_repeated_blocking_finding` now exempt any finding already
+  triaged (address or defer) on the same round -- the guard still fires
+  the first time, unconditionally, but a human's one required look
+  resolves it, the same as it already does for every other outer-loop
+  finding. New `check()` outcome `ok_approve_with_deferrals`: when every
+  blocking finding on a `CHANGES_REQUIRED` round is triaged as `defer`,
+  there is nothing left for a builder to do, so `check()` reports this
+  directly (after the same coverage-completeness gate `READY_FOR_HUMAN_APPROVAL`
+  already applies) instead of falling through to the round cap. The
+  round's own recorded decision stays `CHANGES_REQUIRED` -- an honest
+  record of what was actually found -- `codev git mark-ready` now accepts
+  this reason alongside `ok_approve`. Wires up
+  `human_override_blocking_finding`, a `VALID_ESCALATION_TRIGGERS` entry
+  unused since ADR-0003: `outer-loop-runner.md` and
+  `ai-agent-guidelines.md` (all platforms) now name the exact moment to
+  record it. `codev work reopen` (ADR-0007) needed no change -- it remains
+  the tool for a round cap or drift that genuinely requires more building,
+  which a deferred finding does not.
 
 ### Removed
 - Remove the `clean-code-review` skill (ADR-0005). Its catalog-driven
@@ -289,6 +422,30 @@ Semantic Versioning.
   clarifying sentence: now that the outer loop covers a CoDev-built work
   item with an open PR, it is explicitly the zero-ceremony path for a diff
   with neither.
+- Stop shipping `scripts/evaluate-development-workflow.py`,
+  `scripts/validate-development-workflow.py`, and
+  `evals/development-workflow/scenarios.json` into target repositories
+  (ADR-0009). Both scripts and the catalog they operate on are this
+  repository's own workflow-validation tooling -- `validate-development-
+  workflow.py`'s expected skills/guides are hardcoded to this project's own
+  bundle shape, and the catalog's scenarios test routing among this
+  project's own bundled skills -- referenced nowhere a target repository's
+  agent is instructed to run them except one dead-end mention in
+  `ai-agent-guidelines.md` (removed; the equivalent guidance for this
+  repository's own contributors moved to `CONTRIBUTING.md`). They move from
+  `src/codev_workflow/bundle/` to this repository's top-level `scripts/`
+  and `evals/` directories, which already held stale, independently
+  drifted duplicates of them (missing docstrings, a retired skill
+  reference, pre-relocation doc paths) -- refreshed to the bundle copies'
+  content in the same move, so there is now exactly one copy. A target
+  repository that already has these files (including one that deleted them
+  locally, the discovery that prompted this) sees `codev update` report
+  `retire`, not `conflict`, the next time it runs -- no manual restore
+  needed first. `[tool.setuptools.package-data]`'s now-pointless entries
+  for them are removed; `scripts/verify_release.py` invokes both from
+  their new location. New regression test
+  (`test_walk_bundle_excludes_internal_dev_tooling`) asserting neither
+  script nor the catalog ever reappears in `_walk_bundle()`'s output.
 
 ## [0.2.0] - 2026-08-11
 

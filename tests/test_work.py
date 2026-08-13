@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 from codev_workflow.work import (
     REQUIRED_COVERAGE_DIMENSIONS,
@@ -14,6 +15,7 @@ from codev_workflow.work import (
     describe_all,
     escalations_text,
     log_text,
+    pr_description,
     read_escalations,
     record_builder,
     record_escalation,
@@ -22,6 +24,7 @@ from codev_workflow.work import (
     reopen,
     start,
     triage_note,
+    waive,
 )
 
 FULL_COVERAGE = {
@@ -47,6 +50,7 @@ class StartTests(unittest.TestCase):
                     "latest_decision": None,
                     "link_ref": None,
                     "summary": None,
+                    "description": None,
                     "owner": None,
                     "entry": None,
                 },
@@ -1287,6 +1291,557 @@ class TriageTests(unittest.TestCase):
         self.assertEqual("stop_repeated_finding", result.reason)
 
 
+class AllBlockingDeferredTests(unittest.TestCase):
+    """A triaged blocking finding -- deferred or addressed -- has already had
+    its one required human look, so it should not keep tripping
+    stop_scope_expansion/stop_repeated_finding forever, and an outer round
+    whose triage defers every blocking finding has nothing left to build."""
+
+    def _to_outer_round_two_with_new_finding(
+        self,
+        target: Path,
+        round_one_finding: dict[str, object],
+        round_two_findings: list[dict[str, object]],
+        *,
+        coverage: dict[str, Any] | None = None,
+    ) -> None:
+        start("item-1", "base-sha", target=target)
+        record_reviewer(
+            "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+        )
+        record_builder("item-1", 2, "head-2", {}, target=target)
+        record_reviewer(
+            "item-1",
+            2,
+            "head-2",
+            [round_one_finding],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        record_triage(
+            "item-1",
+            2,
+            {"dispositions": {round_one_finding["id"]: {"disposition": "address"}}},
+            target=target,
+        )
+        record_builder("item-1", 3, "head-3", {"delivered": "fix"}, target=target)
+        record_reviewer(
+            "item-1",
+            3,
+            "head-3",
+            round_two_findings,
+            coverage if coverage is not None else {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+
+    def test_new_finding_still_stops_before_triage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            self._to_outer_round_two_with_new_finding(
+                target, _blocking_finding("a.py:1", "correctness"), [new_finding]
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual("stop_scope_expansion", result.reason)
+
+    def test_deferring_the_new_finding_clears_scope_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [new_finding],
+                coverage=FULL_COVERAGE,
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        new_finding["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "tracked in issue #42",
+                        }
+                    }
+                },
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual(
+            CheckResult(True, "ok_approve_with_deferrals", result.message), result
+        )
+
+    def test_deferring_a_repeated_finding_also_clears(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            repeated = _blocking_finding("a.py:1", "correctness")
+            self._to_outer_round_two_with_new_finding(
+                target, repeated, [repeated], coverage=FULL_COVERAGE
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        repeated["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "still not worth blocking on",
+                        }
+                    }
+                },
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual("ok_approve_with_deferrals", result.reason)
+
+    def test_incomplete_coverage_still_blocks_after_deferral(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [new_finding],
+                coverage={},
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        new_finding["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "tracked separately",
+                        }
+                    }
+                },
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual("stop_incomplete_coverage", result.reason)
+
+    def test_addressing_instead_of_deferring_still_needs_a_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [new_finding],
+                coverage=FULL_COVERAGE,
+            )
+            record_triage(
+                "item-1",
+                3,
+                {"dispositions": {new_finding["id"]: {"disposition": "address"}}},
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        # round 3 is already the outer phase's one allowed correction round
+        self.assertEqual("stop_round_cap", result.reason)
+
+    def test_mixed_address_and_defer_is_not_all_deferred(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            addressed = _blocking_finding("c.py:3", "error_handling")
+            deferred = _blocking_finding("d.py:4", "maintainability")
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [addressed, deferred],
+                coverage=FULL_COVERAGE,
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        addressed["id"]: {"disposition": "address"},
+                        deferred["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "tracked separately",
+                        },
+                    }
+                },
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual("stop_round_cap", result.reason)
+
+    def test_zero_blocking_findings_counts_as_all_deferred(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            nit = {
+                "id": "n1",
+                "location": "c.py:3",
+                "category": "style",
+                "blocking": False,
+                "rank": 3,
+                "summary": "consider renaming",
+            }
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [nit],
+                coverage=FULL_COVERAGE,
+            )
+            record_triage("item-1", 3, {"dispositions": {}}, target=target)
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual("ok_approve_with_deferrals", result.reason)
+
+    def test_deferred_finding_is_visible_in_log_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            self._to_outer_round_two_with_new_finding(
+                target,
+                _blocking_finding("a.py:1", "correctness"),
+                [new_finding],
+                coverage=FULL_COVERAGE,
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        new_finding["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "tracked in issue #42",
+                        }
+                    }
+                },
+                target=target,
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn("CHANGES_REQUIRED", text)
+        self.assertIn("defer (tracked in issue #42)", text)
+
+    def test_inner_phase_gets_no_triage_hint_in_stop_message(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, max_rounds=5)
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [_blocking_finding("a.py:1", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_builder("item-1", 2, "base-sha", {"delivered": "fix"}, target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "base-sha",
+                [_blocking_finding("b.py:9", "architecture_scope")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            result = check("item-1", "base-sha", target=target)
+        self.assertEqual("stop_scope_expansion", result.reason)
+        self.assertNotIn("codev work triage", result.message)
+
+
+class CoverageCarryForwardTests(unittest.TestCase):
+    """A round only needs to record the dimensions it actually re-verified;
+    `check` fills the rest in from whichever earlier round most recently
+    established them. This is what makes coverage carry-forward -- documented
+    since ADR-0008/0010 -- an invariant the tool enforces rather than
+    bookkeeping the recording agent has to get right on its own. See
+    docs/adr/0011-mechanize-coverage-carry-forward.md."""
+
+    def test_ok_approve_carries_forward_coverage_from_an_earlier_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            reopen(
+                "item-1", "new-head", "human approved a PR-comment fix", target=target
+            )
+            record_reviewer(
+                "item-1",
+                2,
+                "new-head",
+                [],
+                {"correctness": FULL_COVERAGE["correctness"]},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "new-head", target=target)
+        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+
+    def test_a_dimension_never_recorded_in_any_round_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                {"correctness": FULL_COVERAGE["correctness"]},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            reopen("item-1", "new-head", "human approved a fix", target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "new-head",
+                [],
+                {"correctness": FULL_COVERAGE["correctness"]},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "new-head", target=target)
+        self.assertFalse(result.ok)
+        self.assertEqual("stop_incomplete_coverage", result.reason)
+        self.assertIn("rollout", result.message)
+
+    def test_a_later_rounds_failing_verdict_overrides_an_earlier_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            reopen("item-1", "new-head", "human approved a fix", target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "new-head",
+                [],
+                {"rollout": {"passed": False, "evidence": "rollback broke"}},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "new-head", target=target)
+        self.assertFalse(result.ok)
+        self.assertEqual("stop_incomplete_coverage", result.reason)
+        self.assertIn("rollout", result.message)
+
+    def test_ok_approve_with_deferrals_also_carries_forward_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            first_finding = _blocking_finding("a.py:1", "correctness")
+            record_builder("item-1", 2, "head-2", {}, target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "head-2",
+                [first_finding],
+                FULL_COVERAGE,
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_triage(
+                "item-1",
+                2,
+                {"dispositions": {first_finding["id"]: {"disposition": "address"}}},
+                target=target,
+            )
+            record_builder("item-1", 3, "head-3", {"delivered": "fix"}, target=target)
+            new_finding = _blocking_finding("c.py:3", "error_handling")
+            record_reviewer(
+                "item-1",
+                3,
+                "head-3",
+                [new_finding],
+                {
+                    "error_handling": {
+                        "passed": True,
+                        "evidence": "re-verified only this",
+                    }
+                },
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_triage(
+                "item-1",
+                3,
+                {
+                    "dispositions": {
+                        new_finding["id"]: {
+                            "disposition": "defer",
+                            "override_reason": "tracked in issue #9",
+                        }
+                    }
+                },
+                target=target,
+            )
+            result = check("item-1", "head-3", target=target)
+        self.assertEqual(
+            CheckResult(True, "ok_approve_with_deferrals", result.message), result
+        )
+
+
+class WaiverTests(unittest.TestCase):
+    """docs/adr/0016-human-selectable-specialist-dispatch-with-authorized-
+    coverage-waivers.md: a human-authorized waiver satisfies
+    `_incomplete_coverage` for a dimension no specialist ran, distinctly
+    from an actual pass -- and participates in the same round-ordered,
+    most-recent-wins merge `_effective_coverage` already applies to real
+    coverage verdicts (ADR-0011)."""
+
+    def test_rejects_empty_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            with self.assertRaises(WorkError):
+                waive("item-1", "rollout", "  ", target=target)
+
+    def test_rejects_unknown_dimension(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            with self.assertRaises(WorkError):
+                waive("item-1", "not-a-real-dimension", "reason", target=target)
+
+    def test_rejects_when_not_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            close("item-1", "abandoned", target=target)
+            with self.assertRaises(WorkError):
+                waive("item-1", "rollout", "reason", target=target)
+
+    def test_waived_dimension_resolves_ok_approve_with_no_specialist_run(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            partial = {
+                dimension: entry
+                for dimension, entry in FULL_COVERAGE.items()
+                if dimension != "rollout"
+            }
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                partial,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            # Confirm it's genuinely incomplete before waiving.
+            self.assertEqual(
+                "stop_incomplete_coverage",
+                check("item-1", "base-sha", target=target).reason,
+            )
+            waive(
+                "item-1", "rollout", "doc-only change, no rollout risk", target=target
+            )
+            result = check("item-1", "base-sha", target=target)
+        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+
+    def test_later_real_verdict_overrides_an_earlier_waiver(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            partial = {
+                dimension: entry
+                for dimension, entry in FULL_COVERAGE.items()
+                if dimension != "rollout"
+            }
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                partial,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            waive("item-1", "rollout", "assumed low risk", target=target)
+            reopen(
+                "item-1",
+                "new-head",
+                "human asked for a rollout check after all",
+                target=target,
+            )
+            record_reviewer(
+                "item-1",
+                2,
+                "new-head",
+                [],
+                {"rollout": {"passed": False, "evidence": "found a real issue"}},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "new-head", target=target)
+        self.assertEqual("stop_incomplete_coverage", result.reason)
+        self.assertIn("rollout: not passed", result.message)
+
+    def test_later_waiver_overrides_an_earlier_failing_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            coverage = dict(FULL_COVERAGE)
+            coverage["rollout"] = {"passed": False, "evidence": "found an issue"}
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                coverage,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            self.assertEqual(
+                "stop_incomplete_coverage",
+                check("item-1", "base-sha", target=target).reason,
+            )
+            reopen(
+                "item-1", "new-head", "human decided it doesn't matter", target=target
+            )
+            waive("item-1", "rollout", "reconsidered, out of scope", target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "new-head",
+                [],
+                {},
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "new-head", target=target)
+        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+
+    def test_log_text_renders_waivers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            waive("item-1", "rollout", "doc-only change", target=target, by="Alice")
+            text = log_text("item-1", target=target)
+        self.assertIn("waived by Alice at round 1: rollout", text)
+        self.assertIn("doc-only change", text)
+
+
 class EscalationLogTests(unittest.TestCase):
     def test_no_file_yet_reads_as_empty(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1396,6 +1951,141 @@ class EscalationLogTests(unittest.TestCase):
         self.assertIn("[outer/round 2]", text)
         self.assertIn("stop_scope_expansion", text)
         self.assertIn("finding at b.py:9 not in round 1", text)
+
+
+class PrDescriptionTests(unittest.TestCase):
+    def test_renders_a_waived_dimension_distinctly_from_passed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="x")
+            partial = {
+                dimension: entry
+                for dimension, entry in FULL_COVERAGE.items()
+                if dimension != "rollout"
+            }
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [],
+                partial,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            waive("item-1", "rollout", "doc-only change", target=target, by="Alice")
+            body = pr_description("item-1", target=target)
+        self.assertIn("rollout: waived (by Alice) -- doc-only change", body)
+        self.assertNotIn("rollout: passed", body)
+
+    def test_falls_back_to_summary_when_description_unset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="a small fix")
+            body = pr_description("item-1", target=target)
+        self.assertIn("a small fix", body)
+
+    def test_prefers_description_over_summary_when_both_set(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                summary="short",
+                description="the fuller why and what, discussed and approved",
+            )
+            body = pr_description("item-1", target=target)
+        self.assertIn("the fuller why and what, discussed and approved", body)
+
+    def test_reports_review_in_progress_before_any_reviewer_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="x")
+            body = pr_description("item-1", target=target)
+        self.assertIn("still in progress", body)
+
+    def test_reports_all_dimensions_pass_on_full_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="x")
+            record_reviewer(
+                "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            record_builder("item-1", 2, "base-sha", {}, target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "base-sha",
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            body = pr_description("item-1", target=target)
+        expected = f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} review dimensions pass"
+        self.assertIn(expected, body)
+
+    def test_names_missing_dimensions_individually_when_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="x")
+            record_reviewer(
+                "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            partial = {"correctness": {"passed": True, "evidence": "checked"}}
+            record_builder("item-1", 2, "base-sha", {}, target=target)
+            record_reviewer(
+                "item-1",
+                2,
+                "base-sha",
+                [],
+                partial,
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            body = pr_description("item-1", target=target)
+        self.assertIn("correctness: passed", body)
+        self.assertIn("rollout: not yet reviewed", body)
+
+    def test_never_includes_the_round_by_round_trail(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, summary="x")
+            finding = {
+                "id": "f1",
+                "location": "a.py:1",
+                "category": "correctness",
+                "blocking": True,
+                "rank": 1,
+                "summary": "a bug",
+            }
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [finding],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            body = pr_description("item-1", target=target)
+        self.assertNotIn("a bug", body)
+        self.assertNotIn("round 1:", body)
+        self.assertIn("codev work log", body)
+
+    def test_includes_the_work_item_id_and_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                summary="x",
+                link_ref="docs/plan.md",
+            )
+            body = pr_description("item-1", target=target)
+        self.assertIn("item-1", body)
+        self.assertIn("docs/plan.md", body)
 
 
 if __name__ == "__main__":

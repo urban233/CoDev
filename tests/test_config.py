@@ -102,6 +102,20 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(1, schema_version)
             self.assertEqual({"model": "anthropic/claude"}, values)
 
+    def test_set_value_round_trips_a_dotted_key(self) -> None:
+        # An unquoted dotted key (e.g. "git.pr_base") is a TOML dotted key --
+        # parsed as a nested table, not one literal key -- unless the writer
+        # quotes it. Regression coverage for that round-trip.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            set_value("git.pr_base", "develop", target=target)
+            _, values = _read_config(_project_config_path(target))
+            self.assertEqual({"git.pr_base": "develop"}, values)
+            self.assertEqual(
+                ResolvedValue("develop", "project"),
+                resolve("git.pr_base", target=target),
+            )
+
     def test_set_value_preserves_other_keys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

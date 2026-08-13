@@ -25,6 +25,13 @@ _OUTER_LOOP_ROLES = (
 
 
 def _role_paths(directory: str, extension: str) -> dict[str, str]:
+    # code-audit (and its code-audit-gate counterpart, ADR-0015) are
+    # deliberately absent here: both are templated ({{LANGUAGE_INSTRUCTIONS}}
+    # etc.), so the raw bundle only ever has a .template source, never the
+    # rendered filename this function's paths assume -- verify_adapter's
+    # bundle-parity test runs directly against the raw bundle. Their rendered
+    # output is instead checked where it's actually produced, by the
+    # installer's own per-platform agent-rendering tests.
     paths = {
         "orchestrator": f"{directory}/orchestrator.{extension}",
         "builder": f"{directory}/builder.{extension}",
@@ -51,6 +58,7 @@ _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
     "outer-loop-runner": (
         "codev work record",
         "codev work triage",
+        "codev work waive",
         "codev git mark-ready",
     ),
     "correctness-tests-specialist": ("expansion_reason",),

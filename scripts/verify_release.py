@@ -28,20 +28,14 @@ def _release_commands(root: Path) -> list[tuple[str, list[str]]]:
             "workflow validation",
             [
                 python,
-                "src/codev_workflow/bundle/scripts/validate-development-workflow.py",
+                "scripts/validate-development-workflow.py",
                 "--repo",
                 "src/codev_workflow/bundle",
             ],
         ),
         (
             "workflow evaluator self-test",
-            [
-                python,
-                "src/codev_workflow/bundle/scripts/evaluate-development-workflow.py",
-                "--repo",
-                "src/codev_workflow/bundle",
-                "--self-test",
-            ],
+            [python, "scripts/evaluate-development-workflow.py", "--self-test"],
         ),
         ("Ruff lint", [python, "-m", "ruff", "check", "."]),
         ("Ruff format", [python, "-m", "ruff", "format", "--check", "."]),

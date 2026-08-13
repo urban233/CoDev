@@ -16,6 +16,8 @@ ALLOWED_OBSERVERS = {"human", "harness", "independent-ai"}
 
 @dataclass(frozen=True)
 class Evaluation:
+    """Represent the result of evaluating one workflow observation set."""
+
     passed: bool
     earned: int
     possible: int
@@ -23,6 +25,17 @@ class Evaluation:
 
 
 def read_json(path: Path) -> Any:
+    """Read and decode a JSON document.
+
+    Args:
+        path: JSON file to read.
+
+    Returns:
+        The decoded JSON value.
+
+    Raises:
+        ValueError: If the file is missing or contains invalid JSON.
+    """
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
@@ -32,6 +45,14 @@ def read_json(path: Path) -> Any:
 
 
 def validate_catalog(catalog: Any) -> list[str]:
+    """Validate the structure and references in an evaluation catalog.
+
+    Args:
+        catalog: Decoded catalog data to validate.
+
+    Returns:
+        Validation error messages, or an empty list when the catalog is valid.
+    """
     errors: list[str] = []
     if not isinstance(catalog, dict):
         return ["catalog root must be an object"]
@@ -106,6 +127,14 @@ def validate_catalog(catalog: Any) -> list[str]:
 
 
 def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
+    """Create an empty observation template for every catalog scenario.
+
+    Args:
+        catalog: Validated evaluation catalog.
+
+    Returns:
+        A JSON-compatible observation template.
+    """
     return {
         "catalog_schema_version": catalog["schema_version"],
         "run_id": "replace-with-run-id",
@@ -138,6 +167,16 @@ def result_template(catalog: dict[str, Any]) -> dict[str, Any]:
 def evaluate_results(
     catalog: dict[str, Any], results: Any, *, allow_partial: bool = False
 ) -> Evaluation:
+    """Score observed workflow results against a validated catalog.
+
+    Args:
+        catalog: Validated evaluation catalog.
+        results: Decoded observation results to score.
+        allow_partial: Whether missing scenario results are permitted.
+
+    Returns:
+        The earned score, possible score, and any validation messages.
+    """
     messages: list[str] = []
     earned = 0
     possible = 0
@@ -191,7 +230,8 @@ def evaluate_results(
             earned += 1
         else:
             messages.append(
-                f"{scenario_id}: route {route!r} is not accepted; expected one of "
+                f"{scenario_id}: route {route!r} is not accepted; expected "
+                "one of "
                 f"{scenario['accepted_routes']!r}"
             )
 
@@ -227,6 +267,14 @@ def evaluate_results(
 
 
 def self_test(catalog: dict[str, Any]) -> list[str]:
+    """Verify that the evaluator accepts and rejects known fixtures.
+
+    Args:
+        catalog: Validated evaluation catalog.
+
+    Returns:
+        Self-test error messages, or an empty list when all checks pass.
+    """
     passing = result_template(catalog)
     passing["run_id"] = "evaluator-self-test"
     passing["observer"]["name"] = "deterministic-fixture"
@@ -268,8 +316,13 @@ def self_test(catalog: dict[str, Any]) -> list[str]:
 
 
 def main() -> int:
+    """Run catalog validation, template generation, or result scoring.
+
+    Returns:
+        Zero when the requested operation succeeds, otherwise one.
+    """
     parser = argparse.ArgumentParser(
-        description="Validate workflow scenarios or score externally observed runs."
+        description=("Validate workflow scenarios or score externally observed runs.")
     )
     parser.add_argument(
         "--repo",
@@ -311,7 +364,8 @@ def main() -> int:
         target = args.write_template.resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
-            json.dumps(result_template(catalog), indent=2) + "\n", encoding="utf-8"
+            json.dumps(result_template(catalog), indent=2) + "\n",
+            encoding="utf-8",
         )
         print(f"Wrote observation template: {target}")
         return 0
@@ -336,7 +390,8 @@ def main() -> int:
             catalog, results, allow_partial=args.allow_partial
         )
         print(
-            f"Workflow behavioral score: {evaluation.earned}/{evaluation.possible} "
+            f"Workflow behavioral score: {evaluation.earned}/"
+            f"{evaluation.possible} "
             f"checks ({len(catalog['scenarios'])} catalog scenarios)"
         )
         for message in evaluation.messages:
@@ -345,7 +400,8 @@ def main() -> int:
 
     print(
         "Workflow evaluation catalog passed: "
-        f"{len(catalog['scenarios'])} scenarios and {len(catalog['criteria'])} criteria"
+        f"{len(catalog['scenarios'])} scenarios and "
+        f"{len(catalog['criteria'])} criteria"
     )
     return 0
 

@@ -10,7 +10,7 @@ model (how the bundle is built, installed, and updated); this document is
 the product itself — the skills, agents, and CLI surface a developer
 actually uses once CoDev is installed.
 
-Surface inventory current as of 2026-08-12.
+Surface inventory current as of 2026-08-13.
 
 ## Identity
 
@@ -89,9 +89,11 @@ undifferentiated six: `review-change`, `pr-review`, and `critique-review`
 stay manual/on-demand, each for a genuinely on-demand case (no work item, an
 already-posted PR, or a downstream finding-to-diff bridge); `code-audit` and
 the two `audit-google-*-style` skills it dispatches are mechanical,
-catalog-driven, and now auto-gate immediately before every PR opens, no
-longer purely manual. `clean-code-review` is retired — its catalog absorbed
-into `architecture-maintainability-specialist` below, not kept as a seventh
+catalog-driven, and no longer purely manual — a pre-PR gate runs
+automatically immediately before every PR opens, now via the dedicated
+`code-audit-gate` subagent rather than `code-audit` itself (ADR-0015).
+`clean-code-review` is retired — its catalog absorbed into
+`architecture-maintainability-specialist` below, not kept as a seventh
 rail.
 
 ### Agents (four platform copies each: OpenCode, Codex, Junie, Antigravity)
@@ -103,7 +105,8 @@ rail.
 | `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `orchestrator`, fresh context each round |
 | `outer-loop-runner` | Review -> Ship (session entry point) | Human-started, separate entry point from `orchestrator`; does not run on a PR event |
 | `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005) |
-| `code-audit` | Review / pre-Ship | Two modes (ADR-0005): a human may still invoke it directly for its full two-phase, human-approval-gated workflow; `orchestrator` also invokes it automatically, audit-only, immediately before every PR opens. Its "never invoke another agent" guardrail is about it calling out, not about being called into — unchanged either way |
+| `code-audit` | Review / pre-Ship | Human-invoked only (ADR-0015): the full two-phase, human-approval-gated audit-and-fix workflow. No longer has an automatic pre-PR invocation mode — that responsibility moved entirely to `code-audit-gate` below, since Phase 1's audit-only pass never needed the approval gate that makes this agent `mode: primary` in the first place |
+| `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `orchestrator`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
 
 ## Directions and open questions
 
@@ -127,6 +130,17 @@ directly in the outer phase, and `codev work check` now reports
 the shelf" CLI command was considered and dropped in the same ADR: GitHub's
 own Issues list, populated via `codev git issue-create` (ADR-0004), already
 covers it without a second, CoDev-specific mechanism.
+
+**Resolved and implemented (ADR-0015):** `code-audit`'s automatic pre-PR
+gate mode is retired in favor of a new, dedicated subagent,
+`code-audit-gate` — the two were always doing different jobs under one
+`mode: primary` agent: a human-approval-gated audit-and-fix workflow, and a
+narrower, always-autonomous audit-and-fix pass with no approval step to
+gate. Splitting them also fixed a round-cap bug the automatic mode's old
+routing had: recording its findings as an outer-phase round could spend
+both of that phase's rounds on mechanical style fixes before the five
+specialists ever ran once. `code-audit-gate` now resolves entirely before
+the reviewer round is recorded, so it never opens the outer phase at all.
 
 **Still open:**
 
