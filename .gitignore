@@ -13,3 +13,5 @@ dist/
 # Local escalation log (ADR-0003) -- deliberately not shared/committed, this
 # project's own dogfood usage of `codev work`.
 .codev/work/escalations.jsonl
+
+real-use-cases

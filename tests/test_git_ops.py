@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from codev_workflow import git_ops, work
+from codev_workflow import config, git_ops, work
 
 FULL_COVERAGE = {
     dimension: {"passed": True, "evidence": f"checked {dimension}"}
@@ -27,6 +29,20 @@ def _init_repo(target: Path) -> str:
     _run(["add", "-A"], cwd=target)
     _run(["commit", "-m", "initial commit"], cwd=target)
     return git_ops.current_head(target)
+
+
+def _write_lock(target: Path, managed_paths: list[str]) -> None:
+    lock_dir = target / ".codev"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 2,
+        "bundle_version": "0.0.0",
+        "platforms": [],
+        "programming_language": None,
+        "files": {path: "deadbeef" for path in managed_paths},
+        "integrations": {},
+    }
+    (lock_dir / "lock.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 class BranchAndCommitTests(unittest.TestCase):
@@ -85,6 +101,119 @@ class BranchAndCommitTests(unittest.TestCase):
             new_head = git_ops.commit("item-1", "add changed.txt", target=target)
             self.assertNotEqual(base, new_head)
             self.assertEqual(new_head, git_ops.current_head(target))
+
+    def test_paths_and_staged_are_mutually_exclusive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.commit(
+                    "item-1", "a change", target=target, paths=["a.txt"], staged=True
+                )
+
+    def test_round_and_evidence_must_be_given_together(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "changed.txt").write_text("content\n", encoding="utf-8")
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.commit("item-1", "a change", target=target, round_number=1)
+
+    def test_paths_commits_only_the_named_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "in-scope.txt").write_text("scoped\n", encoding="utf-8")
+            (target / "unrelated.txt").write_text("unrelated\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1", "scoped change", target=target, paths=["in-scope.txt"]
+            )
+            changed = git_ops.changed_files("item-1", target=target)
+            self.assertIn("in-scope.txt", changed)
+            self.assertNotIn("unrelated.txt", changed)
+            status = _run_capture(["status", "--porcelain"], cwd=target)
+            self.assertIn("unrelated.txt", status)
+
+    def test_staged_commits_only_the_index(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "staged.txt").write_text("staged\n", encoding="utf-8")
+            (target / "unstaged.txt").write_text("unstaged\n", encoding="utf-8")
+            _run(["add", "staged.txt"], cwd=target)
+            git_ops.commit("item-1", "staged only", target=target, staged=True)
+            self.assertIn("staged.txt", git_ops.changed_files("item-1", target=target))
+            self.assertNotIn(
+                "unstaged.txt", git_ops.changed_files("item-1", target=target)
+            )
+
+    def test_round_and_evidence_records_builder_receipt_on_resulting_head(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "changed.txt").write_text("content\n", encoding="utf-8")
+            head = git_ops.commit(
+                "item-1",
+                "builder change",
+                target=target,
+                round_number=1,
+                evidence={"validation": "pytest passed"},
+            )
+            # If record_builder had been called against a stale head, check()
+            # would report stop_drift instead of waiting on the reviewer.
+            result = work.check("item-1", head, target=target)
+            self.assertTrue(result.ok)
+            self.assertEqual("ok_waiting_on_reviewer", result.reason)
+
+    def test_refuses_mixed_managed_and_product_changes_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            _write_lock(target, [".codev/for-ai/ai-agent-guidelines.md"])
+            (target / ".codev").mkdir(exist_ok=True)
+            (target / ".codev" / "for-ai").mkdir(exist_ok=True)
+            (target / ".codev" / "for-ai" / "ai-agent-guidelines.md").write_text(
+                "updated\n", encoding="utf-8"
+            )
+            (target / "product.py").write_text("code\n", encoding="utf-8")
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.commit("item-1", "mixed change", target=target)
+
+    def test_allows_homogeneous_dirty_paths_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            _write_lock(target, [".codev/for-ai/ai-agent-guidelines.md"])
+            (target / "product.py").write_text("code\n", encoding="utf-8")
+            head = git_ops.commit("item-1", "product only", target=target)
+            self.assertEqual(head, git_ops.current_head(target))
+
+    def test_mixed_changes_allowed_with_explicit_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            _write_lock(target, [".codev/for-ai/ai-agent-guidelines.md"])
+            (target / ".codev").mkdir(exist_ok=True)
+            (target / ".codev" / "for-ai").mkdir(exist_ok=True)
+            (target / ".codev" / "for-ai" / "ai-agent-guidelines.md").write_text(
+                "updated\n", encoding="utf-8"
+            )
+            (target / "product.py").write_text("code\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1", "product only", target=target, paths=["product.py"]
+            )
+            self.assertIn("product.py", git_ops.changed_files("item-1", target=target))
 
 
 class ChangedFilesTests(unittest.TestCase):
@@ -163,6 +292,24 @@ def _run_capture(args: list[str], *, cwd: Path) -> str:
     return completed.stdout
 
 
+def _gh_no_existing_pr(
+    pr_create_url: str = "https://github.com/o/r/pull/1",
+    repo_view: str | None = None,
+) -> Callable[..., str]:
+    """A `_run_gh` side_effect: no PR exists yet for any branch queried."""
+
+    def fake(args: list[str], *, cwd: Path) -> str:
+        if args[:2] == ["pr", "view"]:
+            raise git_ops.GitOpsError("no pull requests found")
+        if args[:2] == ["repo", "view"]:
+            if repo_view is None:
+                raise AssertionError("unexpected repo view call")
+            return repo_view
+        return pr_create_url
+
+    return fake
+
+
 class OpenPrTests(unittest.TestCase):
     def _repo_ready_for_pr(self, target: Path) -> str:
         base = _init_repo(target)
@@ -191,17 +338,155 @@ class OpenPrTests(unittest.TestCase):
             target = Path(directory)
             self._repo_ready_for_pr(target)
             with patch.object(
-                git_ops, "_run_gh", return_value="https://github.com/o/r/pull/1"
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
             ) as run_gh:
                 url = git_ops.open_pr(
                     "item-1", "title", "body", target=target, base="main"
                 )
-            command = run_gh.call_args.args[0]
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            command = create_call.args[0]
         self.assertEqual("https://github.com/o/r/pull/1", url)
         self.assertIn("--draft", command)
         self.assertNotIn("--force", command)
         self.assertNotIn("-f", command)
         self.assertIn("codev/item-1", command)
+
+    def test_uses_configured_pr_base_when_none_given(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            config.set_value("git.pr_base", "develop", target=target)
+            with (
+                patch.object(
+                    git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+                ) as run_gh,
+                patch.object(git_ops, "default_branch") as default_branch,
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target)
+            default_branch.assert_not_called()
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+        self.assertIn("develop", create_call.args[0])
+
+    def test_explicit_base_overrides_configured_pr_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            config.set_value("git.pr_base", "develop", target=target)
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+            ) as run_gh:
+                git_ops.open_pr(
+                    "item-1", "title", "body", target=target, base="release"
+                )
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            command = create_call.args[0]
+        self.assertIn("release", command)
+        self.assertNotIn("develop", command)
+
+    def test_falls_back_to_repository_default_branch_when_unconfigured(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            with (
+                patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()),
+                patch.object(
+                    git_ops, "default_branch", return_value="main"
+                ) as default_branch,
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target)
+            default_branch.assert_called_once()
+
+    def test_refuses_when_a_pr_already_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+
+            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
+                if args[:2] == ["pr", "view"]:
+                    return "https://github.com/o/r/pull/9"
+                raise AssertionError(f"unexpected call: {args}")
+
+            with (
+                patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh,
+                self.assertRaises(git_ops.GitOpsError) as context,
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
+            self.assertIn("already has one open", str(context.exception))
+            self.assertIn("mark-ready", str(context.exception))
+            self.assertFalse(
+                any(
+                    call.args[0][:2] == ["pr", "create"]
+                    for call in run_gh.call_args_list
+                )
+            )
+
+    def test_refuses_on_a_hard_stop_even_in_the_outer_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.reopen(
+                "item-1", "some-head-not-matching-real-git", "recovered", target=target
+            )
+            with (
+                patch.object(git_ops, "_run_gh") as run_gh,
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
+            run_gh.assert_not_called()
+
+    def test_opens_a_pr_for_an_outer_phase_item_with_none_yet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.reopen("item-1", base, "recovered into the outer phase", target=target)
+            work.record_reviewer(
+                "item-1",
+                2,
+                base,
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            self.assertEqual(
+                "ok_approve", work.check("item-1", base, target=target).reason
+            )
+
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+            ) as run_gh:
+                url = git_ops.open_pr(
+                    "item-1", "title", "body", target=target, base="main"
+                )
+            self.assertEqual("https://github.com/o/r/pull/1", url)
+            pr_view_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "view"]
+            )
+        self.assertEqual("codev/item-1", pr_view_call.args[0][2])
 
     def test_appends_closes_issue_when_link_ref_matches_same_repo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -218,12 +503,9 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
-            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
-                if args[:2] == ["repo", "view"]:
-                    return "o/r"
-                return "https://github.com/o/r/pull/1"
-
-            with patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh:
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
+            ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
             pr_create_call = next(
                 call
@@ -248,12 +530,9 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
-            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
-                if args[:2] == ["repo", "view"]:
-                    return "o/r"
-                return "https://github.com/o/r/pull/1"
-
-            with patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh:
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
+            ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
             pr_create_call = next(
                 call
@@ -280,12 +559,16 @@ class OpenPrTests(unittest.TestCase):
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             with patch.object(
-                git_ops, "_run_gh", return_value="https://github.com/o/r/pull/1"
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
             ) as run_gh:
                 git_ops.open_pr("item-1", "title", "body", target=target, base="main")
-            self.assertEqual(1, run_gh.call_count)
-            body_index = run_gh.call_args.args[0].index("--body") + 1
-        self.assertEqual("body", run_gh.call_args.args[0][body_index])
+            pr_create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            body_index = pr_create_call.args[0].index("--body") + 1
+        self.assertEqual("body", pr_create_call.args[0][body_index])
 
 
 class CreateIssueTests(unittest.TestCase):
@@ -410,6 +693,74 @@ class MarkReadyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self._repo_ready_for_approval(target)
+            with patch.object(git_ops, "_run_gh", return_value="") as run_gh:
+                git_ops.mark_ready("item-1", target=target)
+            commands = [call.args[0] for call in run_gh.call_args_list]
+        self.assertEqual(2, len(commands))
+        self.assertIn("edit", commands[0])
+        self.assertIn("ready", commands[1])
+
+    def test_regenerated_body_is_the_pr_description_not_the_evidence_log(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_approval(target)
+            with patch.object(git_ops, "_run_gh", return_value="") as run_gh:
+                git_ops.mark_ready("item-1", target=target)
+            edit_call = next(
+                call for call in run_gh.call_args_list if "edit" in call.args[0]
+            )
+            body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
+            self.assertEqual(work.pr_description("item-1", target=target), body)
+            self.assertNotEqual(work.log_text("item-1", target=target), body)
+            self.assertNotIn("round 1:", body)
+
+    def test_readies_when_approved_with_deferrals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.record_builder("item-1", 2, base, {}, target=target)
+            finding = {
+                "id": "f1",
+                "location": "a.py:1",
+                "category": "error_handling",
+                "blocking": True,
+                "rank": 1,
+                "summary": "leaks a raw OSError",
+            }
+            work.record_reviewer(
+                "item-1",
+                2,
+                base,
+                [finding],
+                FULL_COVERAGE,
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            work.record_triage(
+                "item-1",
+                2,
+                {
+                    "dispositions": {
+                        "f1": {
+                            "disposition": "defer",
+                            "override_reason": "tracked in issue #42",
+                        }
+                    }
+                },
+                target=target,
+            )
+            self.assertEqual(
+                "ok_approve_with_deferrals",
+                work.check("item-1", base, target=target).reason,
+            )
+
             with patch.object(git_ops, "_run_gh", return_value="") as run_gh:
                 git_ops.mark_ready("item-1", target=target)
             commands = [call.args[0] for call in run_gh.call_args_list]

@@ -136,3 +136,11 @@ propose it, never invoke it on its own initiative.
   `READY_FOR_OUTER_LOOP` and non-`READY_FOR_OUTER_LOOP` cases, `max_rounds`
   widen-only validation, required-text validation for `head`/`reason`, and
   `log_text` output for the `reopens` trail.
+- Follow-up found in real use: a reopen that infers the outer phase skips
+  the inner loop's own bridge into a pull request, and `codev git
+  open_pr`'s original guard (`check()` must return exactly `ok_ready_for_pr`
+  — a result produced only once) left no way to open one afterward. Fixed
+  by checking GitHub directly for an existing pull request instead of
+  inferring readiness from that one historical `check()` reason; see the
+  `codev git open-pr` entry in `CHANGELOG.md`'s `[Unreleased]` section.
+  `reopen`'s own design did not need to change.

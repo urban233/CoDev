@@ -41,6 +41,29 @@ AUDIT_AGENT_TEMPLATES = {
         ".opencode/agents/code-audit.md",
     ),
 }
+# code-audit-gate is the autonomous, subagent-only counterpart dispatched by
+# orchestrator's pre-PR cleanup step -- distinct from code-audit above, which
+# stays human-direct only (ADR-0015). Same {{LANGUAGE_INSTRUCTIONS}}/
+# {{SKILL_PERMISSIONS}}/{{DESCRIPTION_SCOPE}} templating, rendered the same
+# way via _render_code_audit_agent.
+PRE_PR_CLEANUP_AGENT_TEMPLATES = {
+    "antigravity": (
+        ".agents/agents/code-audit-gate.md.template",
+        ".agents/agents/code-audit-gate.md",
+    ),
+    "codex": (
+        ".codex/agents/code-audit-gate.toml.template",
+        ".codex/agents/code-audit-gate.toml",
+    ),
+    "junie": (
+        ".junie/agents/code-audit-gate.md.template",
+        ".junie/agents/code-audit-gate.md",
+    ),
+    "opencode": (
+        ".opencode/agents/code-audit-gate.md.template",
+        ".opencode/agents/code-audit-gate.md",
+    ),
+}
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
@@ -51,6 +74,13 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "description": "Standalone primary code audit agent",
         "mode": "primary",
     },
+    "code-audit-gate": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Autonomous pre-PR cleanup subagent -- fixes style and "
+            "documentation issues only, dispatched by orchestrator"
+        ),
+    },
     "builder": {
         "model": "openai/gpt-5.6-luna",
         "description": "Bounded implementation subagent",
@@ -58,6 +88,57 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "reviewer": {
         "model": "openai/gpt-5.6-luna",
         "description": "Independent evidence-based code reviewer",
+    },
+    "lightweight-reviewer": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Narrow, fast independent check that the inner loop's change "
+            "matches the work item and passes local QA"
+        ),
+    },
+    "outer-loop-runner": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Human-triggered outer-loop coordinator -- fetches a PR, gates on "
+            "CI, dispatches five specialist reviewers, and drives "
+            "human-triaged correction to a landed pull request"
+        ),
+        "mode": "primary",
+    },
+    "correctness-tests-specialist": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Outer-loop specialist for correctness, error handling, and test "
+            "quality -- one of five parallel specialist reviewers"
+        ),
+    },
+    "security-data-specialist": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Outer-loop specialist for security, privacy, data, and "
+            "compatibility risk -- one of five parallel specialist reviewers"
+        ),
+    },
+    "concurrency-specialist": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Outer-loop specialist for concurrency and race-condition risk -- "
+            "one of five parallel specialist reviewers"
+        ),
+    },
+    "architecture-maintainability-specialist": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Outer-loop specialist for architecture, scope, and "
+            "maintainability -- one of five parallel specialist reviewers"
+        ),
+    },
+    "rollout-specialist": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Outer-loop specialist for rollout, monitoring, migration, and "
+            "rollback -- one of five parallel specialist reviewers"
+        ),
     },
 }
 
@@ -285,6 +366,12 @@ def _bundle_files(
         if template is None:
             raise CoDevError(f"bundle is missing {source}")
         templates[platform] = template
+    cleanup_templates: dict[str, bytes] = {}
+    for platform, (source, _) in PRE_PR_CLEANUP_AGENT_TEMPLATES.items():
+        template = files.pop(source, None)
+        if template is None:
+            raise CoDevError(f"bundle is missing {source}")
+        cleanup_templates[platform] = template
     # The validator needs a complete policy fixture at the bundle root, while
     # target repositories receive the conflict-safe managed block instead.
     files.pop("AGENTS.md", None)
@@ -307,6 +394,11 @@ def _bundle_files(
             _, destination = AUDIT_AGENT_TEMPLATES[platform]
             files[destination] = _render_code_audit_agent(
                 templates[platform], programming_language
+            )
+        if platform in PRE_PR_CLEANUP_AGENT_TEMPLATES:
+            _, destination = PRE_PR_CLEANUP_AGENT_TEMPLATES[platform]
+            files[destination] = _render_code_audit_agent(
+                cleanup_templates[platform], programming_language
             )
     if "opencode" not in platforms:
         files = {

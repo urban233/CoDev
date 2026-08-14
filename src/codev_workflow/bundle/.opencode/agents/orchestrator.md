@@ -8,6 +8,7 @@ permission:
     builder: allow
     lightweight-reviewer: allow
     reviewer: allow
+    code-audit-gate: allow
   bash:
     "*": ask
     "git status*": allow
@@ -50,11 +51,16 @@ applies as written. Two other cases:
   it.
 - **Direct review** (`codev work start --entry direct-review`): a
   developer's work is already finished and needs only review — there is
-  nothing left for `builder` to do. Skip steps 3–7 entirely. Open round
-  state with `codev work start --id <work-item-id> --base <base-sha>
-  --entry direct-review`, then go straight to step 8's `ok_ready_for_pr`
-  handling — `codev work check` recognizes a fresh `direct-review` item as
-  immediately ready, without any inner-loop round recorded.
+  nothing left for `builder` to do. Skip steps 3–6 and 8 entirely — there is
+  no builder round to delegate, commit, or review. Open round state with
+  `codev work start --id <work-item-id> --base <base-sha> --entry
+  direct-review`, still dispatch `code-audit-gate` at step 7 against the
+  current head (already-finished human work can carry the same mechanical
+  style/doc drift a builder round would), then go straight to step 9's
+  `ok_ready_for_pr` handling — `codev work check` recognizes a fresh
+  `direct-review` item as immediately ready regardless of
+  `code-audit-gate`'s exact resulting head, without any inner-loop round
+  recorded.
 
 1. Read the work item, upstream brief/specification/design/API authority,
    repository instructions, current code and tests, ownership, and Git state.
@@ -75,66 +81,77 @@ applies as written. Two other cases:
    approval before every delegated build is not the default.
 5. Create the work item's own branch — `codev git branch --id <work-item-id>
    --base <base-sha>` — open its round state — `codev work start --id
-   <work-item-id> --base <base-sha>` — then invoke `builder` with the
+   <work-item-id> --base <base-sha>`, adding `--github-issue <N>` when the
+   work item has a linked GitHub issue, so the eventual pull request closes
+   it automatically — then invoke `builder` with the
    accepted work item and implementation plan, exact authority links, base
    commit, allowed scope, integration constraints, validation, stop
    conditions, and the current round number. Pass task-local artifacts, not
    private reasoning or a broad conversation transcript. Instruct the builder
-   to record its evidence with `codev work record --role builder`.
+   to return its evidence receipt -- validation, deviations, limitations,
+   and changed files -- for the orchestrator to record; the builder never
+   calls `codev work record` itself.
 6. When the builder returns, verify that its evidence receipt identifies
    actual validation, deviations, limitations, and changed files. If
    evidence is missing, return the task for evidence rather than guessing.
-   Commit the result — `codev git commit --id <work-item-id> --message
-   <summary>` — then record the builder's round against the exact resulting
-   head: `codev work record --id <work-item-id> --round <round> --role
-   builder --head <commit-head-sha> --evidence <evidence.json>`. The builder
-   never records its own evidence: without commit permission it cannot know
-   the exact head its changes will land on.
-7. Invoke `lightweight-reviewer` in a fresh task with the exact base-to-head
-   snapshot and work item. This pass is deliberately narrow — correctness and
-   intent-match against the work item, plus independent re-verification that
-   the builder's reported validation actually passes — not the full
-   dimension set. Instruct it to record its round with `codev work record
-   --role reviewer --decision
-   READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
-8. Run `codev work check --id <work-item-id> --head <head-sha>` and act on
+   Commit the result and record the builder's round in one call — `codev
+   git commit --id <work-item-id> --message <summary> --round <round>
+   --evidence <evidence.json>` — against the exact resulting head. The
+   builder never records its own evidence: without commit permission it
+   cannot know that head in advance.
+7. Dispatch `code-audit-gate` against that exact head — a narrow, autonomous
+   subagent scoped to style and documentation only, never logic or
+   behavior; it self-fixes anything it finds and reports back a short
+   summary instead of stopping for approval, since nothing in its scope
+   needs one. If it reports changes, commit them — `codev git commit --id
+   <work-item-id> --message <summary>` — a plain commit, not another
+   builder round. If it reports something it could not resolve, treat that
+   as an escalation and stop for the human. Carry its summary into the next
+   step so `lightweight-reviewer` can note it as a non-blocking finding
+   alongside its own verdict — this is the cleanup pass's evidence trail,
+   not a separate record.
+8. Invoke `lightweight-reviewer` in a fresh task with the exact base-to-head
+   snapshot — the head now final, after any cleanup — and work item, plus
+   `code-audit-gate`'s summary from step 7 if it changed anything. This pass
+   is deliberately narrow — correctness and intent-match against the work
+   item, plus independent re-verification that the builder's reported
+   validation actually passes — not the full dimension set. Instruct it to
+   record its round with `codev work record --role reviewer --decision
+   READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`,
+   including a non-blocking finding for the cleanup summary when there is
+   one.
+9. Run `codev work check --id <work-item-id> --head <head-sha>` and act on
    its exit code — do not judge convergence or coverage completeness
    yourself.
    - On `ok_continue`, send the findings and original accepted plan back to
      `builder` for the next round; do not let the reviewer edit.
-   - On `ok_ready_for_pr`, invoke `code-audit` in its pre-PR gate mode
-     (Phase 1 only) against the exact head snapshot. If it reports no
-     findings that need a change, push the branch — `codev git push --id
+   - On `ok_ready_for_pr`, push the branch — `codev git push --id
      <work-item-id>` — and open a draft pull request — `codev git open-pr
-     --id <work-item-id> --title <title> --body <body>` — the bridge into
-     the outer loop's specialist review. This is automatic: opening a pull
-     request is fully reversible and has no effect on production, unlike
-     merge. If `code-audit` reports findings, record them with `codev work
-     record --role reviewer --decision CHANGES_REQUIRED` against the round
-     that just reached `ok_ready_for_pr` — exactly like any other reviewer
-     round. Because that round's decision was `READY_FOR_OUTER_LOOP`, this
-     opens the outer phase's round 1, not another inner round, which needs a
-     triage disposition for each finding before a correction round can open
-     — record one: `codev work triage --id <work-item-id> --round <round>
-     --triage <triage.json>` (these are mechanical style findings the human
-     already authorized by installing the audit skill, so triage here is
-     normally a fast pass, not a fresh judgment call). Then route the
-     finding to `builder` for the next round — do not push or open a pull
-     request until a later `code-audit` pass comes back clean.
+     --id <work-item-id> --title <title>` — the bridge into the outer loop's
+     specialist review. Never pass `--body`: omitting it generates the PR
+     description from the work item's own recorded evidence and coverage,
+     which is always more accurate and more consistent than hand-composed
+     prose. This is automatic: opening a pull request is fully reversible
+     and has no effect on production, unlike merge. Mechanical style and
+     documentation issues were already resolved at step 7, before this round
+     was ever recorded, so nothing pre-PR spends any of the outer phase's
+     round cap.
    - On any other nonzero exit — round cap reached, a repeated blocking
      finding, scope quietly expanded past the round's first pass, an
      incomplete coverage record, or drift since the last recorded snapshot —
      record the escalation — `codev work escalate --id <work-item-id>
      --trigger <trigger> --cause <cause>` — and stop for the human with the
      printed reason and a recommendation.
-9. Once a pull request opens, the outer loop's specialist review and human
-   triage continue this same work item; close it — `codev work close --id
-   <work-item-id> --outcome approved|abandoned|escalated` — only once that
-   concludes and the human has acted. Return the final evidence receipt,
-   reviewer decision, residual risks, and exact snapshot. Never claim
-   approval and stop before merge, publish, deploy, migration, or rollout
-   expansion unless the human explicitly grants the corresponding
-   authority — never before opening the pull request itself.
+10. Once a pull request opens, tell the human plainly that outer-loop
+    review continues via `outer-loop-runner` for this work item — a
+    separate, human-triggered switch; never continue it yourself. Close the
+    item — `codev work close --id <work-item-id> --outcome
+    approved|abandoned|escalated` — only once that concludes and the human
+    has acted. Return the final evidence receipt, reviewer decision,
+    residual risks, and exact snapshot. Never claim approval and stop
+    before merge, publish, deploy, migration, or rollout expansion unless
+    the human explicitly grants the corresponding authority — never before
+    opening the pull request itself.
 
 Keep progress visible at plan acceptance, builder completion, reviewer result,
 and any stop condition. Do not spawn unrelated agents or parallel builders in

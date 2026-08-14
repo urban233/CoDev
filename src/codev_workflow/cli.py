@@ -252,6 +252,13 @@ def _parser() -> argparse.ArgumentParser:
         "--summary", default=None, help="one-line human-readable description"
     )
     w_start.add_argument(
+        "--description",
+        default=None,
+        help="fuller why/what, proportional to the work's size; used to build "
+        "the pull request description -- omit for a small item where "
+        "--summary is already enough",
+    )
+    w_start.add_argument(
         "--owner", default=None, help="defaults to the detected local/gh identity"
     )
     w_start.add_argument(
@@ -287,6 +294,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     w_record.add_argument(
         "--coverage", type=_target, help="reviewer: JSON coverage-manifest file"
+    )
+    w_record.add_argument(
+        "--selection",
+        type=_target,
+        help="reviewer, outer phase: JSON specialist-selection audit file",
     )
     w_record.add_argument("--decision", choices=VALID_DECISIONS)
     w_record.add_argument("--target", type=_target, default=Path.cwd())
@@ -329,6 +341,23 @@ def _parser() -> argparse.ArgumentParser:
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
     w_reopen.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_waive = work_commands.add_parser(
+        "waive",
+        help=(
+            "human-authorized: this coverage dimension will not be run for "
+            "this work item -- never run without an explicit human decision"
+        ),
+    )
+    w_waive.add_argument("--id", required=True)
+    w_waive.add_argument(
+        "--dimension", required=True, help="one of REQUIRED_COVERAGE_DIMENSIONS"
+    )
+    w_waive.add_argument("--reason", required=True, help="why this waiver is granted")
+    w_waive.add_argument(
+        "--by", default=None, help="defaults to the detected local/gh identity"
+    )
+    w_waive.add_argument("--target", type=_target, default=Path.cwd())
 
     w_status = work_commands.add_parser(
         "status", help="show one or all open work items"
@@ -413,6 +442,32 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_commit.add_argument("--id", required=True)
     g_commit.add_argument("--message", required=True)
+    g_commit_scope = g_commit.add_mutually_exclusive_group()
+    g_commit_scope.add_argument(
+        "--paths",
+        nargs="+",
+        default=None,
+        help="stage and commit only these paths, instead of everything dirty",
+    )
+    g_commit_scope.add_argument(
+        "--staged",
+        action="store_true",
+        help="commit exactly what is already staged; stage nothing new",
+    )
+    g_commit.add_argument(
+        "--round",
+        type=int,
+        default=None,
+        dest="round_number",
+        help="builder round to record; requires --evidence",
+    )
+    g_commit.add_argument(
+        "--evidence",
+        type=_target,
+        default=None,
+        help="builder: JSON evidence file; with --round, atomically records "
+        "the builder receipt against the resulting commit",
+    )
     g_commit.add_argument("--target", type=_target, default=Path.cwd())
 
     g_push = git_commands.add_parser(
@@ -427,9 +482,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_open_pr.add_argument("--id", required=True)
     g_open_pr.add_argument("--title", required=True)
-    g_open_pr.add_argument("--body", help="literal PR body text")
+    g_open_pr.add_argument(
+        "--body",
+        help="literal PR body text; omit both this and --body-file to "
+        "generate one from the work item's description and coverage",
+    )
     g_open_pr.add_argument("--body-file", type=_target, help="path to a PR body file")
-    g_open_pr.add_argument("--base", help="defaults to the repository's default branch")
+    g_open_pr.add_argument(
+        "--base",
+        help="defaults to the 'git.pr_base' config value, then the "
+        "repository's default branch",
+    )
     g_open_pr.add_argument("--target", type=_target, default=Path.cwd())
 
     g_mark_ready = git_commands.add_parser(
@@ -717,6 +780,7 @@ def _run_work_command(args: argparse.Namespace) -> int:
             max_rounds=args.max_rounds,
             link_ref=link_ref,
             summary=summary,
+            description=args.description,
             owner=owner,
             entry=args.entry,
         )
@@ -740,6 +804,9 @@ def _run_work_command(args: argparse.Namespace) -> int:
             coverage = (
                 work_module.load_json_file(args.coverage) if args.coverage else {}
             )
+            selection = (
+                work_module.load_json_file(args.selection) if args.selection else None
+            )
             work_module.record_reviewer(
                 args.id,
                 args.round,
@@ -748,6 +815,7 @@ def _run_work_command(args: argparse.Namespace) -> int:
                 coverage,
                 args.decision,
                 target=target,
+                specialist_selection=selection,
             )
         print(f"Recorded round {args.round} ({args.role}) for {args.id}")
         return 0
@@ -789,6 +857,20 @@ def _run_work_command(args: argparse.Namespace) -> int:
             by=by,
         )
         print(f"Reopened work item {args.id} at {path}")
+        return 0
+
+    if args.work_command == "waive":
+        by = args.by
+        if by is None:
+            by = git_ops_module.detect_identity(target=target)
+        path = work_module.waive(
+            args.id,
+            args.dimension,
+            args.reason,
+            target=target,
+            by=by,
+        )
+        print(f"Waived {args.dimension!r} for work item {args.id} at {path}")
         return 0
 
     if args.work_command == "status":
@@ -868,7 +950,24 @@ def _run_git_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.git_command == "commit":
-        head = git_ops_module.commit(args.id, args.message, target=target)
+        if (args.round_number is None) != (args.evidence is None):
+            raise git_ops_module.GitOpsError(
+                "--round and --evidence must be given together"
+            )
+        evidence = (
+            work_module.load_json_file(args.evidence)
+            if args.evidence is not None
+            else None
+        )
+        head = git_ops_module.commit(
+            args.id,
+            args.message,
+            target=target,
+            paths=args.paths,
+            staged=args.staged,
+            round_number=args.round_number,
+            evidence=evidence,
+        )
         print(f"Committed {head} on {args.id}'s branch")
         return 0
 
@@ -883,7 +982,7 @@ def _run_git_command(args: argparse.Namespace) -> int:
         elif args.body is not None:
             body = args.body
         else:
-            raise git_ops_module.GitOpsError("either --body or --body-file is required")
+            body = work_module.pr_description(args.id, target=target)
         url = git_ops_module.open_pr(
             args.id, args.title, body, target=target, base=args.base
         )

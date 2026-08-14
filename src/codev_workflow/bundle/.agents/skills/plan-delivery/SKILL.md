@@ -35,7 +35,11 @@ Before updating an existing plan, inspect its current content and the Git
 working tree. Do not silently overwrite a locally changed plan; surface the
 conflict and ask for direction. Preserve the plan's document state using only
 `Draft`, `Accepted`, `Active`, or `Superseded`; Git history is its revision
-record.
+record. `Draft` is not a resting state: once every row in "Risks and
+discovery" tied to a Decision point has a recorded human answer, that is the
+point to move the document state to `Accepted` — say so and ask, rather than
+leaving a plan the team is already acting on marked as if it were still
+unresolved.
 
 ## 1. Verify planning inputs
 
@@ -173,6 +177,15 @@ do not duplicate the full document unless the user asks.
 
 ## Handoff
 
+Before implementation starts on a ready item, and only when the project
+actually tracks issues on GitHub, push it with `codev git issue-create
+--title <title> --body <body> [--path <glob>]...` (`--path` suggests owners
+from an existing `CODEOWNERS` when one exists) and record the returned issue
+URL back in the plan's own Status/tracker column. This is what
+`codev work start --github-issue N` and `codev git open-pr`'s automatic
+`Closes #N` depend on; a project with no GitHub issue tracker in use skips
+this step and the plan entry alone remains the required authority.
+
 Give each developer only their work item, relevant brief/design/API links,
-integration constraints, and acceptance criteria. Start `build-change` for the
-next ready item.
+integration constraints, and acceptance criteria (including the recorded
+issue URL, when one exists). Start `build-change` for the next ready item.

@@ -23,7 +23,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from codev_workflow import work
+from codev_workflow import config, work
+from codev_workflow.installer import CoDevError, _read_lock
 
 GIT_STATE_FILENAME = "git-state.json"
 
@@ -366,13 +367,87 @@ def _ensure_on_own_branch(work_item_id: str, *, target: Path) -> str:
     return branch
 
 
-def commit(work_item_id: str, message: str, *, target: Path) -> str:
+def _managed_paths(target: Path) -> set[str] | None:
+    """CoDev-managed target-relative paths, from .codev/lock.json.
+
+    Returns None (never raises) when the lock file is missing or unreadable
+    -- the mixed-path commit guard below is a defensive nudge, not a hard
+    requirement, and must not block a commit just because a repo has no
+    CoDev install to classify paths against.
+    """
+    try:
+        lock = _read_lock(target)
+    except CoDevError:
+        return None
+    return set(lock["files"])
+
+
+def _dirty_paths(target: Path) -> list[str]:
+    # -uall: list files inside an untracked directory individually rather
+    # than collapsing the whole directory into one entry -- required for
+    # per-file classification against the managed-paths set below.
+    status = _run_git(["status", "--porcelain", "-uall"], cwd=target)
+    paths: list[str] = []
+    for line in status.splitlines():
+        if not line:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        paths.append(path)
+    return paths
+
+
+def _refuse_if_mixed_dirty_paths(work_item_id: str, *, target: Path) -> None:
+    """Refuse a path-less `git add -A` when the dirty worktree mixes
+    CoDev-managed changes with everything else -- prevents concurrent
+    workflow-file edits from silently riding along in a product commit.
+    Callers wanting one or the other on purpose use --paths or --staged.
+    """
+    managed = _managed_paths(target)
+    if not managed:
+        return
+    dirty = _dirty_paths(target)
+    managed_dirty = sorted(path for path in dirty if path in managed)
+    other_dirty = sorted(path for path in dirty if path not in managed)
+    if managed_dirty and other_dirty:
+        raise GitOpsError(
+            f"refusing to commit {work_item_id!r}: the worktree mixes "
+            f"CoDev-managed changes ({', '.join(managed_dirty)}) with other "
+            f"changes ({', '.join(other_dirty)}) -- use --paths or --staged "
+            "to commit them separately"
+        )
+
+
+def commit(
+    work_item_id: str,
+    message: str,
+    *,
+    target: Path,
+    paths: list[str] | None = None,
+    staged: bool = False,
+    round_number: int | None = None,
+    evidence: Any = None,
+) -> str:
     if not message.strip():
         raise GitOpsError("commit message must not be empty")
+    if paths and staged:
+        raise GitOpsError("--paths and --staged are mutually exclusive")
+    if (round_number is None) != (evidence is None):
+        raise GitOpsError("--round and --evidence must be given together")
     _ensure_on_own_branch(work_item_id, target=target)
-    _run_git(["add", "-A"], cwd=target)
+    if staged:
+        pass
+    elif paths:
+        _run_git(["add", "--", *paths], cwd=target)
+    else:
+        _refuse_if_mixed_dirty_paths(work_item_id, target=target)
+        _run_git(["add", "-A"], cwd=target)
     _run_git(["commit", "-m", message], cwd=target)
-    return current_head(target)
+    head = current_head(target)
+    if round_number is not None:
+        work.record_builder(work_item_id, round_number, head, evidence, target=target)
+    return head
 
 
 def push(work_item_id: str, *, target: Path) -> None:
@@ -386,6 +461,16 @@ def push(work_item_id: str, *, target: Path) -> None:
     _run_git(["push", "-u", "origin", branch], cwd=target)
 
 
+def _existing_pr_url(branch: str, *, target: Path) -> str | None:
+    """Read-only: the URL of an already-open PR for this branch, if any."""
+    try:
+        return _run_gh(
+            ["pr", "view", branch, "--json", "url", "-q", ".url"], cwd=target
+        )
+    except GitOpsError:
+        return None
+
+
 def open_pr(
     work_item_id: str,
     title: str,
@@ -397,13 +482,37 @@ def open_pr(
     branch = _ensure_on_own_branch(work_item_id, target=target)
     head = current_head(target)
     result = work.check(work_item_id, head, target=target)
-    if result.reason != "ok_ready_for_pr":
+    description = work.describe(work_item_id, target=target)
+    # ok_ready_for_pr is produced exactly once, at the inner-to-outer
+    # transition -- it never recurs. An item can reach the outer phase
+    # without ever passing through it (codev work reopen recovering
+    # straight into the outer phase, or a direct-review entry), so once
+    # there, any non-stop check() result is eligible too: the guard that
+    # actually matters is "no pull request already exists" below, checked
+    # against GitHub itself rather than inferred from round-state alone.
+    eligible = result.ok and (
+        result.reason == "ok_ready_for_pr" or description["current_phase"] == "outer"
+    )
+    if not eligible:
         raise GitOpsError(
             "refusing to open a pull request: codev work check returned "
-            f"{result.reason!r}, not ok_ready_for_pr ({result.message})"
+            f"{result.reason!r} ({result.message}); a pull request may only be "
+            "opened at the ok_ready_for_pr checkpoint, or for an item already in "
+            "the outer phase with none yet"
         )
-    resolved_base = base or default_branch(target)
-    link_ref = work.describe(work_item_id, target=target).get("link_ref")
+    existing = _existing_pr_url(branch, target=target)
+    if existing is not None:
+        raise GitOpsError(
+            f"refusing to open a pull request: {branch!r} already has one open "
+            f"at {existing} -- use `codev git mark-ready` instead"
+        )
+    resolved_base = base
+    if resolved_base is None:
+        configured_base = config.resolve("git.pr_base", target=target)
+        resolved_base = configured_base.value if configured_base else None
+    if resolved_base is None:
+        resolved_base = default_branch(target)
+    link_ref = description.get("link_ref")
     issue_number = _closes_issue_number(link_ref, target=target)
     final_body = f"{body}\n\nCloses #{issue_number}" if issue_number else body
     return _run_gh(
@@ -424,15 +533,18 @@ def open_pr(
     )
 
 
+_MARK_READY_REASONS = ("ok_approve", "ok_approve_with_deferrals")
+
+
 def mark_ready(work_item_id: str, *, target: Path) -> None:
     branch = _ensure_on_own_branch(work_item_id, target=target)
     head = current_head(target)
     result = work.check(work_item_id, head, target=target)
-    if result.reason != "ok_approve":
+    if result.reason not in _MARK_READY_REASONS:
         raise GitOpsError(
             "refusing to mark the pull request ready: codev work check returned "
-            f"{result.reason!r}, not ok_approve ({result.message})"
+            f"{result.reason!r}, not one of {_MARK_READY_REASONS} ({result.message})"
         )
-    body = work.log_text(work_item_id, target=target)
+    body = work.pr_description(work_item_id, target=target)
     _run_gh(["pr", "edit", branch, "--body", body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)

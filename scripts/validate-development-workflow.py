@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the repository's human-AI development workflow without dependencies."""
+"""Validate the repository's human-AI workflow without dependencies."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ EXPECTED_SKILLS = {
     "build-change": ["assets/implementation-plan.template.md"],
     "review-change": [],
     "pr-review": ["scripts/publish_review.py"],
-    "clean-code-review": [],
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
     "design-skill-eval": ["references/eval-design-checklist.md"],
@@ -35,15 +34,31 @@ EXPECTED_HANDBOOKS: list[str] = []
 
 EXPECTED_GUIDES = [
     "AGENTS.md",
-    "docs/for-human/development-guide.md",
-    "docs/for-ai/ai-agent-guidelines.md",
+    "docs/codev/onboarding/onboarding-guide.md",
+    ".codev/for-ai/ai-agent-guidelines.md",
 ]
 
-EVALUATION_SCRIPT = "scripts/evaluate-development-workflow.py"
-EVALUATION_CATALOG = "evals/development-workflow/scenarios.json"
+# The workflow evaluator and its catalog are this script's own sibling dev
+# tooling -- neither ships in the bundle this script validates (--repo
+# points at src/codev_workflow/bundle, which has no scripts/ or evals/ of
+# its own) -- so they resolve relative to this file's own location, not
+# --repo.
+_SELF_ROOT = Path(__file__).resolve().parent.parent
+EVALUATION_SCRIPT = _SELF_ROOT / "scripts" / "evaluate-development-workflow.py"
+EVALUATION_CATALOG = _SELF_ROOT / "evals" / "development-workflow" / "scenarios.json"
 
 
 def parse_frontmatter(text: str, path: Path, errors: list[str]) -> dict[str, str]:
+    """Parse skill metadata and append malformed-line errors.
+
+    Args:
+        text: Skill file text containing YAML-like frontmatter.
+        path: Skill file path used in error messages.
+        errors: Mutable list receiving validation errors.
+
+    Returns:
+        Parsed frontmatter fields.
+    """
     lines = text.splitlines()
     if not lines or lines[0] != "---":
         errors.append(f"{path}: missing opening YAML delimiter")
@@ -65,6 +80,14 @@ def parse_frontmatter(text: str, path: Path, errors: list[str]) -> dict[str, str
 
 
 def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) -> None:
+    """Validate one skill and its required supporting assets.
+
+    Args:
+        root: Root directory containing installed skills.
+        name: Skill directory name.
+        assets: Relative asset paths required by the skill.
+        errors: Mutable list receiving validation errors.
+    """
     skill_dir = root / name
     skill_file = skill_dir / "SKILL.md"
     if not skill_file.is_file():
@@ -111,6 +134,12 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
 
 
 def validate_guides(repo: Path, errors: list[str]) -> None:
+    """Validate that required guides reference every installed skill.
+
+    Args:
+        repo: Bundle repository root.
+        errors: Mutable list receiving validation errors.
+    """
     guides = [repo / relative for relative in EXPECTED_GUIDES]
     for guide in guides:
         if not guide.is_file():
@@ -123,6 +152,12 @@ def validate_guides(repo: Path, errors: list[str]) -> None:
 
 
 def validate_handbooks(repo: Path, errors: list[str]) -> None:
+    """Validate required handbook contents when handbook expectations exist.
+
+    Args:
+        repo: Bundle repository root.
+        errors: Mutable list receiving validation errors.
+    """
     handbook_root = repo / "docs" / "handbooks"
     for name in EXPECTED_HANDBOOKS:
         handbook = handbook_root / name
@@ -139,14 +174,23 @@ def validate_handbooks(repo: Path, errors: list[str]) -> None:
                 errors.append(f"{handbook}: does not reference {skill}")
 
 
-def validate_evaluations(repo: Path, errors: list[str]) -> int:
-    script = repo / EVALUATION_SCRIPT
-    catalog = repo / EVALUATION_CATALOG
-    if not script.is_file():
-        errors.append(f"{script}: missing")
+def validate_evaluations(errors: list[str]) -> int:
+    """Validate the behavioral evaluation catalog and scorer.
+
+    Uses EVALUATION_SCRIPT/EVALUATION_CATALOG (this script's own sibling
+    tooling), not the bundle repo being validated elsewhere in this module.
+
+    Args:
+        errors: Mutable list receiving validation errors.
+
+    Returns:
+        Number of scenarios in the valid catalog, or zero on failure.
+    """
+    if not EVALUATION_SCRIPT.is_file():
+        errors.append(f"{EVALUATION_SCRIPT}: missing")
         return 0
-    if not catalog.is_file():
-        errors.append(f"{catalog}: missing")
+    if not EVALUATION_CATALOG.is_file():
+        errors.append(f"{EVALUATION_CATALOG}: missing")
         return 0
 
     for label, extra_args in (
@@ -155,7 +199,7 @@ def validate_evaluations(repo: Path, errors: list[str]) -> int:
     ):
         try:
             completed = subprocess.run(
-                [sys.executable, str(script), "--repo", str(repo), *extra_args],
+                [sys.executable, str(EVALUATION_SCRIPT), *extra_args],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -170,14 +214,19 @@ def validate_evaluations(repo: Path, errors: list[str]) -> int:
             return 0
 
     try:
-        data = json.loads(catalog.read_text(encoding="utf-8"))
+        data = json.loads(EVALUATION_CATALOG.read_text(encoding="utf-8"))
         return len(data.get("scenarios", []))
     except (OSError, ValueError, TypeError) as error:
-        errors.append(f"{catalog}: cannot count scenarios: {error}")
+        errors.append(f"{EVALUATION_CATALOG}: cannot count scenarios: {error}")
         return 0
 
 
 def main() -> int:
+    """Validate installed skills, guides, handbooks, and evaluations.
+
+    Returns:
+        Zero when all repository checks pass, otherwise one.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--repo",
@@ -194,7 +243,7 @@ def main() -> int:
         validate_skill(skill_root, skill, assets, errors)
     validate_guides(repo, errors)
     validate_handbooks(repo, errors)
-    scenario_count = validate_evaluations(repo, errors)
+    scenario_count = validate_evaluations(errors)
 
     if errors:
         print("Workflow validation failed:")

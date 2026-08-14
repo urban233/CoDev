@@ -169,7 +169,10 @@ ready, with no inner-loop round recorded at all.
    implementation-plan.template.md` for delegated, multi-session, cross-
    component, or normal/higher-risk work). It never edits product code
    itself. It creates the work item's own branch with `codev git branch` and
-   opens round state with `codev work start`. Raw `git commit`/`git push`/
+   opens round state with `codev work start`, adding `--github-issue <N>`
+   when the work item has a linked GitHub issue (pushed earlier via
+   `codev git issue-create`, per `plan-delivery`'s Handoff) so the eventual
+   pull request closes it automatically. Raw `git commit`/`git push`/
    `gh pr create` stay denied to every agent; `codev git` is the only path
    to mutating the repository or GitHub, and it enforces mechanically what
    this document only used to ask for by convention.
@@ -186,10 +189,10 @@ ready, with no inner-loop round recorded at all.
    publish, deploy, migrate data, or expand rollout. It returns an evidence
    receipt with the exact base snapshot, validation, deviations, and
    limitations — not a head snapshot, since it never commits and so cannot
-   know one. The orchestrator commits the result with `codev git commit`,
-   then records the builder's round with `codev work record --role builder`
-   against that exact resulting head. The builder never records its own
-   evidence.
+   know one. The orchestrator commits the result and records the builder's
+   round in one call — `codev git commit --round <round> --evidence
+   <evidence.json>` — against the exact resulting head. The builder never
+   records its own evidence.
 4. Orchestrator verifies the evidence receipt is complete, then invokes
    **lightweight-reviewer** in a *fresh* task with the exact snapshot and
    work item. This pass is deliberately narrow: correctness and intent-match
@@ -204,21 +207,24 @@ ready, with no inner-loop round recorded at all.
      actionable findings back to the builder without asking the human to
      relay them, then reinvokes the lightweight reviewer on the corrected
      snapshot.
-   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it invokes `code-audit`
-     in its pre-PR gate mode — audit and plan only, never the self-apply
-     phase — against the exact head snapshot. A clean result pushes the
-     branch with `codev git push` and opens a draft pull request with
-     `codev git open-pr` — the bridge into the outer loop's specialist
-     review. This is automatic because opening a pull request is fully
-     reversible and has no effect on production; it is not the same
-     authority as merge. A finding instead gets recorded with `codev work
-     record --role reviewer --decision CHANGES_REQUIRED`, exactly like any
-     other reviewer round, against the round that just converged. Because
-     that round's decision was `READY_FOR_OUTER_LOOP`, this opens the outer
-     phase's round 1, not another inner round — record a triage disposition
-     for each finding with `codev work triage` before routing it back to the
-     builder, the same human-triage gate every other outer-loop round uses.
-     The pull request does not open until a later audit comes back clean.
+   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it dispatches
+     `code-audit-gate` — a narrow, autonomous subagent scoped to style and
+     documentation only, never logic or behavior — against the exact head
+     snapshot, *before* recording the reviewer round that produced
+     `ok_ready_for_pr`. It self-fixes anything it finds and reports back a
+     short summary instead of stopping for approval, since nothing in its
+     scope needs one; the orchestrator commits again only if it changed
+     anything, then records the reviewer round exactly once, against
+     whichever head is now final, carrying `lightweight-reviewer`'s verdict
+     plus that summary as an evidence note. Resolving this before the
+     phase transition, not after, matters mechanically: it means mechanical
+     cleanup never opens the outer phase or spends any of its round cap —
+     that stays reserved for the five specialists' actual review. A clean
+     or now-clean head pushes the branch with `codev git push` and opens a
+     draft pull request with `codev git open-pr` — the bridge into the
+     outer loop's specialist review. This is automatic because opening a
+     pull request is fully reversible and has no effect on production; it
+     is not the same authority as merge.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
      round's first pass, or the snapshot drifted — it records the escalation
@@ -226,12 +232,14 @@ ready, with no inner-loop round recorded at all.
      printed reason and a recommendation, the same as when the accepted plan
      must change materially, work collides, or safe validation is
      unavailable.
-6. Once a pull request opens, the outer loop's specialist review and human
-   triage continue the same work item; close it with `codev work close` only
-   once that concludes. Return the final evidence receipt, reviewer
-   decision, and residual risks. Stop before merge, publish, deploy,
-   migration, or rollout expansion — never before opening the pull request
-   itself.
+6. Once a pull request opens, tell the human plainly that outer-loop review
+   continues via `outer-loop-runner` for this work item — a separate,
+   human-triggered switch, not something the orchestrator attempts or
+   continues on its own. Close the item with `codev work close` only once
+   that concludes and the human has acted. Return the final evidence
+   receipt, reviewer decision, and residual risks. Stop before merge,
+   publish, deploy, migration, or rollout expansion — never before opening
+   the pull request itself.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders
@@ -248,26 +256,71 @@ not a continuation of the inner-loop `orchestrator` conversation — the
 human starts it deliberately, and every specialist invocation inside it
 spends a model call the human chose to authorize.
 
-1. Fetch the pull request's metadata, diff, and CI check status; stop and
-   report if checks are red or still running rather than spending any
-   specialist's budget on a PR that does not build.
-2. Dispatch five specialist reviewers in parallel, each scoped to a
-   disjoint set of `codev work`'s coverage dimensions and none of them
-   recording state themselves: correctness/error-handling/test-quality,
+A second, equally human-triggered entry acts on the PR's existing review
+comments instead of dispatching the five specialists fresh: fetch
+`comments`/`reviews` alongside the usual metadata/diff/checks, draft a
+finding directly from each actionable comment — trusting its content, not
+independently re-verifying it, unless the comment itself names a
+specialist — record and auto-triage every drafted finding as `address` (the
+human's own request to fix these comments is the authorization), then
+correct and verify with the inner loop's fast `lightweight-reviewer`
+standard rather than a full specialist pass, recording coverage only for
+the dimension(s) actually re-verified — `codev work check` fills in every
+other dimension automatically from whichever round most recently
+established it, so nothing needs to be reconstructed by hand. `ok_approve`
+still requires complete eight-dimension coverage; this entry alone does
+not produce that on a PR the five specialists have never reviewed, and
+`codev work check` says so by name when it isn't complete.
+
+1. Fetch the pull request's metadata, diff, and CI check status. On red
+   (not merely pending) checks, attempt one bounded repair: fetch the
+   failing job's diagnostic, dispatch `builder` once scoped only to that
+   failure, push, and re-check -- one attempt, never a second, falling
+   through to stop-and-report if checks are still not green. Before
+   dispatching any specialist, run `codev work check` and act on its exit
+   code: on `ok_outer_loop_needs_reopen` (this item already has a recorded
+   outer round and a further one cannot be recorded as-is), confirm with the
+   human that re-entering is actually intended -- not unexamined drift --
+   then run `codev work reopen` before continuing; on any `stop_*` outcome,
+   record the escalation and stop for the human.
+2. Present the five specialist reviewers as a numbered list, each with the
+   coverage dimension(s) it owns (correctness/error-handling/test-quality,
    security/privacy/data/compatibility, concurrency, architecture/
-   maintainability, and rollout.
+   maintainability, rollout), and ask which to dispatch this pass -- numbers
+   or `all`. Weigh a skipped one against the actual diff before accepting
+   the selection; the human's answer wins regardless. Immediately once
+   selection is final, offer a `codev work waive --dimension` for each
+   dimension whose specialist was not selected, with a reason -- never on
+   your own initiative. Dispatch only the selected specialists in parallel,
+   none of them recording state themselves.
 3. Merge their findings and coverage into one round and record it with
-   `codev work record --role reviewer`, then act on `codev work check`'s
-   exit code exactly as the inner loop does.
+   `codev work record --role reviewer --selection <selection.json>` (naming
+   which specialists actually ran, distinct from what was merely asked),
+   then act on `codev work check`'s exit code exactly as the inner loop
+   does.
 4. On `ok_waiting_on_triage`, present the blocking findings to the human
    with one question — which should be addressed now — and record the
    answer with `codev work triage` before anything else happens. Deferring
-   a blocking finding requires a stated reason.
-5. The one permitted correction round fixes only the findings the human
-   selected, then re-verifies only those findings with only the specialists
-   that own them — not a fresh full pass. Any other nonzero exit records an
-   escalation with `codev work escalate` and stops for the human.
-6. On `ok_approve`, `codev git mark-ready` regenerates the pull request's
+   a blocking finding requires a stated reason. A blocking finding new to
+   this phase or repeating an earlier one (`stop_scope_expansion` /
+   `stop_repeated_finding`) reaches the human the same way, just escalated
+   first — triaging it (address or defer) resolves the stop, since the
+   guard exists to force one human look, not to survive one.
+5. If triage defers every blocking finding, nothing needs building:
+   `codev work check` reports `ok_approve_with_deferrals` directly — record
+   `codev work escalate --trigger human_override_blocking_finding` and go
+   straight to landing. Otherwise the one permitted correction round fixes
+   only the findings the human selected, then re-verifies only those
+   findings with only the specialists that own them — not a fresh full
+   pass. Any other nonzero exit records an escalation with `codev work
+   escalate` and stops for the human.
+6. On `ok_approve` or `ok_approve_with_deferrals`: if no pull request exists
+   yet for this item (for example, it was recovered into the outer phase
+   with `codev work reopen` and never went through the inner loop's own
+   bridge step), run `codev git open-pr` first -- never pass `--body`, it
+   generates the description from the work item's own evidence -- it
+   accepts this state too, not only the original `ok_ready_for_pr`
+   checkpoint. Then `codev git mark-ready` regenerates the pull request's
    body from the work item's full round-state — including every deferred
    finding and its reason — and takes it out of draft. This is not merge
    authority.
@@ -328,6 +381,15 @@ like any other item above: present the stuck state and propose reopening as
 the recommendation, do not run it on your own initiative because a round
 merely looks stuck.
 
+A reopened item can land directly in the outer phase (when the round it
+reopened from had decided `READY_FOR_OUTER_LOOP`), skipping the inner
+loop's own bridge into a pull request. `codev git open-pr` accounts for
+this: it accepts any non-stop `codev work check` result once the item is in
+the outer phase, not only `ok_ready_for_pr`, provided the branch has no
+pull request yet — so if outer-loop review reaches `ok_approve` with none
+open, run `codev git open-pr` once to create it before `codev git
+mark-ready`, which still requires that pull request to already exist.
+
 ## Completion
 
 **For a code change**, return: delivered behavior, files/components changed,
@@ -341,14 +403,3 @@ human.
 consideration, current exposure, success/health evidence, rollback readiness,
 and your recommended next decision. Stop before any deployment or exposure
 change unless the human explicitly authorizes it.
-
-## Evaluate workflow changes
-
-If `AGENTS.md`, a skill, or this document itself changes, validate the
-scenario catalog and run the representative behavioral evaluations in
-`evals/development-workflow/scenarios.json` using
-`scripts/evaluate-development-workflow.py`. Score externally observed
-actions — tool calls and artifacts — never private chain-of-thought, and never
-let the agent under evaluation grade itself. Cover: path selection,
-repository grounding, focus and scope discipline, required stops, validation
-evidence, read-only review behavior, and human-authorization boundaries.

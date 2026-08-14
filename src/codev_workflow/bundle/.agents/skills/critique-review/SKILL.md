@@ -28,9 +28,16 @@ hand off, but do not become the reviewer or silently become the implementer.
 Accept one or more of:
 
 - a `review-change` finding, an outer-loop specialist finding, or a
-  `code-audit` pre-PR gate finding;
-- a presubmit, lint, static-analysis, or test failure; or
-- a developer-supplied review comment tied to an exact file and line.
+  `code-audit` pre-PR gate finding; or
+- a presubmit, lint, static-analysis, or test failure.
+
+For a work item with an open pull request, an existing GitHub review
+comment is `outer-loop-runner`'s comment-sourced entry mode's territory, not
+this skill's: it fixes the finding directly through the tracked inner-loop
+correction cycle instead of stopping at a suggested, unapplied diff. Use
+this skill for that input only when there is no work item to attach the fix
+to at all — the same zero-ceremony case `review-change` itself is scoped
+to.
 
 For every input, verify that the cited code still exists in the supplied
 snapshot. Classify the requested edit as one of:

@@ -85,6 +85,29 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(result.ok, result.issues)
         self.assertGreater(result.managed_files, 30)
 
+    def test_init_installs_code_audit_gate_for_every_platform(self) -> None:
+        self.install(programming_language="python")
+
+        gate_paths = [
+            self.target / ".opencode/agents/code-audit-gate.md",
+            self.target / ".junie/agents/code-audit-gate.md",
+            self.target / ".agents/agents/code-audit-gate.md",
+            self.target / ".codex/agents/code-audit-gate.toml",
+        ]
+        for path in gate_paths:
+            self.assertTrue(path.is_file(), path)
+            text = path.read_text(encoding="utf-8")
+            # code-audit-gate is always-autonomous (ADR-0015): unlike
+            # code-audit, it must never carry code-audit's own stop-for-
+            # approval instruction -- there is no human in its turn to
+            # grant one. (The file does mention the phrase once, in its own
+            # explicit "never do this" sentence -- checking the stop
+            # instruction's exact wording, not the bare phrase, avoids
+            # flagging that.)
+            self.assertNotIn("Stop with `APPROVAL REQUIRED`", text)
+            self.assertIn("audit-google-python-style", text)
+        self.assertTrue(installer.check_project(self.target).ok)
+
     def test_init_defaults_to_language_agnostic_audit(self) -> None:
         self.install()
 
@@ -214,6 +237,7 @@ class InstallerTests(unittest.TestCase):
             [
                 "architecture-maintainability-specialist.toml",
                 "builder.toml",
+                "code-audit-gate.toml",
                 "code-audit.toml",
                 "concurrency-specialist.toml",
                 "correctness-tests-specialist.toml",
@@ -243,6 +267,7 @@ class InstallerTests(unittest.TestCase):
             {
                 ".codex/agents/architecture-maintainability-specialist.toml",
                 ".codex/agents/builder.toml",
+                ".codex/agents/code-audit-gate.toml",
                 ".codex/agents/code-audit.toml",
                 ".codex/agents/concurrency-specialist.toml",
                 ".codex/agents/correctness-tests-specialist.toml",
@@ -693,6 +718,42 @@ class InstallerTests(unittest.TestCase):
         plan = installer.plan_update(self.target)
 
         self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
+
+
+class OpencodeAgentConfigCoverageTests(unittest.TestCase):
+    def test_every_bundled_opencode_agent_is_registered(self) -> None:
+        """Regression test: an `.opencode/agents/*.md` file with no matching
+        `OPENCODE_AGENT_CONFIGS` entry never gets written into a target
+        repository's `.opencode/opencode.json`, so OpenCode has nothing
+        telling it the agent exists -- this caught `outer-loop-runner` and
+        six other agents missing from the config entirely, silent because
+        `_walk_bundle()`/installer file-copying never consulted this dict at
+        all, only `.opencode/opencode.json` merging did.
+        """
+        agents_dir = Path(installer.__file__).parent / "bundle" / ".opencode" / "agents"
+        bundled_names = {path.stem for path in agents_dir.glob("*.md")}
+        rendered_code_audit = Path(installer.AUDIT_AGENT_TEMPLATES["opencode"][1]).stem
+        bundled_names.add(rendered_code_audit)
+        missing = sorted(bundled_names - set(installer.OPENCODE_AGENT_CONFIGS))
+        self.assertEqual([], missing)
+
+
+class InternalDevToolingExcludedFromBundleTests(unittest.TestCase):
+    """Regression test (ADR-0009): this repository's own workflow-validation
+    scripts and their catalog must never reappear inside
+    src/codev_workflow/bundle/ -- they are development tooling for this
+    project, not something a target repository installs or runs."""
+
+    def test_walk_bundle_excludes_internal_dev_tooling(self) -> None:
+        files = installer._walk_bundle()
+        leaked = [
+            path
+            for path in files
+            if path.endswith("evaluate-development-workflow.py")
+            or path.endswith("validate-development-workflow.py")
+            or path.endswith("evals/development-workflow/scenarios.json")
+        ]
+        self.assertEqual([], leaked)
 
 
 class CodeownersInitTests(unittest.TestCase):

@@ -71,7 +71,12 @@ def _toml_scalar(value: str) -> str:
 def _write_config(path: Path, values: dict[str, str]) -> None:
     lines = [f"schema_version = {CONFIG_SCHEMA_VERSION}", "", "[values]"]
     for key in sorted(values):
-        lines.append(f"{key} = {_toml_scalar(values[key])}")
+        # Quote the key too, not only the value: an unquoted key containing a
+        # dot (e.g. "git.pr_base") is a TOML *dotted key*, parsed as a nested
+        # table rather than one literal key -- it would silently fail to
+        # round-trip through _read_config below. Quoting keeps any key name
+        # literal regardless of its characters.
+        lines.append(f"{_toml_scalar(key)} = {_toml_scalar(values[key])}")
     content = ("\n".join(lines) + "\n").encode("utf-8")
     _atomic_write(path, content)
 

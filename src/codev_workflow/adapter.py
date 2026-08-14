@@ -25,6 +25,13 @@ _OUTER_LOOP_ROLES = (
 
 
 def _role_paths(directory: str, extension: str) -> dict[str, str]:
+    # code-audit (and its code-audit-gate counterpart, ADR-0015) are
+    # deliberately absent here: both are templated ({{LANGUAGE_INSTRUCTIONS}}
+    # etc.), so the raw bundle only ever has a .template source, never the
+    # rendered filename this function's paths assume -- verify_adapter's
+    # bundle-parity test runs directly against the raw bundle. Their rendered
+    # output is instead checked where it's actually produced, by the
+    # installer's own per-platform agent-rendering tests.
     paths = {
         "orchestrator": f"{directory}/orchestrator.{extension}",
         "builder": f"{directory}/builder.{extension}",
@@ -44,13 +51,21 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
-    "orchestrator": ("codev work start", "codev work check", "codev git open-pr"),
+    "orchestrator": (
+        "codev work start",
+        "codev work check",
+        "codev git open-pr",
+        "--github-issue",
+    ),
     "builder": ("codev work record",),
     "reviewer": ("codev work record",),
     "lightweight-reviewer": ("codev work record",),
     "outer-loop-runner": (
         "codev work record",
         "codev work triage",
+        "codev work waive",
+        "codev work reopen",
+        "--selection",
         "codev git mark-ready",
     ),
     "correctness-tests-specialist": ("expansion_reason",),
@@ -72,6 +87,13 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
     '"git commit*": allow',
     "'git commit*': allow",
 )
+
+# ADR-0014: `codev git open-pr` generates a PR description from the work
+# item's own recorded evidence and coverage when no `--body`/`--body-file` is
+# given -- an agent hardcoding a body placeholder here defeats that fallback
+# and produces hand-composed prose instead, the exact regression this guards
+# against.
+_HANDWRITTEN_PR_BODY_MARKERS: tuple[str, ...] = ("--body <body>",)
 
 
 class AdapterVerificationError(Exception):
@@ -131,6 +153,12 @@ def verify_adapter(platform: str, *, target: Path) -> VerificationResult:
                 problems.append(
                     f"grants raw git mutation instead of the guarded `codev git` "
                     f"surface: {marker!r}"
+                )
+        for marker in _HANDWRITTEN_PR_BODY_MARKERS:
+            if marker in text:
+                problems.append(
+                    f"hardcodes a PR body placeholder instead of relying on "
+                    f"`codev git open-pr`'s own generated description: {marker!r}"
                 )
 
         findings.append(RoleFinding(role, relative, not problems, tuple(problems)))

@@ -310,6 +310,99 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
+    def test_work_record_reviewer_accepts_specialist_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            empty_findings_path = target / "empty-findings.json"
+            empty_findings_path.write_text("[]", encoding="utf-8")
+            empty_evidence_path = target / "empty-evidence.json"
+            empty_evidence_path.write_text("{}", encoding="utf-8")
+            selection_path = target / "selection.json"
+            selection_path.write_text(
+                json.dumps({"specialists": ["rollout-specialist"]}),
+                encoding="utf-8",
+            )
+            with redirect_stdout(StringIO()):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                main(
+                    [
+                        "work",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--role",
+                        "reviewer",
+                        "--head",
+                        "base-sha",
+                        "--findings",
+                        str(empty_findings_path),
+                        "--decision",
+                        "READY_FOR_OUTER_LOOP",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                main(
+                    [
+                        "work",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "2",
+                        "--role",
+                        "builder",
+                        "--head",
+                        "head-2",
+                        "--evidence",
+                        str(empty_evidence_path),
+                        "--target",
+                        str(target),
+                    ]
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "work",
+                            "record",
+                            "--id",
+                            "item-1",
+                            "--round",
+                            "2",
+                            "--role",
+                            "reviewer",
+                            "--head",
+                            "head-2",
+                            "--findings",
+                            str(empty_findings_path),
+                            "--selection",
+                            str(selection_path),
+                            "--decision",
+                            "READY_FOR_HUMAN_APPROVAL",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                log = StringIO()
+                with redirect_stdout(log):
+                    main(["work", "log", "--id", "item-1", "--target", str(target)])
+        self.assertIn("specialists: rollout-specialist", log.getvalue())
+
     def test_work_reopen_after_close_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
