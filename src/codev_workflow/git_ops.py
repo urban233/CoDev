@@ -156,6 +156,20 @@ def detect_identity(*, target: Path) -> str | None:
     return None
 
 
+def has_github_remote(*, target: Path) -> bool:
+    """Best-effort: does this repository resolve to a real GitHub remote?
+
+    Never raises -- backs `codev work start`'s issue-linkage gate (ADR-0020),
+    which must not turn into a hard GitHub dependency for a repository that
+    has none, the same restraint `detect_identity` already applies.
+    """
+    try:
+        _run_gh(["repo", "view", "--json", "url"], cwd=target)
+    except GitOpsError:
+        return False
+    return True
+
+
 def fetch_issue(number: int, *, target: Path) -> dict[str, str]:
     """Read-only lookup of a GitHub issue's title and URL.
 
@@ -284,6 +298,18 @@ def _closes_issue_number(link_ref: str | None, *, target: Path) -> int | None:
     if name_with_owner != f"{match['owner']}/{match['repo']}":
         return None
     return int(match["number"])
+
+
+def _with_closes_line(body: str, link_ref: str | None, *, target: Path) -> str:
+    """Append `Closes #N` when link_ref names this repo's own GitHub issue.
+
+    Shared by every code path that writes a pull request body -- open_pr's
+    initial body and mark_ready's regenerated one alike -- so the auto-close
+    link, once earned, cannot be silently dropped by whichever call happens
+    to run last.
+    """
+    issue_number = _closes_issue_number(link_ref, target=target)
+    return f"{body}\n\nCloses #{issue_number}" if issue_number else body
 
 
 def current_branch(target: Path) -> str:
@@ -512,9 +538,7 @@ def open_pr(
         resolved_base = configured_base.value if configured_base else None
     if resolved_base is None:
         resolved_base = default_branch(target)
-    link_ref = description.get("link_ref")
-    issue_number = _closes_issue_number(link_ref, target=target)
-    final_body = f"{body}\n\nCloses #{issue_number}" if issue_number else body
+    final_body = _with_closes_line(body, description.get("link_ref"), target=target)
     return _run_gh(
         [
             "pr",
@@ -545,6 +569,8 @@ def mark_ready(work_item_id: str, *, target: Path) -> None:
             "refusing to mark the pull request ready: codev work check returned "
             f"{result.reason!r}, not one of {_MARK_READY_REASONS} ({result.message})"
         )
+    description = work.describe(work_item_id, target=target)
     body = work.pr_description(work_item_id, target=target)
-    _run_gh(["pr", "edit", branch, "--body", body], cwd=target)
+    final_body = _with_closes_line(body, description.get("link_ref"), target=target)
+    _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)

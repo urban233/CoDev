@@ -167,12 +167,25 @@ ready, with no inner-loop round recorded at all.
    work item is ready, presents the focus card, and produces the
    implementation plan (using `.agents/skills/build-change/assets/
    implementation-plan.template.md` for delegated, multi-session, cross-
-   component, or normal/higher-risk work). It never edits product code
-   itself. It creates the work item's own branch with `codev git branch` and
-   opens round state with `codev work start`, adding `--github-issue <N>`
-   when the work item has a linked GitHub issue (pushed earlier via
-   `codev git issue-create`, per `plan-delivery`'s Handoff) so the eventual
-   pull request closes it automatically. Raw `git commit`/`git push`/
+   component, or normal/higher-risk work) — keeping a short 2-4 bullet
+   Approach/Risks summary from that plan in mind for `--description` below
+   when it was rendered, since the eventual pull request body renders that
+   text and nothing else about the plan. It never edits product code itself.
+   It creates the work item's own branch with `codev git branch`, then
+   resolves issue linkage before opening round state: if the item has no
+   linked GitHub issue yet and this repository tracks issues on GitHub, run
+   `codev git issue-create` now — per `plan-delivery`'s Handoff, check
+   rather than assume an earlier session already did it; write the body to a
+   temp file and pass `--body-file` rather than inline `--body` whenever it
+   may contain a backtick, `$`, or double quote, since a shell corrupts
+   those before `codev` ever sees the text — then open round
+   state with `codev work start --github-issue <N>` (or `--link`;
+   `--no-github-issue` only when this repository does not track issues
+   there — `work start` refuses without one of the three) and
+   `--description <text>` when a plan was rendered. If linkage is only
+   resolved after round state already exists, correct it with `codev work
+   relink --github-issue <N>` rather than leaving the link only in the
+   plan's prose. Raw `git commit`/`git push`/
    `gh pr create` stay denied to every agent; `codev git` is the only path
    to mutating the repository or GitHub, and it enforces mechanically what
    this document only used to ask for by convention.
@@ -272,7 +285,10 @@ still requires complete eight-dimension coverage; this entry alone does
 not produce that on a PR the five specialists have never reviewed, and
 `codev work check` says so by name when it isn't complete.
 
-1. Fetch the pull request's metadata, diff, and CI check status. On red
+1. State plainly, before running it, that this step fetches the pull
+   request's metadata, diff, and CI check status read-only via the
+   pr-review skill's fetch script — not a review, not a write to GitHub,
+   just grounding in the PR's real state. Then fetch it. On red
    (not merely pending) checks, attempt one bounded repair: fetch the
    failing job's diagnostic, dispatch `builder` once scoped only to that
    failure, push, and re-check -- one attempt, never a second, falling

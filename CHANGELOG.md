@@ -3,7 +3,69 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.2.3] - 2026-08-14
+
+### Fixed
+- `codev git mark-ready` no longer silently drops `Closes #N` from the pull
+  request body. `open_pr` appended it correctly; `mark_ready` -- which runs
+  at the end of every outer-loop pass -- regenerated the body from
+  `work.pr_description()` alone and never called `_closes_issue_number()`,
+  so the auto-close link was lost from the *final* PR body every time, even
+  when `link_ref` was a correct issue URL. Both now share one
+  `_with_closes_line()` helper. `tests/test_git_ops.py::MarkReadyTests`
+  gains a regression test.
+
+### Added
+- `docs/codev/onboarding/starting-prompts.md`: copy-paste starting prompts
+  for the next work item and for outer-loop review, cross-linked from
+  `onboarding-guide.md`. The outer-loop prompt explicitly asks for the
+  numbered specialist menu and to wait for selection before dispatching --
+  a prompt-level reinforcement of ADR-0021's permission gate, on every
+  platform, not only OpenCode.
+- `codev work relink --id <id> --github-issue N|--link <ref> [--by <name>]`
+  (ADR-0020): corrects `link_ref` after `codev work start` already ran.
+  `--github-issue` can only be resolved at `start()` time and `link_ref` was
+  otherwise write-once for an item's life, with no way to recover from a
+  human catching a missing issue link mid-session -- traced directly to a
+  real session where the only available "fix" was noting the link in the
+  implementation plan's prose, never in state, so `Closes #N` could never
+  fire for that item. Modeled on `waive()`: appends to a new additive
+  `link_ref_updates` list rather than silently overwriting history;
+  `codev work log` renders each correction.
+- `codev work start` refuses to proceed when the repository has a GitHub
+  remote and neither `--github-issue`, `--link`, nor the new
+  `--no-github-issue` acknowledgment flag was given (ADR-0020) -- turns a
+  workflow decision that previously depended entirely on prompt convention
+  into a CLI-level gate, the same "refuse until resolved" shape
+  `codev diff`/`codev update` already use for install conflicts. New
+  best-effort `git_ops.has_github_remote()`, modeled on `detect_identity()`,
+  backs the check without introducing a hard GitHub dependency.
+
+### Design
+- ADR-0020 -- the mechanical issue-linkage gate and `relink` above.
+- ADR-0021 -- OpenCode's `outer-loop-runner` specialist-dispatch permission
+  gate. ADR-0018's own conclusion was that no CLI mechanism can prevent an
+  agent from skipping the numbered specialist menu; a second real session,
+  run on 0.2.2 with that fix's prompt text confirmed present, reproduced the
+  identical skip verbatim. OpenCode's bundled agent file already exposes a
+  real per-subagent permission gate and already uses it elsewhere in the
+  same file (`bash: "*": ask`) -- it was simply configured to `allow` all
+  five specialists. They now require `ask`. Codex/Antigravity/Junie have no
+  equivalent lever today and remain prompt-only, a documented asymmetry
+  rather than a silent one. `adapter.py` gains `_SPECIALIST_ALLOW_MARKERS`
+  so a future edit cannot quietly revert this.
+- ADR-0022 -- bundled workflow-instruction hardening: `orchestrator` (all
+  four platforms) now checks and creates a missing GitHub issue itself
+  instead of only passing one through when it already exists; every
+  `codev git issue-create` call site now instructs `--body-file` over
+  inline `--body` for text with shell metacharacters (unused since ADR-0014,
+  confirmed the literal cause of two separate body-corruption incidents);
+  `orchestrator` now actually populates `codev work start --description`
+  from the approved implementation plan's Approach/Risks, a CLI argument
+  that has existed, unreferenced by any prompt, since ADR-0014;
+  `outer-loop-runner` step 1 now narrates that its fetch is read-only before
+  running it. `adapter.py`'s `_REQUIRED_MARKERS["orchestrator"]` gains
+  `"codev git issue-create"` and `"--no-github-issue"`.
 
 ## [0.2.2] - 2026-08-13
 

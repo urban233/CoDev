@@ -131,6 +131,49 @@ class VerifyAdapterTests(unittest.TestCase):
         self.assertFalse(orchestrator.ok)
         self.assertTrue(any("PR body placeholder" in p for p in orchestrator.problems))
 
+    def test_specialist_permission_reverted_to_allow_is_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            for role, relative in ADAPTER_ROLE_PATHS["opencode"].items():
+                path = target / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                content = (
+                    "codev work start codev work check codev work record "
+                    "codev git open-pr"
+                )
+                if role == "outer-loop-runner":
+                    content += (
+                        "\ntask:\n"
+                        "  correctness-tests-specialist: allow\n"
+                        "  security-data-specialist: ask\n"
+                    )
+                path.write_text(content, encoding="utf-8")
+            result = verify_adapter("opencode", target=target)
+        outer_loop_runner = {f.role: f for f in result.findings}["outer-loop-runner"]
+        self.assertFalse(outer_loop_runner.ok)
+        self.assertTrue(
+            any("ADR-0021 permission gate" in p for p in outer_loop_runner.problems)
+        )
+
+    def test_specialist_permission_ask_is_not_flagged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            for role, relative in ADAPTER_ROLE_PATHS["opencode"].items():
+                path = target / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                content = (
+                    "codev work start codev work check codev work record "
+                    "codev git open-pr"
+                )
+                if role == "outer-loop-runner":
+                    content += "\ntask:\n  correctness-tests-specialist: ask\n"
+                path.write_text(content, encoding="utf-8")
+            result = verify_adapter("opencode", target=target)
+        outer_loop_runner = {f.role: f for f in result.findings}["outer-loop-runner"]
+        self.assertFalse(
+            any("ADR-0021 permission gate" in p for p in outer_loop_runner.problems)
+        )
+
     def test_lightweight_reviewer_role_is_verified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

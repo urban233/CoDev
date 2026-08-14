@@ -668,6 +668,183 @@ class CliTests(unittest.TestCase):
                     ]
                 )
 
+    def test_work_start_refuses_without_issue_linkage_when_repo_has_github(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            errors = StringIO()
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                redirect_stderr(errors),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("--no-github-issue", errors.getvalue())
+            self.assertFalse(
+                (target / ".codev" / "work" / "item-1" / "round-state.json").exists()
+            )
+
+    def test_work_start_no_github_issue_flag_bypasses_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--no-github-issue",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_work_start_link_flag_bypasses_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--link",
+                        "docs/codev/work/item-1/implementation-plan.md",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_work_start_allowed_without_a_gate_check_when_repo_has_no_github(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=False,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_git_relink_by_github_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            issue = {"title": "Fix the thing", "url": "https://github.com/o/r/issues/7"}
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=False,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "work",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.fetch_issue",
+                    return_value=issue,
+                ) as fetch_issue,
+                redirect_stdout(StringIO()) as out,
+            ):
+                code = main(
+                    [
+                        "work",
+                        "relink",
+                        "--id",
+                        "item-1",
+                        "--github-issue",
+                        "7",
+                        "--by",
+                        "octocat",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            fetch_issue.assert_called_once_with(7, target=target.resolve())
+            self.assertIn("Relinked work item item-1", out.getvalue())
+            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
+            self.assertEqual(1, len(state["link_ref_updates"]))
+            self.assertEqual("octocat", state["link_ref_updates"][0]["by"])
+
     def test_work_triage_by_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

@@ -103,7 +103,7 @@ managed file becomes a visible conflict; CoDev never silently replaces it.
 | `codev adapter verify <platform>` | Check one installed adapter's structural conformance (lifecycle wiring present, no unrestricted shell access, no retired patterns) |
 | `codev config get\|set\|list [--global]` | Read or write layered configuration (flags > env > project > global > default) |
 | `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
-| `codev work start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations` | Track one work item's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
+| `codev work start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations\|waive\|reopen\|relink` | Track one work item's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
 | `codev git issue-create\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` alone has no work-item precondition |
 | `codev eval fixture create\|run` / `codev eval snapshot run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode |
 | `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |

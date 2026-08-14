@@ -716,6 +716,60 @@ class MarkReadyTests(unittest.TestCase):
             self.assertNotEqual(work.log_text("item-1", target=target), body)
             self.assertNotIn("round 1:", body)
 
+    def test_appends_closes_issue_when_link_ref_matches_same_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            work.start(
+                "item-1",
+                base,
+                target=target,
+                link_ref="https://github.com/o/r/issues/7",
+            )
+            git_ops.create_branch("item-1", base, target=target)
+            work.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            work.record_builder(
+                "item-1", 2, base, {"delivered": "opened pr"}, target=target
+            )
+            work.record_reviewer(
+                "item-1",
+                2,
+                base,
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+
+            def fake_run_gh(args: list[str], *, cwd: Path) -> str:
+                if args[:2] == ["repo", "view"]:
+                    return "o/r"
+                return ""
+
+            with patch.object(git_ops, "_run_gh", side_effect=fake_run_gh) as run_gh:
+                git_ops.mark_ready("item-1", target=target)
+            edit_call = next(
+                call for call in run_gh.call_args_list if "edit" in call.args[0]
+            )
+            body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
+        self.assertIn("Closes #7", body)
+
+    def test_does_not_append_closes_issue_when_link_ref_is_not_an_issue_url(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_approval(target)
+            with patch.object(git_ops, "_run_gh", return_value="") as run_gh:
+                git_ops.mark_ready("item-1", target=target)
+            edit_call = next(
+                call for call in run_gh.call_args_list if "edit" in call.args[0]
+            )
+            body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
+        self.assertNotIn("Closes", body)
+
     def test_readies_when_approved_with_deferrals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -841,6 +895,24 @@ class DetectIdentityTests(unittest.TestCase):
             ):
                 identity = git_ops.detect_identity(target=target)
             self.assertIsNone(identity)
+
+
+class HasGithubRemoteTests(unittest.TestCase):
+    def test_true_when_repo_view_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch.object(
+                git_ops, "_run_gh", return_value="https://github.com/o/r"
+            ):
+                self.assertTrue(git_ops.has_github_remote(target=target))
+
+    def test_false_when_gh_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch.object(
+                git_ops, "_run_gh", side_effect=git_ops.GitOpsError("no remote")
+            ):
+                self.assertFalse(git_ops.has_github_remote(target=target))
 
 
 class FetchIssueTests(unittest.TestCase):

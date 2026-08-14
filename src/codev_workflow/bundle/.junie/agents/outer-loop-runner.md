@@ -62,7 +62,10 @@ comments instead of running a fresh specialist pass:
 
 ## 1. Fetch and gate
 
-Fetch the PR's current metadata, diff, and CI check status — reuse
+State plainly, before running it, that this step fetches the PR's current
+metadata, diff, and CI check status read-only via the pr-review skill's
+fetch script — not a review, not a write to GitHub, just grounding in the
+PR's real state. Then fetch — reuse
 `.agents/skills/pr-review/scripts/publish_review.py --fetch` and the
 `github-actions-ci-results` skill; do not re-invent fetching.
 

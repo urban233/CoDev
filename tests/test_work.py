@@ -22,6 +22,7 @@ from codev_workflow.work import (
     record_escalation,
     record_reviewer,
     record_triage,
+    relink,
     reopen,
     start,
     triage_note,
@@ -1900,6 +1901,83 @@ class WaiverTests(unittest.TestCase):
             text = log_text("item-1", target=target)
         self.assertIn("waived by Alice at round 1: rollout", text)
         self.assertIn("doc-only change", text)
+
+
+class RelinkTests(unittest.TestCase):
+    """docs/adr/0020: link_ref is write-once at `start()` (ADR-0004), but a
+    human routinely catches a missing/wrong GitHub issue link only after
+    round-state already exists -- `relink` is the recovery path, modeled on
+    `waive()`'s append-only, never-silently-overwriting shape."""
+
+    def test_rejects_empty_link_ref(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            with self.assertRaises(WorkError):
+                relink("item-1", "  ", target=target)
+
+    def test_rejects_when_not_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            close("item-1", "abandoned", target=target)
+            with self.assertRaises(WorkError):
+                relink(
+                    "item-1",
+                    "https://github.com/o/r/issues/7",
+                    target=target,
+                )
+
+    def test_updates_link_ref_visible_through_describe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                link_ref="docs/codev/work/item-1/implementation-plan.md",
+            )
+            relink(
+                "item-1",
+                "https://github.com/o/r/issues/7",
+                target=target,
+                by="urban233",
+            )
+            description = describe("item-1", target=target)
+        self.assertEqual("https://github.com/o/r/issues/7", description["link_ref"])
+
+    def test_a_later_relink_overrides_an_earlier_one(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            relink("item-1", "https://github.com/o/r/issues/7", target=target)
+            relink("item-1", "https://github.com/o/r/issues/9", target=target)
+            description = describe("item-1", target=target)
+        self.assertEqual("https://github.com/o/r/issues/9", description["link_ref"])
+
+    def test_log_text_renders_the_correction_without_losing_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base-sha",
+                target=target,
+                link_ref="docs/codev/work/item-1/implementation-plan.md",
+            )
+            relink(
+                "item-1",
+                "https://github.com/o/r/issues/7",
+                target=target,
+                by="urban233",
+            )
+            text = log_text("item-1", target=target)
+        self.assertIn(
+            "relinked by urban233: "
+            "docs/codev/work/item-1/implementation-plan.md -> "
+            "https://github.com/o/r/issues/7",
+            text,
+        )
+        self.assertIn("link: https://github.com/o/r/issues/7", text)
 
 
 class EscalationLogTests(unittest.TestCase):

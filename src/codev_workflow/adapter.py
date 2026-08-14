@@ -56,6 +56,8 @@ _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
         "codev work check",
         "codev git open-pr",
         "--github-issue",
+        "codev git issue-create",
+        "--no-github-issue",
     ),
     "builder": ("codev work record",),
     "reviewer": ("codev work record",),
@@ -94,6 +96,19 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
 # and produces hand-composed prose instead, the exact regression this guards
 # against.
 _HANDWRITTEN_PR_BODY_MARKERS: tuple[str, ...] = ("--body <body>",)
+
+# ADR-0021: OpenCode's per-subagent `task` permission block is the only
+# mechanical backstop against outer-loop-runner silently skipping the human
+# specialist-selection menu (ADR-0016/0018) -- these five must stay "ask",
+# never regress to "allow", or the one available guardrail disappears again
+# without anything noticing.
+_SPECIALIST_ALLOW_MARKERS: tuple[str, ...] = (
+    "correctness-tests-specialist: allow",
+    "security-data-specialist: allow",
+    "concurrency-specialist: allow",
+    "architecture-maintainability-specialist: allow",
+    "rollout-specialist: allow",
+)
 
 
 class AdapterVerificationError(Exception):
@@ -159,6 +174,12 @@ def verify_adapter(platform: str, *, target: Path) -> VerificationResult:
                 problems.append(
                     f"hardcodes a PR body placeholder instead of relying on "
                     f"`codev git open-pr`'s own generated description: {marker!r}"
+                )
+        for marker in _SPECIALIST_ALLOW_MARKERS:
+            if marker in text:
+                problems.append(
+                    f"grants unconfirmed specialist dispatch instead of the "
+                    f"ADR-0021 permission gate: {marker!r}"
                 )
 
         findings.append(RoleFinding(role, relative, not problems, tuple(problems)))

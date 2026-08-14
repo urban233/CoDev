@@ -184,7 +184,16 @@ from an existing `CODEOWNERS` when one exists) and record the returned issue
 URL back in the plan's own Status/tracker column. This is what
 `codev work start --github-issue N` and `codev git open-pr`'s automatic
 `Closes #N` depend on; a project with no GitHub issue tracker in use skips
-this step and the plan entry alone remains the required authority.
+this step and the plan entry alone remains the required authority. Write the
+body to a temp file and pass `--body-file` instead of inline `--body`
+whenever it may contain a backtick, `$`, or double quote — a shell corrupts
+those characters before `codev` ever sees the text, silently mangling the
+issue.
+
+If a developer starts implementation directly, without a session that ran
+this Handoff first, `orchestrator` checks and creates the issue itself
+before opening round state — this Handoff is the first opportunity to do it,
+not the only one.
 
 Give each developer only their work item, relevant brief/design/API links,
 integration constraints, and acceptance criteria (including the recorded

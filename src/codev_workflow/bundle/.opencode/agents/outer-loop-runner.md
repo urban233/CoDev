@@ -6,11 +6,11 @@ permission:
   task:
     "*": deny
     builder: allow
-    correctness-tests-specialist: allow
-    security-data-specialist: allow
-    concurrency-specialist: allow
-    architecture-maintainability-specialist: allow
-    rollout-specialist: allow
+    correctness-tests-specialist: ask
+    security-data-specialist: ask
+    concurrency-specialist: ask
+    architecture-maintainability-specialist: ask
+    rollout-specialist: ask
   bash:
     "*": ask
     "git status*": allow
@@ -84,7 +84,10 @@ comments instead of running a fresh specialist pass:
 
 ## 1. Fetch and gate
 
-Fetch the PR's current metadata, diff, and CI check status — reuse
+State plainly, before running it, that this step fetches the PR's current
+metadata, diff, and CI check status read-only via the pr-review skill's
+fetch script — not a review, not a write to GitHub, just grounding in the
+PR's real state. Then fetch — reuse
 `.agents/skills/pr-review/scripts/publish_review.py --fetch` and the
 `github-actions-ci-results` skill; do not re-invent fetching.
 
@@ -146,6 +149,13 @@ verdict for only the dimensions it owns; none of them call `codev work
 record` themselves. Note exactly which specialists actually ran — durable
 evidence of what was dispatched, not just what was asked — for step 3's
 `--selection`.
+
+On OpenCode, each specialist dispatch also requires a separate permission
+confirmation before it runs — one prompt per selected specialist, even after
+the human has already answered the menu above in chat. This is a deliberate
+mechanical backstop (ADR-0021), not a malfunction: do not treat it as a
+reason to skip the menu, batch specialists differently, or explain it away —
+just proceed through each confirmation as it appears.
 
 ## 3. Merge and record
 

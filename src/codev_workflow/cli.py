@@ -268,6 +268,13 @@ def _parser() -> argparse.ArgumentParser:
         help="populate --link/--summary from this issue unless given explicitly",
     )
     w_start.add_argument(
+        "--no-github-issue",
+        action="store_true",
+        help="acknowledge this item intentionally has no GitHub issue link -- "
+        "required in place of --github-issue/--link when the repository has "
+        "a GitHub remote and neither was given",
+    )
+    w_start.add_argument(
         "--entry",
         choices=("takeover", "direct-review"),
         default=None,
@@ -358,6 +365,26 @@ def _parser() -> argparse.ArgumentParser:
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
     w_waive.add_argument("--target", type=_target, default=Path.cwd())
+
+    w_relink = work_commands.add_parser(
+        "relink",
+        help=(
+            "correct link_ref after `start` already ran -- the recovery path "
+            "when a GitHub issue is created only after round-state exists"
+        ),
+    )
+    w_relink.add_argument("--id", required=True)
+    w_relink_source = w_relink.add_mutually_exclusive_group(required=True)
+    w_relink_source.add_argument(
+        "--github-issue", type=int, help="resolve --link from this issue's URL"
+    )
+    w_relink_source.add_argument(
+        "--link", help="pointer to the artifact authorizing this work"
+    )
+    w_relink.add_argument(
+        "--by", default=None, help="defaults to the detected local/gh identity"
+    )
+    w_relink.add_argument("--target", type=_target, default=Path.cwd())
 
     w_status = work_commands.add_parser(
         "status", help="show one or all open work items"
@@ -770,6 +797,18 @@ def _run_work_command(args: argparse.Namespace) -> int:
                 link_ref = issue["url"]
             if summary is None:
                 summary = issue["title"]
+        if (
+            link_ref is None
+            and not args.no_github_issue
+            and git_ops_module.has_github_remote(target=target)
+        ):
+            raise WorkError(
+                "this repository has a GitHub remote but no issue linkage was "
+                "given for this work item -- run `codev git issue-create` "
+                "first and pass --github-issue N (or --link), or pass "
+                "--no-github-issue to acknowledge this item intentionally "
+                "has none"
+            )
         owner = args.owner
         if owner is None:
             owner = git_ops_module.detect_identity(target=target)
@@ -871,6 +910,23 @@ def _run_work_command(args: argparse.Namespace) -> int:
             by=by,
         )
         print(f"Waived {args.dimension!r} for work item {args.id} at {path}")
+        return 0
+
+    if args.work_command == "relink":
+        link_ref = args.link
+        if args.github_issue is not None:
+            issue = git_ops_module.fetch_issue(args.github_issue, target=target)
+            link_ref = issue["url"]
+        by = args.by
+        if by is None:
+            by = git_ops_module.detect_identity(target=target)
+        path = work_module.relink(
+            args.id,
+            link_ref,
+            target=target,
+            by=by,
+        )
+        print(f"Relinked work item {args.id} to {link_ref!r} at {path}")
         return 0
 
     if args.work_command == "status":

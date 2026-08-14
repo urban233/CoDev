@@ -11,7 +11,11 @@ AI investigates, proposes, edits, validates, and explains. Use
 several components, or needs a reviewed written plan. When it is written,
 persist it at `docs/codev/work/<work-item-id>/implementation-plan.md`, keyed
 by the same id passed to `codev work start --id`, unless the project already
-has an established equivalent location.
+has an established equivalent location. Its Approach and risk points are
+also what an orchestrating session carries into `codev work start
+--description` — the eventual pull request body renders that text verbatim
+and nothing else about the plan, so keep those sections readable on their
+own.
 
 ## 1. Frame the change
 

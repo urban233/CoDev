@@ -111,6 +111,8 @@ discovering the mismatch after both branches are done.
 
 - Commands for a normal work item:
   [Normal Development Workflow](normal-development-workflow.md)
+- Copy-paste prompts for starting a work item or outer-loop review:
+  [starting-prompts.md](starting-prompts.md)
 - Worked walkthroughs, start to finish: [examples.md](examples.md)
 - The full command/skill/agent reference: `docs/product-map.md`
 - How the bundle installs and updates: `docs/architecture.md`

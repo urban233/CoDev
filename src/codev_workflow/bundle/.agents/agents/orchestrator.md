@@ -55,7 +55,11 @@ applies as written. Two other cases:
    For delegated, multi-session, cross-component, normal-risk, or higher-risk
    work, render the complete
    `.agents/skills/build-change/assets/implementation-plan.template.md` in the
-   conversation. Do not ask the human to write it.
+   conversation. Do not ask the human to write it. When it is rendered, keep
+   a short 2-4 bullet Approach/Risks summary in mind for step 5's
+   `--description` — the eventual pull request body renders that text and
+   nothing else about the plan, so it needs to stand alone without a
+   repository checkout.
 4. Check whether the work needs a human decision before delegating: any of
    `.codev/for-ai/ai-agent-guidelines.md`'s "Stop conditions", or the risk
    categories named in "Risk overrides size" — a cheap path/diff-shape check
@@ -66,18 +70,32 @@ applies as written. Two other cases:
    commit`/`git push`/`gh pr create` stay off limits; `codev git` is the only
    path to mutating the repository or GitHub.
 5. Create the work item's own branch — `codev git branch --id <work-item-id>
-   --base <base-sha>` — open its round state — `codev work start --id
-   <work-item-id> --base <base-sha>`, adding `--github-issue <N>` when the
-   work item has a linked GitHub issue, so the eventual pull request closes
-   it automatically — then use Antigravity's
-   `invoke_subagent` capability to start `builder` with the accepted work
-   item and implementation plan, exact authority links, base commit, allowed
-   scope, integration constraints, validation, stop conditions, and the
-   current round number. Pass task-local artifacts, not private reasoning or
-   a broad conversation transcript. Instruct the builder to return its
-   evidence receipt -- validation, deviations, limitations, and changed
-   files -- for the orchestrator to record; the builder never calls `codev
-   work record` itself.
+   --base <base-sha>`. Resolve issue linkage before opening round state: if
+   the work item has no linked GitHub issue yet and this repository tracks
+   issues on GitHub, run `codev git issue-create` now — per `plan-delivery`'s
+   Handoff, check rather than assume an earlier session already did it; write
+   the body to a temp file and pass `--body-file` rather than inline `--body`
+   whenever it may contain a backtick, `$`, or double quote, since a shell
+   corrupts those before `codev` ever sees the text —
+   then open round state with `codev work start --id <work-item-id> --base
+   <base-sha> --github-issue <N>` (or `--link`; pass `--no-github-issue`
+   only when this repository does not track issues on GitHub — `work start`
+   refuses without one of the three). Pass `--description <text>` too when
+   step 3 rendered the full implementation-plan template — the 2-4 bullet
+   Approach/Risks summary from that step, not a restated one-liner — so the
+   eventual pull request body stands alone without a repository checkout; a
+   bounded item that only has `--summary` degrades gracefully. If a GitHub
+   issue is only created or linked after round state already exists, correct
+   it with `codev work relink --id <work-item-id> --github-issue <N>` —
+   never leave the link only in the implementation plan's prose. Then use
+   Antigravity's `invoke_subagent` capability to start `builder` with the
+   accepted work item and implementation plan, exact authority links, base
+   commit, allowed scope, integration constraints, validation, stop
+   conditions, and the current round number. Pass task-local artifacts, not
+   private reasoning or a broad conversation transcript. Instruct the
+   builder to return its evidence receipt -- validation, deviations,
+   limitations, and changed files -- for the orchestrator to record; the
+   builder never calls `codev work record` itself.
 6. When the builder returns, verify that its evidence receipt identifies
    actual validation, deviations, limitations, and changed files. If
    evidence is missing, return the task for evidence rather than guessing.

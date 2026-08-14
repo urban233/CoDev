@@ -994,6 +994,44 @@ def waive(
     return path
 
 
+def relink(
+    work_item_id: str,
+    link_ref: str,
+    *,
+    target: Path,
+    by: str | None = None,
+) -> Path:
+    """Human-authorized correction of link_ref after `start()` already ran.
+
+    `--github-issue` can only be resolved at `start()` time (ADR-0004), and
+    `link_ref` is otherwise write-once for the rest of an item's life -- this
+    is the recovery path for the ordinary real-world case where a human
+    catches a missing or wrong issue link only after round-state already
+    exists (ADR-0020). Modeled on `waive()`'s shape: the previous value is
+    never discarded, only superseded, so a correction stays visible in
+    `codev work log` instead of silently overwriting history. The very next
+    `codev git open-pr`/`mark-ready` call reads `link_ref` fresh through
+    `describe()`, so no other code path needs to know a correction happened.
+    """
+    _validate_required_text("link_ref", link_ref)
+    _validate_optional_text("by", by)
+    state = _load(work_item_id, target=target)
+    _ensure_in_progress(state)
+    previous = state.get("link_ref")
+    state["link_ref"] = link_ref
+    state.setdefault("link_ref_updates", []).append(
+        {
+            "timestamp": _utc_now_iso(),
+            "previous": previous,
+            "new": link_ref,
+            "by": by,
+        }
+    )
+    path = _work_item_path(target, work_item_id)
+    _save(work_item_id, state, target=target)
+    return path
+
+
 def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
     state = _load(work_item_id, target=target)
     latest = state["rounds"][-1]
@@ -1093,6 +1131,11 @@ def log_text(work_item_id: str, *, target: Path) -> str:
             f"waived{by_suffix} at round {waiver['round']}: {waiver['dimension']} "
             f"-- {waiver['reason']}"
         )
+    for update in state.get("link_ref_updates", []):
+        by = update.get("by")
+        by_suffix = f" by {by}" if by else ""
+        previous = update.get("previous") or "(none)"
+        lines.append(f"relinked{by_suffix}: {previous} -> {update['new']}")
     return "\n".join(lines) + "\n"
 
 
