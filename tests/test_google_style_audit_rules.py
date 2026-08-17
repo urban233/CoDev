@@ -1,3 +1,31 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2026, Martin Urban, Hannah Kullik
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Focused regression tests for the Google Python Style audit parsers."""
 
 from __future__ import annotations
@@ -92,28 +120,6 @@ def wrong():
         self.assertTrue(any(finding.level == "violation" for finding in findings))
         self.assertEqual(rules.count("docstring-raises"), 1)
 
-    def test_directives_are_position_aware(self):
-        """Accept only valid shebang and encoding directive positions."""
-        valid = '#!/usr/bin/env python\n"""Module summary."""\n'
-        self.assertNotIn("comment-punctuation", [f.rule for f in self.audit_checker(valid)])
-        valid_encoding = '# coding: utf-8\n"""Module summary."""\n'
-        self.assertNotIn("comment-punctuation", [f.rule for f in self.audit_checker(valid_encoding)])
-        valid_encoding_second = '"""Module summary."""\n# coding=utf-8\n'
-        self.assertNotIn("comment-punctuation", [f.rule for f in self.audit_checker(valid_encoding_second)])
-        valid_emacs = '# -*- coding: utf-8 -*-\n"""Module summary."""\n'
-        self.assertNotIn("comment-punctuation", [f.rule for f in self.audit_checker(valid_emacs)])
-        invalid = '# ! prose\n#! prose\n# coding nonsense\n"""Module summary."""\n# coding=utf-8\n'
-        findings = self.audit_checker(invalid)
-        self.assertGreaterEqual([f.rule for f in findings].count("comment-punctuation"), 4)
-        indented = '  #!/usr/bin/env python\n"""Module summary."""\n'
-        self.assertIn("comment-punctuation", [f.rule for f in self.audit_checker(indented)])
-        for malformed in (
-            '# -*- coding: utf-8\n"""Module summary."""\n',
-            '# coding: utf-8 -*-\n"""Module summary."""\n',
-            '"""Module summary."""\n# coding=utf-8\n# coding: utf-8\n',
-        ):
-            self.assertIn("comment-punctuation", [f.rule for f in self.audit_checker(malformed)])
-
     def test_private_class_naming(self):
         """Allow private PascalCase classes and reject lowercase classes."""
         source = '''"""Module summary."""
@@ -173,12 +179,11 @@ def generated():
             invalid_findings = self.audit_checker(invalid)
             self.assertTrue(any(finding.level == "violation" for finding in invalid_findings))
 
-    def test_comment_headers_and_markers_are_precise(self):
-        """Keep ordinary early comments and malformed markers visible."""
-        source = '''# Copyright 2024
-# License GPL
-# ordinary comment without period
+    def test_leading_comments_are_excluded_and_markers_are_precise(self):
+        """Exclude leading comments while checking later comments and markers."""
+        source = '''# Leading comment without punctuation or `allowed` :class: markup
 """Module summary."""
+# ordinary comment without period
 # region nonsense
 # region: Checks
 # endregion nonsense
@@ -190,47 +195,327 @@ def generated():
 # --- heading ---
 # === heading ===
 '''
-        rules = [finding.rule for finding in self.audit_checker(source)]
+        findings = self.audit_checker(source)
+        rules = [finding.rule for finding in findings]
         self.assertEqual(rules.count("comment-punctuation"), 5)
+        self.assertFalse(any(finding.line == 1 for finding in findings))
 
-        license_source = '''# Copyright 2024
-# License GPL `bad :class:`
-"""Module summary."""
-'''
-        rules = [finding.rule for finding in self.audit_checker(license_source)]
-        self.assertIn("comment-markup", rules)
-        self.assertNotIn("comment-punctuation", rules)
+    def test_mutable_function_defaults_are_rejected(self):
+        """Reject known mutable defaults while allowing immutable defaults."""
+        source = '''"""Module summary."""
 
-        pyssa_header = '''# PySSA - Python-Plugin for Sequence-to-Structure Analysis
-# Copyright (C) 2024
-# Martin Urban (martin.urban@example.invalid)
-# Source code is available at <https://github.com/example/project>
-# This program is free software: you can redistribute it.
-# ordinary comment without period
-"""Module summary."""
-'''
-        findings = self.audit_checker(pyssa_header)
-        self.assertTrue(any(finding.rule == "comment-punctuation" for finding in findings))
-        self.assertFalse(any(finding.rule == "comment-markup" for finding in findings))
+def invalid_defaults(
+    items=[],
+    mapping={},
+    names=set(),
+    generated=[item for item in ()],
+    *,
+    options=dict(),
+):
+    """Use invalid defaults.
 
-        capitalized = '''# Copyright 2024
-# License GPL
-# Ordinary comment without period
-"""Module summary."""
-'''
-        for checker_name, checker in (("local", CHECKER), ("bundled", BUNDLED_CHECKER)):
-            with self.subTest(checker=checker_name, case="capitalized ordinary comment"):
-                self.assertIn("comment-punctuation", [finding.rule for finding in self.audit_checker(capitalized, checker)])
+    Args:
+        items: Item values.
+        mapping: Mapped values.
+        names: Name values.
+        generated: Generated values.
+        options: Option values.
+    """
 
-        blank_separator = '''# Copyright 2024
-# License GPL
-#
-# This program is free software; it may be redistributed.
-"""Module summary."""
+async def valid_defaults(value=None, values=(), *, names=frozenset()):
+    """Use immutable defaults.
+
+    Args:
+        value: Optional value.
+        values: Immutable values.
+        names: Immutable names.
+    """
 '''
-        for checker_name, checker in (("local", CHECKER), ("bundled", BUNDLED_CHECKER)):
-            with self.subTest(checker=checker_name, case="blank header separator"):
-                self.assertNotIn("comment-punctuation", [finding.rule for finding in self.audit_checker(blank_separator, checker)])
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 5)
+                self.assertTrue(
+                    all(finding.level == "violation" for finding in mutable_defaults)
+                )
+
+    def test_shadowed_mutable_constructor_defaults_require_review(self):
+        """Review constructor defaults when built-in resolution is uncertain."""
+        source = '''"""Module summary."""
+
+list = tuple
+
+def module_shadowed(items=list()):
+    """Use a module-shadowed constructor.
+
+    Args:
+        items: Item values.
+    """
+
+class Container:
+    """Contain a class-shadowed constructor."""
+
+    set = frozenset
+
+    def class_shadowed(self, names=set()):
+        """Use a class-shadowed constructor.
+
+        Args:
+            names: Name values.
+        """
+
+def enclosing(dict):
+    """Define a function with an enclosing shadow.
+
+    Args:
+        dict: Mapping factory.
+    """
+    def function_shadowed(mapping=dict()):
+        """Use an enclosing-function-shadowed constructor.
+
+        Args:
+            mapping: Mapped values.
+        """
+'''
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 3)
+                self.assertTrue(
+                    all(finding.level == "review" for finding in mutable_defaults)
+                )
+
+    def test_comprehension_targets_do_not_shadow_mutable_constructors(self):
+        """Keep comprehension-local names out of enclosing scope resolution."""
+        source = '''"""Module summary."""
+
+def enclosing(values):
+    """Define a function after a comprehension.
+
+    Args:
+        values: Source values.
+    """
+    observed = [value for list in values for value in list]
+
+    def still_builtin(items=list()):
+        """Use an unshadowed built-in constructor.
+
+        Args:
+            items: Item values.
+        """
+
+def enclosing_named_expression(values):
+    """Define a function after a containing-scope binding.
+
+    Args:
+        values: Source values.
+    """
+    observed = [(list := tuple) for value in values]
+
+    def shadowed(items=list()):
+        """Use a constructor shadowed from a comprehension.
+
+        Args:
+            items: Item values.
+        """
+'''
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 2)
+                self.assertEqual(
+                    [finding.level for finding in mutable_defaults],
+                    ["violation", "review"],
+                )
+
+    def test_definition_time_bindings_shadow_mutable_constructors(self):
+        """Resolve defaults in their containing lexical scope."""
+        source = '''"""Module summary."""
+
+def binder(first=(list := tuple), second=list()):
+    """Bind a constructor while evaluating defaults.
+
+    Args:
+        first: First default value.
+        second: Second default value.
+    """
+'''
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 1)
+                self.assertEqual(mutable_defaults[0].level, "review")
+
+    def test_pattern_captures_shadow_mutable_constructors(self):
+        """Collect each structural pattern capture form as a binding."""
+        source = '''"""Module summary."""
+
+def capture_names(value):
+    """Capture constructor names from patterns.
+
+    Args:
+        value: Value to match.
+    """
+    match value:
+        case list:
+            pass
+
+    def match_as(items=list()):
+        """Use a match-as-shadowed constructor.
+
+        Args:
+            items: Item values.
+        """
+
+def capture_sequences(value):
+    """Capture a constructor name from a sequence.
+
+    Args:
+        value: Value to match.
+    """
+    match value:
+        case [*dict]:
+            pass
+
+    def match_star(mapping=dict()):
+        """Use a match-star-shadowed constructor.
+
+        Args:
+            mapping: Mapped values.
+        """
+
+def capture_mappings(value):
+    """Capture a constructor name from a mapping.
+
+    Args:
+        value: Value to match.
+    """
+    match value:
+        case {**set}:
+            pass
+
+    def match_mapping(names=set()):
+        """Use a match-mapping-shadowed constructor.
+
+        Args:
+            names: Name values.
+        """
+'''
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 3)
+                self.assertTrue(
+                    all(finding.level == "review" for finding in mutable_defaults)
+                )
+
+    @unittest.skipIf(sys.version_info < (3, 12), "PEP 695 requires Python 3.12")
+    def test_type_parameters_shadow_mutable_constructors(self):
+        """Collect generic function and class type parameters as bindings."""
+        source = '''"""Module summary."""
+
+def outer[list]():
+    """Define a generic function."""
+
+    def inner(items=list()):
+        """Use a function-type-parameter-shadowed constructor.
+
+        Args:
+            items: Item values.
+        """
+
+class Container[dict]:
+    """Define a generic class."""
+
+    def inner(self, mapping=dict()):
+        """Use a class-type-parameter-shadowed constructor.
+
+        Args:
+            mapping: Mapped values.
+        """
+'''
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(checker=checker_name):
+                findings = self.audit_checker(source, checker)
+                mutable_defaults = [
+                    finding
+                    for finding in findings
+                    if finding.rule == "mutable-default"
+                ]
+                self.assertEqual(len(mutable_defaults), 2)
+                self.assertTrue(
+                    all(finding.level == "review" for finding in mutable_defaults)
+                )
+
+    def test_delete_project_controller_fixtures_are_audited(self):
+        """Audit both required controller fixture classes."""
+        fixture_root = ROOT / ".codev/fixtures"
+        phase_a_repo = fixture_root / "audit-google-python-style-phase-a" / "repository"
+        phase_a_target = phase_a_repo / "src/pyssa/controllers/delete_project_controller.py"
+        phase_b_repo = fixture_root / "audit-google-python-style-phase-b" / "repository"
+        phase_b_target = phase_b_repo / "src/pyssa/controllers/delete_project_controller.py"
+        for checker_name, checker in (
+            ("local", CHECKER),
+            ("bundled", BUNDLED_CHECKER),
+        ):
+            with self.subTest(fixture="audit-google-python-style-phase-a", checker=checker_name):
+                findings = checker.audit(phase_a_target, phase_a_repo)
+                self.assertTrue(
+                    any(
+                        finding.rule == "docstring-markup" and finding.line == 44
+                        for finding in findings
+                    )
+                )
+            with self.subTest(fixture="audit-google-python-style-phase-b", checker=checker_name):
+                findings = checker.audit(phase_b_target, phase_b_repo)
+                violations = [f for f in findings if f.level == "violation"]
+                self.assertFalse(
+                    violations,
+                    f"Expected no violations in phase-b fixture but found: {violations}",
+                )
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,39 +21,48 @@
 """Module for the delete project view controller."""
 import logging
 import os
-from math import *
 
 from src.pyssa.gui import app_state
 from src.pyssa.gui.qt import QtCore
 from src.pyssa.gui.qt import Qt
-from src.pyssa.gui.ui.views import delete_project_view, help_view
-
+from src.pyssa.gui.ui.views import delete_project_view
+from src.pyssa.gui.ui.views import help_view
 from src.pyssa.gui.ui.custom_dialogs import custom_message_box
-from src.pyssa.util import constants, enums, ui_util, exception
-from src.pyssa.logging_pyssa import log_levels, log_handlers
+from src.pyssa.util import constants
+from src.pyssa.util import enums
+from src.pyssa.util import ui_util
+from src.pyssa.util import exception
+from src.pyssa.logging_pyssa import log_levels
+from src.pyssa.logging_pyssa import log_handlers
 
 logger = logging.getLogger(__file__)
 logger.addHandler(log_handlers.log_file_handler)
 __docformat__ = "google"
 
 
-class helper_panel:
+class HelperPanel:
+  """Helper panel placeholder class."""
+
   pass
 
 
 class DeleteProjectViewController(QtCore.QObject):
-  """Class for the :class:`DeleteProjectViewController`."""
+  """View controller for the delete project dialog."""
 
   def __init__(
       self, the_app_state: "app_state.AppState", a_parent=None
   ) -> None:
-    """Constructor
+    """Initialize the delete project view controller.
 
     Args:
-        the_app_state (`app_state.AppState`): The AppState object
+        the_app_state: The AppState object.
+        a_parent: Optional parent widget.
+
+    Raises:
+        IllegalArgumentError: When the_app_state is None.
     """
     # <editor-fold desc="Checks">
-    # Checking `the_app_state` parameter
+    # Checking the_app_state parameter.
     if the_app_state is None:
       logger.error("the_app_state is None.")
       raise exception.IllegalArgumentError("the_app_state is None.")
@@ -67,24 +76,29 @@ class DeleteProjectViewController(QtCore.QObject):
     self.restore_default_view()
 
   def get_view(self):
+    """Return the managed delete project view.
+
+    Returns:
+        The managed delete project view.
+    """
     return self._view
 
-  def FormatData(self) -> None:
+  def format_data(self) -> None:
     """Format data helper."""
     pass
 
   def _open_help_for_dialog(self) -> None:
-    """Opens the help dialog for the corresponding dialog."""
+    """Open the help dialog for the corresponding dialog."""
     logger.log(
       log_levels.SLOT_FUNC_LOG_LEVEL_VALUE, "'Help' button was clicked."
     )
-    tmp_dialog = help_view.HelpView(
+    dialog = help_view.HelpView(
       constants.HELP_TEXT_MAP["DeleteProjectDialog"]
     )
-    tmp_dialog.exec()
+    dialog.exec()
 
   def restore_default_view(self) -> None:
-    """Restores the default UI"""
+    """Restore the default UI state."""
     self._view.ui.label_31.hide()
     self._view.ui.txt_delete_search.setPlaceholderText("Search")
     self._view.ui.txt_delete_search.clear()
@@ -92,13 +106,13 @@ class DeleteProjectViewController(QtCore.QObject):
     self._view.ui.btn_delete_delete_project.setEnabled(False)
 
   def _fill_projects_list_view(self) -> None:
-    """Lists all projects."""
+    """List all projects."""
     self._view.ui.list_delete_projects_view.setModel(
         self._app_state.workspace.get_model()
     )
 
   def _connect_all_ui_elements_to_slot_functions(self) -> None:
-    """Connects all UI elements to their corresponding slot functions in the class."""
+    """Connect all UI elements to their corresponding slot functions in the class."""
     self._view.ui.txt_delete_search.textChanged.connect(
         self.validate_delete_search
     )
@@ -112,7 +126,11 @@ class DeleteProjectViewController(QtCore.QObject):
     self._view.ui.btn_help.clicked.connect(self._open_help_for_dialog)
 
   def validate_delete_search(self, search_text: str) -> None:
-    """Validates the input of the project name in real-time."""
+    """Validate the input of the project name in real-time.
+
+    Args:
+        search_text: The text entered in the search field.
+    """
     logger.log(log_levels.SLOT_FUNC_LOG_LEVEL_VALUE, "A text was entered.")
     projects_list_view = self._view.ui.list_delete_projects_view
     ui_util.select_matching_string_in_q_list_view(
@@ -122,7 +140,7 @@ class DeleteProjectViewController(QtCore.QObject):
     )
 
   def select_project_from_delete_list(self) -> None:
-    """Selects a project from the project list on the delete page."""
+    """Select a project from the project list on the delete page."""
     logger.log(
         log_levels.SLOT_FUNC_LOG_LEVEL_VALUE,
         "A project from the list of existing projects was clicked.",
@@ -155,14 +173,14 @@ class DeleteProjectViewController(QtCore.QObject):
       self._view.ui.txt_delete_selected_projects.setText("")
 
   def activate_delete_button(self) -> None:
-    """Activates the delete button."""
+    """Activate the delete button."""
     if self._view.ui.txt_delete_selected_projects.text() == "":
       self._view.ui.btn_delete_delete_project.setEnabled(False)
     else:
       self._view.ui.btn_delete_delete_project.setEnabled(True)
 
   def delete_project(self) -> None:
-    """Deletes an existing project."""
+    """Delete an existing project."""
     logger.log(
         log_levels.SLOT_FUNC_LOG_LEVEL_VALUE, "'Delete' button was clicked."
     )
@@ -184,13 +202,13 @@ class DeleteProjectViewController(QtCore.QObject):
       dialog_message = "Are you sure you want to delete this project?"
       dialog_title = "Delete Project"
 
-    tmp_dialog = custom_message_box.CustomMessageBoxDelete(
+    confirmation_dialog = custom_message_box.CustomMessageBoxDelete(
         dialog_message,
         dialog_title,
         custom_message_box.CustomMessageBoxIcons.WARNING.value,
     )
-    tmp_dialog.exec()
-    if not tmp_dialog.response:
+    confirmation_dialog.exec()
+    if not confirmation_dialog.response:
       return
 
     for name in names_to_delete:

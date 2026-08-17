@@ -48,6 +48,9 @@ families independently:
 * Naming: PascalCase classes; snake_case functions, methods, parameters, and
   variables; no `tmp_` bindings; preserve precise dunder/private names,
   uppercase constants, and exact AST visitor dispatch overrides.
+* Function defaults: no mutable list, dict, or set literals, comprehensions, or
+  built-in constructor calls. Constructor names that cannot be statically
+  confirmed as built-ins require review rather than a hard violation.
 * Documentation and comments: no backticks or `:class:` markup; period-ending
   summaries and descriptions; every public and private module, class, function,
   and method has a descriptive docstring; complete applicable `Args:` entries
@@ -56,10 +59,9 @@ families independently:
   require `Returns:` too. Named or qualified exception names match by either
   equivalent leaf or qualified form. Dynamic/factory raises require exactly a
   non-empty, period-ended `Exception:` entry; unrelated named entries fail.
-* Comment punctuation is exempt only for exact shebang/encoding directives,
-  conservative recognized leading license/header lines within lines 1–25, and
-  exact fold, region, or symmetric separator markers. Markup is always checked;
-  uncertain early comments are checked normally.
+* Exclude comments before the first Python statement from supplemental comment
+  checks. For later comments, check markup and punctuation except for exact
+  fold, region, or symmetric separator markers.
 
 Produce a short grouped plan naming exact files, rule families, exact edits,
 Ruff-assisted versus manual ownership, exclusions, behavior/API safeguards, and

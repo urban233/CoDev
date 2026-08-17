@@ -36,80 +36,29 @@ TYPE_COMMENT = re.compile(r"#\s*type:\s*(?!ignore\b)")
 TODO = re.compile(r"#\s*TODO(?!\s*:\s*\S+\s+-\s+\S+)", re.IGNORECASE)
 PYLINT = re.compile(r"#\s*pylint\s*:", re.IGNORECASE)
 SECTION = re.compile(r"^(Args|Raises|Returns|Yields):$")
-LICENSE_MARKERS = (
-    "copyright", "license", "licensed", "spdx", "gnu general public license",
-    "free software foundation", "warranty", "redistribution",
-)
-HEADER_LINE_PATTERNS = (
-    "copyright", "spdx-license-identifier", "license", "licensed", "gnu ",
-    "free software foundation", "warranty", "redistribution", "source code",
-    "this program", "you should", "along with", "without", "either ",
-)
-SHEBANG = re.compile(r"^#!\s*/[A-Za-z0-9_.+/-]+(?:\s+.*)?$")
-ENCODING_PLAIN = re.compile(r"^coding[:=]\s*[-\w.]+$")
-ENCODING_EMACS = re.compile(r"^-\*-\s*coding[:=]\s*[-\w.]+\s*-\*-$")
 
 
-def header_comment_lines(source):
-    """Return punctuation-exempt lines in a recognized leading header.
+def leading_comment_lines(source):
+    """Return comment lines before the first Python statement.
 
     Args:
         source: Python source text.
     Returns:
-        Header comment line numbers.
+        Leading comment line numbers.
     """
-    leading = []
-    for number, line in enumerate(source.splitlines()[:25], start=1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            if stripped.startswith("#"):
-                leading.append((number, stripped[1:].strip()))
-            continue
-        break
-    def structured(text, continuation=False):
-        """Return whether a comment resembles structured header text.
-
-        Args:
-            text: Comment text without its hash.
-            continuation: Whether a legal continuation line follows a marker.
-        Returns:
-            Whether the text is structured header content.
-        """
-        lowered = text.lower()
-        return (
-            any(lowered.startswith(pattern) for pattern in HEADER_LINE_PATTERNS)
-            or bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]*\s+-\s+Python\b.*", text))
-            or (continuation and text == "")
-            or (continuation and bool(re.fullmatch(r"[A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+)+\s+\([^)]*@[^)]*\)", text)))
-        )
-
-    markers = [index for index, (_, text) in enumerate(leading) if structured(text) and any(marker in text.lower() for marker in LICENSE_MARKERS)]
-    directives = set()
-    raw_lines = source.splitlines()
-    for number, line in enumerate(raw_lines[:2], start=1):
-        stripped = line.strip()
-        if not stripped.startswith("#"):
-            continue
-        text = stripped[1:].strip()
-        if (number == 1 and SHEBANG.fullmatch(line)) or (
-            number in {1, 2}
-            and (ENCODING_PLAIN.fullmatch(text) or ENCODING_EMACS.fullmatch(text))
-        ):
-            directives.add(number)
-    if not markers:
-        return directives
-    exempt = set()
-    for number, text in leading[min(markers):]:
-        if text == "":
-            exempt.add(number)
-            continue
-        if not structured(text, continuation=True):
+    lines = set()
+    try:
+        tokens = tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__)
+        for token in tokens:
+            if token.type == tokenize.COMMENT:
+                lines.add(token.start[0])
+                continue
+            if token.type in {tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER}:
+                continue
             break
-        exempt.add(number)
-    for number, text in leading[:min(markers)]:
-        if structured(text):
-            exempt.add(number)
-    return exempt | directives
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return lines
 
 
 def section_or_fold_comment(text):
@@ -307,6 +256,145 @@ def _is_mutable_value(node):
     return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"dict", "list", "set"}
 
 
+def _mutable_defaults(node):
+    """Return known mutable defaults from a function signature.
+
+    Args:
+        node: Function syntax node.
+    Returns:
+        Mutable positional and keyword-only defaults.
+    """
+    defaults = [*node.args.defaults, *node.args.kw_defaults]
+    return [default for default in defaults if default is not None and _is_mutable_value(default)]
+
+
+def _scope_bindings(node):
+    """Return names and wildcard imports bound in one lexical scope.
+
+    Args:
+        node: Module, class, or function syntax node.
+    Returns:
+        Bound names and whether a wildcard import makes resolution uncertain.
+    """
+    names = set()
+    wildcard_import = False
+    comprehension_types = (
+        ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp
+    )
+
+    def walk_comprehension(current):
+        """Collect containing-scope bindings from a comprehension.
+
+        Args:
+            current: Comprehension syntax node.
+        """
+        if isinstance(current, ast.Lambda):
+            return
+        if isinstance(current, ast.NamedExpr):
+            walk(current.target)
+            walk_comprehension(current.value)
+            return
+        if isinstance(current, ast.comprehension):
+            walk_comprehension(current.iter)
+            for condition in current.ifs:
+                walk_comprehension(condition)
+            return
+        for child in ast.iter_child_nodes(current):
+            walk_comprehension(child)
+
+    def walk_definition_expressions(current):
+        """Collect bindings evaluated while defining a child scope.
+
+        Args:
+            current: Function, class, or lambda syntax node.
+        """
+        expressions = [*getattr(current, "decorator_list", [])]
+        if isinstance(current, ast.ClassDef):
+            expressions.extend(current.bases)
+            expressions.extend(keyword.value for keyword in current.keywords)
+        else:
+            arguments = current.args
+            expressions.extend(arguments.defaults)
+            expressions.extend(
+                default for default in arguments.kw_defaults if default is not None
+            )
+            function_args = [
+                *getattr(arguments, "posonlyargs", []),
+                *arguments.args,
+                *arguments.kwonlyargs,
+            ]
+            if arguments.vararg:
+                function_args.append(arguments.vararg)
+            if arguments.kwarg:
+                function_args.append(arguments.kwarg)
+            expressions.extend(
+                argument.annotation
+                for argument in function_args
+                if argument.annotation is not None
+            )
+            returns = getattr(current, "returns", None)
+            if returns is not None:
+                expressions.append(returns)
+        expressions.extend(getattr(current, "type_params", []))
+        for expression in expressions:
+            walk(expression)
+
+    def walk(current):
+        """Collect bindings without descending into child lexical scopes."""
+        nonlocal wildcard_import
+        if current is not node and isinstance(
+            current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
+            if hasattr(current, "name"):
+                names.add(current.name)
+            walk_definition_expressions(current)
+            return
+        if isinstance(current, comprehension_types):
+            walk_comprehension(current)
+            return
+        if isinstance(current, ast.Name) and isinstance(current.ctx, (ast.Store, ast.Del)):
+            names.add(current.id)
+        elif isinstance(current, ast.arg):
+            names.add(current.arg)
+        elif isinstance(current, ast.Import):
+            names.update(alias.asname or alias.name.split(".", 1)[0] for alias in current.names)
+        elif isinstance(current, ast.ImportFrom):
+            wildcard_import = wildcard_import or any(alias.name == "*" for alias in current.names)
+            names.update(alias.asname or alias.name for alias in current.names if alias.name != "*")
+        elif isinstance(current, ast.ExceptHandler) and current.name:
+            names.add(current.name)
+        elif isinstance(current, (ast.MatchAs, ast.MatchStar)) and current.name:
+            names.add(current.name)
+        elif isinstance(current, ast.MatchMapping) and current.rest:
+            names.add(current.rest)
+        for child in ast.iter_child_nodes(current):
+            walk(child)
+
+    names.update(
+        type_parameter.name
+        for type_parameter in getattr(node, "type_params", [])
+        if getattr(type_parameter, "name", None)
+    )
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        arguments = node.args
+        function_args = [
+            *getattr(arguments, "posonlyargs", []),
+            *arguments.args,
+            *arguments.kwonlyargs,
+        ]
+        if arguments.vararg:
+            function_args.append(arguments.vararg)
+        if arguments.kwarg:
+            function_args.append(arguments.kwarg)
+        names.update(argument.arg for argument in function_args)
+        body = node.body if isinstance(node.body, list) else [node.body]
+    else:
+        body = node.body
+    for statement in body:
+        walk(statement)
+    return names, wildcard_import
+
+
 def _is_ast_visitor_hook(name):
     """Return whether a name is an exact AST visitor dispatch override.
 
@@ -437,6 +525,17 @@ class Visitor(ast.NodeVisitor):
             path: Source path.
         """
         self.root, self.path, self.results, self.scopes = root, path, [], ["module"]
+        self.bindings = []
+
+    def visit_Module(self, node):
+        """Track names that can shadow built-ins at module scope.
+
+        Args:
+            node: Module syntax node.
+        """
+        self.bindings.append(_scope_bindings(node))
+        self.generic_visit(node)
+        self.bindings.pop()
 
     def visit_Import(self, node):
         """Check ordinary import statements.
@@ -553,13 +652,25 @@ class Visitor(ast.NodeVisitor):
             add(self.results, self.root, self.path, node, "tmp-prefix", "violation", "Functions must not use the tmp_ prefix.")
         if not (_is_ast_visitor_hook(node.name) or DUNDER.fullmatch(node.name) or valid_snake(node.name)):
             add(self.results, self.root, self.path, node, "function-naming", "violation", "Functions and methods must use snake_case.")
+        for default in _mutable_defaults(node):
+            constructor = default.func.id if isinstance(default, ast.Call) else None
+            confirmed_builtin = constructor and all(
+                not wildcard and constructor not in names
+                for names, wildcard in self.bindings
+            )
+            if confirmed_builtin or constructor is None:
+                add(self.results, self.root, self.path, default, "mutable-default", "violation", "Function defaults must not create mutable objects.")
+            else:
+                add(self.results, self.root, self.path, default, "mutable-default", "review", "Confirm that this constructor resolves to an immutable default value.")
         doc_findings(self.results, self.root, self.path, node, "function")
         if self.scopes[-1] == "function":
             add(self.results, self.root, self.path, node, "nested-function", "review", "Review whether this nested function is necessary.")
         if node.end_lineno is not None and node.end_lineno - node.lineno + 1 > 40:
             add(self.results, self.root, self.path, node, "function-length", "review", "Review whether this function can remain focused below about 40 lines.")
         self.scopes.append("function")
+        self.bindings.append(_scope_bindings(node))
         self.generic_visit(node)
+        self.bindings.pop()
         self.scopes.pop()
 
     def visit_Assign(self, node):
@@ -586,7 +697,9 @@ class Visitor(ast.NodeVisitor):
             add(self.results, self.root, self.path, node, "nested-class", "review", "Review whether this nested class is necessary.")
         doc_findings(self.results, self.root, self.path, node, "class")
         self.scopes.append("class")
+        self.bindings.append(_scope_bindings(node))
         self.generic_visit(node)
+        self.bindings.pop()
         self.scopes.pop()
 
 
@@ -601,7 +714,10 @@ def token_findings(source, root, path):
         Token findings.
     """
     results = []
+    excluded_comment_lines = leading_comment_lines(source)
     for line_number, line in enumerate(source.splitlines(), start=1):
+        if line_number in excluded_comment_lines:
+            continue
         if len(line) > 80:
             add(results, root, path, ast.Constant(value=None), "line-length", "review", "Review this line over the Google 80-character limit.", line_number)
         if TYPE_COMMENT.search(line):
@@ -622,9 +738,11 @@ def token_findings(source, root, path):
             text = token.string.lstrip("#").strip()
             if not text:
                 continue
+            if token.start[0] in excluded_comment_lines:
+                continue
             if "`" in text or ":class:" in text:
                 add(results, root, path, token, "comment-markup", "violation", "Comments must not contain backticks or Sphinx class markup.", token.start[0])
-            if token.start[0] in header_comment_lines(source) or section_or_fold_comment(text):
+            if section_or_fold_comment(text):
                 continue
             if not text.endswith("."):
                 add(results, root, path, token, "comment-punctuation", "violation", "Code comments must end with a period.", token.start[0])

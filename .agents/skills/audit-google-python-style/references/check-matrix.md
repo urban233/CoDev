@@ -5,12 +5,13 @@
 | Syntax and unreadable source | supplemental checker | violation | None; standard library only. |
 | One module/symbol per import; no wildcard imports | supplemental checker | violation | None. |
 | PascalCase classes; snake_case functions/methods/parameters/bindings; no tmp_ | checker plus actor | violation | Dunder/private names, uppercase constants, and exact AST visitor overrides are documented exceptions. |
+| Mutable function defaults | supplemental checker | violation or review | List/dict/set literals, comprehensions, and confirmed built-in constructors are violations in positional and keyword-only defaults; shadowed or uncertain constructor names require review. |
 | Docstrings and summaries | supplemental checker plus actor | violation | Modules, classes, public/private functions and methods; summaries and logical section descriptions end with periods. |
 | Args completeness | supplemental checker | violation | Positional-only, positional, keyword-only, *args, and **kwargs; self/cls excluded. |
 | Returns/Yields completeness | supplemental checker | violation | Direct current scope plus non-None value annotations; nested scopes excluded. |
 | Raises completeness and matching | supplemental checker | violation | Direct current scope only; named/qualified forms match symmetrically by leaf or qualified name. Dynamic raises require exactly `Exception:` with nonempty period-ended text. |
-| Forbidden markup | supplemental checker | violation | Backticks and `:class:` are always checked, including headers. |
-| Comment punctuation | supplemental checker | violation | Only conservative recognized leading license/header lines within lines 1–25, exact shebang/encoding directives, and exact fold/region/symmetric separator markers are exempt. |
+| Forbidden markup | supplemental checker | violation | Comments before the first Python statement are excluded; later comments and all docstrings are checked. |
+| Comment punctuation | supplemental checker | violation | Comments before the first Python statement and exact fold/region/symmetric separator markers are excluded. |
 | Existing supplemental review rules | supplemental checker | review/violation | Type comments, TODO format, Pylint suppressions, continuations, broad exceptions, assertions, lambdas, mutable state, legacy aliases, nested definitions, long lines/functions, and syntax/readability findings. |
 | Exclusions | supplemental checker | policy | Case-insensitive `.agents`, caches, build output, generated, vendor, site-packages, and related excluded components. |
 | Ruff lint and formatting | pymake/Ruff wrapper | report separately | Never run Pylint; report unavailable wrappers honestly. |
