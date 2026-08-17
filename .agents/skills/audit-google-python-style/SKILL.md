@@ -1,156 +1,96 @@
 ---
 name: audit-google-python-style
-description: Audit Python code against the Google Python Style Guide using this repository's Ruff and pymake toolchain plus supplemental analysis, then propose a short grouped remediation plan for explicit human approval before modifying approved source files. Invoke only when the user explicitly requests this audit or invokes $audit-google-python-style. Do not use for ordinary code reviews, pull-request reviews, linting, or implementation tasks.
+description: Audit Python code against the Google Python Style Guide, produce a grouped read-only plan, and apply only an explicitly approved exact plan. Invoke only for an explicit Google Python Style audit request.
 ---
 
-# Audit Google Python Style
+# Google Python Style audit
 
-Perform a specialist Google Python Style audit with Ruff and `pymake` as the
-deterministic baseline. This skill has two explicit phases: plan, then apply
-after approval.
+This skill is an explicit two-phase workflow. It never inspects, invokes, copies,
+imports, or relies on an evaluation-only verifier or oracle script.
+
+```mermaid
+flowchart LR
+ A[Phase A: audit] --> P[Grouped exact plan]
+ P --> R[APPROVAL REQUIRED]
+ R --> B[Phase B: bounded remediation]
+ B --> C[Revalidate and report COMPLETED]
+```
 
 ## Invocation boundary
 
-Use this skill only for an explicit request such as:
+Use only when the human explicitly requests this audit or invokes
+`$audit-google-python-style`. Do not use it for ordinary reviews, linting, or
+implementation tasks. Invocation is not permission to edit.
+
+## Phase A: read-only audit and plan
+
+Read repository instructions, configuration, generated-code policy, exceptions,
+and working-tree state. Define the approved Python scope, including tests unless
+explicitly excluded. Exclude dependencies, caches, build output, vendored or
+generated code only with repository evidence. Run repository checks and then the
+skill-owned supplemental checker:
 
 ```text
-$audit-google-python-style
-Audit the Python codebase and propose approved style fixes.
+.agents/skills/audit-google-python-style/scripts/check_google_rules.py --root <approved-scope-root>
 ```
 
-Do not invoke it implicitly as part of `review-change`, `clean-code-review`,
-`pr-review`, a normal code review, or a generic linting request.
+Use `pymake` wrappers when the repository provides them: `pymake lint`,
+`pymake format dry_run=true`, and `pymake check_types`. If unavailable, report
+that fact and use the repository's documented Ruff commands; never install
+dependencies or claim an unavailable check passed.
 
-Invoking the skill is not approval to modify code. Keep the audit and plan
-phase read-only. Require a separate affirmative human response to the exact
-plan before entering the apply phase.
+The checker owns deterministic syntax, import, naming, markup, punctuation, and
+documentation findings. The actor owns contextual judgment for exceptions,
+resources, state, annotations, design, and consistency. Review these rule
+families independently:
 
-## Tooling policy
+* Imports: one module or symbol per import statement; no wildcard imports.
+* Naming: PascalCase classes; snake_case functions, methods, parameters, and
+  variables; no `tmp_` bindings; preserve precise dunder/private names,
+  uppercase constants, and exact AST visitor dispatch overrides.
+* Documentation and comments: no backticks or `:class:` markup; period-ending
+  summaries and descriptions; every public and private module, class, function,
+  and method has a descriptive docstring; complete applicable `Args:` entries
+  for every parameter form, direct-scope `Returns:`/`Yields:`, and direct-scope
+  `Raises:` descriptions. Value returns inferred from non-None annotations
+  require `Returns:` too. Named or qualified exception names match by either
+  equivalent leaf or qualified form. Dynamic/factory raises require exactly a
+  non-empty, period-ended `Exception:` entry; unrelated named entries fail.
+* Comment punctuation is exempt only for exact shebang/encoding directives,
+  conservative recognized leading license/header lines within lines 1–25, and
+  exact fold, region, or symmetric separator markers. Markup is always checked;
+  uncertain early comments are checked normally.
 
-The attached guide mentions Pylint, but this repository deliberately uses Ruff.
-Never invoke, install, configure, or require Pylint. Use the repository wrapper:
-
-```powershell
-.\pymake.bat lint
-.\pymake.bat format dry_run=true
-.\pymake.bat check_types
-```
-
-Use `pymake` rather than invoking Ruff, formatters, or type checkers directly.
-The supplemental standard-library checker is the only extra command because no
-existing `pymake` task wraps it.
-
-## Phase A: audit and approval plan
-
-1. Read repository instructions, `ruff.toml`, `pyproject.toml`, `pyrefly.toml`,
-   package-specific configurations, generated-code conventions, local
-   exceptions, and the current working-tree state.
-2. Define the in-scope `.py` files. Include tests unless explicitly excluded.
-   Exclude dependencies, caches, build output, vendored code, generated code,
-   and `.agents` only with repository evidence.
-3. Run the deterministic `pymake` checks before making judgments.
-4. Run `scripts/check_google_rules.py` for each Python package.
-5. Perform the agent judgment pass over imports, naming, documentation,
-   exceptions, resources, global state, type annotations, and consistency.
-6. Produce a short remediation plan grouped by source-file collection and rule
-   family. Include:
-   - approved scope and excluded files;
-   - grouped files or directories;
-   - exact style changes proposed;
-   - whether each change is Ruff-assisted or manual;
-   - non-goals and behavior-preservation constraints; and
-   - post-approval validation commands.
-7. Stop and ask the human to approve, reject, or revise this exact plan. Do not
-   edit files, run `pymake` write-mode format/lint fixes, or apply automated
-   changes before approval.
-
-If the plan depends on missing scope, a project-policy decision, uncertain
-generated-code status, or a behavior/public-API/architecture change, ask for
-clarification instead of silently expanding the plan.
-
-## Strict documentation contract
-
-Treat documentation as a style requirement for every documentable symbol,
-whether it is public or private. This includes modules, functions, async
-functions, classes, methods, constructors, properties, and other named
-callables. Do not exempt a private or internal symbol merely because its name
-starts with an underscore. Generated code is excluded only when the repository
-provides evidence that it is generated and out of scope.
-
-Every docstring must contain a concise summary sentence on its first line,
-terminated as a complete sentence. For functions and methods, use Google
-Python docstring sections as applicable:
-
-- `Args:` describes every meaningful parameter, including keyword-only,
-  variadic, optional, and private parameters; `self` and `cls` do not need
-  entries.
-- `Returns:` describes every returned value when the callable returns a value.
-- `Yields:` describes yielded values for generators instead of `Returns:`.
-- `Raises:` describes exceptions that are part of the callable's contract.
-
-Do not accept an empty docstring, a placeholder, a name restatement, or a
-summary without required parameter or return documentation. A callable with no
-meaningful parameters does not need an `Args:` section, and a callable that
-only returns `None` does not need `Returns:`, but its summary must still
-describe the behavior. Missing docstrings or missing applicable sections are
-style fixes for the approval plan unless their wording requires a human API or
-behavior decision.
+Produce a short grouped plan naming exact files, rule families, exact edits,
+Ruff-assisted versus manual ownership, exclusions, behavior/API safeguards, and
+post-approval validation. Do not edit, format-write, or apply fixes. End the
+report exactly with `APPROVAL REQUIRED`.
 
 ## Phase B: approved remediation
 
-Enter this phase only after explicit approval of the plan. Treat approval as
-limited to the named files, rule families, and non-goals.
+Enter only after explicit human approval of the exact plan. Recheck the tree and
+re-audit the approved scope; stop for changed inputs or a new decision. Apply
+only approved style edits, preserving executable behavior, tests, public APIs,
+dependencies, configuration, generated sources, and unrelated user changes.
+Use Ruff's formatter or safe fixes only through the repository wrapper and only
+when its complete target is approved; otherwise make targeted edits. Re-run the
+repository checks and supplemental checker, run affected tests, inspect the
+complete diff, and report exact commands, residual findings, changed files, and
+the verdict `COMPLETED`, `PARTIALLY COMPLETED`, or `CLARIFICATION REQUIRED`.
+Include approved-scope evidence from `git diff --name-only` and
+`git diff --check`; the workflow owns scope and diff evidence, while the
+checker owns only general Python style findings.
 
-1. Re-check the working tree and re-audit the approved scope. If relevant files
-   changed since the plan, stop and present an updated plan.
-2. Apply only the approved style changes. Preserve runtime behavior, public
-   APIs, tests, and unrelated user changes. Do not alter dependencies,
-   configuration, or generated sources unless explicitly approved.
-3. Use Ruff's formatter and safe fixes through the repository wrapper when the
-   approved scope covers the formatter's full target. For a partial scope,
-   make targeted edits and use `pymake` check-only validation to avoid changing
-   unapproved files.
-4. Make remaining documentation, import, exception, type, naming, and design
-   corrections manually.
-5. Re-run `pymake lint`, `pymake format dry_run=true`, `pymake check_types`, and
-   the supplemental checker. Run tests when edits could affect behavior.
-6. Inspect the exact diff for scope expansion, accidental behavior changes,
-   weakened tests, and formatter churn.
-7. Report applied changes, validation evidence, residual findings, and any
-   items that require a new approval. Do not merge, commit, or release.
+Never inspect, invoke, copy, import, or rely on evaluation-only verifier/oracle
+scripts such as `check_audit.py`. The checker implementation must remain an
+independent standard-library audit, not oracle-derived logic.
 
-## Supplemental checks
+## Independent coverage boundary
 
-The checker identifies relative and wildcard imports, semicolons, explicit
-line continuations, type comments, Pylint suppressions, `typing.Text`, legacy
-typing aliases, broad exception handlers, assertions outside tests, missing or
-incomplete docstrings for public and private documentable symbols, mutable
-module/class state, nested definitions, lambdas, long functions, long lines,
-malformed TODO comments, syntax errors, and unreadable source files.
-
-Use Python's standard-library `ast` and `tokenize` modules. Hard syntactic
-violations exit non-zero; judgment items are review findings until the agent
-decides whether the guide and repository context establish a violation.
-
-## Style judgment
-
-Apply the guide's normative language precisely. Treat recommendations as
-context-sensitive unless Ruff, the type checker, or local policy makes them
-mandatory. Review module structure, docstring completeness and quality,
-comments, exception design, resource lifetime and context managers,
-comprehensions, decorators, generators, properties, logging, error messages,
-TODO context, `__main__` guards, function size, annotations, `None` handling,
-generics, and local consistency. The documentation contract above is an
-explicit project audit policy and applies to private symbols as well as public
-ones. Do not turn Pylint-specific instructions into requirements for this
-Ruff-based repository.
-
-## Plan and completion reports
-
-The plan report must end with `APPROVAL REQUIRED` unless no changes are needed.
-The apply report must include exact commands and results, approved scope,
-changed files, residual findings, and one verdict: `COMPLETED`, `PARTIALLY
-COMPLETED`, or `CLARIFICATION REQUIRED`.
-
-Never claim compliance solely because Ruff passes. Human approval authorizes
-only the approved remediation plan and never authorizes merge or release.
+Generalizable import, naming, documentation, comment, exclusion, and
+supplemental review rules are independently owned by this skill's instructions,
+matrix, and standard-library checker. The repository regression module
+`tests/test_google_style_audit_rules.py` is maintenance evidence and is not
+installed into target repositories. Fixture-only target path allowlists, Git
+status enforcement, and exact harness success text belong only to the
+evaluation harness and are intentionally never replicated by this skill.

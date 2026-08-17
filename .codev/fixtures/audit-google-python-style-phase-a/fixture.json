@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "audit-google-python-style-phase-a",
+  "description": "Read-only Google Python Style audit and approval-plan scenario.",
+  "skill": "audit-google-python-style",
+  "category": "phase_a_planning",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}
