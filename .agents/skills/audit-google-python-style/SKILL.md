@@ -67,34 +67,72 @@ families independently:
   checks. For later comments, check markup and punctuation except for exact
   fold, region, or symmetric separator markers.
 * Standard Python patterns that trigger `review`-level mutable-state flags but
-  are not style defects: module-level `__all__`, `__slots__`, `__version__`, and
-  logger setup (`logging.getLogger`, `logger.addHandler`). Treat these as
-  acceptable in the plan; do not propose changes to them in Phase B.
+  are not style defects: module-level `__all__` and `__slots__` defined as list
+  literals. Treat these as acceptable in the plan; do not propose changes in
+  Phase B.
 
-Produce a short grouped plan naming exact files, rule families, exact edits,
-Ruff-assisted versus manual ownership, exclusions, behavior/API safeguards, and
-post-approval validation. Do not edit, format-write, or apply fixes. End the
-report exactly with `APPROVAL REQUIRED`. In automated agent operation, proceed
-immediately to Phase B.
+Produce a grouped remediation plan naming exact files, rule families, exact
+edits, Ruff-assisted versus manual ownership, exclusions, behavior/API
+safeguards, and post-fix validation commands. Do not edit, format-write, or
+apply fixes. End the report exactly with `APPROVAL REQUIRED`. In automated
+agent operation, proceed immediately to Phase B.
 
 ## Phase B: automatic remediation
 
 In automated agent operation, enter Phase B immediately after Phase A completes
 with `APPROVAL REQUIRED`. In interactive use, enter only after explicit human
-approval of the exact plan. Recheck the tree and re-audit the approved scope;
-stop for changed inputs or a new decision. Apply only approved-scope style edits,
-preserving executable behavior, tests, public APIs, dependencies, configuration,
-generated sources, and unrelated user changes.
+approval of the exact plan. Re-run the supplemental checker with the same
+`--root` to confirm the approved scope and findings match the Phase A plan;
+if they diverge, stop and report CLARIFICATION REQUIRED. Apply only
+approved-scope style edits, preserving executable behavior, tests, public APIs,
+dependencies, configuration, generated sources, and unrelated user changes.
 
 Apply fixes in this order:
 
 1. Run Ruff formatter and safe fixes through the repository wrapper (`pymake lint`,
-   `pymake format`) or documented Ruff commands to correct formatting, unused
-   imports, and other auto-fixable findings; report unavailable wrappers honestly.
-2. Make targeted manual edits for remaining `violation`-level findings: split
-   multi-symbol imports, rename symbols (providing compatibility aliases for public
-   names, none for private `_`-prefixed symbols), rewrite docstrings, remove
-   backtick and `:class:` markup, and fix comment punctuation.
+   `pymake format`), or the repository's documented Ruff commands, or — if
+   neither is available — `ruff check --fix --extend-select UP,I,B,SIM <scope>`
+   and `ruff format <scope>` directly. Use `--extend-select`, not `--select`,
+   so the repository's own pyproject.toml Ruff configuration is respected and
+   these groups are added on top. `UP` covers typing modernisation
+   (`typing.Text` → `str`, legacy collection aliases); `I` enforces import
+   ordering; `B` flags mutable defaults (B006) and other bugs; `SIM` flags
+   simplification opportunities; `E731` (lambda assignment) and `E702`
+   (semicolons) are already in Ruff's default E7 group and need no explicit
+   selection. Enable all groups unconditionally — do not wait for a violation
+   to appear before enabling them. Note that `B006`, naming-convention
+   violations (N-rules), docstring content, and all comment findings are
+   flagged by Ruff but are never auto-fixed; those categories always require
+   manual edits in step 2. Report any unavailable tool honestly; never claim
+   a check passed that did not run.
+2. Make targeted manual edits for remaining `violation`-level findings by
+   category:
+   - *Imports*: split multi-symbol import and from-import statements; replace
+     wildcard imports with the explicit named symbols actually used in the file
+     (scan for unqualified names not defined locally, then cross-reference with
+     the imported module's `__all__` to confirm which symbols the wildcard
+     provides); convert relative imports to absolute package paths (derive from
+     `pyproject.toml`, `setup.py`, or directory layout). Ruff UP rules handle
+     `typing.Text` → `str` automatically; only intervene manually if the
+     checker still reports a `no-typing-text` finding after step 1.
+   - *Naming*: rename classes to PascalCase; rename functions, methods,
+     parameters, and bindings to snake_case; remove `tmp_` prefixes; add
+     compatibility aliases for renamed public-API symbols, placed immediately
+     after each renamed definition; for private `_`-prefixed renames (no
+     alias), also update every call site and attribute access within the
+     approved scope. Keyword parameters of public functions are part of the
+     public API — update every keyword call site within scope, and issue
+     PARTIALLY COMPLETED if external callers may be affected.
+   - *Defaults*: replace confirmed-mutable default arguments (list, dict, or
+     set literals) with a `None` sentinel guarded by
+     `if arg is None: arg = <default>` in the function body; update any
+     affected type annotation from `T` to `T | None`.
+   - *Type comments*: convert `# type:` comments to inline annotations.
+   - *Documentation*: add or rewrite module, class, function, and method
+     docstrings; complete Args, Returns, Yields, and Raises sections with
+     period-ended entries; remove backtick and `:class:` markup from docstrings.
+   - *Comments*: remove backtick and `:class:` markup; add terminal periods to
+     all non-header, non-marker inline comments.
 3. Re-run the supplemental checker; if Ruff transformations introduced new
    `violation`-level findings, apply targeted fixes and repeat until the checker
    reports zero `violation`-level findings in the approved scope.
@@ -106,12 +144,18 @@ one-off lambda with a named function); leave the pattern unchanged when it is
 intentional or acceptable under the Google Style Guide and note the judgment in
 the Phase B report.
 
-Re-run the repository checks and supplemental checker, run affected tests, inspect
-the complete diff, and report exact commands, residual findings, changed files, and
-the verdict `COMPLETED`, `PARTIALLY COMPLETED`, or `CLARIFICATION REQUIRED`.
-Include approved-scope evidence from `git diff --name-only` and
-`git diff --check`; the workflow owns scope and diff evidence, while the
-checker owns only general Python style findings.
+Re-run the repository checks and supplemental checker. Run the repository test
+suite scoped to the approved files where the runner supports it (e.g.,
+`pytest <module>`, `pymake test`), or the full suite otherwise; if tests fail,
+the remediation altered behavior — revert the offending edit and rerun. If a
+`violation`-level finding cannot be safely resolved without altering observable
+behavior or requires information beyond the approved scope, document it and
+issue PARTIALLY COMPLETED. Inspect the complete diff and report exact commands,
+residual findings, changed files, and the verdict `COMPLETED`,
+`PARTIALLY COMPLETED`, or `CLARIFICATION REQUIRED`. Include approved-scope
+evidence from `git diff --name-only` and `git diff --check`; the workflow owns
+scope and diff evidence, while the checker owns only general Python style
+findings.
 
 Never inspect, invoke, copy, import, or rely on evaluation-only verifier/oracle
 scripts such as `check_audit.py`. The checker implementation must remain an
