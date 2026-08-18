@@ -1,18 +1,21 @@
 ---
 name: audit-google-python-style
-description: Audit Python code against the Google Python Style Guide, produce a grouped read-only plan, and apply only an explicitly approved exact plan. Invoke only for an explicit Google Python Style audit request.
+description: Audit Python code against the Google Python Style Guide and automatically fix all deterministic style violations to produce clean, conformant code. Invoke only for an explicit Google Python Style audit request.
 ---
 
 # Google Python Style audit
 
-This skill is an explicit two-phase workflow. It never inspects, invokes, copies,
-imports, or relies on an evaluation-only verifier or oracle script.
+This skill runs a deterministic two-phase workflow: Phase A produces a grouped
+audit plan and ends with `APPROVAL REQUIRED`; Phase B immediately applies all
+fixes in automated agent operation, or waits for explicit human approval in
+interactive use. It never inspects, invokes, copies, imports, or relies on an
+evaluation-only verifier or oracle script.
 
 ```mermaid
 flowchart LR
  A[Phase A: audit] --> P[Grouped exact plan]
  P --> R[APPROVAL REQUIRED]
- R --> B[Phase B: bounded remediation]
+ R --> B[Phase B: automatic remediation]
  B --> C[Revalidate and report COMPLETED]
 ```
 
@@ -20,7 +23,8 @@ flowchart LR
 
 Use only when the human explicitly requests this audit or invokes
 `$audit-google-python-style`. Do not use it for ordinary reviews, linting, or
-implementation tasks. Invocation is not permission to edit.
+implementation tasks. Phase A invocation is read-only; editing is confined to
+Phase B.
 
 ## Phase A: read-only audit and plan
 
@@ -62,22 +66,48 @@ families independently:
 * Exclude comments before the first Python statement from supplemental comment
   checks. For later comments, check markup and punctuation except for exact
   fold, region, or symmetric separator markers.
+* Standard Python patterns that trigger `review`-level mutable-state flags but
+  are not style defects: module-level `__all__`, `__slots__`, `__version__`, and
+  logger setup (`logging.getLogger`, `logger.addHandler`). Treat these as
+  acceptable in the plan; do not propose changes to them in Phase B.
 
 Produce a short grouped plan naming exact files, rule families, exact edits,
 Ruff-assisted versus manual ownership, exclusions, behavior/API safeguards, and
 post-approval validation. Do not edit, format-write, or apply fixes. End the
-report exactly with `APPROVAL REQUIRED`.
+report exactly with `APPROVAL REQUIRED`. In automated agent operation, proceed
+immediately to Phase B.
 
-## Phase B: approved remediation
+## Phase B: automatic remediation
 
-Enter only after explicit human approval of the exact plan. Recheck the tree and
-re-audit the approved scope; stop for changed inputs or a new decision. Apply
-only approved style edits, preserving executable behavior, tests, public APIs,
-dependencies, configuration, generated sources, and unrelated user changes.
-Use Ruff's formatter or safe fixes only through the repository wrapper and only
-when its complete target is approved; otherwise make targeted edits. Re-run the
-repository checks and supplemental checker, run affected tests, inspect the
-complete diff, and report exact commands, residual findings, changed files, and
+In automated agent operation, enter Phase B immediately after Phase A completes
+with `APPROVAL REQUIRED`. In interactive use, enter only after explicit human
+approval of the exact plan. Recheck the tree and re-audit the approved scope;
+stop for changed inputs or a new decision. Apply only approved-scope style edits,
+preserving executable behavior, tests, public APIs, dependencies, configuration,
+generated sources, and unrelated user changes.
+
+Apply fixes in this order:
+
+1. Run Ruff formatter and safe fixes through the repository wrapper (`pymake lint`,
+   `pymake format`) or documented Ruff commands to correct formatting, unused
+   imports, and other auto-fixable findings; report unavailable wrappers honestly.
+2. Make targeted manual edits for remaining `violation`-level findings: split
+   multi-symbol imports, rename symbols (providing compatibility aliases for public
+   names, none for private `_`-prefixed symbols), rewrite docstrings, remove
+   backtick and `:class:` markup, and fix comment punctuation.
+3. Re-run the supplemental checker; if Ruff transformations introduced new
+   `violation`-level findings, apply targeted fixes and repeat until the checker
+   reports zero `violation`-level findings in the approved scope.
+
+For residual `review`-level findings after all violations are resolved: apply a
+safe fix when a clearly better alternative exists (narrow a broad exception to a
+specific type, extract an oversized function into focused helpers, replace a
+one-off lambda with a named function); leave the pattern unchanged when it is
+intentional or acceptable under the Google Style Guide and note the judgment in
+the Phase B report.
+
+Re-run the repository checks and supplemental checker, run affected tests, inspect
+the complete diff, and report exact commands, residual findings, changed files, and
 the verdict `COMPLETED`, `PARTIALLY COMPLETED`, or `CLARIFICATION REQUIRED`.
 Include approved-scope evidence from `git diff --name-only` and
 `git diff --check`; the workflow owns scope and diff evidence, while the
