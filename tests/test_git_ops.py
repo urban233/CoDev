@@ -9,11 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from codev_workflow import config, git_ops, work
+from codev_workflow import config, git_ops, task
 
 FULL_COVERAGE = {
     dimension: {"passed": True, "evidence": f"checked {dimension}"}
-    for dimension in work.REQUIRED_COVERAGE_DIMENSIONS
+    for dimension in task.REQUIRED_COVERAGE_DIMENSIONS
 }
 
 
@@ -157,7 +157,7 @@ class BranchAndCommitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
             (target / "changed.txt").write_text("content\n", encoding="utf-8")
             head = git_ops.commit(
@@ -169,7 +169,7 @@ class BranchAndCommitTests(unittest.TestCase):
             )
             # If record_builder had been called against a stale head, check()
             # would report stop_drift instead of waiting on the reviewer.
-            result = work.check("item-1", head, target=target)
+            result = task.check("item-1", head, target=target)
             self.assertTrue(result.ok)
             self.assertEqual("ok_waiting_on_reviewer", result.reason)
 
@@ -313,9 +313,9 @@ def _gh_no_existing_pr(
 class OpenPrTests(unittest.TestCase):
     def _repo_ready_for_pr(self, target: Path) -> str:
         base = _init_repo(target)
-        work.start("item-1", base, target=target)
+        task.start("item-1", base, target=target)
         git_ops.create_branch("item-1", base, target=target)
-        work.record_reviewer(
+        task.record_reviewer(
             "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
         )
         return base
@@ -324,7 +324,7 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
             with (
                 patch.object(git_ops, "_run_gh") as run_gh,
@@ -436,12 +436,12 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
-            work.reopen(
+            task.reopen(
                 "item-1", "some-head-not-matching-real-git", "recovered", target=target
             )
             with (
@@ -455,13 +455,13 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
-            work.reopen("item-1", base, "recovered into the outer phase", target=target)
-            work.record_reviewer(
+            task.reopen("item-1", base, "recovered into the outer phase", target=target)
+            task.record_reviewer(
                 "item-1",
                 2,
                 base,
@@ -471,7 +471,7 @@ class OpenPrTests(unittest.TestCase):
                 target=target,
             )
             self.assertEqual(
-                "ok_approve", work.check("item-1", base, target=target).reason
+                "ok_approve", task.check("item-1", base, target=target).reason
             )
 
             with patch.object(
@@ -492,14 +492,14 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start(
+            task.start(
                 "item-1",
                 base,
                 target=target,
                 link_ref="https://github.com/o/r/issues/7",
             )
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
@@ -519,14 +519,14 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start(
+            task.start(
                 "item-1",
                 base,
                 target=target,
                 link_ref="https://github.com/other/repo/issues/7",
             )
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
 
@@ -548,14 +548,14 @@ class OpenPrTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start(
+            task.start(
                 "item-1",
                 base,
                 target=target,
                 link_ref="docs/codev/work/item-1/implementation-plan.md",
             )
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             with patch.object(
@@ -658,15 +658,15 @@ class SuggestOwnersTests(unittest.TestCase):
 class MarkReadyTests(unittest.TestCase):
     def _repo_ready_for_approval(self, target: Path) -> None:
         base = _init_repo(target)
-        work.start("item-1", base, target=target)
+        task.start("item-1", base, target=target)
         git_ops.create_branch("item-1", base, target=target)
-        work.record_reviewer(
+        task.record_reviewer(
             "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
         )
-        work.record_builder(
+        task.record_builder(
             "item-1", 2, base, {"delivered": "opened pr"}, target=target
         )
-        work.record_reviewer(
+        task.record_reviewer(
             "item-1",
             2,
             base,
@@ -680,7 +680,7 @@ class MarkReadyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
             with (
                 patch.object(git_ops, "_run_gh") as run_gh,
@@ -712,28 +712,28 @@ class MarkReadyTests(unittest.TestCase):
                 call for call in run_gh.call_args_list if "edit" in call.args[0]
             )
             body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
-            self.assertEqual(work.pr_description("item-1", target=target), body)
-            self.assertNotEqual(work.log_text("item-1", target=target), body)
+            self.assertEqual(task.pr_description("item-1", target=target), body)
+            self.assertNotEqual(task.log_text("item-1", target=target), body)
             self.assertNotIn("round 1:", body)
 
     def test_appends_closes_issue_when_link_ref_matches_same_repo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start(
+            task.start(
                 "item-1",
                 base,
                 target=target,
                 link_ref="https://github.com/o/r/issues/7",
             )
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
-            work.record_builder(
+            task.record_builder(
                 "item-1", 2, base, {"delivered": "opened pr"}, target=target
             )
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1",
                 2,
                 base,
@@ -774,12 +774,12 @@ class MarkReadyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            work.start("item-1", base, target=target)
+            task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
-            work.record_builder("item-1", 2, base, {}, target=target)
+            task.record_builder("item-1", 2, base, {}, target=target)
             finding = {
                 "id": "f1",
                 "location": "a.py:1",
@@ -788,7 +788,7 @@ class MarkReadyTests(unittest.TestCase):
                 "rank": 1,
                 "summary": "leaks a raw OSError",
             }
-            work.record_reviewer(
+            task.record_reviewer(
                 "item-1",
                 2,
                 base,
@@ -797,7 +797,7 @@ class MarkReadyTests(unittest.TestCase):
                 "CHANGES_REQUIRED",
                 target=target,
             )
-            work.record_triage(
+            task.record_triage(
                 "item-1",
                 2,
                 {
@@ -812,7 +812,7 @@ class MarkReadyTests(unittest.TestCase):
             )
             self.assertEqual(
                 "ok_approve_with_deferrals",
-                work.check("item-1", base, target=target).reason,
+                task.check("item-1", base, target=target).reason,
             )
 
             with patch.object(git_ops, "_run_gh", return_value="") as run_gh:

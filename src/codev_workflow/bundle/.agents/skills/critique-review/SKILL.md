@@ -31,11 +31,11 @@ Accept one or more of:
   `code-audit` pre-PR gate finding; or
 - a presubmit, lint, static-analysis, or test failure.
 
-For a work item with an open pull request, an existing GitHub review
+For a task with an open pull request, an existing GitHub review
 comment is `outer-loop-runner`'s comment-sourced entry mode's territory, not
 this skill's: it fixes the finding directly through the tracked inner-loop
 correction cycle instead of stopping at a suggested, unapplied diff. Use
-this skill for that input only when there is no work item to attach the fix
+this skill for that input only when there is no task to attach the fix
 to at all — the same zero-ceremony case `review-change` itself is scoped
 to.
 

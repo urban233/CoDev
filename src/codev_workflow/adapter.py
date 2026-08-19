@@ -2,7 +2,7 @@
 
 Verifies structural parity across the four platform adapters without
 requiring them to be rendered from one source yet: every role file must
-reference the `codev work` lifecycle wiring, must not resurrect the retired
+reference the `codev task` lifecycle wiring, must not resurrect the retired
 P0-P3 finding scale, and must not grant unrestricted shell execution. This is
 a second line of defense against cross-adapter drift, not a substitute for
 eventually rendering adapters from one config source.
@@ -34,6 +34,7 @@ def _role_paths(directory: str, extension: str) -> dict[str, str]:
     # installer's own per-platform agent-rendering tests.
     paths = {
         "orchestrator": f"{directory}/orchestrator.{extension}",
+        "planner": f"{directory}/planner.{extension}",
         "builder": f"{directory}/builder.{extension}",
         "reviewer": f"{directory}/reviewer.{extension}",
         "lightweight-reviewer": f"{directory}/lightweight-reviewer.{extension}",
@@ -52,21 +53,22 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
     "orchestrator": (
-        "codev work start",
-        "codev work check",
+        "codev task start",
+        "codev task check",
         "codev git open-pr",
         "--github-issue",
         "codev git issue-create",
         "--no-github-issue",
     ),
-    "builder": ("codev work record",),
-    "reviewer": ("codev work record",),
-    "lightweight-reviewer": ("codev work record",),
+    "planner": ("codev git issue-create",),
+    "builder": ("codev task record",),
+    "reviewer": ("codev task record",),
+    "lightweight-reviewer": ("codev task record",),
     "outer-loop-runner": (
-        "codev work record",
-        "codev work triage",
-        "codev work waive",
-        "codev work reopen",
+        "codev task record",
+        "codev task triage",
+        "codev task waive",
+        "codev task reopen",
         "--selection",
         "codev git mark-ready",
     ),
@@ -90,8 +92,8 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
     "'git commit*': allow",
 )
 
-# ADR-0014: `codev git open-pr` generates a PR description from the work
-# item's own recorded evidence and coverage when no `--body`/`--body-file` is
+# ADR-0014: `codev git open-pr` generates a PR description from the task's
+# own recorded evidence and coverage when no `--body`/`--body-file` is
 # given -- an agent hardcoding a body placeholder here defeats that fallback
 # and produces hand-composed prose instead, the exact regression this guards
 # against.

@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codev_workflow.cli import _apply_deprecated_aliases, _format_snapshot_report, main
-from codev_workflow.work import CheckResult
+from codev_workflow.task import CheckResult
 
 
 class CliTests(unittest.TestCase):
@@ -186,7 +186,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(0, main(["check", "--target", str(target)]))
             self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
 
-    def test_work_lifecycle_round_trip(self) -> None:
+    def test_task_lifecycle_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             findings_path = target / "findings.json"
@@ -215,7 +215,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "start",
                             "--id",
                             "item-1",
@@ -232,7 +232,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -255,7 +255,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -270,7 +270,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -289,16 +289,16 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     0,
-                    main(["work", "status", "--id", "item-1", "--target", str(target)]),
+                    main(["task", "status", "--id", "item-1", "--target", str(target)]),
                 )
                 self.assertEqual(
-                    0, main(["work", "log", "--id", "item-1", "--target", str(target)])
+                    0, main(["task", "log", "--id", "item-1", "--target", str(target)])
                 )
                 self.assertEqual(
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "close",
                             "--id",
                             "item-1",
@@ -310,7 +310,7 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
-    def test_work_record_reviewer_accepts_specialist_selection(self) -> None:
+    def test_task_record_reviewer_accepts_specialist_selection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             empty_findings_path = target / "empty-findings.json"
@@ -325,7 +325,7 @@ class CliTests(unittest.TestCase):
             with redirect_stdout(StringIO()):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -337,7 +337,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "record",
                         "--id",
                         "item-1",
@@ -357,7 +357,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "record",
                         "--id",
                         "item-1",
@@ -377,7 +377,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -400,10 +400,10 @@ class CliTests(unittest.TestCase):
                 )
                 log = StringIO()
                 with redirect_stdout(log):
-                    main(["work", "log", "--id", "item-1", "--target", str(target)])
+                    main(["task", "log", "--id", "item-1", "--target", str(target)])
         self.assertIn("specialists: rollout-specialist", log.getvalue())
 
-    def test_work_reopen_after_close_round_trip(self) -> None:
+    def test_task_reopen_after_close_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -411,7 +411,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "start",
                             "--id",
                             "item-1",
@@ -426,7 +426,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "close",
                             "--id",
                             "item-1",
@@ -442,7 +442,7 @@ class CliTests(unittest.TestCase):
             with redirect_stderr(errors):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -453,7 +453,7 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(2, code)
-            self.assertIn("codev work reopen", errors.getvalue())
+            self.assertIn("codev task reopen", errors.getvalue())
 
             out = StringIO()
             with redirect_stdout(out):
@@ -461,7 +461,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "reopen",
                             "--id",
                             "item-1",
@@ -480,7 +480,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -491,9 +491,9 @@ class CliTests(unittest.TestCase):
                         ]
                     ),
                 )
-            self.assertIn("Reopened work item item-1", out.getvalue())
+            self.assertIn("Reopened task item-1", out.getvalue())
 
-    def test_work_start_github_issue_populates_link_and_summary(self) -> None:
+    def test_task_start_github_issue_populates_link_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             issue = {"title": "Fix the thing", "url": "https://github.com/o/r/issues/7"}
@@ -509,7 +509,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -523,12 +523,12 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(0, code)
             fetch_issue.assert_called_once_with(7, target=target.resolve())
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
             self.assertEqual("Fix the thing", state["summary"])
 
-    def test_work_start_explicit_summary_wins_over_github_issue(self) -> None:
+    def test_task_start_explicit_summary_wins_over_github_issue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             issue = {"title": "Issue title", "url": "https://github.com/o/r/issues/7"}
@@ -544,7 +544,7 @@ class CliTests(unittest.TestCase):
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -558,11 +558,11 @@ class CliTests(unittest.TestCase):
                         str(target),
                     ]
                 )
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("My own summary", state["summary"])
 
-    def test_work_start_owner_defaults_to_detected_identity(self) -> None:
+    def test_task_start_owner_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -574,7 +574,7 @@ class CliTests(unittest.TestCase):
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -585,11 +585,11 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             detect_identity.assert_called_once_with(target=target.resolve())
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("octocat", state["owner"])
 
-    def test_work_start_entry_takeover_stays_in_inner_phase(self) -> None:
+    def test_task_start_entry_takeover_stays_in_inner_phase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -601,7 +601,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -614,12 +614,12 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(0, code)
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("takeover", state["entry"])
             self.assertEqual("inner", state["rounds"][0]["phase"])
 
-    def test_work_start_entry_direct_review_opens_outer_phase(self) -> None:
+    def test_task_start_entry_direct_review_opens_outer_phase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -631,7 +631,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -644,18 +644,18 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(0, code)
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("direct-review", state["entry"])
             self.assertEqual("outer", state["rounds"][0]["phase"])
 
-    def test_work_start_rejects_unknown_entry(self) -> None:
+    def test_task_start_rejects_unknown_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -668,7 +668,7 @@ class CliTests(unittest.TestCase):
                     ]
                 )
 
-    def test_work_start_refuses_without_issue_linkage_when_repo_has_github(
+    def test_task_start_refuses_without_issue_linkage_when_repo_has_github(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -683,7 +683,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -696,10 +696,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertIn("--no-github-issue", errors.getvalue())
             self.assertFalse(
-                (target / ".codev" / "work" / "item-1" / "round-state.json").exists()
+                (target / ".codev" / "task" / "item-1" / "round-state.json").exists()
             )
 
-    def test_work_start_no_github_issue_flag_bypasses_the_gate(self) -> None:
+    def test_task_start_no_github_issue_flag_bypasses_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -715,7 +715,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -728,7 +728,7 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(0, code)
 
-    def test_work_start_link_flag_bypasses_the_gate(self) -> None:
+    def test_task_start_link_flag_bypasses_the_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -744,7 +744,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -758,7 +758,7 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(0, code)
 
-    def test_work_start_allowed_without_a_gate_check_when_repo_has_no_github(
+    def test_task_start_allowed_without_a_gate_check_when_repo_has_no_github(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -776,7 +776,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -805,7 +805,7 @@ class CliTests(unittest.TestCase):
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -824,7 +824,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "relink",
                         "--id",
                         "item-1",
@@ -838,14 +838,14 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(0, code)
             fetch_issue.assert_called_once_with(7, target=target.resolve())
-            self.assertIn("Relinked work item item-1", out.getvalue())
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            self.assertIn("Relinked task item-1", out.getvalue())
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
             self.assertEqual(1, len(state["link_ref_updates"]))
             self.assertEqual("octocat", state["link_ref_updates"][0]["by"])
 
-    def test_work_triage_by_defaults_to_detected_identity(self) -> None:
+    def test_task_triage_by_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             triage_path = target / "triage.json"
@@ -855,12 +855,12 @@ class CliTests(unittest.TestCase):
                     "codev_workflow.cli.git_ops_module.detect_identity",
                     return_value="octocat",
                 ) as detect_identity,
-                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                patch("codev_workflow.cli.task_module.record_triage") as record_triage,
                 redirect_stdout(StringIO()),
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "triage",
                         "--id",
                         "item-1",
@@ -881,7 +881,7 @@ class CliTests(unittest.TestCase):
                 by="octocat",
             )
 
-    def test_work_triage_explicit_by_skips_detection(self) -> None:
+    def test_task_triage_explicit_by_skips_detection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             triage_path = target / "triage.json"
@@ -890,12 +890,12 @@ class CliTests(unittest.TestCase):
                 patch(
                     "codev_workflow.cli.git_ops_module.detect_identity"
                 ) as detect_identity,
-                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                patch("codev_workflow.cli.task_module.record_triage") as record_triage,
                 redirect_stdout(StringIO()),
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "triage",
                         "--id",
                         "item-1",
@@ -918,18 +918,18 @@ class CliTests(unittest.TestCase):
                 by="explicit-triager",
             )
 
-    def test_work_check_prints_triage_note(self) -> None:
+    def test_task_check_prints_triage_note(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
                 patch(
-                    "codev_workflow.cli.work_module.check",
+                    "codev_workflow.cli.task_module.check",
                     return_value=CheckResult(True, "ok_continue", "proceed"),
                 ),
                 patch(
-                    "codev_workflow.cli.work_module.triage_note",
+                    "codev_workflow.cli.task_module.triage_note",
                     return_value=(
-                        "note: octocat both owns this work item and triaged this round"
+                        "note: octocat both owns this task and triaged this round"
                     ),
                 ),
             ):
@@ -937,7 +937,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     code = main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -950,20 +950,20 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("note: octocat", output.getvalue())
 
-    def test_work_check_omits_note_when_none(self) -> None:
+    def test_task_check_omits_note_when_none(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
                 patch(
-                    "codev_workflow.cli.work_module.check",
+                    "codev_workflow.cli.task_module.check",
                     return_value=CheckResult(True, "ok_continue", "proceed"),
                 ),
-                patch("codev_workflow.cli.work_module.triage_note", return_value=None),
+                patch("codev_workflow.cli.task_module.triage_note", return_value=None),
                 redirect_stdout(StringIO()) as output,
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "check",
                         "--id",
                         "item-1",
@@ -1089,7 +1089,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertIn("already exists", errors.getvalue())
 
-    def test_work_escalate_and_escalations_round_trip(self) -> None:
+    def test_task_escalate_and_escalations_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -1097,7 +1097,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "escalate",
                             "--id",
                             "item-1",
@@ -1117,12 +1117,12 @@ class CliTests(unittest.TestCase):
             output = StringIO()
             with redirect_stdout(output):
                 self.assertEqual(
-                    0, main(["work", "escalations", "--target", str(target)])
+                    0, main(["task", "escalations", "--target", str(target)])
                 )
         self.assertIn("item-1", output.getvalue())
         self.assertIn("stop_round_cap", output.getvalue())
 
-    def test_work_check_repeated_finding_exits_nonzero(self) -> None:
+    def test_task_check_repeated_finding_exits_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             finding = [
@@ -1145,7 +1145,7 @@ class CliTests(unittest.TestCase):
             with redirect_stdout(StringIO()):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1163,7 +1163,7 @@ class CliTests(unittest.TestCase):
                     if round_number > 1:
                         main(
                             [
-                                "work",
+                                "task",
                                 "record",
                                 "--id",
                                 "item-1",
@@ -1181,7 +1181,7 @@ class CliTests(unittest.TestCase):
                         )
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -1203,7 +1203,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stderr(errors):
                     code = main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -1215,7 +1215,7 @@ class CliTests(unittest.TestCase):
                     )
             self.assertEqual(1, code)
 
-    def test_status_reports_bundle_health_adapters_and_work_items(self) -> None:
+    def test_status_reports_bundle_health_adapters_and_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -1230,7 +1230,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1249,7 +1249,7 @@ class CliTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["healthy"])
             self.assertEqual(["codex"], payload["adapters"])
-            self.assertEqual(1, payload["work_items_in_progress"])
+            self.assertEqual(1, payload["tasks_in_progress"])
             self.assertNotIn("python_version", payload)
 
     def test_status_verbose_adds_environment_fields(self) -> None:
@@ -1274,7 +1274,7 @@ class CliTests(unittest.TestCase):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1288,7 +1288,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-2",
@@ -1302,7 +1302,7 @@ class CliTests(unittest.TestCase):
                 )
             with patch(
                 "codev_workflow.cli.git_ops_module.changed_files",
-                side_effect=lambda work_item_id, target: ["shared.py"],
+                side_effect=lambda task_id, target: ["shared.py"],
             ):
                 output = StringIO()
                 with redirect_stdout(output):
@@ -1323,7 +1323,7 @@ class CliTests(unittest.TestCase):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1342,7 +1342,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     main(["status", "--target", str(target), "--verbose", "--json"])
             payload = json.loads(output.getvalue())
-            self.assertEqual({"alice": 1}, payload["work_items_in_progress_by_owner"])
+            self.assertEqual({"alice": 1}, payload["tasks_in_progress_by_owner"])
             self.assertEqual([], payload["changed_file_overlaps"])
 
     def test_status_without_verbose_omits_owner_and_overlap_keys(self) -> None:
@@ -1354,7 +1354,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     main(["status", "--target", str(target), "--json"])
             payload = json.loads(output.getvalue())
-            self.assertNotIn("work_items_in_progress_by_owner", payload)
+            self.assertNotIn("tasks_in_progress_by_owner", payload)
             self.assertNotIn("changed_file_overlaps", payload)
 
     def test_doctor_alias_forwards_to_verbose_status(self) -> None:
@@ -1418,7 +1418,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            self.assertEqual(10, len(payload["findings"]))
+            self.assertEqual(11, len(payload["findings"]))
 
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

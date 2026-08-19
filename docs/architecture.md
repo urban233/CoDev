@@ -5,10 +5,11 @@
 CoDev separates workflow maintenance from workflow use. The canonical bundle
 lives in this project; agents consume ordinary, repository-local files in each
 software project. CoDev's install, update, and remove machinery never runs
-while product code is being built. The `codev work` lifecycle commands are the
+while product code is being built. The `codev task` lifecycle commands are the
 one exception: they may run during a build session, are strictly read-only
 with respect to product source, and only read or write their own state under
-`.codev/work/` (see [ADR-0001](adr/0001-work-lifecycle-invariant.md)).
+`.codev/task/` (see [ADR-0001](adr/0001-work-lifecycle-invariant.md) and
+[ADR-0023](adr/0023-work-item-renamed-to-task.md)).
 
 ```text
 CoDev source -> versioned Python package -> explicit CLI command -> target repo
@@ -79,9 +80,10 @@ removes only unchanged managed files and integrations; it remains opt-in.
 - Installed instruction changes are reviewable source changes.
 - Deterministic checks run without network access or model calls.
 - Behavioral model evaluations remain externally observed and separately run.
-- `codev work` lifecycle commands are read-only with respect to product
-  source; they only mutate their own state under `.codev/work/`
-  (see [ADR-0001](adr/0001-work-lifecycle-invariant.md)).
+- `codev task` lifecycle commands are read-only with respect to product
+  source; they only mutate their own state under `.codev/task/`
+  (see [ADR-0001](adr/0001-work-lifecycle-invariant.md) and
+  [ADR-0023](adr/0023-work-item-renamed-to-task.md)).
 
 ## Compatibility
 

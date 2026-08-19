@@ -244,6 +244,7 @@ class InstallerTests(unittest.TestCase):
                 "lightweight-reviewer.toml",
                 "orchestrator.toml",
                 "outer-loop-runner.toml",
+                "planner.toml",
                 "reviewer.toml",
                 "rollout-specialist.toml",
                 "security-data-specialist.toml",
@@ -274,6 +275,7 @@ class InstallerTests(unittest.TestCase):
                 ".codex/agents/lightweight-reviewer.toml",
                 ".codex/agents/orchestrator.toml",
                 ".codex/agents/outer-loop-runner.toml",
+                ".codex/agents/planner.toml",
                 ".codex/agents/reviewer.toml",
                 ".codex/agents/rollout-specialist.toml",
                 ".codex/agents/security-data-specialist.toml",
@@ -380,7 +382,7 @@ class InstallerTests(unittest.TestCase):
         gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(installer.GITIGNORE_START, gitignore)
         self.assertIn(installer.GITIGNORE_END, gitignore)
-        self.assertIn(".codev/work/escalations.jsonl", gitignore)
+        self.assertIn(".codev/task/escalations.jsonl", gitignore)
         lock = json.loads((self.target / ".codev" / "lock.json").read_text())
         self.assertIn("gitignore_block_hash", lock["integrations"])
 

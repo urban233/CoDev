@@ -16,8 +16,12 @@ from typing import Any, cast
 
 from codev_workflow.installer import _atomic_write
 
-ROUND_SCHEMA_VERSION = 2
-WORK_DIR_RELATIVE = PurePosixPath(".codev/work")
+# v3 (ADR-0023): "work item" is renamed to "task" throughout -- the schema
+# key is task_id (was work_item_id) and state lives under .codev/task/ (was
+# .codev/work/). v2 files are rejected by _load's version guard below -- no
+# migration, same precedent ADR-0003 set for v1->v2.
+ROUND_SCHEMA_VERSION = 3
+TASK_DIR_RELATIVE = PurePosixPath(".codev/task")
 ESCALATIONS_FILENAME = "escalations.jsonl"
 DEFAULT_INNER_MAX_ROUNDS = 2
 DEFAULT_OUTER_MAX_ROUNDS = 2
@@ -76,8 +80,8 @@ SPECIALIST_NAMES = (
 )
 
 
-class WorkError(Exception):
-    """Raised for invalid work-item state or lifecycle transitions."""
+class TaskError(Exception):
+    """Raised for invalid task state or lifecycle transitions."""
 
 
 @dataclass(frozen=True)
@@ -91,93 +95,93 @@ def load_json_file(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise WorkError(f"cannot read {path}: {error}") from error
+        raise TaskError(f"cannot read {path}: {error}") from error
 
 
-def _validate_id(work_item_id: str) -> None:
-    if not _ID_PATTERN.match(work_item_id):
-        raise WorkError(
-            f"invalid work item id {work_item_id!r}; use letters, digits, '.', '_', '-'"
+def _validate_id(task_id: str) -> None:
+    if not _ID_PATTERN.match(task_id):
+        raise TaskError(
+            f"invalid task id {task_id!r}; use letters, digits, '.', '_', '-'"
         )
 
 
-def _work_item_dir(target: Path, work_item_id: str) -> Path:
-    _validate_id(work_item_id)
-    return target / Path(WORK_DIR_RELATIVE.as_posix()) / work_item_id
+def _task_dir(target: Path, task_id: str) -> Path:
+    _validate_id(task_id)
+    return target / Path(TASK_DIR_RELATIVE.as_posix()) / task_id
 
 
-def _work_item_path(target: Path, work_item_id: str) -> Path:
-    return _work_item_dir(target, work_item_id) / "round-state.json"
+def _task_path(target: Path, task_id: str) -> Path:
+    return _task_dir(target, task_id) / "round-state.json"
 
 
-def _load(work_item_id: str, *, target: Path) -> dict[str, Any]:
-    path = _work_item_path(target, work_item_id)
+def _load(task_id: str, *, target: Path) -> dict[str, Any]:
+    path = _task_path(target, task_id)
     if not path.exists():
-        raise WorkError(f"no work item {work_item_id!r} at {path}")
+        raise TaskError(f"no task {task_id!r} at {path}")
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise WorkError(f"cannot read {path}: {error}") from error
+        raise TaskError(f"cannot read {path}: {error}") from error
     if (
         not isinstance(state, dict)
         or state.get("round_schema_version") != ROUND_SCHEMA_VERSION
     ):
-        raise WorkError(
+        raise TaskError(
             f"{path} has an unsupported or invalid round schema; "
             "install a compatible CoDev version"
         )
     return state
 
 
-def _save(work_item_id: str, state: dict[str, Any], *, target: Path) -> None:
-    path = _work_item_path(target, work_item_id)
+def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
+    path = _task_path(target, task_id)
     content = (json.dumps(state, indent=2, sort_keys=True) + "\n").encode("utf-8")
     _atomic_write(path, content)
 
 
 def _ensure_in_progress(state: dict[str, Any]) -> None:
     if state["status"] != "in_progress":
-        raise WorkError(f"work item is {state['status']!r}, not in_progress")
+        raise TaskError(f"task is {state['status']!r}, not in_progress")
 
 
 def _normalize_max_rounds(max_rounds: int | dict[str, int] | None) -> dict[str, int]:
     if max_rounds is None:
         return {"inner": DEFAULT_INNER_MAX_ROUNDS, "outer": DEFAULT_OUTER_MAX_ROUNDS}
     if isinstance(max_rounds, bool):
-        raise WorkError(
+        raise TaskError(
             "max_rounds must be an int or a {'inner': int, 'outer': int} dict"
         )
     if isinstance(max_rounds, int):
         if max_rounds < 1:
-            raise WorkError("max_rounds must be at least 1")
+            raise TaskError("max_rounds must be at least 1")
         return {"inner": max_rounds, "outer": max_rounds}
     if isinstance(max_rounds, dict):
         missing = [phase for phase in PHASES if phase not in max_rounds]
         if missing:
-            raise WorkError(f"max_rounds is missing phase(s): {', '.join(missing)}")
+            raise TaskError(f"max_rounds is missing phase(s): {', '.join(missing)}")
         extra = sorted(set(max_rounds) - set(PHASES))
         if extra:
-            raise WorkError(f"max_rounds has unknown phase(s): {', '.join(extra)}")
+            raise TaskError(f"max_rounds has unknown phase(s): {', '.join(extra)}")
         for phase in PHASES:
             value = max_rounds[phase]
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-                raise WorkError(f"max_rounds[{phase!r}] must be an integer >= 1")
+                raise TaskError(f"max_rounds[{phase!r}] must be an integer >= 1")
         return {phase: max_rounds[phase] for phase in PHASES}
-    raise WorkError("max_rounds must be an int or a {'inner': int, 'outer': int} dict")
+    raise TaskError("max_rounds must be an int or a {'inner': int, 'outer': int} dict")
 
 
 def _validate_optional_text(field_name: str, value: str | None) -> None:
     if value is not None and (not isinstance(value, str) or not value.strip()):
-        raise WorkError(f"{field_name} must be non-empty text when provided")
+        raise TaskError(f"{field_name} must be non-empty text when provided")
 
 
 def _validate_required_text(field_name: str, value: str) -> None:
     if not isinstance(value, str) or not value.strip():
-        raise WorkError(f"{field_name} must be non-empty text")
+        raise TaskError(f"{field_name} must be non-empty text")
 
 
 def start(
-    work_item_id: str,
+    task_id: str,
     base_snapshot: str,
     *,
     target: Path,
@@ -194,24 +198,24 @@ def start(
     _validate_optional_text("description", description)
     _validate_optional_text("owner", owner)
     if entry is not None and entry not in VALID_ENTRY_MODES:
-        raise WorkError(
+        raise TaskError(
             f"entry must be null or one of {VALID_ENTRY_MODES}, got {entry!r}"
         )
-    path = _work_item_path(target, work_item_id)
+    path = _task_path(target, task_id)
     if path.exists():
-        raise WorkError(
-            f"work item {work_item_id!r} already exists at {path}; to continue "
-            "it (after a close, a round-cap stop, or drift) use `codev work "
+        raise TaskError(
+            f"task {task_id!r} already exists at {path}; to continue "
+            "it (after a close, a round-cap stop, or drift) use `codev task "
             "reopen`, not `start`"
         )
     # direct-review has nothing for the inner loop to do -- round 1 opens
-    # straight into the outer phase so the first `codev work record` lands on
+    # straight into the outer phase so the first `codev task record` lands on
     # it directly, instead of the inner-to-outer transition `_round_slot`
     # normally requires a READY_FOR_OUTER_LOOP decision to create.
     initial_phase = "outer" if entry == "direct-review" else "inner"
     state: dict[str, Any] = {
         "round_schema_version": ROUND_SCHEMA_VERSION,
-        "work_item_id": work_item_id,
+        "task_id": task_id,
         "base_snapshot": base_snapshot,
         "max_rounds": resolved_max_rounds,
         "current_round": 1,
@@ -225,7 +229,7 @@ def start(
         "owner": owner,
         "entry": entry,
     }
-    _save(work_item_id, state, target=target)
+    _save(task_id, state, target=target)
     return path
 
 
@@ -240,13 +244,13 @@ def _round_slot(state: dict[str, Any], round_number: int) -> dict[str, Any]:
             return round_entry
 
     if round_number != len(rounds) + 1:
-        raise WorkError(
+        raise TaskError(
             f"cannot open round {round_number}: expected round {len(rounds) + 1}"
         )
     previous = rounds[-1]
     previous_reviewer = previous["reviewer"]
     if previous_reviewer is None:
-        raise WorkError(
+        raise TaskError(
             f"cannot open round {round_number}: round {previous['round']} has no "
             "reviewer decision yet"
         )
@@ -254,28 +258,28 @@ def _round_slot(state: dict[str, Any], round_number: int) -> dict[str, Any]:
     if previous_decision == "CHANGES_REQUIRED":
         phase = previous["phase"]
         if phase == "outer" and previous.get("triage") is None:
-            raise WorkError(
+            raise TaskError(
                 f"cannot open round {round_number}: round {previous['round']} has "
                 "no recorded triage yet"
             )
     elif previous_decision == "READY_FOR_OUTER_LOOP":
         if previous["phase"] != "inner":
-            raise WorkError(
+            raise TaskError(
                 f"cannot open round {round_number}: READY_FOR_OUTER_LOOP is only a "
                 "valid transition from the inner phase"
             )
         phase = "outer"
     else:
-        raise WorkError(
+        raise TaskError(
             f"cannot open round {round_number}: round {previous['round']} decision "
             f"{previous_decision!r} does not permit opening a new round"
         )
 
     if _phase_round_count(rounds, phase) + 1 > state["max_rounds"][phase]:
-        raise WorkError(
+        raise TaskError(
             f"cannot open round {round_number}: max_rounds for phase {phase!r} is "
             f"{state['max_rounds'][phase]}; a human may continue this item with "
-            "`codev work reopen`, optionally raising the cap"
+            "`codev task reopen`, optionally raising the cap"
         )
     new_round: dict[str, Any] = {
         "round": round_number,
@@ -290,34 +294,34 @@ def _round_slot(state: dict[str, Any], round_number: int) -> dict[str, Any]:
 
 def _validate_findings(raw: Any) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
-        raise WorkError("findings must be a JSON array")
+        raise TaskError("findings must be a JSON array")
     validated: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
-            raise WorkError(f"finding[{index}] must be a JSON object")
+            raise TaskError(f"finding[{index}] must be a JSON object")
         finding_id = item.get("id")
         if not isinstance(finding_id, str) or not finding_id:
-            raise WorkError(f"finding[{index}] needs a non-empty id")
+            raise TaskError(f"finding[{index}] needs a non-empty id")
         if finding_id in seen_ids:
-            raise WorkError(f"duplicate finding id: {finding_id}")
+            raise TaskError(f"duplicate finding id: {finding_id}")
         seen_ids.add(finding_id)
         for field_name in ("location", "category", "summary"):
             value = item.get(field_name)
             if not isinstance(value, str) or not value.strip():
-                raise WorkError(
+                raise TaskError(
                     f"finding {finding_id!r}: {field_name} must be non-empty text"
                 )
         if not isinstance(item.get("blocking"), bool):
-            raise WorkError(f"finding {finding_id!r}: blocking must be true or false")
+            raise TaskError(f"finding {finding_id!r}: blocking must be true or false")
         if not isinstance(item.get("rank"), int):
-            raise WorkError(f"finding {finding_id!r}: rank must be an integer")
+            raise TaskError(f"finding {finding_id!r}: rank must be an integer")
         expansion_reason = item.get("expansion_reason")
         if (
             expansion_reason is not None
             and expansion_reason not in VALID_EXPANSION_REASONS
         ):
-            raise WorkError(
+            raise TaskError(
                 f"finding {finding_id!r}: expansion_reason must be null or one of "
                 f"{VALID_EXPANSION_REASONS}"
             )
@@ -337,19 +341,19 @@ def _validate_findings(raw: Any) -> list[dict[str, Any]]:
 
 def _validate_coverage(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        raise WorkError("coverage must be a JSON object")
+        raise TaskError("coverage must be a JSON object")
     validated: dict[str, Any] = {}
     for dimension, entry in raw.items():
         if dimension not in REQUIRED_COVERAGE_DIMENSIONS:
-            raise WorkError(f"unknown coverage dimension: {dimension!r}")
+            raise TaskError(f"unknown coverage dimension: {dimension!r}")
         if not isinstance(entry, dict):
-            raise WorkError(f"coverage[{dimension!r}] must be a JSON object")
+            raise TaskError(f"coverage[{dimension!r}] must be a JSON object")
         passed = entry.get("passed")
         evidence = entry.get("evidence")
         if not isinstance(passed, bool):
-            raise WorkError(f"coverage[{dimension!r}].passed must be true or false")
+            raise TaskError(f"coverage[{dimension!r}].passed must be true or false")
         if not isinstance(evidence, str) or not evidence.strip():
-            raise WorkError(f"coverage[{dimension!r}].evidence must be non-empty text")
+            raise TaskError(f"coverage[{dimension!r}].evidence must be non-empty text")
         validated[dimension] = {"passed": passed, "evidence": evidence}
     return validated
 
@@ -360,46 +364,46 @@ def _validate_specialist_selection(raw: Any) -> dict[str, Any]:
     ADR-0010, dispatches none of the five), but every named entry must be a
     real specialist, named at most once."""
     if not isinstance(raw, dict):
-        raise WorkError("specialist_selection must be a JSON object")
+        raise TaskError("specialist_selection must be a JSON object")
     specialists = raw.get("specialists")
     if not isinstance(specialists, list) or not all(
         isinstance(name, str) for name in specialists
     ):
-        raise WorkError("specialist_selection.specialists must be a list of strings")
+        raise TaskError("specialist_selection.specialists must be a list of strings")
     unknown = [name for name in specialists if name not in SPECIALIST_NAMES]
     if unknown:
-        raise WorkError(f"specialist_selection names unknown specialist(s): {unknown}")
+        raise TaskError(f"specialist_selection names unknown specialist(s): {unknown}")
     if len(set(specialists)) != len(specialists):
-        raise WorkError("specialist_selection.specialists must not repeat a name")
+        raise TaskError("specialist_selection.specialists must not repeat a name")
     return {"specialists": list(specialists)}
 
 
 def record_builder(
-    work_item_id: str,
+    task_id: str,
     round_number: int,
     head_snapshot: str,
     evidence: Any,
     *,
     target: Path,
 ) -> None:
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     if not isinstance(evidence, dict):
-        raise WorkError("builder evidence must be a JSON object")
+        raise TaskError("builder evidence must be a JSON object")
     round_entry = _round_slot(state, round_number)
     if round_entry["builder"] is not None:
-        raise WorkError(
+        raise TaskError(
             f"round {round_number} already has a recorded builder entry; to "
             "record a correction, target a new round instead -- the next "
-            "sequential round, or `codev work reopen` if this item is in a "
+            "sequential round, or `codev task reopen` if this item is in a "
             "terminal state"
         )
     round_entry["builder"] = {"head_snapshot": head_snapshot, "evidence": evidence}
-    _save(work_item_id, state, target=target)
+    _save(task_id, state, target=target)
 
 
 def record_reviewer(
-    work_item_id: str,
+    task_id: str,
     round_number: int,
     head_snapshot: str,
     findings: Any,
@@ -410,10 +414,10 @@ def record_reviewer(
     specialist_selection: Any = None,
 ) -> None:
     if decision not in VALID_DECISIONS:
-        raise WorkError(
+        raise TaskError(
             f"invalid decision {decision!r}; expected one of {VALID_DECISIONS}"
         )
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     round_entry = _round_slot(state, round_number)
     if decision == "READY_FOR_OUTER_LOOP" and round_entry["phase"] != "inner":
@@ -427,17 +431,17 @@ def record_reviewer(
         # write site, instead of letting that corrupted state be recorded at
         # all -- see `check()`'s `ok_outer_loop_needs_reopen` for the
         # matching upfront signal, and the escaped incident this closes.
-        raise WorkError(
+        raise TaskError(
             f"round {round_number} is already in the outer phase; "
             "READY_FOR_OUTER_LOOP only means an inner-phase hand-off to the "
             "outer loop -- record READY_FOR_HUMAN_APPROVAL, "
             "CHANGES_REQUIRED, or BLOCKED_BY_MISSING_EVIDENCE instead"
         )
     if round_entry["reviewer"] is not None:
-        raise WorkError(
+        raise TaskError(
             f"round {round_number} already has a recorded reviewer entry; to "
             "re-review after a correction, record a new round instead -- the "
-            "next sequential round, or `codev work reopen` if this item is "
+            "next sequential round, or `codev task reopen` if this item is "
             "in a terminal state"
         )
     reviewer_entry: dict[str, Any] = {
@@ -451,38 +455,38 @@ def record_reviewer(
             specialist_selection
         )
     round_entry["reviewer"] = reviewer_entry
-    _save(work_item_id, state, target=target)
+    _save(task_id, state, target=target)
 
 
 def _validate_triage(raw: Any, findings: list[dict[str, Any]]) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        raise WorkError("triage must be a JSON object")
+        raise TaskError("triage must be a JSON object")
     dispositions = raw.get("dispositions")
     if not isinstance(dispositions, dict):
-        raise WorkError("triage.dispositions must be a JSON object")
+        raise TaskError("triage.dispositions must be a JSON object")
     all_ids = {finding["id"] for finding in findings}
     blocking_ids = {finding["id"] for finding in findings if finding["blocking"]}
     validated: dict[str, dict[str, Any]] = {}
     for finding_id, entry in dispositions.items():
         if finding_id not in all_ids:
-            raise WorkError(f"triage references unknown finding id: {finding_id!r}")
+            raise TaskError(f"triage references unknown finding id: {finding_id!r}")
         if not isinstance(entry, dict):
-            raise WorkError(f"triage[{finding_id!r}] must be a JSON object")
+            raise TaskError(f"triage[{finding_id!r}] must be a JSON object")
         disposition = entry.get("disposition")
         if disposition not in VALID_TRIAGE_DISPOSITIONS:
-            raise WorkError(
+            raise TaskError(
                 f"triage[{finding_id!r}].disposition must be one of "
                 f"{VALID_TRIAGE_DISPOSITIONS}"
             )
         override_reason = entry.get("override_reason")
         if override_reason is not None and not isinstance(override_reason, str):
-            raise WorkError(f"triage[{finding_id!r}].override_reason must be text")
+            raise TaskError(f"triage[{finding_id!r}].override_reason must be text")
         if (
             disposition == "defer"
             and finding_id in blocking_ids
             and not (isinstance(override_reason, str) and override_reason.strip())
         ):
-            raise WorkError(
+            raise TaskError(
                 f"triage[{finding_id!r}]: deferring a blocking finding requires a "
                 "non-empty override_reason"
             )
@@ -492,7 +496,7 @@ def _validate_triage(raw: Any, findings: list[dict[str, Any]]) -> dict[str, Any]
         }
     missing = blocking_ids - set(validated)
     if missing:
-        raise WorkError(
+        raise TaskError(
             "triage is missing a disposition for blocking finding(s): "
             + ", ".join(sorted(missing))
         )
@@ -500,7 +504,7 @@ def _validate_triage(raw: Any, findings: list[dict[str, Any]]) -> dict[str, Any]
 
 
 def record_triage(
-    work_item_id: str,
+    task_id: str,
     round_number: int,
     triage: Any,
     *,
@@ -508,26 +512,26 @@ def record_triage(
     by: str | None = None,
 ) -> None:
     _validate_optional_text("by", by)
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     round_entry = _round_slot(state, round_number)
     if round_entry["phase"] != "outer":
-        raise WorkError(
+        raise TaskError(
             f"round {round_number} is not in the outer phase; triage does not apply"
         )
     reviewer = round_entry["reviewer"]
     if reviewer is None:
-        raise WorkError(f"round {round_number} has no recorded reviewer findings yet")
+        raise TaskError(f"round {round_number} has no recorded reviewer findings yet")
     if reviewer["decision"] != "CHANGES_REQUIRED":
-        raise WorkError(
+        raise TaskError(
             f"round {round_number} decision is not CHANGES_REQUIRED; nothing to triage"
         )
     if round_entry.get("triage") is not None:
-        raise WorkError(f"round {round_number} already has a recorded triage")
+        raise TaskError(f"round {round_number} already has a recorded triage")
     validated = _validate_triage(triage, reviewer["findings"])
     validated["by"] = by
     round_entry["triage"] = validated
-    _save(work_item_id, state, target=target)
+    _save(task_id, state, target=target)
 
 
 def _triage_owner_note(owner: str | None, triage: dict[str, Any] | None) -> str | None:
@@ -535,17 +539,17 @@ def _triage_owner_note(owner: str | None, triage: dict[str, Any] | None) -> str 
         return None
     by = triage.get("by")
     if by and by == owner:
-        return f"note: {owner} both owns this work item and triaged this round"
+        return f"note: {owner} both owns this task and triaged this round"
     return None
 
 
-def triage_note(work_item_id: str, *, target: Path) -> str | None:
-    """The same-person owner/triager note for the work item's latest round.
+def triage_note(task_id: str, *, target: Path) -> str | None:
+    """The same-person owner/triager note for the task's latest round.
 
     Informational only -- callers print this alongside `check`'s result, it
     is never a new check() outcome and never affects the exit code.
     """
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     latest = state["rounds"][-1]
     return _triage_owner_note(state.get("owner"), latest.get("triage"))
 
@@ -697,8 +701,8 @@ def _effective_coverage(state: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
-    state = _load(work_item_id, target=target)
+def check(task_id: str, head: str, *, target: Path) -> CheckResult:
+    state = _load(task_id, target=target)
     rounds: list[dict[str, Any]] = state["rounds"]
     latest = rounds[-1]
 
@@ -740,7 +744,7 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
     if decision == "CHANGES_REQUIRED":
         phase = latest["phase"]
         triage_hint = (
-            " -- codev work triage may address or defer it (with a reason) to "
+            " -- codev task triage may address or defer it (with a reason) to "
             "resolve this"
             if phase == "outer"
             else ""
@@ -821,7 +825,7 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
                 f"round {latest['round']}: already in the outer phase with "
                 "READY_FOR_OUTER_LOOP recorded -- confirm with the human "
                 "that re-entering the outer loop is actually intended (not "
-                "unexamined drift), then run `codev work reopen` before "
+                "unexamined drift), then run `codev task reopen` before "
                 "dispatching specialists or recording anything; a further "
                 "round cannot be recorded here as-is",
             )
@@ -845,20 +849,20 @@ def check(work_item_id: str, head: str, *, target: Path) -> CheckResult:
     return CheckResult(True, "ok_blocked_missing_evidence", decision)
 
 
-def close(work_item_id: str, outcome: str, *, target: Path) -> None:
+def close(task_id: str, outcome: str, *, target: Path) -> None:
     if outcome not in VALID_OUTCOMES:
-        raise WorkError(
+        raise TaskError(
             f"invalid outcome {outcome!r}; expected one of {VALID_OUTCOMES}"
         )
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     state["status"] = "closed"
     state["outcome"] = outcome
-    _save(work_item_id, state, target=target)
+    _save(task_id, state, target=target)
 
 
 def reopen(
-    work_item_id: str,
+    task_id: str,
     head: str,
     reason: str,
     *,
@@ -866,7 +870,7 @@ def reopen(
     max_rounds: int | dict[str, int] | None = None,
     by: str | None = None,
 ) -> Path:
-    """Human-authorized recovery for a work item `check` reports as stuck.
+    """Human-authorized recovery for a task `check` reports as stuck.
 
     `start` refuses to reuse an id once its state file exists at all, and
     `_round_slot` mechanically refuses to open a round beyond `max_rounds` --
@@ -877,7 +881,7 @@ def reopen(
     it works regardless of `status`, never touches a previously recorded
     round's builder/reviewer entry, and only re-baselines `base_snapshot` to
     `head` and appends one fresh, empty round so the ordinary
-    builder/reviewer/`codev work record` flow can resume from there. Every
+    builder/reviewer/`codev task record` flow can resume from there. Every
     call is appended to `reopens` so the recovery is as visible as the
     history it continues -- see docs/adr/0007-work-item-recovery.md.
 
@@ -888,7 +892,7 @@ def reopen(
     _validate_required_text("head", head)
     _validate_required_text("reason", reason)
     _validate_optional_text("by", by)
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
 
     resolved_max_rounds = state["max_rounds"]
     if max_rounds is not None:
@@ -896,7 +900,7 @@ def reopen(
         for phase in PHASES:
             done = _phase_round_count(state["rounds"], phase)
             if resolved_max_rounds[phase] < done:
-                raise WorkError(
+                raise TaskError(
                     f"max_rounds[{phase!r}] ({resolved_max_rounds[phase]}) is "
                     f"below the {done} round(s) already recorded for that phase"
                 )
@@ -940,13 +944,13 @@ def reopen(
             "max_rounds": resolved_max_rounds,
         }
     )
-    path = _work_item_path(target, work_item_id)
-    _save(work_item_id, state, target=target)
+    path = _task_path(target, task_id)
+    _save(task_id, state, target=target)
     return path
 
 
 def waive(
-    work_item_id: str,
+    task_id: str,
     dimension: str,
     reason: str,
     *,
@@ -954,7 +958,7 @@ def waive(
     by: str | None = None,
 ) -> Path:
     """Human-authorized: this coverage dimension will not be run for this
-    work item, instead of leaving it to eventually be covered by some round.
+    task, instead of leaving it to eventually be covered by some round.
 
     Modeled on `reopen`'s append-only pattern, not `record_triage`'s
     single-slot-per-round one -- `waive` is meant to be callable multiple
@@ -963,7 +967,7 @@ def waive(
 
     Deliberately distinct from a passing coverage entry (no `passed` key):
     `_effective_coverage` folds waivers into the same most-recent-wins merge
-    as real coverage verdicts, but `codev work log` and `pr_description()`
+    as real coverage verdicts, but `codev task log` and `pr_description()`
     always render a waiver as "waived", never as "passed" -- this system
     never claims something was verified when a human decided not to run it.
 
@@ -972,13 +976,13 @@ def waive(
     own initiative because a specialist looked skippable.
     """
     if dimension not in REQUIRED_COVERAGE_DIMENSIONS:
-        raise WorkError(
+        raise TaskError(
             f"unknown coverage dimension: {dimension!r}; expected one of "
             f"{REQUIRED_COVERAGE_DIMENSIONS}"
         )
     _validate_required_text("reason", reason)
     _validate_optional_text("by", by)
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     state.setdefault("coverage_waivers", []).append(
         {
@@ -989,13 +993,13 @@ def waive(
             "by": by,
         }
     )
-    path = _work_item_path(target, work_item_id)
-    _save(work_item_id, state, target=target)
+    path = _task_path(target, task_id)
+    _save(task_id, state, target=target)
     return path
 
 
 def relink(
-    work_item_id: str,
+    task_id: str,
     link_ref: str,
     *,
     target: Path,
@@ -1009,13 +1013,13 @@ def relink(
     catches a missing or wrong issue link only after round-state already
     exists (ADR-0020). Modeled on `waive()`'s shape: the previous value is
     never discarded, only superseded, so a correction stays visible in
-    `codev work log` instead of silently overwriting history. The very next
+    `codev task log` instead of silently overwriting history. The very next
     `codev git open-pr`/`mark-ready` call reads `link_ref` fresh through
     `describe()`, so no other code path needs to know a correction happened.
     """
     _validate_required_text("link_ref", link_ref)
     _validate_optional_text("by", by)
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     _ensure_in_progress(state)
     previous = state.get("link_ref")
     state["link_ref"] = link_ref
@@ -1027,17 +1031,17 @@ def relink(
             "by": by,
         }
     )
-    path = _work_item_path(target, work_item_id)
-    _save(work_item_id, state, target=target)
+    path = _task_path(target, task_id)
+    _save(task_id, state, target=target)
     return path
 
 
-def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
-    state = _load(work_item_id, target=target)
+def describe(task_id: str, *, target: Path) -> dict[str, Any]:
+    state = _load(task_id, target=target)
     latest = state["rounds"][-1]
     reviewer = latest["reviewer"]
     return {
-        "work_item_id": state["work_item_id"],
+        "task_id": state["task_id"],
         "status": state["status"],
         "current_round": state["current_round"],
         "current_phase": latest["phase"],
@@ -1052,7 +1056,7 @@ def describe(work_item_id: str, *, target: Path) -> dict[str, Any]:
 
 
 def describe_all(*, target: Path) -> list[dict[str, Any]]:
-    root = target / Path(WORK_DIR_RELATIVE.as_posix())
+    root = target / Path(TASK_DIR_RELATIVE.as_posix())
     if not root.exists():
         return []
     results = []
@@ -1062,10 +1066,10 @@ def describe_all(*, target: Path) -> list[dict[str, Any]]:
     return results
 
 
-def log_text(work_item_id: str, *, target: Path) -> str:
-    state = _load(work_item_id, target=target)
+def log_text(task_id: str, *, target: Path) -> str:
+    state = _load(task_id, target=target)
     lines = [
-        f"work item {state['work_item_id']} - {state['status']} "
+        f"task {state['task_id']} - {state['status']} "
         f"(round {state['current_round']}/{state['max_rounds']})"
     ]
     summary = state.get("summary")
@@ -1151,22 +1155,22 @@ _DIMENSION_LABELS: dict[str, str] = {
 }
 
 
-def pr_description(work_item_id: str, *, target: Path) -> str:
+def pr_description(task_id: str, *, target: Path) -> str:
     """A human-readable pull request body, self-contained without the repo's
     own docs -- distinct from log_text()'s round-by-round evidence log, which
-    stays the audit trail (`codev work log`) and is never embedded here.
+    stays the audit trail (`codev task log`) and is never embedded here.
 
     Draws on `description` (falling back to `summary` for a small item that
     never needed the fuller text) for the why/what, and the item's coverage
     manifest for a prose validation summary -- both already recorded by the
     time an item reaches `open-pr`/`mark-ready`, so this needs no new input.
     """
-    state = _load(work_item_id, target=target)
+    state = _load(task_id, target=target)
     rounds: list[dict[str, Any]] = state["rounds"]
     lines: list[str] = []
 
     narrative = state.get("description") or state.get("summary")
-    lines.append(narrative if narrative else f"Work item {state['work_item_id']}.")
+    lines.append(narrative if narrative else f"Task {state['task_id']}.")
     lines.append("")
 
     lines.append("## Validation")
@@ -1201,17 +1205,17 @@ def pr_description(work_item_id: str, *, target: Path) -> str:
                     lines.append(f"- {label}: not passed")
     lines.append("")
 
-    tracking = f"Work item: {state['work_item_id']}"
+    tracking = f"Task: {state['task_id']}"
     link_ref = state.get("link_ref")
     if link_ref:
         tracking += f" ({link_ref})"
     lines.append(tracking)
-    lines.append(f"Full review history: `codev work log --id {state['work_item_id']}`")
+    lines.append(f"Full review history: `codev task log --id {state['task_id']}`")
     return "\n".join(lines) + "\n"
 
 
 def _escalations_path(target: Path) -> Path:
-    return target / Path(WORK_DIR_RELATIVE.as_posix()) / ESCALATIONS_FILENAME
+    return target / Path(TASK_DIR_RELATIVE.as_posix()) / ESCALATIONS_FILENAME
 
 
 def _utc_now_iso() -> str:
@@ -1219,7 +1223,7 @@ def _utc_now_iso() -> str:
 
 
 def record_escalation(
-    work_item_id: str,
+    task_id: str,
     trigger: str,
     cause: str,
     *,
@@ -1231,18 +1235,18 @@ def record_escalation(
     which stays read-only; the caller records an escalation explicitly after
     observing a `stop_*` result, a pre-build critical interrupt, or a human
     override of a blocking finding during triage."""
-    _validate_id(work_item_id)
+    _validate_id(task_id)
     if trigger not in VALID_ESCALATION_TRIGGERS:
-        raise WorkError(
+        raise TaskError(
             f"trigger must be one of {VALID_ESCALATION_TRIGGERS}, got {trigger!r}"
         )
     if phase is not None and phase not in PHASES:
-        raise WorkError(f"phase must be one of {PHASES} or null, got {phase!r}")
+        raise TaskError(f"phase must be one of {PHASES} or null, got {phase!r}")
     if not cause.strip():
-        raise WorkError("cause must not be empty")
+        raise TaskError("cause must not be empty")
     record = {
         "timestamp": _utc_now_iso(),
-        "work_item_id": work_item_id,
+        "task_id": task_id,
         "phase": phase,
         "round": round_number,
         "trigger": trigger,
@@ -1258,7 +1262,7 @@ def read_escalations(
     *,
     target: Path,
     since: str | None = None,
-    work_item_id: str | None = None,
+    task_id: str | None = None,
 ) -> list[dict[str, Any]]:
     path = _escalations_path(target)
     if not path.exists():
@@ -1270,7 +1274,7 @@ def read_escalations(
         record = cast("dict[str, Any]", json.loads(line))
         if since is not None and record["timestamp"] < since:
             continue
-        if work_item_id is not None and record["work_item_id"] != work_item_id:
+        if task_id is not None and record["task_id"] != task_id:
             continue
         records.append(record)
     return records
@@ -1285,7 +1289,7 @@ def escalations_text(*, target: Path, since: str | None = None) -> str:
         phase = record["phase"] or "-"
         round_number = record["round"] if record["round"] is not None else "-"
         lines.append(
-            f"{record['timestamp']} {record['work_item_id']} "
+            f"{record['timestamp']} {record['task_id']} "
             f"[{phase}/round {round_number}] {record['trigger']}: {record['cause']}"
         )
     return "\n".join(lines) + "\n"

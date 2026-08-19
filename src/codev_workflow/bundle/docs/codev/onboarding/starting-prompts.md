@@ -1,6 +1,6 @@
 # Starting Prompts
 
-Two prompts you'll type often: kicking off the next work item, and starting
+Two prompts you'll type often: kicking off the next task, and starting
 outer-loop review on an open pull request. Both assume CoDev is installed
 and you're about to switch your assistant's primary agent to `orchestrator`
 or `outer-loop-runner` (on OpenCode, `/agent orchestrator` or `/agent
@@ -12,15 +12,15 @@ themselves in the repository and ask you only for decisions that are
 actually yours to make; a longer prompt does not make either one safer, and
 mostly just repeats what they already do by default.
 
-## Starting the next work item
+## Starting the next task
 
 ```text
-Take work item <WORK-ITEM-ID> from the delivery plan at <PATH-OR-LINK>.
+Take task <WORK-ITEM-ID> from the delivery plan at <PATH-OR-LINK>.
 GitHub user for ownership/assignment is <YOUR-GITHUB-LOGIN>. If the plan
 still has placeholder owner/reviewer names that haven't been assigned yet,
 disregard them and use the login above instead.
 
-Create the work item's own branch, then stop and show me the implementation
+Create the task's own branch, then stop and show me the implementation
 plan before any code changes — I want to discuss and accept it first, not
 after the fact.
 ```
@@ -29,7 +29,7 @@ Why this is enough, and no more:
 
 - **You don't need to ask for a GitHub issue explicitly.** `orchestrator`
   checks for one itself before opening round state, creates it if this
-  repository tracks issues on GitHub and none exists yet, and `codev work
+  repository tracks issues on GitHub and none exists yet, and `codev task
   start` refuses to proceed silently without one — you'll be told directly
   if it can't resolve this on its own instead of finding out later that a
   pull request never linked back to anything.
@@ -42,12 +42,12 @@ Why this is enough, and no more:
   always including.** It's already the default for delegated, multi-session,
   or higher-risk work, but stating it removes any doubt for a borderline
   case and guarantees a checkpoint even for a smaller item.
-- **If this work item's pull request needs a specific integration branch**
+- **If this task's pull request needs a specific integration branch**
   (not the repository's default — a `plugins` line, a `develop` branch,
   whatever this repository actually uses), say so before the branch is
   pushed: "target `<branch>`, not `<default>`." Set it once, repository-wide,
   with `codev config set git.pr_base <branch>` instead of repeating it on
-  every work item.
+  every task.
 
 ## Starting outer-loop review
 
@@ -70,4 +70,4 @@ the gap the rest of the time, on every platform.
 If you'd rather run every dimension without narrowing it down, say `all`
 when asked, or state it in the same message: "...run all five." Either way,
 CoDev records exactly which specialists actually ran, distinctly from what
-was merely asked, in `codev work log`.
+was merely asked, in `codev task log`.

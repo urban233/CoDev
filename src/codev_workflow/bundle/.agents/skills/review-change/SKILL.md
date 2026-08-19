@@ -1,6 +1,6 @@
 ---
 name: review-change
-description: Independently review a pull request, commit, patch, or working-tree diff for correctness, regressions, security, test quality, maintainability, scope, and conformance to an accepted brief or design. Use when a developer requests code review, a second AI pass, pre-merge assurance, or an evidence-based quality gate. Review only the exact supplied snapshot and do not modify code unless explicitly asked afterward. Its natural home is a diff with no work item and no open pull request — once a CoDev-built work item has an open PR, the outer loop's specialist review covers this same ground automatically.
+description: Independently review a pull request, commit, patch, or working-tree diff for correctness, regressions, security, test quality, maintainability, scope, and conformance to an accepted brief or design. Use when a developer requests code review, a second AI pass, pre-merge assurance, or an evidence-based quality gate. Review only the exact supplied snapshot and do not modify code unless explicitly asked afterward. Its natural home is a diff with no task and no open pull request — once a CoDev-built task has an open PR, the outer loop's specialist review covers this same ground automatically.
 ---
 
 # Review Change
@@ -10,7 +10,7 @@ base-to-head snapshot and state the snapshot when possible.
 
 ## Preconditions
 
-Read the issue or work item, acceptance criteria, relevant brief/design/API,
+Read the issue or task, acceptance criteria, relevant brief/design/API,
 repository instructions, complete diff, and validation evidence. Inspect enough
 surrounding code to understand behavior. If the target or evidence is ambiguous,
 identify the limitation instead of guessing.

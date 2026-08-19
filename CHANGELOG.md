@@ -3,6 +3,45 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- `planner`, a fifth primary agent (ADR-0024): a human-started entry point
+  for the Specify/Understand/Design/Plan phases, decoupled from
+  `orchestrator`'s Build/Review/Ship scope -- wraps `specify-project`,
+  `define-product`, `design-solution`, and `plan-delivery` in one session,
+  and never invokes `builder`/`reviewer`/`orchestrator`. Gains an
+  issue-only short circuit: given an accepted design or decision, draft a
+  task and run `codev git issue-create` directly, skipping
+  `plan-delivery`'s milestone/work-list machinery, and stop there --
+  starting the task remains `orchestrator`'s job in a later session.
+  `adapter.py` and `installer.py` register it the same way as every other
+  role.
+- `.github/pull_request_template.md` and `.github/ISSUE_TEMPLATE/task.md`:
+  installed into every adopting repository the same way every other bundle
+  file is (no new CLI surface). Adapted from an external design-doc-template
+  review into CoDev's own vocabulary -- risk labels match
+  `implementation-plan.template.md`'s existing `low`/`normal`/`high`/
+  `critical` scale rather than inventing a new one, "Stop if" reuses the
+  Focus card's existing term, and the `[unverified]` inline-assumption
+  marker is adopted as a new lightweight convention. `codev git
+  issue-create` already covers the CLI side (title/body/assignees, no
+  labels yet -- flagged as a possible follow-up, not built here).
+
+### Changed
+- **Breaking:** "work item" is renamed to "task" throughout (ADR-0023): the
+  `codev work ...` CLI group is now `codev task ...`, `.codev/work/` is now
+  `.codev/task/`, and the `work_item_id` round-state field is now `task_id`.
+  `ROUND_SCHEMA_VERSION` moves to 3; a schema-2 `round-state.json` is
+  rejected with a clear error rather than migrated, the same precedent
+  ADR-0003 set for the schema-1-to-2 bump -- an in-flight task must finish
+  or restart under the previous CoDev version. `codev status --json`'s
+  `work_items_in_progress`/`work_items_in_progress_by_owner` fields are now
+  `tasks_in_progress`/`tasks_in_progress_by_owner`. The `docs/codev/work/`
+  planning-artifact convention is now `docs/codev/task/`. All four platform
+  adapters, `adapter.py`'s required-marker checks, and every skill/doc
+  referencing the old terminology are updated together.
+
 ## [0.2.3] - 2026-08-14
 
 ### Fixed

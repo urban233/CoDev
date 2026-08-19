@@ -24,7 +24,7 @@ Redirect instead when:
 - a bounded brownfield feature needs `define-product` and, if material,
   `design-solution`;
 - a local fix or refactor can start with `build-change`;
-- an accepted specification needs milestones and work items from
+- an accepted specification needs milestones and tasks from
   `plan-delivery`; or
 - the request is to implement code.
 

@@ -98,13 +98,13 @@ managed file becomes a visible conflict; CoDev never silently replaces it.
 | Command | Purpose |
 |---|---|
 | `codev init` / `diff` / `update` / `remove` | Install, preview, apply, or remove the bundle |
-| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open work items, WIP-per-owner and changed-file overlap |
+| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap |
 | `codev adapter list` / `codev adapter add <platform>` | Show or add one platform adapter to an existing install |
 | `codev adapter verify <platform>` | Check one installed adapter's structural conformance (lifecycle wiring present, no unrestricted shell access, no retired patterns) |
 | `codev config get\|set\|list [--global]` | Read or write layered configuration (flags > env > project > global > default) |
 | `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
-| `codev work start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations\|waive\|reopen\|relink` | Track one work item's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
-| `codev git issue-create\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` alone has no work-item precondition |
+| `codev task start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations\|waive\|reopen\|relink` | Track one task's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
+| `codev git issue-create\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` alone has no task precondition |
 | `codev eval fixture create\|run` / `codev eval snapshot run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode |
 | `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |
 
@@ -216,6 +216,8 @@ my-project/
 ├── .junie/agents/                    # Junie subagents
 ├── .codev/for-ai/                    # the AI's operating contract -- not for casual browsing
 ├── .codev/lock.json                  # installed version and source hashes
+├── .github/pull_request_template.md  # evidence-based PR template
+├── .github/ISSUE_TEMPLATE/task.md    # one-task issue template with runnable acceptance criteria
 ├── docs/codev/onboarding/            # the human onboarding guide and worked examples
 ├── evals/development-workflow/       # behavioral scenarios
 └── scripts/                          # deterministic validators

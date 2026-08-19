@@ -12,7 +12,7 @@ this into a general branch, commit, or working-tree review.
 ## Review contract
 
 1. Identify the repository, PR number, base SHA, head SHA, merge base, title,
-   description, draft state, linked work item, changed files, CI/check status,
+   description, draft state, linked task, changed files, CI/check status,
    existing review comments, and current checkout state.
 2. Stop if the PR cannot be resolved, the head changed during inspection, the
    required brief or acceptance evidence is missing, or local changes would be

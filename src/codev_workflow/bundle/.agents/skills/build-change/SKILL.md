@@ -1,6 +1,6 @@
 ---
 name: build-change
-description: Pair with a developer to investigate, plan, implement, test, and prepare one bounded code change, bug fix, refactor, or delivery-plan work item. Use when the user wants hands-on AI-assisted coding with frequent checkpoints and human control rather than a long autonomous implementation loop. Ground every plan in the current repository and keep changes small and reviewable.
+description: Pair with a developer to investigate, plan, implement, test, and prepare one bounded code change, bug fix, refactor, or delivery-plan task. Use when the user wants hands-on AI-assisted coding with frequent checkpoints and human control rather than a long autonomous implementation loop. Ground every plan in the current repository and keep changes small and reviewable.
 ---
 
 # Build Change
@@ -9,17 +9,17 @@ Work as an interactive pair engineer. The human owns intent and acceptance; the
 AI investigates, proposes, edits, validates, and explains. Use
 `assets/implementation-plan.template.md` only when work spans sessions, affects
 several components, or needs a reviewed written plan. When it is written,
-persist it at `docs/codev/work/<work-item-id>/implementation-plan.md`, keyed
-by the same id passed to `codev work start --id`, unless the project already
+persist it at `docs/codev/task/<task-id>/implementation-plan.md`, keyed
+by the same id passed to `codev task start --id`, unless the project already
 has an established equivalent location. Its Approach and risk points are
-also what an orchestrating session carries into `codev work start
+also what an orchestrating session carries into `codev task start
 --description` — the eventual pull request body renders that text verbatim
 and nothing else about the plan, so keep those sections readable on their
 own.
 
 ## 1. Frame the change
 
-Read the issue or work item, relevant brief/design/API references, repository
+Read the issue or task, relevant brief/design/API references, repository
 instructions, and current Git state. Before editing, show a compact inline focus
 card:
 
@@ -90,7 +90,7 @@ Return a compact evidence receipt:
 - **Known limitations:** risks and follow-up work; and
 - **Review state:** independent review status and rollout implications.
 
-When a written implementation plan exists for this work item, update its
+When a written implementation plan exists for this task, update its
 `Status:` line to match this Completion Evidence in the same edit — a plan
 that still says `Draft` while its own Completion Evidence claims delivery is
 a stale artifact, not a harmless formality; independent review checks for

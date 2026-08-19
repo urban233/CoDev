@@ -95,7 +95,7 @@ five specialist reviewers — correctness, security, concurrency,
 architecture, rollout — examine it in parallel and hand you exactly the
 findings that need a decision. You triage; CoDev does not decide for you
 which finding matters. `review-change` still exists for the case none of
-that covers: a diff with no work item and no open PR yet, reviewed on
+that covers: a diff with no task and no open PR yet, reviewed on
 demand.
 
 ## Multi-developer, briefly
@@ -109,9 +109,9 @@ discovering the mismatch after both branches are done.
 
 ## Where to go next
 
-- Commands for a normal work item:
+- Commands for a normal task:
   [Normal Development Workflow](normal-development-workflow.md)
-- Copy-paste prompts for starting a work item or outer-loop review:
+- Copy-paste prompts for starting a task or outer-loop review:
   [starting-prompts.md](starting-prompts.md)
 - Worked walkthroughs, start to finish: [examples.md](examples.md)
 - The full command/skill/agent reference: `docs/product-map.md`

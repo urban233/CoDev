@@ -44,7 +44,7 @@ a public/shared contract, persistent data, permissions, privacy, or security,
 settle the design first. If multiple developers will work concurrently, agree
 on the shared contract and delivery plan before implementation starts.
 
-## 3. Start and branch a tracked work item
+## 3. Start and branch a tracked task
 
 For normal tracked work, capture the current commit as the base, then start the
 item and create its branch. Pick a stable, descriptive ID such as
@@ -52,7 +52,7 @@ item and create its branch. Pick a stable, descriptive ID such as
 
 ```shell
 git rev-parse HEAD
-codev work start --id checkout-tax-exempt-total --base <base-sha> \
+codev task start --id checkout-tax-exempt-total --base <base-sha> \
   --summary "Correct tax-exempt checkout totals" --link <issue-or-plan-url>
 codev git branch --id checkout-tax-exempt-total --base <base-sha>
 ```
@@ -68,11 +68,11 @@ If you started coding before involving CoDev, use one entry mode deliberately:
 
 ```shell
 # Unfinished work: let the build loop continue the existing diff.
-codev work start --id checkout-tax-exempt-total --base <base-sha> \
+codev task start --id checkout-tax-exempt-total --base <base-sha> \
   --entry takeover --summary "Correct tax-exempt checkout totals"
 
 # Finished work: skip the build loop and send it to the PR review path.
-codev work start --id checkout-tax-exempt-total --base <base-sha> \
+codev task start --id checkout-tax-exempt-total --base <base-sha> \
   --entry direct-review --summary "Correct tax-exempt checkout totals"
 ```
 
@@ -87,14 +87,14 @@ change.
 At the end of the build round, require an evidence receipt that names the files
 changed, exact validation commands and results, acceptance evidence, known
 limitations, and review state. The workflow records builder and reviewer
-evidence under `.codev/work/`; it never writes product source itself.
+evidence under `.codev/task/`; it never writes product source itself.
 
 Check progress at any time:
 
 ```shell
-codev work status --target .
-codev work log --id checkout-tax-exempt-total --target .
-codev work check --id checkout-tax-exempt-total --head "$(git rev-parse HEAD)"
+codev task status --target .
+codev task log --id checkout-tax-exempt-total --target .
+codev task check --id checkout-tax-exempt-total --head "$(git rev-parse HEAD)"
 ```
 
 Do not accept self-approval. The implementer can self-check, but a fresh,
@@ -104,8 +104,8 @@ of the changed snapshot.
 
 ## 5. Commit and open the pull request
 
-Once `codev work check` reports `ok_ready_for_pr`, use the guarded Git commands
-for the work item. They ensure the action occurs on that item's branch rather
+Once `codev task check` reports `ok_ready_for_pr`, use the guarded Git commands
+for the task. They ensure the action occurs on that item's branch rather
 than the default branch.
 
 ```shell
@@ -138,7 +138,7 @@ and the AI provide evidence but do not make those decisions.
 After the human approval and merge decision, record the final outcome:
 
 ```shell
-codev work close --id checkout-tax-exempt-total --outcome approved
+codev task close --id checkout-tax-exempt-total --outcome approved
 ```
 
 Use `--outcome abandoned` when the work is intentionally stopped, or
@@ -155,14 +155,14 @@ codev status --target .
 # Once per repository
 codev init --target . --agent-platform all
 
-# One normal work item
+# One normal task
 git rev-parse HEAD
-codev work start --id <id> --base <base-sha> --summary "<outcome>" --link <url>
+codev task start --id <id> --base <base-sha> --summary "<outcome>" --link <url>
 codev git branch --id <id> --base <base-sha>
 
 # During build and review
-codev work status
-codev work check --id <id> --head "$(git rev-parse HEAD)"
+codev task status
+codev task check --id <id> --head "$(git rev-parse HEAD)"
 
 # When ready for a pull request
 codev git commit --id <id> --message "<message>"
@@ -171,7 +171,7 @@ codev git open-pr --id <id> --title "<title>"
 codev git mark-ready --id <id>
 
 # After the human decision
-codev work close --id <id> --outcome approved
+codev task close --id <id> --outcome approved
 ```
 
 To update the installed workflow later, preview first and resolve any reported

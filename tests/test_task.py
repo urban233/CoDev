@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from codev_workflow.work import (
+from codev_workflow.task import (
     REQUIRED_COVERAGE_DIMENSIONS,
     CheckResult,
-    WorkError,
+    TaskError,
     check,
     close,
     describe,
@@ -44,7 +44,7 @@ class StartTests(unittest.TestCase):
             summary = describe("item-1", target=target)
             self.assertEqual(
                 {
-                    "work_item_id": "item-1",
+                    "task_id": "item-1",
                     "status": "in_progress",
                     "current_round": 1,
                     "current_phase": "inner",
@@ -104,28 +104,28 @@ class StartTests(unittest.TestCase):
     def test_start_rejects_invalid_entry(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), entry="bogus")
 
     def test_start_rejects_empty_link(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), link_ref="   ")
 
     def test_start_rejects_empty_summary(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), summary="")
 
     def test_start_rejects_empty_owner(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), owner="")
 
@@ -133,20 +133,20 @@ class StartTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 start("item-1", "base-sha", target=target)
 
     def test_start_rejects_invalid_id(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("../escape", "base-sha", target=Path(directory))
 
     def test_start_rejects_non_positive_max_rounds(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), max_rounds=0)
 
@@ -156,7 +156,7 @@ class RoundOpeningTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder("item-1", 3, "head-sha", {}, target=target)
 
     def test_cannot_open_round_two_without_changes_required(self) -> None:
@@ -172,7 +172,7 @@ class RoundOpeningTests(unittest.TestCase):
                 "READY_FOR_HUMAN_APPROVAL",
                 target=target,
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder("item-1", 2, "head-2", {}, target=target)
 
     def test_cannot_exceed_max_rounds(self) -> None:
@@ -188,7 +188,7 @@ class RoundOpeningTests(unittest.TestCase):
                 "CHANGES_REQUIRED",
                 target=target,
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder("item-1", 2, "head-2", {}, target=target)
 
     def test_cannot_double_record_same_role_in_a_round(self) -> None:
@@ -196,7 +196,7 @@ class RoundOpeningTests(unittest.TestCase):
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             record_builder("item-1", 1, "base-sha", {"delivered": "x"}, target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder(
                     "item-1", 1, "base-sha", {"delivered": "y"}, target=target
                 )
@@ -217,7 +217,7 @@ class RecordValidationTests(unittest.TestCase):
                     "summary": "bug",
                 }
             ]
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1", 1, "base-sha", bad, {}, "CHANGES_REQUIRED", target=target
                 )
@@ -244,7 +244,7 @@ class RecordValidationTests(unittest.TestCase):
                     "summary": "nit",
                 },
             ]
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1",
                     1,
@@ -259,7 +259,7 @@ class RecordValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1",
                     1,
@@ -274,7 +274,7 @@ class RecordValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1", 1, "base-sha", [], {}, "LOOKS_FINE", target=target
                 )
@@ -516,7 +516,7 @@ class CloseTests(unittest.TestCase):
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             close("item-1", "abandoned", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder("item-1", 1, "base-sha", {}, target=target)
 
     def test_cannot_close_twice(self) -> None:
@@ -524,14 +524,14 @@ class CloseTests(unittest.TestCase):
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             close("item-1", "abandoned", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 close("item-1", "approved", target=target)
 
     def test_invalid_outcome_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 close("item-1", "maybe", target=target)
 
 
@@ -539,7 +539,7 @@ class ReopenTests(unittest.TestCase):
     def test_reopen_missing_item_raises(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             reopen("item-1", "new-head", "human approved", target=Path(directory))
 
@@ -547,14 +547,14 @@ class ReopenTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 reopen("item-1", "   ", "human approved", target=target)
 
     def test_reopen_rejects_empty_reason(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 reopen("item-1", "new-head", "", target=target)
 
     def test_reopen_closed_item_returns_to_in_progress(self) -> None:
@@ -655,7 +655,7 @@ class ReopenTests(unittest.TestCase):
                 "CHANGES_REQUIRED",
                 target=target,
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 reopen(
                     "item-1",
                     "head3",
@@ -695,12 +695,12 @@ class ReopenTests(unittest.TestCase):
 
 
 class DescribeAllTests(unittest.TestCase):
-    def test_lists_every_work_item(self) -> None:
+    def test_lists_every_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             start("item-2", "base-sha", target=target)
-            ids = sorted(item["work_item_id"] for item in describe_all(target=target))
+            ids = sorted(item["task_id"] for item in describe_all(target=target))
         self.assertEqual(["item-1", "item-2"], ids)
 
     def test_empty_when_nothing_started(self) -> None:
@@ -820,14 +820,14 @@ class MaxRoundsNormalizationTests(unittest.TestCase):
     def test_dict_missing_a_phase_rejected(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), max_rounds={"inner": 2})
 
     def test_dict_with_unknown_phase_rejected(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start(
                 "item-1",
@@ -839,7 +839,7 @@ class MaxRoundsNormalizationTests(unittest.TestCase):
     def test_bool_rejected(self) -> None:
         with (
             tempfile.TemporaryDirectory() as directory,
-            self.assertRaises(WorkError),
+            self.assertRaises(TaskError),
         ):
             start("item-1", "base-sha", target=Path(directory), max_rounds=True)
 
@@ -888,7 +888,7 @@ class ReadyForOuterLoopTests(unittest.TestCase):
                 "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             record_builder("item-1", 2, "head-2", {}, target=target)
-            with self.assertRaises(WorkError) as raised:
+            with self.assertRaises(TaskError) as raised:
                 record_reviewer(
                     "item-1",
                     2,
@@ -916,7 +916,7 @@ class ReadyForOuterLoopTests(unittest.TestCase):
                 "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
             record_builder("item-1", 2, "head-2", {}, target=target)
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["rounds"][-1]["reviewer"] = {
                 "head_snapshot": "head-2",
@@ -930,7 +930,7 @@ class ReadyForOuterLoopTests(unittest.TestCase):
         self.assertEqual(
             CheckResult(True, "ok_outer_loop_needs_reopen", result.message), result
         )
-        self.assertIn("codev work reopen", result.message)
+        self.assertIn("codev task reopen", result.message)
 
     def test_record_reviewer_write_once_message_names_the_fix(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -939,20 +939,20 @@ class ReadyForOuterLoopTests(unittest.TestCase):
             record_reviewer(
                 "item-1", 1, "base-sha", [], {}, "CHANGES_REQUIRED", target=target
             )
-            with self.assertRaises(WorkError) as raised:
+            with self.assertRaises(TaskError) as raised:
                 record_reviewer(
                     "item-1", 1, "base-sha", [], {}, "CHANGES_REQUIRED", target=target
                 )
-        self.assertIn("codev work reopen", str(raised.exception))
+        self.assertIn("codev task reopen", str(raised.exception))
 
     def test_record_builder_write_once_message_names_the_fix(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             record_builder("item-1", 1, "base-sha", {}, target=target)
-            with self.assertRaises(WorkError) as raised:
+            with self.assertRaises(TaskError) as raised:
                 record_builder("item-1", 1, "base-sha", {}, target=target)
-        self.assertIn("codev work reopen", str(raised.exception))
+        self.assertIn("codev task reopen", str(raised.exception))
 
 
 class ScopeExpansionTests(unittest.TestCase):
@@ -1089,7 +1089,7 @@ class TriageTests(unittest.TestCase):
             self._to_outer_round_one_with_findings(
                 target, [_blocking_finding("a.py:1", "concurrency")]
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage("item-1", 2, {"dispositions": {}}, target=target)
 
     def test_deferring_a_blocking_finding_requires_a_reason(self) -> None:
@@ -1099,7 +1099,7 @@ class TriageTests(unittest.TestCase):
                 target, [_blocking_finding("a.py:1", "concurrency")]
             )
             finding_id = "f-a.py:1-concurrency"
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage(
                     "item-1",
                     2,
@@ -1155,7 +1155,7 @@ class TriageTests(unittest.TestCase):
             self._to_outer_round_one_with_findings(
                 target, [_blocking_finding("a.py:1", "concurrency")]
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage(
                     "item-1",
                     2,
@@ -1172,7 +1172,7 @@ class TriageTests(unittest.TestCase):
             finding_id = "f-a.py:1-concurrency"
             payload = {"dispositions": {finding_id: {"disposition": "address"}}}
             record_triage("item-1", 2, payload, target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage("item-1", 2, payload, target=target)
 
     def test_cannot_triage_the_inner_phase(self) -> None:
@@ -1188,7 +1188,7 @@ class TriageTests(unittest.TestCase):
                 "CHANGES_REQUIRED",
                 target=target,
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage(
                     "item-1",
                     1,
@@ -1225,7 +1225,7 @@ class TriageTests(unittest.TestCase):
             self._to_outer_round_one_with_findings(
                 target, [_blocking_finding("a.py:1", "concurrency")]
             )
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_builder("item-1", 3, "head-3", {}, target=target)
 
     def test_record_triage_stores_by(self) -> None:
@@ -1252,7 +1252,7 @@ class TriageTests(unittest.TestCase):
                 target, [_blocking_finding("a.py:1", "concurrency")]
             )
             finding_id = "f-a.py:1-concurrency"
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_triage(
                     "item-1",
                     2,
@@ -1278,7 +1278,7 @@ class TriageTests(unittest.TestCase):
             note = triage_note("item-1", target=target)
             text = log_text("item-1", target=target)
         self.assertEqual(
-            "note: octocat both owns this work item and triaged this round", note
+            "note: octocat both owns this task and triaged this round", note
         )
         self.assertIn(note, text)
 
@@ -1605,7 +1605,7 @@ class AllBlockingDeferredTests(unittest.TestCase):
             )
             result = check("item-1", "base-sha", target=target)
         self.assertEqual("stop_scope_expansion", result.reason)
-        self.assertNotIn("codev work triage", result.message)
+        self.assertNotIn("codev task triage", result.message)
 
 
 class CoverageCarryForwardTests(unittest.TestCase):
@@ -1771,14 +1771,14 @@ class WaiverTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 waive("item-1", "rollout", "  ", target=target)
 
     def test_rejects_unknown_dimension(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 waive("item-1", "not-a-real-dimension", "reason", target=target)
 
     def test_rejects_when_not_in_progress(self) -> None:
@@ -1786,7 +1786,7 @@ class WaiverTests(unittest.TestCase):
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             close("item-1", "abandoned", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 waive("item-1", "rollout", "reason", target=target)
 
     def test_waived_dimension_resolves_ok_approve_with_no_specialist_run(
@@ -1913,7 +1913,7 @@ class RelinkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 relink("item-1", "  ", target=target)
 
     def test_rejects_when_not_in_progress(self) -> None:
@@ -1921,7 +1921,7 @@ class RelinkTests(unittest.TestCase):
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             close("item-1", "abandoned", target=target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 relink(
                     "item-1",
                     "https://github.com/o/r/issues/7",
@@ -2002,7 +2002,7 @@ class EscalationLogTests(unittest.TestCase):
             )
             records = read_escalations(target=target)
         self.assertEqual(1, len(records))
-        self.assertEqual("item-1", records[0]["work_item_id"])
+        self.assertEqual("item-1", records[0]["task_id"])
         self.assertEqual("stop_round_cap", records[0]["trigger"])
         self.assertEqual("inner", records[0]["phase"])
         self.assertEqual(2, records[0]["round"])
@@ -2034,36 +2034,36 @@ class EscalationLogTests(unittest.TestCase):
                 target=target,
             )
             records = read_escalations(target=target)
-        self.assertEqual(["item-1", "item-2"], [r["work_item_id"] for r in records])
+        self.assertEqual(["item-1", "item-2"], [r["task_id"] for r in records])
 
     def test_unknown_trigger_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_escalation("item-1", "not_a_real_trigger", "why", target=target)
 
     def test_empty_cause_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_escalation("item-1", "stop_drift", "   ", target=target)
 
     def test_invalid_phase_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_escalation(
                     "item-1", "stop_drift", "why", target=target, phase="sideways"
                 )
 
-    def test_read_filters_by_work_item_id(self) -> None:
+    def test_read_filters_by_task_id(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             record_escalation("item-1", "stop_drift", "a", target=target)
             record_escalation("item-2", "stop_drift", "b", target=target)
-            records = read_escalations(target=target, work_item_id="item-2")
+            records = read_escalations(target=target, task_id="item-2")
         self.assertEqual(1, len(records))
-        self.assertEqual("item-2", records[0]["work_item_id"])
+        self.assertEqual("item-2", records[0]["task_id"])
 
     def test_read_filters_by_since(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2160,7 +2160,7 @@ class SpecialistSelectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self._to_outer_round(target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1",
                     2,
@@ -2176,7 +2176,7 @@ class SpecialistSelectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self._to_outer_round(target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1",
                     2,
@@ -2197,7 +2197,7 @@ class SpecialistSelectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self._to_outer_round(target)
-            with self.assertRaises(WorkError):
+            with self.assertRaises(TaskError):
                 record_reviewer(
                     "item-1",
                     2,
@@ -2328,9 +2328,9 @@ class PrDescriptionTests(unittest.TestCase):
             body = pr_description("item-1", target=target)
         self.assertNotIn("a bug", body)
         self.assertNotIn("round 1:", body)
-        self.assertIn("codev work log", body)
+        self.assertIn("codev task log", body)
 
-    def test_includes_the_work_item_id_and_link(self) -> None:
+    def test_includes_the_task_id_and_link(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start(

@@ -1,11 +1,11 @@
 ---
 name: "lightweight-reviewer"
-description: "Narrow, fast independent check that the inner loop's change matches the work item and passes local QA"
+description: "Narrow, fast independent check that the inner loop's change matches the task and passes local QA"
 ---
 
-Review the exact supplied base-to-head diff and work item without relying on
+Review the exact supplied base-to-head diff and task without relying on
 the implementing agent's private reasoning. Confirm the exact base and head
-snapshots before reviewing. If the diff, work item, or builder evidence is
+snapshots before reviewing. If the diff, task, or builder evidence is
 missing or ambiguous, return `BLOCKED BY MISSING EVIDENCE` rather than
 reconstructing it from chat.
 
@@ -14,9 +14,9 @@ This pass is deliberately narrow, not a substitute for full review:
 1. Independently re-run the formatter, static checks, and tests the builder
    reported — against the exact head snapshot — rather than trusting its
    self-reported validation.
-2. Confirm the diff plausibly implements what the work item asked and
+2. Confirm the diff plausibly implements what the task asked and
    contains no obvious defect.
-3. When `docs/codev/work/<work-item-id>/implementation-plan.md` exists,
+3. When `docs/codev/task/<task-id>/implementation-plan.md` exists,
    confirm its `Status:` line and Completion Evidence agree with this exact
    head and decision — not still `Draft` or otherwise stale while the diff
    claims delivery. A mismatch is a blocking `maintainability` finding on
@@ -38,14 +38,14 @@ do not approve and do not stay silent because it is outside this pass's
 normal scope — record it as a blocking finding and decide `CHANGES REQUIRED`
 so the orchestrator treats it as a critical interrupt, not an ordinary round.
 
-Record this round with `codev work record --id <work-item-id> --round
+Record this round with `codev task record --id <task-id> --round
 <round> --role reviewer --head <head-sha> --findings <findings.json>
 --coverage <coverage.json> --decision
 READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE` before
 returning in the conversation. Report a coverage verdict only for
 `correctness` — the other dimensions are out of scope for this pass, and
-`codev work check` does not require them for `READY_FOR_OUTER_LOOP`.
-`codev work check` — run by the orchestrator, not you — is the sole
+`codev task check` does not require them for `READY_FOR_OUTER_LOOP`.
+`codev task check` — run by the orchestrator, not you — is the sole
 authority on whether the loop may continue, has hit its round cap, or has
 seen a repeated or newly expanded blocking finding; do not judge convergence
 yourself.

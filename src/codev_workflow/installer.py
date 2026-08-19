@@ -67,7 +67,15 @@ PRE_PR_CLEANUP_AGENT_TEMPLATES = {
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
-        "description": "Human-controlled workflow and work-item orchestrator",
+        "description": "Human-controlled workflow and task orchestrator",
+    },
+    "planner": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Human-controlled entry point for Specify, Understand, Design, "
+            "and Plan work -- decoupled from execution"
+        ),
+        "mode": "primary",
     },
     "code-audit": {
         "model": "openai/gpt-5.6-luna",
@@ -93,7 +101,7 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5.6-luna",
         "description": (
             "Narrow, fast independent check that the inner loop's change "
-            "matches the work item and passes local QA"
+            "matches the task and passes local QA"
         ),
     },
     "outer-loop-runner": {
@@ -157,7 +165,7 @@ acceptance, merge, deployment, migration, publication, and rollout expansion.
 
 GITIGNORE_BLOCK = """# codev:start
 # CoDev local escalation log (ADR-0003) -- not shared or committed.
-.codev/work/escalations.jsonl
+.codev/task/escalations.jsonl
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")

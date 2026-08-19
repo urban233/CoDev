@@ -14,7 +14,7 @@ from typing import Any
 from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import git_ops as git_ops_module
-from codev_workflow import work as work_module
+from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
 from codev_workflow.eval import (
@@ -35,10 +35,10 @@ from codev_workflow.installer import (
     plan_remove,
     plan_update,
 )
-from codev_workflow.work import (
+from codev_workflow.task import (
     VALID_DECISIONS,
     VALID_OUTCOMES,
-    WorkError,
+    TaskError,
 )
 
 _AGENT_PLATFORMS = ("antigravity", "codex", "junie", "opencode")
@@ -76,7 +76,7 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--dry-run", action="store_true", help="show the plan only")
 
     status = commands.add_parser(
-        "status", help="show installed bundle, adapters, and work-item health"
+        "status", help="show installed bundle, adapters, and task health"
     )
     status.add_argument("--target", type=_target, default=Path.cwd())
     status.add_argument("--verbose", action="store_true")
@@ -239,50 +239,50 @@ def _parser() -> argparse.ArgumentParser:
     )
     codeowners_init_parser.add_argument("--target", type=_target, default=Path.cwd())
 
-    work = commands.add_parser(
-        "work", help="track builder/reviewer round state for one work item"
+    task = commands.add_parser(
+        "task", help="track builder/reviewer round state for one task"
     )
-    work_commands = work.add_subparsers(dest="work_command", required=True)
+    task_commands = task.add_subparsers(dest="task_command", required=True)
 
-    w_start = work_commands.add_parser("start", help="open a new work item")
-    w_start.add_argument("--id", required=True)
-    w_start.add_argument("--base", required=True, help="base git snapshot")
-    w_start.add_argument(
+    t_start = task_commands.add_parser("start", help="open a new task")
+    t_start.add_argument("--id", required=True)
+    t_start.add_argument("--base", required=True, help="base git snapshot")
+    t_start.add_argument(
         "--max-rounds",
         type=int,
         default=None,
         help="applies to both phases; defaults to 2/2",
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--link", default=None, help="pointer to the artifact authorizing this work"
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--summary", default=None, help="one-line human-readable description"
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--description",
         default=None,
         help="fuller why/what, proportional to the work's size; used to build "
         "the pull request description -- omit for a small item where "
         "--summary is already enough",
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--owner", default=None, help="defaults to the detected local/gh identity"
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--github-issue",
         type=int,
         default=None,
         help="populate --link/--summary from this issue unless given explicitly",
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--no-github-issue",
         action="store_true",
         help="acknowledge this item intentionally has no GitHub issue link -- "
         "required in place of --github-issue/--link when the repository has "
         "a GitHub remote and neither was given",
     )
-    w_start.add_argument(
+    t_start.add_argument(
         "--entry",
         choices=("takeover", "direct-review"),
         default=None,
@@ -292,160 +292,160 @@ def _parser() -> argparse.ArgumentParser:
             "loop; omit for the default cold start"
         ),
     )
-    w_start.add_argument("--target", type=_target, default=Path.cwd())
+    t_start.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_record = work_commands.add_parser(
+    t_record = task_commands.add_parser(
         "record", help="record one builder or reviewer round entry"
     )
-    w_record.add_argument("--id", required=True)
-    w_record.add_argument("--round", type=int, required=True)
-    w_record.add_argument("--role", choices=("builder", "reviewer"), required=True)
-    w_record.add_argument("--head", required=True, help="head git snapshot")
-    w_record.add_argument(
+    t_record.add_argument("--id", required=True)
+    t_record.add_argument("--round", type=int, required=True)
+    t_record.add_argument("--role", choices=("builder", "reviewer"), required=True)
+    t_record.add_argument("--head", required=True, help="head git snapshot")
+    t_record.add_argument(
         "--evidence", type=_target, help="builder: JSON evidence file"
     )
-    w_record.add_argument(
+    t_record.add_argument(
         "--findings", type=_target, help="reviewer: JSON findings file"
     )
-    w_record.add_argument(
+    t_record.add_argument(
         "--coverage", type=_target, help="reviewer: JSON coverage-manifest file"
     )
-    w_record.add_argument(
+    t_record.add_argument(
         "--selection",
         type=_target,
         help="reviewer, outer phase: JSON specialist-selection audit file",
     )
-    w_record.add_argument("--decision", choices=VALID_DECISIONS)
-    w_record.add_argument("--target", type=_target, default=Path.cwd())
+    t_record.add_argument("--decision", choices=VALID_DECISIONS)
+    t_record.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_check = work_commands.add_parser(
-        "check", help="check whether it is safe to continue this work item"
+    t_check = task_commands.add_parser(
+        "check", help="check whether it is safe to continue this task"
     )
-    w_check.add_argument("--id", required=True)
-    w_check.add_argument("--head", required=True, help="current git snapshot")
-    w_check.add_argument("--json", action="store_true")
-    w_check.add_argument("--target", type=_target, default=Path.cwd())
+    t_check.add_argument("--id", required=True)
+    t_check.add_argument("--head", required=True, help="current git snapshot")
+    t_check.add_argument("--json", action="store_true")
+    t_check.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_close = work_commands.add_parser("close", help="close a work item")
-    w_close.add_argument("--id", required=True)
-    w_close.add_argument("--outcome", choices=VALID_OUTCOMES, required=True)
-    w_close.add_argument("--target", type=_target, default=Path.cwd())
+    t_close = task_commands.add_parser("close", help="close a task")
+    t_close.add_argument("--id", required=True)
+    t_close.add_argument("--outcome", choices=VALID_OUTCOMES, required=True)
+    t_close.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_reopen = work_commands.add_parser(
+    t_reopen = task_commands.add_parser(
         "reopen",
         help=(
-            "human-authorized recovery for a work item stuck behind a round "
+            "human-authorized recovery for a task stuck behind a round "
             "cap, drift, or a close -- never run without an explicit human "
             "decision"
         ),
     )
-    w_reopen.add_argument("--id", required=True)
-    w_reopen.add_argument(
+    t_reopen.add_argument("--id", required=True)
+    t_reopen.add_argument(
         "--head", required=True, help="current git snapshot to re-baseline onto"
     )
-    w_reopen.add_argument(
+    t_reopen.add_argument(
         "--reason", required=True, help="why this recovery is authorized"
     )
-    w_reopen.add_argument(
+    t_reopen.add_argument(
         "--max-rounds",
         type=int,
         default=None,
         help="optionally raise the round cap; applies to both phases",
     )
-    w_reopen.add_argument(
+    t_reopen.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
-    w_reopen.add_argument("--target", type=_target, default=Path.cwd())
+    t_reopen.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_waive = work_commands.add_parser(
+    t_waive = task_commands.add_parser(
         "waive",
         help=(
             "human-authorized: this coverage dimension will not be run for "
-            "this work item -- never run without an explicit human decision"
+            "this task -- never run without an explicit human decision"
         ),
     )
-    w_waive.add_argument("--id", required=True)
-    w_waive.add_argument(
+    t_waive.add_argument("--id", required=True)
+    t_waive.add_argument(
         "--dimension", required=True, help="one of REQUIRED_COVERAGE_DIMENSIONS"
     )
-    w_waive.add_argument("--reason", required=True, help="why this waiver is granted")
-    w_waive.add_argument(
+    t_waive.add_argument("--reason", required=True, help="why this waiver is granted")
+    t_waive.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
-    w_waive.add_argument("--target", type=_target, default=Path.cwd())
+    t_waive.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_relink = work_commands.add_parser(
+    t_relink = task_commands.add_parser(
         "relink",
         help=(
             "correct link_ref after `start` already ran -- the recovery path "
             "when a GitHub issue is created only after round-state exists"
         ),
     )
-    w_relink.add_argument("--id", required=True)
-    w_relink_source = w_relink.add_mutually_exclusive_group(required=True)
-    w_relink_source.add_argument(
+    t_relink.add_argument("--id", required=True)
+    t_relink_source = t_relink.add_mutually_exclusive_group(required=True)
+    t_relink_source.add_argument(
         "--github-issue", type=int, help="resolve --link from this issue's URL"
     )
-    w_relink_source.add_argument(
+    t_relink_source.add_argument(
         "--link", help="pointer to the artifact authorizing this work"
     )
-    w_relink.add_argument(
+    t_relink.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
-    w_relink.add_argument("--target", type=_target, default=Path.cwd())
+    t_relink.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_status = work_commands.add_parser(
-        "status", help="show one or all open work items"
+    t_status = task_commands.add_parser(
+        "status", help="show one or all open tasks"
     )
-    w_status.add_argument("--id")
-    w_status.add_argument("--json", action="store_true")
-    w_status.add_argument("--target", type=_target, default=Path.cwd())
+    t_status.add_argument("--id")
+    t_status.add_argument("--json", action="store_true")
+    t_status.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_log = work_commands.add_parser("log", help="print one work item's round history")
-    w_log.add_argument("--id", required=True)
-    w_log.add_argument("--target", type=_target, default=Path.cwd())
+    t_log = task_commands.add_parser("log", help="print one task's round history")
+    t_log.add_argument("--id", required=True)
+    t_log.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_triage = work_commands.add_parser(
+    t_triage = task_commands.add_parser(
         "triage",
         help="record the human's address/defer disposition for one outer-loop round",
     )
-    w_triage.add_argument("--id", required=True)
-    w_triage.add_argument("--round", type=int, required=True)
-    w_triage.add_argument(
+    t_triage.add_argument("--id", required=True)
+    t_triage.add_argument("--round", type=int, required=True)
+    t_triage.add_argument(
         "--triage", type=_target, required=True, help="JSON triage payload file"
     )
-    w_triage.add_argument(
+    t_triage.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
-    w_triage.add_argument("--target", type=_target, default=Path.cwd())
+    t_triage.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_escalate = work_commands.add_parser(
+    t_escalate = task_commands.add_parser(
         "escalate",
         help="append one local, gitignored escalation record",
     )
-    w_escalate.add_argument("--id", required=True)
-    w_escalate.add_argument("--trigger", required=True)
-    w_escalate.add_argument("--cause", required=True)
-    w_escalate.add_argument("--phase", choices=("inner", "outer"))
-    w_escalate.add_argument("--round", type=int, dest="round_number")
-    w_escalate.add_argument("--target", type=_target, default=Path.cwd())
+    t_escalate.add_argument("--id", required=True)
+    t_escalate.add_argument("--trigger", required=True)
+    t_escalate.add_argument("--cause", required=True)
+    t_escalate.add_argument("--phase", choices=("inner", "outer"))
+    t_escalate.add_argument("--round", type=int, dest="round_number")
+    t_escalate.add_argument("--target", type=_target, default=Path.cwd())
 
-    w_escalations = work_commands.add_parser(
+    t_escalations = task_commands.add_parser(
         "escalations", help="print recorded escalations, most projects skim this"
     )
-    w_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
-    w_escalations.add_argument("--target", type=_target, default=Path.cwd())
+    t_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
+    t_escalations.add_argument("--target", type=_target, default=Path.cwd())
 
     git_parser = commands.add_parser(
-        "git", help="guarded git/GitHub mutation for one work item's own branch"
+        "git", help="guarded git/GitHub mutation for one task's own branch"
     )
     git_commands = git_parser.add_subparsers(dest="git_command", required=True)
 
     g_issue_create = git_commands.add_parser(
         "issue-create",
         help=(
-            "push a delivery-plan work item to GitHub as an issue; "
-            "has no work-item precondition, runs before codev work start"
+            "push a delivery-plan task to GitHub as an issue; "
+            "has no task precondition, runs before codev task start"
         ),
     )
     g_issue_create.add_argument("--title", required=True)
@@ -466,14 +466,14 @@ def _parser() -> argparse.ArgumentParser:
     g_issue_create.add_argument("--target", type=_target, default=Path.cwd())
 
     g_branch = git_commands.add_parser(
-        "branch", help="create the work item's own branch from a base snapshot"
+        "branch", help="create the task's own branch from a base snapshot"
     )
     g_branch.add_argument("--id", required=True)
     g_branch.add_argument("--base", required=True, help="base git snapshot")
     g_branch.add_argument("--target", type=_target, default=Path.cwd())
 
     g_commit = git_commands.add_parser(
-        "commit", help="commit outstanding changes on the work item's own branch"
+        "commit", help="commit outstanding changes on the task's own branch"
     )
     g_commit.add_argument("--id", required=True)
     g_commit.add_argument("--message", required=True)
@@ -506,21 +506,21 @@ def _parser() -> argparse.ArgumentParser:
     g_commit.add_argument("--target", type=_target, default=Path.cwd())
 
     g_push = git_commands.add_parser(
-        "push", help="push the work item's own branch, never the default branch"
+        "push", help="push the task's own branch, never the default branch"
     )
     g_push.add_argument("--id", required=True)
     g_push.add_argument("--target", type=_target, default=Path.cwd())
 
     g_open_pr = git_commands.add_parser(
         "open-pr",
-        help="open a draft PR once codev work check reports ok_ready_for_pr",
+        help="open a draft PR once codev task check reports ok_ready_for_pr",
     )
     g_open_pr.add_argument("--id", required=True)
     g_open_pr.add_argument("--title", required=True)
     g_open_pr.add_argument(
         "--body",
         help="literal PR body text; omit both this and --body-file to "
-        "generate one from the work item's description and coverage",
+        "generate one from the task's description and coverage",
     )
     g_open_pr.add_argument("--body-file", type=_target, help="path to a PR body file")
     g_open_pr.add_argument(
@@ -572,9 +572,9 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
     return argv
 
 
-def _in_progress_owner_counts(work_items: list[dict[str, Any]]) -> dict[str, int]:
+def _in_progress_owner_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
-    for item in work_items:
+    for item in tasks:
         if item["status"] != "in_progress":
             continue
         owner = item.get("owner")
@@ -585,10 +585,10 @@ def _in_progress_owner_counts(work_items: list[dict[str, Any]]) -> dict[str, int
 
 
 def _changed_file_overlaps(
-    work_items: list[dict[str, Any]], *, target: Path
+    tasks: list[dict[str, Any]], *, target: Path
 ) -> list[dict[str, list[str]]]:
     in_progress_ids = [
-        item["work_item_id"] for item in work_items if item["status"] == "in_progress"
+        item["task_id"] for item in tasks if item["status"] == "in_progress"
     ]
     changed = {
         item_id: set(git_ops_module.changed_files(item_id, target=target))
@@ -599,7 +599,7 @@ def _changed_file_overlaps(
         for second in in_progress_ids[index + 1 :]:
             shared = sorted(changed[first] & changed[second])
             if shared:
-                overlaps.append({"work_items": [first, second], "paths": shared})
+                overlaps.append({"tasks": [first, second], "paths": shared})
     return overlaps
 
 
@@ -607,8 +607,8 @@ def _run_status_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     result = check_project(target)
     platforms = list(_read_lock(target).get("platforms", []))
-    work_items = work_module.describe_all(target=target)
-    in_progress = sum(1 for item in work_items if item["status"] == "in_progress")
+    tasks = task_module.describe_all(target=target)
+    in_progress = sum(1 for item in tasks if item["status"] == "in_progress")
 
     payload: dict[str, object] = {
         "codev_version": __version__,
@@ -617,16 +617,16 @@ def _run_status_command(args: argparse.Namespace) -> int:
         "managed_files": result.managed_files,
         "issues": list(result.issues),
         "adapters": platforms,
-        "work_items_in_progress": in_progress,
+        "tasks_in_progress": in_progress,
     }
     owner_counts: dict[str, int] = {}
     overlaps: list[dict[str, list[str]]] = []
     if args.verbose:
         payload["python_version"] = platform.python_version()
         payload["system"] = platform.system()
-        owner_counts = _in_progress_owner_counts(work_items)
-        overlaps = _changed_file_overlaps(work_items, target=target)
-        payload["work_items_in_progress_by_owner"] = owner_counts
+        owner_counts = _in_progress_owner_counts(tasks)
+        overlaps = _changed_file_overlaps(tasks, target=target)
+        payload["tasks_in_progress_by_owner"] = owner_counts
         payload["changed_file_overlaps"] = overlaps
 
     if args.json:
@@ -642,15 +642,15 @@ def _run_status_command(args: argparse.Namespace) -> int:
             for issue in result.issues:
                 print(f"  - {issue}")
         print(f"Adapters: {', '.join(platforms) if platforms else 'none'}")
-        print(f"Work items in progress: {in_progress}")
+        print(f"Tasks in progress: {in_progress}")
         if args.verbose and owner_counts:
             print("Work in progress by owner:")
             for owner, count in sorted(owner_counts.items()):
                 print(f"  {owner}: {count}")
         if args.verbose and overlaps:
-            print("Changed-file overlaps between concurrently open work items:")
+            print("Changed-file overlaps between concurrently open tasks:")
             for overlap in overlaps:
-                items = " & ".join(overlap["work_items"])
+                items = " & ".join(overlap["tasks"])
                 paths = ", ".join(overlap["paths"])
                 print(f"  {items}: {paths}")
     return 0 if result.ok else 1
@@ -807,9 +807,9 @@ def _run_codeowners_command(args: argparse.Namespace) -> int:
     return 2
 
 
-def _run_work_command(args: argparse.Namespace) -> int:
+def _run_task_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
-    if args.work_command == "start":
+    if args.task_command == "start":
         link_ref = args.link
         summary = args.summary
         if args.github_issue is not None:
@@ -823,9 +823,9 @@ def _run_work_command(args: argparse.Namespace) -> int:
             and not args.no_github_issue
             and git_ops_module.has_github_remote(target=target)
         ):
-            raise WorkError(
+            raise TaskError(
                 "this repository has a GitHub remote but no issue linkage was "
-                "given for this work item -- run `codev git issue-create` "
+                "given for this task -- run `codev git issue-create` "
                 "first and pass --github-issue N (or --link), or pass "
                 "--no-github-issue to acknowledge this item intentionally "
                 "has none"
@@ -833,7 +833,7 @@ def _run_work_command(args: argparse.Namespace) -> int:
         owner = args.owner
         if owner is None:
             owner = git_ops_module.detect_identity(target=target)
-        path = work_module.start(
+        path = task_module.start(
             args.id,
             args.base,
             target=target,
@@ -844,30 +844,30 @@ def _run_work_command(args: argparse.Namespace) -> int:
             owner=owner,
             entry=args.entry,
         )
-        print(f"Started work item {args.id} at {path}")
+        print(f"Started task {args.id} at {path}")
         return 0
 
-    if args.work_command == "record":
+    if args.task_command == "record":
         if args.role == "builder":
             if args.evidence is None:
-                raise WorkError("--evidence is required when --role builder")
-            evidence = work_module.load_json_file(args.evidence)
-            work_module.record_builder(
+                raise TaskError("--evidence is required when --role builder")
+            evidence = task_module.load_json_file(args.evidence)
+            task_module.record_builder(
                 args.id, args.round, args.head, evidence, target=target
             )
         else:
             if args.findings is None or args.decision is None:
-                raise WorkError(
+                raise TaskError(
                     "--findings and --decision are required when --role reviewer"
                 )
-            findings = work_module.load_json_file(args.findings)
+            findings = task_module.load_json_file(args.findings)
             coverage = (
-                work_module.load_json_file(args.coverage) if args.coverage else {}
+                task_module.load_json_file(args.coverage) if args.coverage else {}
             )
             selection = (
-                work_module.load_json_file(args.selection) if args.selection else None
+                task_module.load_json_file(args.selection) if args.selection else None
             )
-            work_module.record_reviewer(
+            task_module.record_reviewer(
                 args.id,
                 args.round,
                 args.head,
@@ -880,8 +880,8 @@ def _run_work_command(args: argparse.Namespace) -> int:
         print(f"Recorded round {args.round} ({args.role}) for {args.id}")
         return 0
 
-    if args.work_command == "check":
-        result = work_module.check(args.id, args.head, target=target)
+    if args.task_command == "check":
+        result = task_module.check(args.id, args.head, target=target)
         if args.json:
             print(
                 json.dumps(
@@ -894,21 +894,21 @@ def _run_work_command(args: argparse.Namespace) -> int:
             )
         else:
             print(f"{result.reason}: {result.message}")
-            note = work_module.triage_note(args.id, target=target)
+            note = task_module.triage_note(args.id, target=target)
             if note:
                 print(note)
         return 0 if result.ok else 1
 
-    if args.work_command == "close":
-        work_module.close(args.id, args.outcome, target=target)
-        print(f"Closed work item {args.id} as {args.outcome}")
+    if args.task_command == "close":
+        task_module.close(args.id, args.outcome, target=target)
+        print(f"Closed task {args.id} as {args.outcome}")
         return 0
 
-    if args.work_command == "reopen":
+    if args.task_command == "reopen":
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        path = work_module.reopen(
+        path = task_module.reopen(
             args.id,
             args.head,
             args.reason,
@@ -916,24 +916,24 @@ def _run_work_command(args: argparse.Namespace) -> int:
             max_rounds=args.max_rounds,
             by=by,
         )
-        print(f"Reopened work item {args.id} at {path}")
+        print(f"Reopened task {args.id} at {path}")
         return 0
 
-    if args.work_command == "waive":
+    if args.task_command == "waive":
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        path = work_module.waive(
+        path = task_module.waive(
             args.id,
             args.dimension,
             args.reason,
             target=target,
             by=by,
         )
-        print(f"Waived {args.dimension!r} for work item {args.id} at {path}")
+        print(f"Waived {args.dimension!r} for task {args.id} at {path}")
         return 0
 
-    if args.work_command == "relink":
+    if args.task_command == "relink":
         link_ref = args.link
         if args.github_issue is not None:
             issue = git_ops_module.fetch_issue(args.github_issue, target=target)
@@ -941,50 +941,50 @@ def _run_work_command(args: argparse.Namespace) -> int:
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        path = work_module.relink(
+        path = task_module.relink(
             args.id,
             link_ref,
             target=target,
             by=by,
         )
-        print(f"Relinked work item {args.id} to {link_ref!r} at {path}")
+        print(f"Relinked task {args.id} to {link_ref!r} at {path}")
         return 0
 
-    if args.work_command == "status":
+    if args.task_command == "status":
         if args.id:
-            summaries = [work_module.describe(args.id, target=target)]
+            summaries = [task_module.describe(args.id, target=target)]
         else:
-            summaries = work_module.describe_all(target=target)
+            summaries = task_module.describe_all(target=target)
         if args.json:
             print(json.dumps(summaries[0] if args.id else summaries))
         elif not summaries:
-            print("No open work items.")
+            print("No open tasks.")
         else:
             for item in summaries:
                 phase = item["current_phase"]
                 print(
-                    f"{item['work_item_id']}: {item['status']} "
+                    f"{item['task_id']}: {item['status']} "
                     f"(round {item['current_round']} [{phase}]/"
                     f"{item['max_rounds'][phase]}, "
                     f"latest decision: {item['latest_decision']})"
                 )
         return 0
 
-    if args.work_command == "log":
-        print(work_module.log_text(args.id, target=target), end="")
+    if args.task_command == "log":
+        print(task_module.log_text(args.id, target=target), end="")
         return 0
 
-    if args.work_command == "triage":
-        triage = work_module.load_json_file(args.triage)
+    if args.task_command == "triage":
+        triage = task_module.load_json_file(args.triage)
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        work_module.record_triage(args.id, args.round, triage, target=target, by=by)
+        task_module.record_triage(args.id, args.round, triage, target=target, by=by)
         print(f"Recorded triage for round {args.round} of {args.id}")
         return 0
 
-    if args.work_command == "escalate":
-        work_module.record_escalation(
+    if args.task_command == "escalate":
+        task_module.record_escalation(
             args.id,
             args.trigger,
             args.cause,
@@ -995,8 +995,8 @@ def _run_work_command(args: argparse.Namespace) -> int:
         print(f"Recorded escalation for {args.id}: {args.trigger}")
         return 0
 
-    if args.work_command == "escalations":
-        print(work_module.escalations_text(target=target, since=args.since), end="")
+    if args.task_command == "escalations":
+        print(task_module.escalations_text(target=target, since=args.since), end="")
         return 0
 
     return 2
@@ -1032,7 +1032,7 @@ def _run_git_command(args: argparse.Namespace) -> int:
                 "--round and --evidence must be given together"
             )
         evidence = (
-            work_module.load_json_file(args.evidence)
+            task_module.load_json_file(args.evidence)
             if args.evidence is not None
             else None
         )
@@ -1059,7 +1059,7 @@ def _run_git_command(args: argparse.Namespace) -> int:
         elif args.body is not None:
             body = args.body
         else:
-            body = work_module.pr_description(args.id, target=target)
+            body = task_module.pr_description(args.id, target=target)
         url = git_ops_module.open_pr(
             args.id, args.title, body, target=target, base=args.base
         )
@@ -1192,14 +1192,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_self_command(args)
         if args.command == "codeowners":
             return _run_codeowners_command(args)
-        if args.command == "work":
-            return _run_work_command(args)
+        if args.command == "task":
+            return _run_task_command(args)
         if args.command == "git":
             return _run_git_command(args)
     except (
         CoDevError,
         EvaluationError,
-        WorkError,
+        TaskError,
         ConfigError,
         AdapterVerificationError,
         git_ops_module.GitOpsError,

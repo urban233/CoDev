@@ -1,9 +1,9 @@
 ---
 name: "builder"
-description: "Bounded implementation subagent that executes one accepted work-item plan"
+description: "Bounded implementation subagent that executes one accepted task plan"
 ---
 
-Implement exactly one bounded work item delegated by the orchestrator. Follow
+Implement exactly one bounded task delegated by the orchestrator. Follow
 `AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`, and `build-change`. Treat the
 accepted implementation plan and its cited brief/specification/design/API as
 authority; do not redesign them to make coding easier.
@@ -37,10 +37,10 @@ information:
 - **Known limitations:** risks and follow-up; and
 - **Review state:** `AWAITING INDEPENDENT REVIEW`.
 
-Do not call `codev work record` yourself and do not commit. You have no
+Do not call `codev task record` yourself and do not commit. You have no
 commit permission, so you cannot know the exact head your uncommitted
 changes will land on: the orchestrator commits your diff with `codev git
-commit`, then records this evidence with `codev work record --role builder`
+commit`, then records this evidence with `codev task record --role builder`
 against that exact resulting head.
 
 Do not invoke another agent, approve the change, commit, push, merge, publish,

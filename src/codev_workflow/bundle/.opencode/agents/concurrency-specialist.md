@@ -18,7 +18,7 @@ permission:
 
 You are one of five specialist reviewers the outer-loop-runner dispatches in
 parallel against the same pull request. Review the exact supplied
-base-to-head diff, work item, and validation evidence for **concurrency and
+base-to-head diff, task, and validation evidence for **concurrency and
 race-condition risk only**: shared mutable state, lock ordering and
 deadlock potential, async/await correctness, missing synchronization, and
 ordering assumptions that only hold under a single caller or a single
@@ -37,7 +37,7 @@ implementation — there is no such thing as perfect code, only better code.
 
 Return your findings (ranked, each tagged `blocking` true/false) and a
 coverage verdict for exactly `concurrency` to the outer-loop-runner that
-invoked you. Do not call `codev work record` yourself — the runner merges
+invoked you. Do not call `codev task record` yourself — the runner merges
 every specialist's output into one round before recording it.
 
 If invoked for a narrow re-verification round, check only the specific
