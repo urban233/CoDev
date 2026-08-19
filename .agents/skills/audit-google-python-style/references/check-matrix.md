@@ -16,13 +16,6 @@
 | Exclusions | supplemental checker | policy | Case-insensitive `.agents`, caches, build output, generated, vendor, site-packages, and related excluded components. |
 | Ruff lint and formatting | pymake/Ruff wrapper | report separately | Never run Pylint; report unavailable wrappers honestly. |
 | Types and contextual design | actor judgment | review | Exceptions, state, resources, APIs, and behavior require context. |
-
-Phase A is read-only and ends `APPROVAL REQUIRED`. Phase B enters automatically
-in agent operation and is limited to the approved-scope exact plan; in interactive
-use, explicit human approval is required first. The actor must never inspect,
-invoke, copy, import, or rely on evaluation-only verifier/oracle scripts.
-`check_audit.py` belongs only to the Phase B harness.
-
 ## Independent coverage boundary
 
 | Generic rule or evidence | Owner | Boundary |
