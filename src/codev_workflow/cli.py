@@ -30,6 +30,7 @@ from codev_workflow.installer import (
     check_project,
     codeowners_init,
     format_plan,
+    plan_adapter_remove,
     plan_init,
     plan_remove,
     plan_update,
@@ -189,6 +190,13 @@ def _parser() -> argparse.ArgumentParser:
     a_verify.add_argument("platform", choices=_AGENT_PLATFORMS)
     a_verify.add_argument("--target", type=_target, default=Path.cwd())
     a_verify.add_argument("--json", action="store_true")
+
+    a_remove = adapter_commands.add_parser(
+        "remove", help="remove one adapter from an existing installation"
+    )
+    a_remove.add_argument("platform", choices=_AGENT_PLATFORMS)
+    a_remove.add_argument("--target", type=_target, default=Path.cwd())
+    a_remove.add_argument("--dry-run", action="store_true", help="show the plan only")
 
     config = commands.add_parser("config", help="read or write layered configuration")
     config_commands = config.add_subparsers(dest="config_command", required=True)
@@ -706,6 +714,19 @@ def _run_adapter_command(args: argparse.Namespace) -> int:
                     for problem in finding.problems:
                         print(f"  - {problem}")
         return 0 if result.ok else 1
+
+    if args.adapter_command == "remove":
+        plan = plan_adapter_remove(target, args.platform)
+        print(format_plan(plan))
+        if plan.conflicts:
+            print(f"Adapter remove stopped: {len(plan.conflicts)} conflict(s).")
+            return 2
+        if args.dry_run:
+            print("Dry run complete; no files were written.")
+            return 0
+        apply_plan(target, plan)
+        print(f"Removed adapter {args.platform!r} from {target}")
+        return 0
 
     return 2
 

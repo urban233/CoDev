@@ -806,5 +806,193 @@ class CodeownersInitTests(unittest.TestCase):
         self.assertIn("# path/pattern  @your-team-here", text)
 
 
+class AdapterRemoveTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.target = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def install(
+        self,
+        platforms: tuple[str, ...] = ("all",),
+        programming_language: str = "none",
+    ) -> installer.Plan:
+        plan = installer.plan_init(self.target, platforms, programming_language)
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        return plan
+
+    def test_remove_opencode_from_multi_platform_install(self) -> None:
+        self.install(("codex", "opencode"))
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".opencode").exists())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["codex"], lock["platforms"])
+        self.assertFalse(any(p.startswith(".opencode/") for p in lock["files"]))
+
+    def test_remove_codex_from_multi_platform_install(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "codex")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".codex").exists())
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["opencode"], lock["platforms"])
+        self.assertFalse(any(p.startswith(".codex/") for p in lock["files"]))
+
+    def test_remove_shared_skills_preserved(self) -> None:
+        self.install(("codex", "opencode"))
+        skills_before = sorted(
+            str(p.relative_to(self.target))
+            for p in (self.target / ".agents" / "skills").glob("*")
+        )
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+
+        skills_after = sorted(
+            str(p.relative_to(self.target))
+            for p in (self.target / ".agents" / "skills").glob("*")
+        )
+        self.assertEqual(skills_before, skills_after)
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(any(p.startswith(".agents/skills/") for p in lock["files"]))
+
+    def test_remove_last_platform_rejected(self) -> None:
+        self.install(("codex",))
+
+        with self.assertRaises(installer.CoDevError) as ctx:
+            installer.plan_adapter_remove(self.target, "codex")
+        self.assertIn("codev remove", str(ctx.exception))
+
+    def test_remove_not_installed_platform_raises(self) -> None:
+        self.install(("codex",))
+
+        with self.assertRaises(installer.CoDevError) as ctx:
+            installer.plan_adapter_remove(self.target, "junie")
+        self.assertIn("not installed", str(ctx.exception))
+
+    def test_remove_unknown_platform_raises(self) -> None:
+        self.install(("codex",))
+        with self.assertRaises(installer.CoDevError):
+            installer.plan_adapter_remove(self.target, "bogus")
+
+    def test_remove_conflict_on_local_edit(self) -> None:
+        self.install(("codex", "opencode"))
+        agent = self.target / ".opencode" / "agents" / "builder.md"
+        original = agent.read_text(encoding="utf-8")
+        agent.write_text(original + "\nlocal edit\n", encoding="utf-8")
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+
+        self.assertTrue(plan.conflicts)
+        self.assertTrue(agent.exists())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_remove_opencode_cleans_config_managed_entries(self) -> None:
+        self.install(("codex", "opencode"))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertIn("agent", config)
+        self.assertIn("$schema", config)
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse(config_path.exists())
+
+    def test_remove_opencode_preserves_user_owned_config(self) -> None:
+        self.install(("codex", "opencode"))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["theme"] = "custom"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        remaining = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual("custom", remaining["theme"])
+        self.assertNotIn("agent", remaining)
+        self.assertNotIn("$schema", remaining)
+
+    def test_remove_produces_valid_lock(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, lock["schema_version"])
+        self.assertEqual(["codex"], lock["platforms"])
+        remaining_files = set(lock["files"])
+        for rel in remaining_files:
+            self.assertTrue(
+                (self.target / rel).is_file(),
+                f"lock references missing file {rel}",
+            )
+
+    def test_remove_then_add_back_round_trip(self) -> None:
+        self.install(("codex", "opencode"))
+        remove_plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(remove_plan.conflicts)
+        installer.apply_plan(self.target, remove_plan)
+
+        add_plan = installer.plan_update(self.target, ["opencode"])
+        self.assertFalse(add_plan.conflicts)
+        installer.apply_plan(self.target, add_plan)
+
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_dry_run_does_not_modify_files(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        self.assertTrue(plan.changed)
+
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_remove_junie_from_multi_platform(self) -> None:
+        self.install(("codex", "junie"))
+        self.assertTrue((self.target / ".junie" / "agents" / "builder.md").is_file())
+
+        plan = installer.plan_adapter_remove(self.target, "junie")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".junie").exists())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

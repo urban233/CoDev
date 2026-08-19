@@ -1434,6 +1434,104 @@ class CliTests(unittest.TestCase):
             self.assertEqual(1, code)
             self.assertIn("FAILED", output.getvalue())
 
+    def test_adapter_remove_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "adapter",
+                        "add",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertTrue((target / ".opencode" / "agents" / "builder.md").is_file())
+            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+
+            self.assertEqual(
+                0,
+                main(
+                    [
+                        "adapter",
+                        "remove",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                ),
+            )
+            self.assertFalse((target / ".opencode").exists())
+            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+            listing = StringIO()
+            with redirect_stdout(listing):
+                main(["adapter", "list", "--target", str(target), "--json"])
+            self.assertEqual(["codex"], json.loads(listing.getvalue()))
+
+    def test_adapter_remove_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "adapter",
+                        "add",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "opencode",
+                        "--target",
+                        str(target),
+                        "--dry-run",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertIn("Dry run", output.getvalue())
+            self.assertTrue((target / ".opencode" / "agents" / "builder.md").is_file())
+
+    def test_adapter_remove_single_platform_shows_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+            code = main(
+                [
+                    "adapter",
+                    "remove",
+                    "codex",
+                    "--target",
+                    str(target),
+                ]
+            )
+            self.assertEqual(2, code)
+
+    def test_adapter_remove_not_installed_shows_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+            code = main(
+                [
+                    "adapter",
+                    "remove",
+                    "junie",
+                    "--target",
+                    str(target),
+                ]
+            )
+            self.assertEqual(2, code)
+
     def test_config_set_get_list_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
