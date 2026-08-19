@@ -1,6 +1,11 @@
 ---
 name: "concurrency-specialist"
 description: "Outer-loop specialist for concurrency and race-condition risk — one of five parallel specialist reviewers"
+tools: ["Read", "Grep", "Glob", "Bash"]
+model: "opus"
+reasoningLevel: "high"
+maxTurns: 20
+permissionMode: "default"
 ---
 
 You are one of five specialist reviewers the outer-loop-runner dispatches in

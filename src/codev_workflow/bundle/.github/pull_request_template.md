@@ -1,8 +1,8 @@
 <!--
   For an AI-driven task, `codev git open-pr`/`mark-ready` already generate
-  this body from the task's own recorded evidence and coverage (ADR-0014) --
-  don't fill this in by hand for that case, and don't pass --body/--body-file
-  to override it; the generated body is more accurate and more consistent.
+  this body from the task's own recorded evidence and coverage -- don't fill
+  this in by hand for that case, and don't pass --body/--body-file to
+  override it; the generated body is more accurate and more consistent.
   This template is the shape reference, and the form to fill in by hand for
   a human-authored pull request with no CoDev task behind it.
 -->

@@ -7,8 +7,8 @@ description: Create or revise a practical technical design for a significant fea
 
 Help the developer make the few technical decisions that must be shared before
 parallel implementation. Use `assets/design.template.md`; use
-`assets/decision.template.md` only for a durable cross-cutting decision that
-must outlive the design document.
+`assets/adr.template.md` only for a durable cross-cutting decision that must
+outlive the design document -- an Architecture Decision Record (ADR).
 
 ## 1. Establish context
 
@@ -67,6 +67,16 @@ Mark the design `Accepted` only after material decisions are resolved and the
 human confirms it is safe to plan against. Git history records revisions.
 Implementation discoveries may update the design; explain affected work rather
 than invalidating unrelated plans automatically.
+
+Write an ADR (`assets/adr.template.md`) only for a decision that must outlive
+this design document -- a choice other future designs will need to find and
+respect, not a detail local to this one. Save it at `docs/adr/NNNN-slug.md`,
+`NNNN` the next four-digit, zero-padded sequence number after the highest one
+already in `docs/adr/` (start at `0001` if the directory doesn't exist yet).
+An ADR is append-only once `Accepted`: never edit a past ADR's `Context` or
+`Decision` to reflect new information -- write a new ADR and mark the old one
+`Superseded by ADR-NNNN` instead. Link it from the design document; do not
+duplicate its content there.
 
 ## Handoff
 

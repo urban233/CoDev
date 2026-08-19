@@ -38,6 +38,7 @@ rewritten.
 | GitHub's tracker artifact for a task | **issue** | ticket, bug |
 | Session entry point for Specify/Understand/Design/Plan | **`planner`** | — (new, ADR-0024) |
 | Session entry point for Build/Review/Ship | **`orchestrator`** | — |
+| A durable, cross-cutting decision that outlives one design document | **ADR** (Architecture Decision Record), `design-solution`'s `assets/adr.template.md`, stored at `docs/adr/NNNN-slug.md` | decision, `assets/decision.template.md` (ADR-0025) |
 
 ## The phase spine
 
@@ -146,6 +147,14 @@ design or decision, draft a task and run `codev git issue-create` directly,
 skipping `plan-delivery`'s milestone/work-list machinery, and stop —
 `orchestrator`'s existing step-5 fallback (create the issue itself if still
 missing) is unchanged and still correct either way.
+
+**Resolved and implemented (ADR-0025):** `design-solution`'s decision asset
+is formalized into an explicit ADR practice — renamed `assets/adr.template.md`
+(was `decision.template.md`), with a fixed storage convention
+(`docs/adr/NNNN-slug.md`, sequential four-digit numbering) and an explicit
+append-only rule once `Accepted` (a later reversal writes a new ADR and marks
+the old one `Superseded by ADR-NNNN`, never edits it). This repository now
+practices it on itself too, documented at `docs/adr/README.md`.
 
 **Resolved and implemented (ADR-0006):** task entry modes give
 human-authored work a first-class path into the inner/outer loop instead of

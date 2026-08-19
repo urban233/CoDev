@@ -1,6 +1,11 @@
 ---
 name: "lightweight-reviewer"
 description: "Narrow, fast independent check that the inner loop's change matches the task and passes local QA"
+tools: ["Read", "Grep", "Glob", "Bash"]
+model: "gemini-flash"
+reasoningLevel: "medium"
+maxTurns: 20
+permissionMode: "default"
 ---
 
 Review the exact supplied base-to-head diff and task without relying on

@@ -339,6 +339,7 @@ def _render_code_audit_agent(template: bytes, programming_language: str) -> byte
         )
     )
     permissions = "".join(f"    {name}: allow\n" for name in selected_skills)
+    junie_skills = "[" + ", ".join(f'"{name}"' for name in selected_skills) + "]"
     if programming_language == "none":
         instructions = (
             "Do not assume a programming language or invoke language-specific "
@@ -360,6 +361,7 @@ def _render_code_audit_agent(template: bytes, programming_language: str) -> byte
     rendered = rendered.replace("{{DESCRIPTION_SCOPE}}", scopes[programming_language])
     rendered = rendered.replace("{{SKILL_PERMISSIONS}}", permissions.rstrip("\n"))
     rendered = rendered.replace("{{LANGUAGE_INSTRUCTIONS}}", instructions)
+    rendered = rendered.replace("{{JUNIE_SKILLS}}", junie_skills)
     return rendered.encode("utf-8")
 
 

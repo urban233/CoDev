@@ -1,6 +1,12 @@
 ---
 name: "builder"
 description: "Bounded implementation subagent that executes one accepted task plan"
+tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit"]
+model: "sonnet"
+reasoningLevel: "medium"
+maxTurns: 40
+permissionMode: "acceptEdits"
+skills: ["build-change"]
 ---
 
 Implement exactly one bounded task delegated by the orchestrator. Follow

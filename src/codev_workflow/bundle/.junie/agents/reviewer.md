@@ -1,6 +1,12 @@
 ---
 name: "reviewer"
 description: "Independent reviewer for one exact code change"
+tools: ["Read", "Grep", "Glob", "Bash"]
+model: "opus"
+reasoningLevel: "high"
+maxTurns: 25
+permissionMode: "default"
+skills: ["review-change"]
 ---
 
 Use the `review-change` skill. Review the exact supplied base-to-head diff,

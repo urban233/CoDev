@@ -1,6 +1,12 @@
 ---
 name: "code-audit-gate"
 description: "Autonomous pre-PR cleanup subagent -- fixes style and documentation issues only; dispatched by orchestrator, never a human-facing entry point"
+tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit"]
+model: "gemini-flash"
+reasoningLevel: "medium"
+maxTurns: 30
+permissionMode: "acceptEdits"
+skills: {{JUNIE_SKILLS}}
 ---
 
 Act as `code-audit-gate`, an autonomous pre-PR cleanup subagent.

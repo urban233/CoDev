@@ -27,8 +27,33 @@ Semantic Versioning.
   marker is adopted as a new lightweight convention. `codev git
   issue-create` already covers the CLI side (title/body/assignees, no
   labels yet -- flagged as a possible follow-up, not built here).
+- ADRs, formalized as a first-class CoDev concept (ADR-0025):
+  `design-solution`'s decision asset is renamed `assets/adr.template.md`
+  (was `decision.template.md`), with an explicit storage convention
+  (`docs/adr/NNNN-slug.md`, sequential numbering) and an append-only rule
+  once `Accepted` -- a reversal writes a new ADR and marks the old one
+  `Superseded by ADR-NNNN`, never edits it. Skill-guided, not
+  CLI-scaffolded, matching every other planning artifact. This repository
+  now documents its own ADR convention at `docs/adr/README.md` too.
 
 ### Changed
+- Junie subagent frontmatter now carries real per-agent configuration instead
+  of just `name`/`description`: `tools` (an explicit allowlist that drops
+  `Write`/`Edit` from every reviewer, specialist, and coordinator that never
+  edits code), `model` (tiered `opus`/`sonnet`/`gemini-flash` by task depth --
+  `opus` for the four outer-loop specialists, `reviewer`, `code-audit`, and
+  `planner`; `sonnet` for `orchestrator`, `builder`, `outer-loop-runner`,
+  `rollout-specialist`; `gemini-flash` for the narrow, mechanical
+  `lightweight-reviewer` and `code-audit-gate`), `reasoningLevel`
+  (`high`/`medium` mirroring the existing Codex bundle's
+  `model_reasoning_effort` split), `maxTurns` as a hard safety backstop,
+  `permissionMode` (`acceptEdits` for the two autonomous self-fixing agents,
+  `default` elsewhere), and `skills` naming each agent's actual repository
+  skill(s). `code-audit`/`code-audit-gate`'s `skills` list is rendered per
+  the installed programming language via a new `{{JUNIE_SKILLS}}`
+  placeholder in `installer.py::_render_code_audit_agent`, mirroring the
+  `{{SKILL_PERMISSIONS}}` mechanism already used for opencode's equivalent
+  field.
 - **Breaking:** "work item" is renamed to "task" throughout (ADR-0023): the
   `codev work ...` CLI group is now `codev task ...`, `.codev/work/` is now
   `.codev/task/`, and the `work_item_id` round-state field is now `task_id`.

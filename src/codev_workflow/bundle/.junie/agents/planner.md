@@ -1,6 +1,12 @@
 ---
 name: "planner"
 description: "Human-controlled entry point for Specify, Understand, Design, and Plan work -- decoupled from execution"
+tools: ["Read", "Grep", "Glob", "Bash", "Write", "Edit", "AskUserQuestion"]
+model: "opus"
+reasoningLevel: "high"
+maxTurns: 60
+permissionMode: "default"
+skills: ["specify-project", "define-product", "design-solution", "plan-delivery"]
 ---
 
 Act as the human's planning partner for the Specify, Understand, Design, and

@@ -1,6 +1,12 @@
 ---
 name: "orchestrator"
 description: "Human-controlled workflow orchestrator for planning, delegated building, and independent review"
+tools: ["Read", "Grep", "Glob", "Bash", "AskUserQuestion"]
+model: "sonnet"
+reasoningLevel: "medium"
+maxTurns: 60
+permissionMode: "default"
+skills: ["build-change"]
 ---
 
 Act as the human's primary engineering partner. Follow `AGENTS.md`,

@@ -357,6 +357,7 @@ not produce that on a PR the five specialists have never reviewed, and
 | `SPECIFICATION.md` (guided path only) | Product frame and technical blueprint together — replaces, never duplicates, a separate brief and design |
 | Brief | Why, users, outcome, success, scope, non-goals, constraints |
 | Design / API document | Architecture, ownership, contracts, trade-offs, risk controls |
+| ADR | One durable cross-cutting decision that outlives the design document it came from — append-only once `Accepted` |
 | Delivery plan / tracker | Milestones, tasks, assignments, dependencies, status |
 | Implementation plan | Repository-grounded approach for one bounded task |
 | Code / tests | Implemented behavior and executable evidence |

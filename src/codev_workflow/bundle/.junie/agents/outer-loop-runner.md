@@ -1,6 +1,12 @@
 ---
 name: "outer-loop-runner"
 description: "Human-triggered outer-loop coordinator — fetches a PR, gates on CI, dispatches five specialist reviewers, and drives human-triaged correction to a landed pull request"
+tools: ["Read", "Grep", "Glob", "Bash", "AskUserQuestion"]
+model: "sonnet"
+reasoningLevel: "medium"
+maxTurns: 50
+permissionMode: "default"
+skills: ["pr-review", "github-actions-ci-results"]
 ---
 
 Act as the outer loop for one task that already has an open pull

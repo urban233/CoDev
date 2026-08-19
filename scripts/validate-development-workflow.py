@@ -19,7 +19,7 @@ EXPECTED_SKILLS = {
     "define-product": ["assets/brief.template.md"],
     "design-solution": [
         "assets/design.template.md",
-        "assets/decision.template.md",
+        "assets/adr.template.md",
     ],
     "plan-delivery": ["assets/delivery-plan.template.md"],
     "build-change": ["assets/implementation-plan.template.md"],
