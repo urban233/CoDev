@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.2.4] - 2026-08-19
 
 ### Added
 - `planner`, a fifth primary agent (ADR-0024): a human-started entry point
@@ -66,6 +66,14 @@ Semantic Versioning.
   planning-artifact convention is now `docs/codev/task/`. All four platform
   adapters, `adapter.py`'s required-marker checks, and every skill/doc
   referencing the old terminology are updated together.
+
+### Fixed
+- `[tool.setuptools.package-data]` in `pyproject.toml` was missing an entry
+  for `bundle/.github/`, so the new `pull_request_template.md` and
+  `ISSUE_TEMPLATE/task.md` were silently absent from every built wheel --
+  caught by `scripts/verify_release.py::verify_bundle_packaging` before this
+  release shipped, the same gap that check exists to catch (its own
+  docstring cites a prior real incident of exactly this shape).
 
 ## [0.2.3] - 2026-08-14
 
