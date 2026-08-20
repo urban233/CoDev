@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
@@ -27,6 +28,15 @@ from codev_workflow import config, task
 from codev_workflow.installer import CoDevError, _read_lock
 
 GIT_STATE_FILENAME = "git-state.json"
+PR_TEMPLATE_PATH = Path(".github/pull_request_template.md")
+_PR_TEMPLATE_MARKERS = (
+    "summary",
+    "validation",
+    "changed-files",
+    "review",
+    "tracking",
+    "closes",
+)
 
 
 class GitOpsError(Exception):
@@ -312,6 +322,54 @@ def _with_closes_line(body: str, link_ref: str | None, *, target: Path) -> str:
     return f"{body}\n\nCloses #{issue_number}" if issue_number else body
 
 
+def _render_pr_template(task_id: str, *, target: Path) -> str:
+    """Render task evidence into the repository's managed PR template.
+
+    Older or project-owned templates remain untouched: their absence or an
+    incompatible shape falls back to the established standalone description.
+    """
+    description = task.describe(task_id, target=target)
+    generated = task.pr_description(task_id, target=target)
+    template_path = target / PR_TEMPLATE_PATH
+    if not template_path.is_file():
+        warnings.warn(
+            f"{PR_TEMPLATE_PATH} is absent; using CoDev's generated PR body instead",
+            stacklevel=2,
+        )
+        return _with_closes_line(generated, description.get("link_ref"), target=target)
+
+    template = template_path.read_text(encoding="utf-8")
+    markers = {
+        marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS
+    }
+    missing = [marker for marker, token in markers.items() if token not in template]
+    if missing:
+        warnings.warn(
+            f"{PR_TEMPLATE_PATH} is not CoDev-compatible (missing "
+            f"{', '.join(missing)}); using CoDev's generated PR body instead",
+            stacklevel=2,
+        )
+        return _with_closes_line(generated, description.get("link_ref"), target=target)
+
+    generated_without_trailing_newline = generated.rstrip()
+    validation = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[-1]
+    validation = validation.split("\n\nTask: ", 1)[0]
+    summary = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[0]
+    issue_number = _closes_issue_number(description.get("link_ref"), target=target)
+    changed = changed_files(task_id, target=target)
+    values = {
+        "summary": summary,
+        "validation": validation,
+        "changed-files": ", ".join(changed) if changed else "none recorded",
+        "review": f"Latest task review: {description['latest_decision'] or 'in progress'}.",
+        "tracking": generated_without_trailing_newline.rsplit("\n\n", 1)[-1],
+        "closes": f"Closes #{issue_number}" if issue_number else "",
+    }
+    for marker, token in markers.items():
+        template = template.replace(token, values[marker])
+    return template.rstrip()
+
+
 def current_branch(target: Path) -> str:
     return _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=target)
 
@@ -504,6 +562,7 @@ def open_pr(
     *,
     target: Path,
     base: str | None = None,
+    use_template: bool = False,
 ) -> str:
     branch = _ensure_on_own_branch(task_id, target=target)
     head = current_head(target)
@@ -538,7 +597,11 @@ def open_pr(
         resolved_base = configured_base.value if configured_base else None
     if resolved_base is None:
         resolved_base = default_branch(target)
-    final_body = _with_closes_line(body, description.get("link_ref"), target=target)
+    final_body = (
+        _render_pr_template(task_id, target=target)
+        if use_template
+        else _with_closes_line(body, description.get("link_ref"), target=target)
+    )
     return _run_gh(
         [
             "pr",
@@ -569,8 +632,6 @@ def mark_ready(task_id: str, *, target: Path) -> None:
             "refusing to mark the pull request ready: codev task check returned "
             f"{result.reason!r}, not one of {_MARK_READY_REASONS} ({result.message})"
         )
-    description = task.describe(task_id, target=target)
-    body = task.pr_description(task_id, target=target)
-    final_body = _with_closes_line(body, description.get("link_ref"), target=target)
+    final_body = _render_pr_template(task_id, target=target)
     _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)

@@ -20,6 +20,15 @@ error handling, and test quality only**:
    small representative suite would catch realistic regressions and
    boundary behavior. Coverage percentage is diagnostic, never a gate.
 
+Judge test quality against
+`.agents/skills/testing-craft/references/writing-tests.md` (naming,
+structure, the test-doubles priority ladder, brittleness) and
+`.agents/skills/testing-craft/references/test-strategy.md` (size/scope
+justified by the change's actual risk) rather than a general impression —
+a missing test, a mock standing in for a real implementation without
+reason, or a test coupled to an internal method is each a concrete finding
+under that reference, not merely non-ideal.
+
 Security/privacy/data/compatibility, concurrency, architecture,
 maintainability, and rollout belong to the other four specialists — do not
 review them here, and do not duplicate their findings.

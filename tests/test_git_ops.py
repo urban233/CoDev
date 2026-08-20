@@ -15,6 +15,14 @@ FULL_COVERAGE = {
     dimension: {"passed": True, "evidence": f"checked {dimension}"}
     for dimension in task.REQUIRED_COVERAGE_DIMENSIONS
 }
+_BUNDLE_PR_TEMPLATE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "codev_workflow"
+    / "bundle"
+    / ".github"
+    / "pull_request_template.md"
+)
 
 
 def _run(args: list[str], *, cwd: Path) -> None:
@@ -43,6 +51,12 @@ def _write_lock(target: Path, managed_paths: list[str]) -> None:
         "integrations": {},
     }
     (lock_dir / "lock.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_pr_template(target: Path) -> None:
+    template = target / git_ops.PR_TEMPLATE_PATH
+    template.parent.mkdir(parents=True, exist_ok=True)
+    template.write_text(_BUNDLE_PR_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 class BranchAndCommitTests(unittest.TestCase):
@@ -355,6 +369,61 @@ class OpenPrTests(unittest.TestCase):
         self.assertNotIn("-f", command)
         self.assertIn("codev/item-1", command)
 
+    def test_renders_the_repository_pr_template_for_an_automatic_body(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            _write_pr_template(target)
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+            ) as run_gh:
+                git_ops.open_pr(
+                    "item-1",
+                    "title",
+                    task.pr_description("item-1", target=target),
+                    target=target,
+                    base="main",
+                    use_template=True,
+                )
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            body = create_call.args[0][create_call.args[0].index("--body") + 1]
+        self.assertIn("## Summary", body)
+        self.assertIn("## Test plan", body)
+        self.assertIn("Task item-1.", body)
+        self.assertNotIn("<!-- codev:", body)
+
+    def test_falls_back_when_the_repository_template_is_incompatible(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            template = target / git_ops.PR_TEMPLATE_PATH
+            template.parent.mkdir(parents=True, exist_ok=True)
+            template.write_text("## Summary\n", encoding="utf-8")
+            with (
+                self.assertWarnsRegex(UserWarning, "not CoDev-compatible"),
+                patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()) as run_gh,
+            ):
+                git_ops.open_pr(
+                    "item-1",
+                    "title",
+                    task.pr_description("item-1", target=target),
+                    target=target,
+                    base="main",
+                    use_template=True,
+                )
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            body = create_call.args[0][create_call.args[0].index("--body") + 1]
+            expected = task.pr_description("item-1", target=target)
+        self.assertEqual(expected, body)
+
     def test_uses_configured_pr_base_when_none_given(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -499,6 +568,7 @@ class OpenPrTests(unittest.TestCase):
                 link_ref="https://github.com/o/r/issues/7",
             )
             git_ops.create_branch("item-1", base, target=target)
+            _write_pr_template(target)
             task.record_reviewer(
                 "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
             )
@@ -506,7 +576,14 @@ class OpenPrTests(unittest.TestCase):
             with patch.object(
                 git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
             ) as run_gh:
-                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
+                git_ops.open_pr(
+                    "item-1",
+                    "title",
+                    task.pr_description("item-1", target=target),
+                    target=target,
+                    base="main",
+                    use_template=True,
+                )
             pr_create_call = next(
                 call
                 for call in run_gh.call_args_list
@@ -714,7 +791,23 @@ class MarkReadyTests(unittest.TestCase):
             body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
             self.assertEqual(task.pr_description("item-1", target=target), body)
             self.assertNotEqual(task.log_text("item-1", target=target), body)
-            self.assertNotIn("round 1:", body)
+        self.assertNotIn("round 1:", body)
+
+    def test_regenerated_body_preserves_the_repository_pr_template(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_approval(target)
+            _write_pr_template(target)
+            with patch.object(git_ops, "_run_gh", return_value="") as run_gh:
+                git_ops.mark_ready("item-1", target=target)
+            edit_call = next(
+                call for call in run_gh.call_args_list if "edit" in call.args[0]
+            )
+            body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
+        self.assertIn("## Summary", body)
+        self.assertIn("## Review", body)
+        self.assertIn("Latest task review: READY_FOR_HUMAN_APPROVAL.", body)
+        self.assertNotIn("<!-- codev:", body)
 
     def test_appends_closes_issue_when_link_ref_matches_same_repo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

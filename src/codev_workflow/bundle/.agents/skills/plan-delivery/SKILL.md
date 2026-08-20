@@ -19,7 +19,9 @@ For an explicit request to create or update a delivery plan, create or update
 the plan in the repository. Default to
 `docs/codev/delivery/<milestone-slug>.md`; use an established equivalent
 location when the project already has one. Start from
-`assets/delivery-plan.template.md` when creating a new plan.
+`assets/delivery-plan.template.md` when creating a new plan. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the plan's prose.
 
 An initial request to *show* or frame a milestone without creating a plan may
 remain an unassigned, chat-only planning brief. Make that limitation explicit

@@ -49,13 +49,21 @@ it to one of four steps:
 | **Review** (`review-change`, plus an automatic pass) | Is this exact change correct, safe, and consistent with what we agreed? | Catching that a SMILES canonicalizer drops E/Z stereochemistry for one specific ring class — a real, narrow correctness bug, not a style nit. |
 | **Ship** | Are we ready to expose this, and how will we know it's working? | Rolling a new ML-based hepatotoxicity filter out to 10% of incoming compound batches before trusting it on the full screening queue. |
 
-Two of the ten installed skills sit outside this table because they don't
+Two of the twelve installed skills sit outside this table because they don't
 fit the four-step shape: `pr-review` reviews a GitHub Pull Request that
 already exists (possibly not even yours), and `critique-review` turns an
 existing finding into a concrete suggested diff — it's a bridge from a
-review to a fix, not a review itself. `design-skill-eval` is a different
-kind of tool again: it scaffolds evaluation fixtures so you can measure
-whether a skill actually helps, empirically, rather than just trusting it.
+review to a fix, not a review itself. `design-skill-eval`,
+`technical-writing-style`, and `testing-craft` are different kinds of
+tools again: `design-skill-eval` scaffolds evaluation fixtures so you can
+measure whether a skill actually helps, empirically, rather than just
+trusting it; `technical-writing-style` is what the other planning skills
+read automatically before drafting prose, and what you can invoke directly
+to revise the writing quality of an existing document; and `testing-craft`
+is what `specify-project`, `design-solution`, and `build-change` read
+automatically before they design or write test content, and what you can
+invoke directly to design a test strategy, audit an existing test suite's
+health, or triage a flaky test.
 
 ## Two steps that only show up sometimes
 

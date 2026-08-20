@@ -7,7 +7,9 @@ description: Prepare and guide a safe release of a completed feature or product 
 
 Treat launch as the start of a learning loop, not the end of implementation. Use
 `assets/launch-plan.template.md` for material launches; a pull-request checklist
-is sufficient for low-risk routine releases.
+is sufficient for low-risk routine releases. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the launch plan's prose.
 
 ## 1. Classify launch risk
 

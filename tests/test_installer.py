@@ -36,7 +36,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         self.assertFalse(any(path.endswith(".template") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(13, len(skills))
+        self.assertEqual(15, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/design-skill-eval/SKILL.md").is_file()

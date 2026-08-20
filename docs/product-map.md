@@ -10,7 +10,7 @@ model (how the bundle is built, installed, and updated); this document is
 the product itself — the skills, agents, and CLI surface a developer
 actually uses once CoDev is installed.
 
-Surface inventory current as of 2026-08-19.
+Surface inventory current as of 2026-08-20.
 
 ## Identity
 
@@ -100,6 +100,8 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | `audit-google-typescript-style` | Review / pre-Ship | Manual only, by explicit design |
 | `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-runner` step 1 |
 | `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval fixture for an existing skill |
+| `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-delivery`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
+| `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
 | `launch-product` | Launch | Manual — not referenced by `orchestrator` |
 
 Per ADR-0005, the review family is now two clusters rather than an
@@ -123,7 +125,7 @@ rail.
 | `builder` | Build | Auto-invoked by `orchestrator` |
 | `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `orchestrator`, fresh context each round |
 | `outer-loop-runner` | Review -> Ship (session entry point) | Human-started, separate entry point from `orchestrator`; does not run on a PR event |
-| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005) |
+| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005); `correctness-tests-specialist` judges `test_quality` against `testing-craft`'s references |
 | `code-audit` | Review / pre-Ship | Human-invoked only (ADR-0015): the full two-phase, human-approval-gated audit-and-fix workflow. No longer has an automatic pre-PR invocation mode — that responsibility moved entirely to `code-audit-gate` below, since Phase 1's audit-only pass never needed the approval gate that makes this agent `mode: primary` in the first place |
 | `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `orchestrator`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
 

@@ -15,7 +15,15 @@ work. Use the applicable repository skill:
 - `critique-review` for precise, read-only suggested diffs from review findings; and
 - `launch-product` for readiness, rollout, rollback, and learning; and
 - `design-skill-eval` for designing and scaffolding a new evaluation fixture
-  for an installed skill's performance corpus.
+  for an installed skill's performance corpus; and
+- `technical-writing-style` to audit or revise the writing quality of an
+  existing document -- also read automatically by `specify-project`,
+  `define-product`, `design-solution`, `plan-delivery`, and
+  `launch-product` before they draft or revise prose; and
+- `testing-craft` to design a test strategy, write well-crafted tests, or
+  audit an existing test suite's health -- also read automatically by
+  `specify-project`, `design-solution`, and `build-change` before they
+  touch test content.
 
 Use the lightest safe path. Inspect the repository before prescribing code
 mechanics, keep changes small, run proportionate validation, and stop for

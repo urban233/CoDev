@@ -3,6 +3,18 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+- `codev git open-pr` and `codev git mark-ready` now render CoDev task
+  evidence into the installed `.github/pull_request_template.md`, so draft
+  and ready pull requests retain the repository's template structure. The
+  bundled template defines markers for the task summary, validation, changed
+  files, review decision, tracking information, and same-repository
+  `Closes #N` linkage. Repositories with a missing or incompatible template
+  retain the previous generated-body behavior with a warning; explicit
+  `--body` and `--body-file` inputs still bypass automatic rendering.
+
 ## [0.2.4] - 2026-08-19
 
 ### Added

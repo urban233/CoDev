@@ -28,6 +28,12 @@ EXPECTED_SKILLS = {
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
     "design-skill-eval": ["references/eval-design-checklist.md"],
+    "technical-writing-style": ["references/writing-style.md"],
+    "testing-craft": [
+        "references/test-strategy.md",
+        "references/writing-tests.md",
+        "references/test-suite-health.md",
+    ],
 }
 
 EXPECTED_HANDBOOKS: list[str] = []

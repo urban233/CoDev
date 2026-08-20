@@ -92,11 +92,9 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
     "'git commit*': allow",
 )
 
-# ADR-0014: `codev git open-pr` generates a PR description from the task's
-# own recorded evidence and coverage when no `--body`/`--body-file` is
-# given -- an agent hardcoding a body placeholder here defeats that fallback
-# and produces hand-composed prose instead, the exact regression this guards
-# against.
+# `codev git open-pr` renders recorded task evidence into the repository PR
+# template when no `--body`/`--body-file` is given. An agent hardcoding a body
+# placeholder would bypass that guarded rendering path.
 _HANDWRITTEN_PR_BODY_MARKERS: tuple[str, ...] = ("--body <body>",)
 
 # ADR-0021: OpenCode's per-subagent `task` permission block is the only
@@ -175,7 +173,7 @@ def verify_adapter(platform: str, *, target: Path) -> VerificationResult:
             if marker in text:
                 problems.append(
                     f"hardcodes a PR body placeholder instead of relying on "
-                    f"`codev git open-pr`'s own generated description: {marker!r}"
+                    f"`codev git open-pr`'s template-aware rendering: {marker!r}"
                 )
         for marker in _SPECIALIST_ALLOW_MARKERS:
             if marker in text:

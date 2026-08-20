@@ -135,10 +135,9 @@ applies as written. Two other cases:
    - On `ok_ready_for_pr`, push the branch — `codev git push --id
      <task-id>` — and open a draft pull request — `codev git open-pr
      --id <task-id> --title <title>` — the bridge into the outer loop's
-     specialist review. Never pass `--body`: omitting it generates the PR
-     description from the task's own recorded evidence and coverage,
-     which is always more accurate and more consistent than hand-composed
-     prose. This is automatic: opening a pull request is fully reversible
+      specialist review. Never pass `--body`: omitting it renders the task's
+      recorded evidence and coverage into the repository's PR template. This
+      is automatic: opening a pull request is fully reversible
      and has no effect on production, unlike merge. Mechanical style and
      documentation issues were already resolved at step 7, before this round
      was ever recorded, so nothing pre-PR spends any of the outer phase's

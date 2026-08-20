@@ -28,6 +28,23 @@ Design (`design-solution`) and delivery planning (`plan-delivery`) are
 conditional depth inside Understand, not stages every change must pass
 through. Most changes do not need them.
 
+Every planning skill that produces a reviewer-facing document --
+`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
+`launch-product` -- reads `technical-writing-style` before drafting or
+revising its prose. That is a prerequisite read inside the calling skill's
+own workflow, not a separate stage; invoke `technical-writing-style`
+directly only to audit or revise the writing quality of an already-written
+document.
+
+`specify-project` and `design-solution` read `testing-craft` before
+deciding a change's test strategy; `build-change` reads it before adding
+or updating tests; `correctness-tests-specialist` reads it as review
+criteria for the `test_quality` dimension below. These are the same kind
+of prerequisite read, not a separate stage. Invoke `testing-craft` directly
+to design a test strategy outside an open planning or build session, audit
+an existing test suite's health, or triage one specific flaky or brittle
+test.
+
 Where the platform provides a repository-local `planner` subagent, it is the
 dedicated, human-started entry point for `specify-project`, `define-product`,
 `design-solution`, and `plan-delivery` — a session decoupled from `Build`,
@@ -243,8 +260,9 @@ ready, with no inner-loop round recorded at all.
      cleanup never opens the outer phase or spends any of its round cap —
      that stays reserved for the five specialists' actual review. A clean
      or now-clean head pushes the branch with `codev git push` and opens a
-     draft pull request with `codev git open-pr` — the bridge into the
-     outer loop's specialist review. This is automatic because opening a
+      draft pull request with `codev git open-pr` — the bridge into the
+      outer loop's specialist review. Omitting `--body` renders recorded task
+      evidence and coverage into the repository's PR template. This is automatic because opening a
      pull request is fully reversible and has no effect on production; it
      is not the same authority as merge.
    - On any other nonzero exit — the round cap is reached, a blocking
@@ -342,12 +360,12 @@ not produce that on a PR the five specialists have never reviewed, and
 6. On `ok_approve` or `ok_approve_with_deferrals`: if no pull request exists
    yet for this item (for example, it was recovered into the outer phase
    with `codev task reopen` and never went through the inner loop's own
-   bridge step), run `codev git open-pr` first -- never pass `--body`, it
-   generates the description from the task's own evidence -- it
+    bridge step), run `codev git open-pr` first -- never pass `--body`, it
+    renders the task's evidence into the repository PR template -- it
    accepts this state too, not only the original `ok_ready_for_pr`
    checkpoint. Then `codev git mark-ready` regenerates the pull request's
-   body from the task's full round-state — including every deferred
-   finding and its reason — and takes it out of draft. This is not merge
+    body from current task evidence into that template and takes it out of
+    draft. This is not merge
    authority.
 
 ## Artifact authority

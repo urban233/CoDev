@@ -8,7 +8,9 @@ description: Turn a software idea, product proposal, or feature request into a c
 Guide the developer from an idea to an accepted brief. Explain the purpose of
 each step in plain language and keep the conversation focused on product intent.
 
-Use `assets/brief.template.md` when a durable brief is useful.
+Use `assets/brief.template.md` when a durable brief is useful. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the brief's prose.
 
 ## 1. Choose the workflow size
 

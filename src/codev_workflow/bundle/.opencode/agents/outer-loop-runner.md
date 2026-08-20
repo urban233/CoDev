@@ -227,14 +227,12 @@ After triage, `codev task check` reports one of three outcomes:
 ## 6. Land it
 
 On `ok_approve` or `ok_approve_with_deferrals`, run `codev git mark-ready
---id <task-id>` — it
-regenerates the pull request's body from the task's full round-state,
-including every deferred or overridden finding with its reason, and converts
-the draft out of draft. If no pull request exists yet for this item (for
+--id <task-id>` — it re-renders the task's current evidence into the
+repository PR template and converts the draft out of draft. If no pull request exists yet for this item (for
 example, it was recovered into the outer phase with `codev task reopen` and
 never went through the inner loop's own bridge step), run `codev git
-open-pr --id <task-id> --title <title>` first — never pass `--body`,
-the same rule as the inner loop's own bridge step — it accepts this state
+open-pr --id <task-id> --title <title>` first — never pass `--body`, so it
+renders the repository PR template; it accepts this state
 too, not only the original `ok_ready_for_pr` checkpoint — then `mark-ready`.
 This is not merge authority; it only makes the PR visibly ready for the
 human's own holistic review. Report the PR link, the final evidence, and any

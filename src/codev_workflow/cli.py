@@ -1054,14 +1054,21 @@ def _run_git_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.git_command == "open-pr":
+        use_template = False
         if args.body_file is not None:
             body = args.body_file.read_text(encoding="utf-8")
         elif args.body is not None:
             body = args.body
         else:
             body = task_module.pr_description(args.id, target=target)
+            use_template = True
         url = git_ops_module.open_pr(
-            args.id, args.title, body, target=target, base=args.base
+            args.id,
+            args.title,
+            body,
+            target=target,
+            base=args.base,
+            use_template=use_template,
         )
         print(url)
         return 0

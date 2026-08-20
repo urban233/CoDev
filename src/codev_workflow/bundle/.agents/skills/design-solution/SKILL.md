@@ -6,9 +6,12 @@ description: Create or revise a practical technical design for a significant fea
 # Design Solution
 
 Help the developer make the few technical decisions that must be shared before
-parallel implementation. Use `assets/design.template.md`; use
-`assets/adr.template.md` only for a durable cross-cutting decision that must
-outlive the design document -- an Architecture Decision Record (ADR).
+parallel implementation. Use `assets/design.template.md` for the design, or
+for each child design once split (see step 2); use `assets/adr.template.md`
+only for a durable cross-cutting decision that must outlive the design
+document -- an Architecture Decision Record (ADR). Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising a design document's prose.
 
 ## 1. Establish context
 
@@ -19,7 +22,45 @@ outcome. Return to `define-product` if the outcome or scope is the real problem.
 State which decisions the design must settle and which details can safely remain
 with implementing engineers.
 
-## 2. Investigate before proposing
+## 2. Decide the document's shape
+
+Decide whether this is one design or a parent with independent children
+before investigating or drafting. Split when the work covers more than one
+subsystem that each has its own components, contracts, alternatives, and
+risk profile, and that a reviewer could accept on its own -- not merely
+because the topic is broad or the likely document will be long. Two
+signals, not hard limits: the Proposed design section would need more than
+one independent Components/APIs/Alternatives block, or the reviewers
+needed for different parts of the document do not overlap and each would
+have to read past substantial unrelated subsystem detail to reach their
+own part.
+
+When splitting:
+
+- Keep entangled cross-cutting material in the **parent**: Summary, Goals
+  and non-goals, the shared component map, cross-subsystem contracts, and
+  any open question that blocks more than one child. Save it at
+  `docs/codev/design/<slug>/design.md` as usual.
+- Give each independent subsystem its own **child** design at
+  `docs/codev/design/<slug>/<child-slug>.md`, using this same template and
+  skill, scoped to that subsystem's own components, alternatives, risk,
+  and test strategy.
+- Link every child from the parent's Proposed design section with a
+  one-line scope. Set each child's `Parent design` header field to link
+  back. Never duplicate a fact between parent and child -- state it once
+  and link to it.
+- A child can be drafted, reviewed, and marked `Accepted` on its own
+  schedule. The parent depends on a child only for the specific decisions
+  it names as blocking, not for that child's unrelated detail.
+- Do not split a design that covers one coherent subsystem merely because
+  it is long. Splitting adds a document and a cross-reference to maintain,
+  and only pays for itself when it lets a reviewer skip content that is
+  not theirs.
+
+Revisit this decision in step 7 if drafting reveals the scope is more
+entangled, or more separable, than it first appeared.
+
+## 3. Investigate before proposing
 
 Locate existing components, ownership, extension points, schemas, APIs, failure
 conventions, deployment model, and comparable implementations. Distinguish
@@ -29,7 +70,7 @@ For material choices, present the recommended option, meaningful alternatives,
 and trade-offs. Ask the human only when alternatives change product behavior,
 an interface, persistent data, risk, cost, or ownership.
 
-## 3. Design stable boundaries
+## 4. Design stable boundaries
 
 Describe components in ordinary language. For every cross-component API or
 contract, define:
@@ -44,7 +85,7 @@ contract, define:
 Do not prescribe classes, private methods, file layouts, or algorithms unless
 they are genuinely architectural.
 
-## 4. Design quality and delivery
+## 5. Design quality and delivery
 
 Cover proportionate concerns:
 
@@ -55,16 +96,42 @@ Cover proportionate concerns:
 - migration, feature flag, rollout, rollback, and cleanup; and
 - unresolved risks with an owner and evidence-producing next step.
 
+Read `.agents/skills/testing-craft/references/test-strategy.md` before
+deciding the size/scope mix and which larger tests earn their cost for the
+bullet above, and run its self-check
+(`references/test-strategy.md#5-self-check-before-accepting-a-strategy` in
+that skill) against the design's Test strategy section.
+
 Prefer a thin end-to-end path that can be tested early.
 
-## 5. Review and accept
+## 6. Write for the reviewers, not for yourself
+
+The design's readers are the named reviewers and the accountable owner making
+an accept/reject decision -- not another agent operating under a token
+budget. Do not carry this repository's own dense, agent-facing house style
+into a document a human must read and approve.
+
+Read `.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising any prose, and apply it -- do not
+treat it as optional background. Run its self-check
+(`references/writing-style.md#11-self-check-before-saving` in that skill)
+against your draft before moving to step 7.
+
+## 7. Review and accept
+
+Before saving, confirm step 2's shape decision still holds: if drafting
+pulled in a second independent subsystem, or the whole document turned out
+to be one coherent scope after all, split or merge now rather than saving
+something the shape rule would have rejected.
 
 Save product designs under `docs/codev/design/` or feature-local designs under
 `docs/codev/features/<slug>/design.md`, following repository conventions. Name
 an owner and required domain reviewers. Keep open questions visible.
 
 Mark the design `Accepted` only after material decisions are resolved and the
-human confirms it is safe to plan against. Git history records revisions.
+human confirms it is safe to plan against. For a child design, this means
+only that child's own decisions; the parent stays `Draft` until every child
+it names as blocking is `Accepted`. Git history records revisions.
 Implementation discoveries may update the design; explain affected work rather
 than invalidating unrelated plans automatically.
 

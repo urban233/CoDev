@@ -13,6 +13,50 @@ from codev_workflow.task import CheckResult
 
 
 class CliTests(unittest.TestCase):
+    def test_open_pr_uses_template_only_for_automatic_bodies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            body_file = target / "body.md"
+            body_file.write_text("from file", encoding="utf-8")
+            cases = (
+                ([], "generated", True),
+                (["--body", "literal"], "literal", False),
+                (["--body-file", str(body_file)], "from file", False),
+            )
+            with (
+                patch(
+                    "codev_workflow.cli.task_module.pr_description",
+                    return_value="generated",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.open_pr",
+                    return_value="https://github.com/o/r/pull/1",
+                ) as open_pr,
+            ):
+                for extra_args, expected_body, expected_template in cases:
+                    with self.subTest(extra_args=extra_args):
+                        with redirect_stdout(StringIO()):
+                            result = main(
+                                [
+                                    "git",
+                                    "open-pr",
+                                    "--id",
+                                    "item-1",
+                                    "--title",
+                                    "title",
+                                    "--target",
+                                    str(target),
+                                    *extra_args,
+                                ]
+                            )
+                        self.assertEqual(0, result)
+                        self.assertEqual(expected_body, open_pr.call_args.args[2])
+                        self.assertEqual(
+                            expected_template,
+                            open_pr.call_args.kwargs["use_template"],
+                        )
+                        open_pr.reset_mock()
+
     def test_init_check_diff_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

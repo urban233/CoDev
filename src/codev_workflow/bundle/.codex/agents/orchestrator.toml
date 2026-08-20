@@ -101,9 +101,9 @@ exact resulting head, without any inner-loop round recorded.
    exit code: on `ok_continue`, route findings back to the builder and repeat
    independent review; on `ok_ready_for_pr`, push the branch with `codev
    git push --id <task-id>` and open a draft pull request with
-   `codev git open-pr --id <task-id> --title <title>` -- never pass
-   `--body`, since omitting it generates the PR description from the work
-   item's own recorded evidence and coverage instead of hand-composed prose
+    `codev git open-pr --id <task-id> --title <title>` -- never pass
+    `--body`, since omitting it renders the work item's recorded evidence and
+    coverage into the repository's PR template
    (automatic because opening a pull request is fully reversible, unlike
    merge -- mechanical style and documentation issues were already
    resolved at step 7, before this round was ever recorded, so nothing
