@@ -10,7 +10,7 @@ logic). It is the only place in this suite that needs a real, running
 Docker; Docker support is explicitly opt-in, deferred-risk infrastructure
 (ADR-0027), not a hard dependency of CoDev or of this test suite, so every
 test here is skipped outright -- never failed -- when Docker isn't
-available or isn't actually running where these tests execute.
+available or isn't able to run Linux containers where these execute.
 
 Neither the real skill directory nor the real committed task is ever
 mutated: both are copied into an isolated temporary repository, and only
@@ -89,24 +89,41 @@ print(json.dumps({{"type": "text", "part": {{"text": "Wrote audit-plan.json."}}}
 
 
 def _docker_available() -> bool:
+    """True only when a *Linux* container daemon is reachable.
+
+    A Windows-container daemon (the default on windows-latest CI runners)
+    answers `docker version` happily yet cannot pull or build Linux base
+    images at all, so the server version alone is not enough.
+    """
     if shutil.which("docker") is None:
         return False
     try:
-        result = subprocess.run(
+        version = subprocess.run(
             ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        ostype = subprocess.run(
+            ["docker", "info", "--format", "{{.OSType}}"],
             capture_output=True,
             text=True,
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
-    return result.returncode == 0
+    return (
+        version.returncode == 0
+        and ostype.returncode == 0
+        and ostype.stdout.strip() == "linux"
+    )
 
 
 @unittest.skipUnless(
     _docker_available(),
-    "real Docker not available/running -- Docker sandbox is opt-in "
-    "infrastructure (ADR-0027), not a hard test dependency",
+    "real Docker with Linux container support not available/running -- "
+    "Docker sandbox is opt-in infrastructure (ADR-0027), not a hard test "
+    "dependency",
 )
 class DockerBenchmarkRealSkillTests(unittest.TestCase):
     """`codev eval benchmark run --sandbox docker`, driven through the real
