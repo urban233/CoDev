@@ -185,8 +185,20 @@ def _docker_precondition(extra_flags: list[str]) -> None:
 
 
 def available() -> str:
-    """Resolve the ``skillevaluator`` executable, or raise EvaluationError."""
+    """Resolve the ``skillevaluator`` executable, or raise EvaluationError.
+
+    Falls back to a plain file-existence check when ``shutil.which`` finds
+    nothing -- the same fallback ``evaluate()`` already uses for
+    ``opencode``/``git``. This matters on Windows: Python 3.12 tightened
+    ``shutil.which``'s extension matching, so an explicit path whose
+    extension isn't in ``PATHEXT`` (e.g. a `.py` script, as this project's
+    own fake-executable test stubs are) is no longer resolved purely via
+    ``shutil.which`` there, even though the file genuinely exists and is
+    exactly what the caller asked to run.
+    """
     resolved = shutil.which(EXECUTABLE)
+    if resolved is None and Path(EXECUTABLE).is_file():
+        resolved = str(Path(EXECUTABLE).resolve())
     if resolved is None:
         raise EvaluationError(
             f"skillevaluator not found on PATH. Install: {INSTALL_HINT}"
