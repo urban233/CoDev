@@ -56,7 +56,9 @@ def _write_lock(target: Path, managed_paths: list[str]) -> None:
 def _write_pr_template(target: Path) -> None:
     template = target / git_ops.PR_TEMPLATE_PATH
     template.parent.mkdir(parents=True, exist_ok=True)
-    template.write_text(_BUNDLE_PR_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
+    template.write_text(
+        _BUNDLE_PR_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8"
+    )
 
 
 class BranchAndCommitTests(unittest.TestCase):
@@ -405,7 +407,9 @@ class OpenPrTests(unittest.TestCase):
             template.write_text("## Summary\n", encoding="utf-8")
             with (
                 self.assertWarnsRegex(UserWarning, "not CoDev-compatible"),
-                patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()) as run_gh,
+                patch.object(
+                    git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+                ) as run_gh,
             ):
                 git_ops.open_pr(
                     "item-1",

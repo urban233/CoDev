@@ -339,9 +339,7 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
         return _with_closes_line(generated, description.get("link_ref"), target=target)
 
     template = template_path.read_text(encoding="utf-8")
-    markers = {
-        marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS
-    }
+    markers = {marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS}
     missing = [marker for marker, token in markers.items() if token not in template]
     if missing:
         warnings.warn(
@@ -361,7 +359,9 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
         "summary": summary,
         "validation": validation,
         "changed-files": ", ".join(changed) if changed else "none recorded",
-        "review": f"Latest task review: {description['latest_decision'] or 'in progress'}.",
+        "review": (
+            f"Latest task review: {description['latest_decision'] or 'in progress'}."
+        ),
         "tracking": generated_without_trailing_newline.rsplit("\n\n", 1)[-1],
         "closes": f"Closes #{issue_number}" if issue_number else "",
     }

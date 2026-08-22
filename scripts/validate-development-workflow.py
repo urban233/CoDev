@@ -102,9 +102,13 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
 
     text = skill_file.read_text(encoding="utf-8")
     metadata = parse_frontmatter(text, skill_file, errors)
-    if set(metadata) != {"name", "description"}:
+    allowed_fields = {"name", "description", "license"}
+    required_present = {"name", "description"} <= set(metadata)
+    only_allowed = set(metadata) <= allowed_fields
+    if not required_present or not only_allowed:
         errors.append(
-            f"{skill_file}: frontmatter must contain only name and description"
+            f"{skill_file}: frontmatter must contain name and description, "
+            f"plus only {sorted(allowed_fields - {'name', 'description'})}"
         )
     if metadata.get("name") != name:
         errors.append(f"{skill_file}: name must match directory {name!r}")

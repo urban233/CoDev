@@ -54,6 +54,7 @@ codev_workflow = [
   "bundle/AGENTS.md",
   "bundle/.codev/for-ai/*.md",
   "bundle/.agents/skills/*/SKILL.md",
+  "bundle/.agents/skills/*/skill-card.md",
   "bundle/.agents/skills/*/agents/*.yaml",
   "bundle/.agents/skills/*/assets/*",
   "bundle/.agents/skills/*/references/*",

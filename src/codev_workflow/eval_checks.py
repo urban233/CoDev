@@ -110,9 +110,7 @@ def changed_paths_since_seed(*, ignore: Sequence[str] = ()) -> list[str]:
         timeout=30,
     )
     untracked = {
-        line[3:].strip()
-        for line in status.stdout.splitlines()
-        if line.startswith("??")
+        line[3:].strip() for line in status.stdout.splitlines() if line.startswith("??")
     }
 
     return sorted((tracked_changed | untracked) - set(ignore))

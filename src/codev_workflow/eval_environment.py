@@ -80,7 +80,8 @@ class WorktreeEnvironment:
             if run.code != 0:
                 raise EvaluationError(f"git seed phase failed: {run.stderr}")
         run = git_run(
-            self._git, ["worktree", "add", "--detach", str(self._worktree), "HEAD"],
+            self._git,
+            ["worktree", "add", "--detach", str(self._worktree), "HEAD"],
             self._seed,
         )
         if run.code != 0:
@@ -141,9 +142,7 @@ class DockerEnvironment:
         already follows (e.g. `--dir <cwd>`), so no argv-specific knowledge
         of OpenCode's flags is needed here.
         """
-        remapped = [
-            _MOUNT_POINT if part == str(cwd) else part for part in argv
-        ]
+        remapped = [_MOUNT_POINT if part == str(cwd) else part for part in argv]
         docker_argv = [
             self._docker,
             "run",

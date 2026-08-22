@@ -23,7 +23,7 @@ class CliTests(unittest.TestCase):
             target = Path(directory)
             body_file = target / "body.md"
             body_file.write_text("from file", encoding="utf-8")
-            cases = (
+            cases: tuple[tuple[list[str], str, bool], ...] = (
                 ([], "generated", True),
                 (["--body", "literal"], "literal", False),
                 (["--body-file", str(body_file)], "from file", False),
