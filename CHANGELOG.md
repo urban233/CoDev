@@ -5,6 +5,82 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-22
+
+### Added
+- `codev eval nvidia <verb>`, a second, independent evaluation engine
+  wrapping the external NVIDIA SkillEvaluator CLI against a skill directory
+  itself -- Tier 1 static/security checks, Tier 2 semantic dedup, and Tier 3
+  live agent evaluation. A thin, credential-explicit subprocess wrapper
+  sharing this project's existing subprocess execution, environment
+  isolation, durable publication, and redaction primitives, rather than one
+  shared behavioral interface across two engines with different units of
+  evaluation (ADR-0026). Documented in
+  `docs/features/nvidia-skill-evaluator/{brief,design,README,how-to,
+  setup-guide,walkthrough-audit-google-python-style}.md`.
+- An opt-in Docker sandbox for the native skill-evaluation harness: a task
+  can declare `"environment": {"backend": "docker", "image": "..."}` in its
+  `task.json`, then `--sandbox docker` on either `codev eval task run` or
+  `codev eval benchmark run` runs the actor inside that container instead of
+  the host worktree. CoDev never builds, pulls, or ships the image itself
+  (ADR-0027).
+- A declarative `checks.json` alternative to hand-written verifier scripts
+  (`eval_checks.py`): four built-in check types (`json_field_equals`,
+  `finding_matches`, `files_unchanged_except`, `command_succeeds`) plus
+  shared helpers (`load_structured_output`, `finding_matches`,
+  `changed_paths_since_seed`, `require`) importable from a custom
+  `verifier.json` script too.
+- `codev eval doctor` (zero-cost readiness check for `git`/`opencode`) and
+  `codev eval report <output-dir>` (plain-text rendering of a trial's or
+  benchmark's output directory).
+- `--agent <path>` on both `codev eval task run` and `codev eval benchmark
+  run`: override the resolved OpenCode executable with a fake-agent stub
+  script for a zero-cost dry run of verifier/checks logic before spending
+  real model budget.
+- A packaged eval trace: an unrestricted `codev eval benchmark run <skill>`
+  now writes `.agents/skills/<skill>/evals/benchmark.json` and a Markdown
+  rendering at `evals/BENCHMARK.md` into the skill's own directory,
+  mirroring NVIDIA SkillEvaluator's Recommended Artifact Set for a skill
+  package (ADR-0028). `codev eval show <skill>` reads it back as text.
+  `--no-package` opts out; a `--category`-restricted run never packages,
+  since a partial run shouldn't silently claim full coverage.
+- `skill-card.md` for every bundled skill (Description, Owner, License/Terms
+  of Use, Use Case, Deployment Geography, Requirements/Dependencies, Known
+  Risks and Mitigations, References, Skill Output, Skill Version, Ethical
+  Considerations) and a `license` frontmatter field on every bundled
+  `SKILL.md`, adopting the rest of NVIDIA's Recommended Artifact Set that
+  ADR-0028 had deferred (ADR-0029). A bundled
+  `docs/codev/onboarding/skill-card.template.md` is the copy-this-file
+  starting point for a new skill.
+- `docs/features/skill-eval/how-to-write-a-task.md`: a start-to-finish,
+  junior-developer-facing tutorial for writing and testing a new eval task,
+  built around one real worked example, including a zero-cost fake-agent
+  testing workflow and the packaged-trace/`eval show` step.
+- `tests/test_eval_artifact_set.py` and `tests/test_eval_docker_benchmark.py`:
+  integration tests against the real, bundled `audit-google-python-style`
+  skill and its real `audit-google-python-style-demo` task, copied into an
+  isolated temporary repository so the real bundle is never mutated. The
+  latter builds and runs an actual local Docker image/container, skipped
+  gracefully (never failed) when Docker isn't available.
+
+### Changed
+- The native skill-evaluation harness's vocabulary now matches the field's
+  standard terms: fixture -> task, snapshot -> benchmark, `--without-skill`
+  -> `--baseline`, all scoped under `codev eval` so nothing collides with
+  `codev task`'s own work-item tracker.
+- `audit-google-python-style-demo`'s rubric criterion R2 was rewritten to
+  match its own flat JSON output schema (a specific `category` and an
+  actionable `summary` per finding) instead of asking for a grouped or
+  sectioned plan the schema has no field to express.
+
+### Removed
+- `codev fixture`, `codev run`, `codev eval snapshot run`, and
+  `.codev/fixtures/` -- removed outright in favor of `codev eval task
+  create/run`, `codev eval benchmark run`, and `.codev/eval/tasks/`. CoDev is
+  Alpha, so this is a clean break, not an aliased migration; every
+  previously-committed fixture was migrated to the new corpus in the same
+  change.
+
 ### Fixed
 - `codev git open-pr` and `codev git mark-ready` now render CoDev task
   evidence into the installed `.github/pull_request_template.md`, so draft
@@ -14,6 +90,10 @@ Semantic Versioning.
   `Closes #N` linkage. Repositories with a missing or incompatible template
   retain the previous generated-body behavior with a warning; explicit
   `--body` and `--body-file` inputs still bypass automatic rendering.
+- `codev eval show` and `codev eval benchmark run` no longer mangle a skill
+  argument pasted as a path (e.g. `.agents/skills/<name>`, copied while
+  browsing) into a nonsense doubled path -- both now strip that prefix and
+  accept the bare skill name either way.
 
 ## [0.2.4] - 2026-08-19
 

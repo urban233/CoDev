@@ -18,6 +18,6 @@
 
 **Skill Output:** An implemented, tested code change prepared for independent review (and, once a task exists, a pull request).
 
-**Skill Version:** Versioned with the installed CoDev release (currently 0.2.4).
+**Skill Version:** Versioned with the installed CoDev release (currently 0.3.0).
 
 **Ethical Considerations:** Human retains authority for acceptance, merge, deployment, and publication (see `AGENTS.md`'s Human-AI Development Policy); this skill does not act autonomously beyond that boundary.

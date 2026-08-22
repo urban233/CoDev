@@ -18,6 +18,6 @@
 
 **Skill Output:** An independent review: findings by dimension, and a verdict.
 
-**Skill Version:** Versioned with the installed CoDev release (currently 0.2.4).
+**Skill Version:** Versioned with the installed CoDev release (currently 0.3.0).
 
 **Ethical Considerations:** Human retains authority for acceptance, merge, deployment, and publication (see `AGENTS.md`'s Human-AI Development Policy); this skill does not act autonomously beyond that boundary.
