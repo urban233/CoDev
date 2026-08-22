@@ -32,6 +32,27 @@ It covers reader-first framing, document opening and structure, headings,
 paragraphs, lists and tables, sentence-level language, terminology,
 global/inclusive writing, formatting, and diagrams, plus a self-check.
 
+## Run the structural check
+
+Before or alongside the manual pass, run `scripts/check_structure.py
+<files...>` (or `--root <dir>` to check every `*.md` file directly in one
+directory) against the document or document set. It catches what a
+read-through is prone to miss: a broken link or anchor, a heading with no
+content before its first subheading, a table column that repeats nearly
+the same value in every row, a table wide enough that its cells are
+carrying prose instead of comparable values, and a paragraph that closely
+matches one in a different file.
+
+Treat `violation`-level findings as mechanically certain -- fix them.
+Treat `review`-level findings, mainly the cross-file duplicate check, as
+needing judgment before acting: a short, deliberately worded pointer
+sentence repeated across sibling documents (`See the parent design's
+Goals and non-goals...`) is the correct de-duplication pattern, not a
+defect, even though its wording is near-identical to a sibling's. Check
+what each match is actually doing -- restating a fact, or pointing at
+one -- before touching it. The script cannot make that distinction; only
+its `violation`-level findings can be trusted without a second look.
+
 ## When invoked directly on an existing document
 
 1. Read the whole document. Identify its actual audience, scope, and the

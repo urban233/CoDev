@@ -8,7 +8,12 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from codev_workflow.cli import _apply_deprecated_aliases, _format_snapshot_report, main
+from codev_workflow.cli import (
+    _apply_deprecated_aliases,
+    _format_benchmark_report,
+    _skill_name,
+    main,
+)
 from codev_workflow.task import CheckResult
 
 
@@ -1629,14 +1634,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("upgrade", output.getvalue().lower())
 
     def test_deprecated_aliases_rewrite_to_new_command_forms(self) -> None:
-        self.assertEqual(
-            ["eval", "fixture", "create", "name", "--target", "T"],
-            _apply_deprecated_aliases(["fixture", "create", "name", "--target", "T"]),
-        )
-        self.assertEqual(
-            ["eval", "run", "name", "--target", "T"],
-            _apply_deprecated_aliases(["eval", "name", "--target", "T"]),
-        )
+        # CoDev is Alpha: eval's old command forms (fixture/run/snapshot) were
+        # removed outright rather than aliased. Only the unrelated
+        # check/doctor top-level aliases remain.
         self.assertEqual(
             ["status", "--target", "T"],
             _apply_deprecated_aliases(["check", "--target", "T"]),
@@ -1648,63 +1648,113 @@ class CliTests(unittest.TestCase):
 
     def test_new_command_forms_pass_through_unchanged(self) -> None:
         self.assertEqual(
-            ["eval", "run", "name"], _apply_deprecated_aliases(["eval", "run", "name"])
+            ["eval", "task", "run", "name"],
+            _apply_deprecated_aliases(["eval", "task", "run", "name"]),
         )
         self.assertEqual(
-            ["eval", "fixture", "create", "name"],
-            _apply_deprecated_aliases(["eval", "fixture", "create", "name"]),
+            ["eval", "task", "create", "name"],
+            _apply_deprecated_aliases(["eval", "task", "create", "name"]),
         )
         self.assertEqual(["status"], _apply_deprecated_aliases(["status"]))
         self.assertEqual([], _apply_deprecated_aliases([]))
 
-    def test_eval_run_without_skill_flag_maps_to_with_skill_false(self) -> None:
+    def test_eval_task_run_baseline_flag_maps_to_with_skill_false(self) -> None:
         with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
             code = main(
                 [
                     "eval",
+                    "task",
                     "run",
                     "name",
                     "--target",
                     "T",
                     "--output",
                     "O",
-                    "--without-skill",
+                    "--baseline",
                 ]
             )
         self.assertEqual(0, code)
         self.assertFalse(evaluate_mock.call_args.kwargs["with_skill"])
 
-    def test_eval_run_defaults_to_with_skill(self) -> None:
+    def test_eval_task_run_defaults_to_with_skill(self) -> None:
         with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
-            main(["eval", "run", "name", "--target", "T", "--output", "O"])
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertTrue(evaluate_mock.call_args.kwargs["with_skill"])
 
-    def test_eval_snapshot_run_prints_category_matrix(self) -> None:
+    def test_eval_task_run_agent_flag_overrides_opencode_executable(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(
+                [
+                    "eval",
+                    "task",
+                    "run",
+                    "name",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--agent",
+                    "/path/to/fake-agent.py",
+                ]
+            )
+        self.assertEqual(
+            "/path/to/fake-agent.py", evaluate_mock.call_args.kwargs["opencode"]
+        )
+
+    def test_eval_task_run_without_agent_flag_omits_opencode_kwarg(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
+        self.assertNotIn("opencode", evaluate_mock.call_args.kwargs)
+
+    def test_eval_task_run_defaults_sandbox_to_worktree(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
+        self.assertEqual("worktree", evaluate_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_task_run_sandbox_docker_flag_is_forwarded(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(
+                [
+                    "eval",
+                    "task",
+                    "run",
+                    "name",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--sandbox",
+                    "docker",
+                ]
+            )
+        self.assertEqual("docker", evaluate_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_benchmark_run_prints_category_matrix(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 5,
             "categories": {
                 "security": {
                     "with_skill_percentage": 100.0,
-                    "without_skill_percentage": 50.0,
+                    "baseline_percentage": 50.0,
                     "delta": 50.0,
                 }
             },
             "overall": {
                 "with_skill_percentage": 100.0,
-                "without_skill_percentage": 50.0,
+                "baseline_percentage": 50.0,
                 "delta": 50.0,
             },
         }
         with patch(
-            "codev_workflow.cli.run_snapshot", return_value=report
-        ) as snapshot_mock:
+            "codev_workflow.cli.run_benchmark", return_value=report
+        ) as benchmark_mock:
             output = StringIO()
             with redirect_stdout(output):
                 code = main(
                     [
                         "eval",
-                        "snapshot",
+                        "benchmark",
                         "run",
                         "review-change",
                         "--target",
@@ -1716,8 +1766,8 @@ class CliTests(unittest.TestCase):
                     ]
                 )
         self.assertEqual(0, code)
-        snapshot_mock.assert_called_once()
-        self.assertEqual(5, snapshot_mock.call_args.kwargs["repetitions"])
+        benchmark_mock.assert_called_once()
+        self.assertEqual(5, benchmark_mock.call_args.kwargs["repetitions"])
         printed = output.getvalue()
         self.assertIn("Skill: review-change (5 repetitions)", printed)
         self.assertIn("security", printed)
@@ -1725,27 +1775,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("+50.0pp", printed)
         self.assertIn("Full report:", printed)
 
-    def test_eval_snapshot_run_forwards_repeated_category_flags(self) -> None:
+    def test_eval_benchmark_run_forwards_repeated_category_flags(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 1,
             "categories": {},
             "overall": {
                 "with_skill_percentage": 0.0,
-                "without_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
                 "delta": 0.0,
             },
         }
         with (
             patch(
-                "codev_workflow.cli.run_snapshot", return_value=report
-            ) as snapshot_mock,
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
             redirect_stdout(StringIO()),
         ):
             main(
                 [
                     "eval",
-                    "snapshot",
+                    "benchmark",
                     "run",
                     "review-change",
                     "--target",
@@ -1760,30 +1810,30 @@ class CliTests(unittest.TestCase):
             )
         self.assertEqual(
             ["security", "correctness"],
-            snapshot_mock.call_args.kwargs["only_categories"],
+            benchmark_mock.call_args.kwargs["only_categories"],
         )
 
-    def test_eval_snapshot_run_defaults_categories_to_none(self) -> None:
+    def test_eval_benchmark_run_defaults_categories_to_none(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 1,
             "categories": {},
             "overall": {
                 "with_skill_percentage": 0.0,
-                "without_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
                 "delta": 0.0,
             },
         }
         with (
             patch(
-                "codev_workflow.cli.run_snapshot", return_value=report
-            ) as snapshot_mock,
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
             redirect_stdout(StringIO()),
         ):
             main(
                 [
                     "eval",
-                    "snapshot",
+                    "benchmark",
                     "run",
                     "review-change",
                     "--target",
@@ -1792,31 +1842,392 @@ class CliTests(unittest.TestCase):
                     "O",
                 ]
             )
-        self.assertIsNone(snapshot_mock.call_args.kwargs["only_categories"])
+        self.assertIsNone(benchmark_mock.call_args.kwargs["only_categories"])
 
-    def test_format_snapshot_report_aligns_columns_and_sorts_categories(self) -> None:
+    def test_eval_benchmark_run_packages_by_default(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertTrue(benchmark_mock.call_args.kwargs["package"])
+
+    def test_eval_benchmark_run_no_package_flag_forwards_false(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--no-package",
+                ]
+            )
+        self.assertFalse(benchmark_mock.call_args.kwargs["package"])
+
+    def test_eval_benchmark_run_agent_flag_overrides_opencode(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--agent",
+                    "./fake-agent.py",
+                ]
+            )
+        self.assertEqual("./fake-agent.py", benchmark_mock.call_args.kwargs["opencode"])
+
+    def test_eval_benchmark_run_omits_opencode_kwarg_without_agent_flag(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertNotIn("opencode", benchmark_mock.call_args.kwargs)
+
+    def test_eval_benchmark_run_defaults_sandbox_to_worktree(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertEqual("worktree", benchmark_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_benchmark_run_sandbox_flag_forwards_docker(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--sandbox",
+                    "docker",
+                ]
+            )
+        self.assertEqual("docker", benchmark_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_show_prints_packaged_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evals_dir = root / ".agents" / "skills" / "review-change" / "evals"
+            evals_dir.mkdir(parents=True)
+            trace = {
+                "skill": "review-change",
+                "repetitions": 3,
+                "generated_at": "2026-08-22T00:00:00+00:00",
+                "categories": {
+                    "security": {
+                        "with_skill_percentage": 100.0,
+                        "baseline_percentage": 50.0,
+                        "delta": 50.0,
+                    }
+                },
+                "overall": {
+                    "with_skill_percentage": 100.0,
+                    "baseline_percentage": 50.0,
+                    "delta": 50.0,
+                },
+            }
+            (evals_dir / "benchmark.json").write_text(json.dumps(trace))
+
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(["eval", "show", "review-change", "--target", str(root)])
+        self.assertEqual(0, code)
+        printed = output.getvalue()
+        self.assertIn("Skill: review-change (3 repetitions)", printed)
+        self.assertIn("security", printed)
+        self.assertIn("Generated: 2026-08-22T00:00:00+00:00", printed)
+        self.assertIn("Trace file:", printed)
+
+    def test_eval_show_reports_missing_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = StringIO()
+            errors = StringIO()
+            with redirect_stdout(output), redirect_stderr(errors):
+                code = main(["eval", "show", "never-evaluated", "--target", str(root)])
+        self.assertEqual(1, code)
+        self.assertIn("no eval trace found", errors.getvalue())
+        self.assertIn("codev eval benchmark run never-evaluated", errors.getvalue())
+
+    def test_skill_name_strips_a_pasted_agents_skills_path(self) -> None:
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(".agents/skills/audit-google-python-style"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(".agents/skills/audit-google-python-style/"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name("./.agents/skills/audit-google-python-style"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(
+                "/Users/rootm/github_repos/CoDev/.agents/skills/"
+                "audit-google-python-style"
+            ),
+        )
+
+    def test_skill_name_leaves_a_bare_name_unchanged(self) -> None:
+        self.assertEqual("review-change", _skill_name("review-change"))
+
+    def test_eval_show_accepts_a_pasted_agents_skills_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evals_dir = root / ".agents" / "skills" / "review-change" / "evals"
+            evals_dir.mkdir(parents=True)
+            trace = {
+                "skill": "review-change",
+                "repetitions": 1,
+                "categories": {},
+                "overall": {
+                    "with_skill_percentage": 100.0,
+                    "baseline_percentage": 0.0,
+                    "delta": 100.0,
+                },
+            }
+            (evals_dir / "benchmark.json").write_text(json.dumps(trace))
+
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(
+                    [
+                        "eval",
+                        "show",
+                        ".agents/skills/review-change",
+                        "--target",
+                        str(root),
+                    ]
+                )
+        self.assertEqual(0, code)
+        self.assertIn("Skill: review-change", output.getvalue())
+
+    def test_eval_nvidia_validate_forwards_target_output_and_extra(self) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=True
+            ) as verb_mock,
+            redirect_stdout(StringIO()) as output,
+        ):
+            code = main(
+                [
+                    "eval",
+                    "nvidia",
+                    "validate",
+                    "SKILL",
+                    "--output",
+                    "O",
+                    "--extra=--llm",
+                ]
+            )
+        self.assertEqual(0, code)
+        verb_mock.assert_called_once()
+        args, kwargs = verb_mock.call_args
+        self.assertEqual("validate", args[0])
+        self.assertEqual(Path("SKILL"), kwargs["target"])
+        self.assertEqual(Path("O"), kwargs["output"])
+        self.assertEqual(["--llm"], kwargs["extra_flags"])
+        self.assertEqual(900, kwargs["timeout_seconds"])
+        self.assertIn("Evaluation passed: O", output.getvalue())
+
+    def test_eval_nvidia_verb_without_target_requirement_omits_skill_path(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=True
+            ) as verb_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(["eval", "nvidia", "models", "--output", "O"])
+        self.assertIsNone(verb_mock.call_args.kwargs["target"])
+
+    def test_eval_nvidia_tier3_evaluate_is_a_nested_subcommand(self) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=False
+            ) as verb_mock,
+            redirect_stdout(StringIO()),
+        ):
+            code = main(
+                [
+                    "eval",
+                    "nvidia",
+                    "tier3",
+                    "evaluate",
+                    "SKILL",
+                    "--output",
+                    "O",
+                    "--timeout",
+                    "60",
+                ]
+            )
+        self.assertEqual(1, code)
+        self.assertEqual("tier3-evaluate", verb_mock.call_args.args[0])
+        self.assertEqual(60, verb_mock.call_args.kwargs["timeout_seconds"])
+
+    def test_eval_nvidia_is_not_rewritten_by_deprecated_alias_handling(self) -> None:
+        self.assertEqual(
+            ["eval", "nvidia", "validate", "SKILL"],
+            _apply_deprecated_aliases(["eval", "nvidia", "validate", "SKILL"]),
+        )
+
+    def test_format_benchmark_report_aligns_columns_and_sorts_categories(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 3,
             "categories": {
                 "security": {
                     "with_skill_percentage": 100.0,
-                    "without_skill_percentage": 66.7,
+                    "baseline_percentage": 66.7,
                     "delta": 33.3,
                 },
                 "architecture_scope": {
                     "with_skill_percentage": 50.0,
-                    "without_skill_percentage": 50.0,
+                    "baseline_percentage": 50.0,
                     "delta": 0.0,
                 },
             },
             "overall": {
                 "with_skill_percentage": 75.0,
-                "without_skill_percentage": 58.4,
+                "baseline_percentage": 58.4,
                 "delta": 16.7,
             },
         }
-        table = _format_snapshot_report(report)
+        table = _format_benchmark_report(report)
         lines = table.splitlines()
         # Category rows are sorted alphabetically; Overall always comes last,
         # set off by its own separator line, regardless of category order.

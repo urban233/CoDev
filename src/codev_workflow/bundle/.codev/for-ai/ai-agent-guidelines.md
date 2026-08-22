@@ -64,7 +64,7 @@ automatic continuation.
 | Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |
 | Greenfield product or whole-product redesign | `specify-project` — one continuous, recommendation-led interview producing a single canonical `SPECIFICATION.md`; never duplicate its facts into a separate brief and design |
 | Approaching production exposure | `launch-product` |
-| Adding or designing an evaluation fixture for an installed skill | `design-skill-eval` — scaffolds and designs one fixture under `.codev/fixtures/`; never for running an existing snapshot or for building the skill itself |
+| Adding or designing an evaluation task for an installed skill | `design-skill-eval` — scaffolds and designs one task under `.codev/eval/tasks/`; never for running an existing benchmark or for building the skill itself |
 
 **Risk overrides size.** Permissions, security, privacy, public APIs,
 persistent data, billing, compliance, destructive operations, or hard-to-

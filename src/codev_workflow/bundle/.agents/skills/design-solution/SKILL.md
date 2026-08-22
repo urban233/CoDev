@@ -124,6 +124,47 @@ pulled in a second independent subsystem, or the whole document turned out
 to be one coherent scope after all, split or merge now rather than saving
 something the shape rule would have rejected.
 
+When step 2 produced a parent and children, also run this audit before
+saving. A single-document read-through does not catch these -- splitting
+creates failure modes that only exist across documents. Start with
+`python3 .agents/skills/technical-writing-style/scripts/check_structure.py
+<parent.md> <child1.md> ...` -- it mechanically catches a broken
+cross-document link or anchor, a heading with no content before its first
+subheading, and a redundant table column in every file, not only the one
+where the defect was first noticed. Fix every `violation`-level finding
+outright, and use judgment on `review`-level findings (see that skill's
+own guidance on its cross-file duplicate check before acting on one).
+Then still work through the rest of this list by hand -- the script has no
+way to know whether two similar sentences assert the same fact or merely
+share a template pattern, which of two overlapping claims is the one to
+keep, or whether a bullet's meaning survived being split across files:
+
+- Diff every child's opening paragraph against the parent's Summary and
+  Goals. If the same claim appears in both, delete one side and link to
+  the other instead of restating it -- including a claim the child
+  attributes back to the parent in passing; attribution is not an
+  exemption from the no-duplication rule.
+- Re-check every acronym or term's first use independently in each
+  resulting file. A definition that now lives only in a sibling file does
+  not satisfy `references/writing-style.md`'s first-use rule for this
+  file's own reviewer.
+- Re-check heading-to-subheading spacing in every resulting file, not only
+  the one it was first fixed in -- the same structural fix does not
+  propagate to siblings on its own.
+- Re-run the redundant-column check against every table in every
+  resulting file, including a table that looks nothing like the one that
+  originally prompted the check -- the same shape usually hides the same
+  defect.
+- Count goals, non-goals, components, alternatives, and open-question
+  bullets before and after the split at the clause level, not the bullet
+  level. A clause dropped from inside a surviving bullet is invisible to
+  a bullet count, and a compound bullet split across two children is
+  exactly where this happens.
+- Apply the sentence-density rule to prose written during the split itself
+  -- new summaries, new transition sentences -- with the same rigor as
+  prose carried over from the original. New prose is not exempt because
+  it is new.
+
 Save product designs under `docs/codev/design/` or feature-local designs under
 `docs/codev/features/<slug>/design.md`, following repository conventions. Name
 an owner and required domain reviewers. Keep open questions visible.

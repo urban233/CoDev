@@ -19,7 +19,7 @@ their own product in a repository that has CoDev installed. Every command,
 skill, and agent below exists to serve that one relationship — a human
 directing AI-assisted work in their own repository. Where CoDev's own
 repository uses these same capabilities on itself (running its own eval
-fixtures against its own skills), that is CoDev dogfooding its product, not
+tasks against its own skills), that is CoDev dogfooding its product, not
 a second audience the product is designed for.
 
 ## Terminology
@@ -82,7 +82,8 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | `codeowners init` | Ship (one-time setup) | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
 | `task start/record/check/close/status/log/triage/escalate/escalations` | Build, Review | Read/write one task's round state; read-only w.r.t. product source (ADR-0001). `start --entry {takeover,direct-review}` (ADR-0006) marks whether the item's code is unfinished human work joining the inner loop, or finished human work going straight to the outer loop |
 | `git issue-create/branch/commit/push/open-pr/mark-ready` | Understand (issue-create only), Build, Ship | The only path to mutating the repository or GitHub; `issue-create` alone has no task precondition |
-| `eval fixture create/run` / `eval snapshot run` | Cross-cutting | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode; not limited to CoDev's bundled skills |
+| `eval task create/run` / `eval benchmark run` | Cross-cutting | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode; not limited to CoDev's bundled skills |
+| `eval show <skill>` | Cross-cutting | Render a skill's packaged eval trace (`.agents/skills/<skill>/evals/benchmark.json`), written automatically by an unrestricted `eval benchmark run` (ADR-0028) |
 
 ### Named skills (all manually invoked by name, unless noted)
 
@@ -99,7 +100,7 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | `audit-google-python-style` | Review / pre-Ship | Manual only, by explicit design ("invoke only when the user explicitly requests") |
 | `audit-google-typescript-style` | Review / pre-Ship | Manual only, by explicit design |
 | `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-runner` step 1 |
-| `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval fixture for an existing skill |
+| `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval task for an existing skill |
 | `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-delivery`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
 | `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
 | `launch-product` | Launch | Manual — not referenced by `orchestrator` |

@@ -19,10 +19,12 @@ from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
 from codev_workflow.eval import (
     EvaluationError,
-    create_fixture,
+    create_task,
     evaluate,
-    run_snapshot,
+    run_benchmark,
 )
+from codev_workflow.eval_nvidia import VERBS as _NVIDIA_VERBS
+from codev_workflow.eval_nvidia import run_verb as _run_nvidia_verb
 from codev_workflow.installer import (
     CoDevError,
     _read_lock,
@@ -43,11 +45,25 @@ from codev_workflow.task import (
 
 _AGENT_PLATFORMS = ("antigravity", "codex", "junie", "opencode")
 _AGENT_PLATFORM_CHOICES = ("all", *_AGENT_PLATFORMS)
-_DEPRECATED_EVAL_SUBCOMMANDS = {"run", "fixture", "snapshot"}
 
 
 def _target(value: str) -> Path:
     return Path(value).expanduser()
+
+
+def _skill_name(value: str) -> str:
+    """A skill name never contains a path separator -- but `.agents/skills/`
+    is exactly the path a developer sees when browsing for one, so typing
+    `.agents/skills/<name>` (or a longer path ending in it, with or without
+    a trailing slash) instead of the bare name is a natural mistake. Strip
+    that prefix if present rather than failing (or, worse, silently
+    resolving to a nonsense doubled path like `.agents/skills/.agents/skills/
+    <name>`) further downstream."""
+    marker = ".agents/skills/"
+    index = value.replace("\\", "/").rstrip("/").find(marker)
+    if index == -1:
+        return value
+    return value.replace("\\", "/").rstrip("/")[index + len(marker) :]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -120,49 +136,152 @@ def _parser() -> argparse.ArgumentParser:
     remove.add_argument("--target", type=_target, default=Path.cwd())
     remove.add_argument("--dry-run", action="store_true", help="show the plan only")
 
-    evaluation = commands.add_parser("eval", help="skill-evaluation fixtures and runs")
+    evaluation = commands.add_parser("eval", help="skill-evaluation tasks and runs")
     eval_commands = evaluation.add_subparsers(dest="eval_command", required=True)
 
-    e_fixture = eval_commands.add_parser("fixture", help="manage evaluation fixtures")
-    e_fixture_commands = e_fixture.add_subparsers(
-        dest="eval_fixture_command", required=True
+    e_task = eval_commands.add_parser("task", help="manage evaluation tasks")
+    e_task_commands = e_task.add_subparsers(dest="eval_task_command", required=True)
+    e_task_create = e_task_commands.add_parser(
+        "create", help="create an evaluation task"
     )
-    e_fixture_create = e_fixture_commands.add_parser(
-        "create", help="create an evaluation fixture"
-    )
-    e_fixture_create.add_argument("name")
-    e_fixture_create.add_argument("--target", type=_target, required=True)
-    e_fixture_create.add_argument("--include", action="append", required=True)
+    e_task_create.add_argument("name")
+    e_task_create.add_argument("--target", type=_target, required=True)
+    e_task_create.add_argument("--include", action="append", required=True)
 
-    e_run = eval_commands.add_parser("run", help="evaluate a local fixture")
-    e_run.add_argument("name")
-    e_run.add_argument("--target", type=_target, required=True)
-    e_run.add_argument("--output", type=_target, required=True)
-    e_run.add_argument(
-        "--without-skill",
+    e_task_run = e_task_commands.add_parser("run", help="run a local evaluation task")
+    e_task_run.add_argument("name")
+    e_task_run.add_argument("--target", type=_target, required=True)
+    e_task_run.add_argument("--output", type=_target, required=True)
+    e_task_run.add_argument(
+        "--baseline",
         action="store_true",
-        help="run without staging the fixture's skill into the worktree",
+        help="run the baseline condition -- without staging the task's skill "
+        "into the worktree",
+    )
+    e_task_run.add_argument(
+        "--agent",
+        default=None,
+        help="override the resolved OpenCode executable -- point at a "
+        "fake-agent stub script for a zero-cost dry run of verifier/checks "
+        "logic, instead of a real actor invocation",
+    )
+    e_task_run.add_argument(
+        "--sandbox",
+        choices=("worktree", "docker"),
+        default="worktree",
+        help="where the actor executes; 'docker' requires the task to "
+        "declare an environment block in its task.json (see ADR-0027) -- "
+        "worktree isolation on the host remains the default",
     )
 
-    e_snapshot = eval_commands.add_parser(
-        "snapshot", help="skill performance snapshots (with/without comparisons)"
+    e_benchmark = eval_commands.add_parser(
+        "benchmark", help="skill performance benchmarks (with/without comparisons)"
     )
-    e_snapshot_commands = e_snapshot.add_subparsers(
-        dest="eval_snapshot_command", required=True
+    e_benchmark_commands = e_benchmark.add_subparsers(
+        dest="eval_benchmark_command", required=True
     )
-    e_snapshot_run = e_snapshot_commands.add_parser(
-        "run", help="run every fixture for one skill, with and without it, repeated"
+    e_benchmark_run = e_benchmark_commands.add_parser(
+        "run", help="run every task for one skill, with and without it, repeated"
     )
-    e_snapshot_run.add_argument("skill")
-    e_snapshot_run.add_argument("--target", type=_target, required=True)
-    e_snapshot_run.add_argument("--output", type=_target, required=True)
-    e_snapshot_run.add_argument("--repetitions", type=int, default=3)
-    e_snapshot_run.add_argument(
+    e_benchmark_run.add_argument("skill", type=_skill_name)
+    e_benchmark_run.add_argument("--target", type=_target, required=True)
+    e_benchmark_run.add_argument("--output", type=_target, required=True)
+    e_benchmark_run.add_argument("--repetitions", type=int, default=3)
+    e_benchmark_run.add_argument(
         "--category",
         dest="categories",
         action="append",
         help="restrict the run to this category; repeat to select several",
     )
+    e_benchmark_run.add_argument(
+        "--no-package",
+        dest="package",
+        action="store_false",
+        default=True,
+        help="do not write the skill's own evals/benchmark.json and "
+        "evals/BENCHMARK.md eval trace (an unrestricted run packages by "
+        "default; a --category-restricted run never packages)",
+    )
+    e_benchmark_run.add_argument(
+        "--agent",
+        default=None,
+        help="override the resolved OpenCode executable for every trial in "
+        "this run -- point at a fake-agent stub script for a zero-cost dry "
+        "run of a whole category before spending real model budget, the "
+        "same idea as 'eval task run --agent'",
+    )
+    e_benchmark_run.add_argument(
+        "--sandbox",
+        choices=("worktree", "docker"),
+        default="worktree",
+        help="where each trial's actor executes; 'docker' requires every "
+        "task in this benchmark to declare an environment block in its "
+        "task.json (see ADR-0027) -- worktree isolation on the host remains "
+        "the default, same as 'eval task run --sandbox'",
+    )
+
+    e_doctor = eval_commands.add_parser(
+        "doctor", help="check readiness for running an evaluation task"
+    )
+    e_doctor.add_argument("--target", type=_target, default=Path.cwd())
+
+    e_report = eval_commands.add_parser(
+        "report", help="render a trial's or benchmark's output directory as text"
+    )
+    e_report.add_argument("output", type=_target)
+
+    e_show = eval_commands.add_parser(
+        "show", help="show a packaged skill's eval trace (evals/benchmark.json)"
+    )
+    e_show.add_argument("skill", type=_skill_name)
+    e_show.add_argument("--target", type=_target, default=Path.cwd())
+
+    e_nvidia = eval_commands.add_parser(
+        "nvidia",
+        help="run the external NVIDIA SkillEvaluator against a skill directory",
+    )
+    e_nvidia_commands = e_nvidia.add_subparsers(
+        dest="eval_nvidia_command", required=True
+    )
+    e_nvidia_tier3_commands = None
+    for _nvidia_spec in _NVIDIA_VERBS:
+        if len(_nvidia_spec.argv) == 1:
+            _nvidia_group, _nvidia_dest = e_nvidia_commands, _nvidia_spec.name
+        else:
+            if e_nvidia_tier3_commands is None:
+                e_nvidia_tier3 = e_nvidia_commands.add_parser(
+                    "tier3", help="Tier 3 live-agent expert aliases"
+                )
+                e_nvidia_tier3_commands = e_nvidia_tier3.add_subparsers(
+                    dest="eval_nvidia_tier3_command", required=True
+                )
+            _nvidia_group, _nvidia_dest = e_nvidia_tier3_commands, _nvidia_spec.argv[-1]
+        _nvidia_verb_parser = _nvidia_group.add_parser(
+            _nvidia_dest, help=f"skillevaluator {' '.join(_nvidia_spec.argv)}"
+        )
+        if _nvidia_spec.needs_target:
+            _nvidia_verb_parser.add_argument("skill_path", type=_target)
+        _nvidia_verb_parser.add_argument("--output", type=_target, required=True)
+        _nvidia_verb_parser.add_argument(
+            "--timeout",
+            type=int,
+            default=900,
+            dest="timeout_seconds",
+            help="subprocess timeout in seconds (default: 900)",
+        )
+        _nvidia_verb_parser.add_argument(
+            "--extra",
+            dest="extra",
+            action="append",
+            default=[],
+            metavar="FLAG",
+            help="one additional skillevaluator flag or value, forwarded "
+            "verbatim after CoDev's own flags in the order given; repeat "
+            "for more. Use --extra=VALUE (with '=', not a space) whenever "
+            "VALUE itself starts with '-', e.g. --extra=--env-mode "
+            "--extra=docker",
+        )
+        _nvidia_verb_parser.set_defaults(nvidia_verb=_nvidia_spec.name)
 
     adapter = commands.add_parser("adapter", help="manage platform adapters")
     adapter_commands = adapter.add_subparsers(dest="adapter_command", required=True)
@@ -394,9 +513,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     t_relink.add_argument("--target", type=_target, default=Path.cwd())
 
-    t_status = task_commands.add_parser(
-        "status", help="show one or all open tasks"
-    )
+    t_status = task_commands.add_parser("status", help="show one or all open tasks")
     t_status.add_argument("--id")
     t_status.add_argument("--json", action="store_true")
     t_status.add_argument("--target", type=_target, default=Path.cwd())
@@ -552,14 +669,6 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
     if not argv:
         return argv
     head, rest = argv[0], argv[1:]
-
-    if head == "fixture" and rest and rest[0] == "create":
-        _warn_deprecated("'fixture create'", "'eval fixture create'")
-        return ["eval", "fixture", *rest]
-
-    if head == "eval" and (not rest or rest[0] not in _DEPRECATED_EVAL_SUBCOMMANDS):
-        _warn_deprecated("'eval <name>'", "'eval run <name>'")
-        return ["eval", "run", *rest]
 
     if head == "check":
         _warn_deprecated("'check'", "'status'")
@@ -1081,33 +1190,121 @@ def _run_git_command(args: argparse.Namespace) -> int:
     return 2
 
 
-def _format_snapshot_report(report: dict[str, Any]) -> str:
-    """Render a skill performance snapshot as an aligned category matrix."""
+def _format_benchmark_report(report: dict[str, Any]) -> str:
+    """Render a skill performance benchmark as an aligned category matrix."""
     rows = [(category, data) for category, data in sorted(report["categories"].items())]
     rows.append(("Overall", report["overall"]))
     name_width = max(len("Category"), *(len(name) for name, _ in rows))
 
-    def line(name: str, with_pct: str, without_pct: str, delta: str) -> str:
-        return f"{name:<{name_width}}  {with_pct:>10}  {without_pct:>14}  {delta:>9}"
+    def line(name: str, with_pct: str, baseline_pct: str, delta: str) -> str:
+        return f"{name:<{name_width}}  {with_pct:>10}  {baseline_pct:>10}  {delta:>9}"
 
     lines = [
         f"Skill: {report['skill']} ({report['repetitions']} repetitions)",
         "",
-        line("Category", "With-skill", "Without-skill", "Delta"),
-        "-" * (name_width + 40),
+        line("Category", "With-skill", "Baseline", "Delta"),
+        "-" * (name_width + 36),
     ]
     for name, data in rows:
         if name == "Overall":
-            lines.append("-" * (name_width + 40))
+            lines.append("-" * (name_width + 36))
         lines.append(
             line(
                 name,
                 f"{data['with_skill_percentage']}%",
-                f"{data['without_skill_percentage']}%",
+                f"{data['baseline_percentage']}%",
                 f"{data['delta']:+.1f}pp",
             )
         )
     return "\n".join(lines)
+
+
+def _run_eval_doctor_command(args: argparse.Namespace) -> int:
+    """Fast, zero-cost readiness check before a real trial run."""
+    ready = True
+    print("codev eval doctor")
+    git_path = shutil.which("git")
+    if git_path:
+        print(f"  git       pass  {git_path}")
+    else:
+        print("  git       fail  not found on PATH")
+        ready = False
+    opencode_path = shutil.which("opencode")
+    if opencode_path:
+        print(f"  opencode  pass  {opencode_path}")
+    else:
+        print("  opencode  fail  not found on PATH")
+        ready = False
+    if not ready:
+        print(
+            "codev: not ready -- install the missing tool(s) above before "
+            "running a real task",
+            file=sys.stderr,
+        )
+    return 0 if ready else 1
+
+
+def _run_eval_report_command(args: argparse.Namespace) -> int:
+    """Render a trial's or benchmark's output directory as plain text."""
+    output: Path = args.output
+    benchmark_path = output / "benchmark.json"
+    result_path = output / "result.json"
+    if benchmark_path.is_file():
+        report = json.loads(benchmark_path.read_text(encoding="utf-8"))
+        print(_format_benchmark_report(report))
+        return 0
+    if result_path.is_file():
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        judge = result.get("judge", {})
+        judge_line = judge.get("status", "skipped")
+        if judge.get("verdict"):
+            judge_line = f"{judge_line} ({judge['verdict']})"
+        print(f"Task: {result['task']['name']}")
+        print(f"Outcome: {result['outcome']}")
+        print(f"Actor: {result.get('actor', {}).get('status', 'skipped')}")
+        print(f"Verifier: {result.get('verifier', {}).get('status', 'skipped')}")
+        print(f"Judge: {judge_line}")
+        return 0
+    print(
+        f"codev: no result.json or benchmark.json found in {output}",
+        file=sys.stderr,
+    )
+    return 2
+
+
+def _run_eval_show_command(args: argparse.Namespace) -> int:
+    """Show a skill's packaged eval trace, if `codev eval benchmark run` has
+    written one into its own directory (see docs/adr/0028-skill-packages-
+    carry-their-own-eval-trace.md)."""
+    target: Path = args.target.resolve()
+    trace_path = target / ".agents" / "skills" / args.skill / "evals" / "benchmark.json"
+    if not trace_path.is_file():
+        print(
+            f"codev: no eval trace found for skill '{args.skill}' "
+            f"({trace_path}) -- run `codev eval benchmark run {args.skill} "
+            "--target . --output <dir>` to create one",
+            file=sys.stderr,
+        )
+        return 1
+    report = json.loads(trace_path.read_text(encoding="utf-8"))
+    print(_format_benchmark_report(report))
+    generated_at = report.get("generated_at")
+    if generated_at:
+        print(f"\nGenerated: {generated_at}")
+    print(f"Trace file: {trace_path}")
+    return 0
+
+
+def _run_eval_nvidia_command(args: argparse.Namespace) -> int:
+    passed = _run_nvidia_verb(
+        args.nvidia_verb,
+        target=getattr(args, "skill_path", None),
+        output=args.output,
+        extra_flags=list(args.extra),
+        timeout_seconds=args.timeout_seconds,
+    )
+    print(f"Evaluation {'passed' if passed else 'failed'}: {args.output}")
+    return 0 if passed else 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1163,34 +1360,63 @@ def main(argv: Sequence[str] | None = None) -> int:
             apply_plan(target, plan)
             print(f"Removed CoDev from {target}")
             return 0
-        if args.command == "eval" and args.eval_command == "fixture":
-            created = create_fixture(args.name, args.target, args.include)
-            print(f"Created fixture at {created}")
+        if (
+            args.command == "eval"
+            and args.eval_command == "task"
+            and args.eval_task_command == "create"
+        ):
+            created = create_task(args.name, args.target, args.include)
+            print(f"Created task at {created}")
             return 0
-        if args.command == "eval" and args.eval_command == "run":
+        if (
+            args.command == "eval"
+            and args.eval_command == "task"
+            and args.eval_task_command == "run"
+        ):
+            evaluate_kwargs: dict[str, Any] = {
+                "with_skill": not args.baseline,
+                "sandbox": args.sandbox,
+            }
+            if args.agent is not None:
+                evaluate_kwargs["opencode"] = args.agent
             passed = evaluate(
                 args.name,
                 args.target,
                 args.output,
-                with_skill=not args.without_skill,
+                **evaluate_kwargs,
             )
             print(f"Evaluation {'passed' if passed else 'failed'}: {args.output}")
             return 0 if passed else 1
         if (
             args.command == "eval"
-            and args.eval_command == "snapshot"
-            and args.eval_snapshot_command == "run"
+            and args.eval_command == "benchmark"
+            and args.eval_benchmark_command == "run"
         ):
-            report = run_snapshot(
+            benchmark_kwargs: dict[str, Any] = {
+                "repetitions": args.repetitions,
+                "only_categories": args.categories,
+                "package": args.package,
+                "sandbox": args.sandbox,
+            }
+            if args.agent is not None:
+                benchmark_kwargs["opencode"] = args.agent
+            report = run_benchmark(
                 args.skill,
                 args.target,
                 args.output,
-                repetitions=args.repetitions,
-                only_categories=args.categories,
+                **benchmark_kwargs,
             )
-            print(_format_snapshot_report(report))
-            print(f"Full report: {args.output / 'snapshot.json'}")
+            print(_format_benchmark_report(report))
+            print(f"Full report: {args.output / 'benchmark.json'}")
             return 0
+        if args.command == "eval" and args.eval_command == "doctor":
+            return _run_eval_doctor_command(args)
+        if args.command == "eval" and args.eval_command == "report":
+            return _run_eval_report_command(args)
+        if args.command == "eval" and args.eval_command == "show":
+            return _run_eval_show_command(args)
+        if args.command == "eval" and args.eval_command == "nvidia":
+            return _run_eval_nvidia_command(args)
         if args.command == "adapter":
             return _run_adapter_command(args)
         if args.command == "config":

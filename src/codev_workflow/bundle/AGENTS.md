@@ -14,7 +14,7 @@ work. Use the applicable repository skill:
   comments; and
 - `critique-review` for precise, read-only suggested diffs from review findings; and
 - `launch-product` for readiness, rollout, rollback, and learning; and
-- `design-skill-eval` for designing and scaffolding a new evaluation fixture
+- `design-skill-eval` for designing and scaffolding a new evaluation task
   for an installed skill's performance corpus; and
 - `technical-writing-style` to audit or revise the writing quality of an
   existing document -- also read automatically by `specify-project`,

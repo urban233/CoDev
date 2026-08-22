@@ -1,12 +1,12 @@
 # Eval design checklist
 
 Concrete failure modes observed while building this project's own
-`review-change` eval corpus, kept here so the next fixture doesn't repeat
+`review-change` eval corpus, kept here so the next task doesn't repeat
 them. Read the relevant section before writing the file it names.
 
 ## Ground truth {#ground-truth}
 
-The strength of a fixture is entirely a function of how falsifiable its
+The strength of a task is entirely a function of how falsifiable its
 ground truth is. Three tiers, strongest first:
 
 1. **Seeded defect + deterministic verifier.** A specific, plantable
@@ -24,13 +24,13 @@ ground truth is. Three tiers, strongest first:
 If you're tempted to reach for tier 2 or 3 because tier 1 is hard to
 construct for this skill, that difficulty is itself useful information --
 it may mean the skill's actual value is hard to measure, which is worth
-saying explicitly in the fixture's `description` rather than papering over
+saying explicitly in the task's `description` rather than papering over
 with a softer eval.
 
 ## The tautology trap
 
-A fixture that always passes, or always fails, regardless of whether the
-skill is staged, is worse than no fixture -- it produces a confident-looking
+A task that always passes, or always fails, regardless of whether the
+skill is staged, is worse than no task -- it produces a confident-looking
 number that means nothing. Concretely:
 
 - **Too easy:** the planted problem is something any capable model avoids
@@ -42,7 +42,7 @@ number that means nothing. Concretely:
   in the seed, needs external documentation). Both conditions fail.
 
 Run step 11 of `SKILL.md` (the with/without check) *before* committing a
-fixture, not after it's already in the corpus generating misleading
+task, not after it's already in the corpus generating misleading
 percentages.
 
 ## Prompt design
@@ -68,7 +68,7 @@ percentages.
   expansion. If the check needs more than one command, write a small
   script and call it as the single command.
 - Standard library only. The evaluation harness does not install
-  dependencies, and assuming any will make the fixture fail for reasons
+  dependencies, and assuming any will make the task fail for reasons
   unrelated to the skill being tested.
 - Check for the specific planted problem, not just "the actor produced
   well-formed output." A verifier that only validates JSON shape will
@@ -94,17 +94,17 @@ percentages.
 - No `.git`, no secrets, no symlinks, no dependency manifests that imply
   an install step, no assumption of network access.
 - Keep it small. The actor pays real time and tokens exploring the seed;
-  an oversized seed makes every run of this fixture more expensive without
+  an oversized seed makes every run of this task more expensive without
   making it a better test.
 
 ## Cost awareness
 
 Every repetition of every condition is a real, live model call (and, if
-the verifier passes, a second one for the judge). Before adding a fixture
-to a skill's corpus, or before running a snapshot across many fixtures,
-estimate the cost: fixtures × 2 conditions × repetitions, each run costing
+the verifier passes, a second one for the judge). Before adding a task
+to a skill's corpus, or before running a benchmark across many tasks,
+estimate the cost: tasks × 2 conditions × repetitions, each run costing
 roughly 20K-55K tokens based on this project's own measured runs (actor
 alone when the judge is skipped; actor + judge when it's reached). Prefer
-`codev eval snapshot run <skill> --category <name> --repetitions 1` for a
+`codev eval benchmark run <skill> --category <name> --repetitions 1` for a
 cheap sanity check before committing to the full corpus at the default
 repetition count.

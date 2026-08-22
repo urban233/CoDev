@@ -55,7 +55,7 @@ already exists (possibly not even yours), and `critique-review` turns an
 existing finding into a concrete suggested diff — it's a bridge from a
 review to a fix, not a review itself. `design-skill-eval`,
 `technical-writing-style`, and `testing-craft` are different kinds of
-tools again: `design-skill-eval` scaffolds evaluation fixtures so you can
+tools again: `design-skill-eval` scaffolds evaluation tasks so you can
 measure whether a skill actually helps, empirically, rather than just
 trusting it; `technical-writing-style` is what the other planning skills
 read automatically before drafting prose, and what you can invoke directly

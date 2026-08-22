@@ -91,6 +91,11 @@ operating under a token budget. Write for that reader.
   column that says the same name eleven times). State that fact once in
   the sentence introducing the table instead. A column earns its place by
   varying row to row.
+- Check every table in the document against this rule, not only the one
+  that originally prompted it. A table with the same shape elsewhere in
+  the same document -- an open-questions table with its own all-identical
+  owner column, say -- usually has the same defect and is easy to miss
+  once the first instance is already fixed.
 - Prefer roughly four or five columns. When one comparison genuinely needs
   more than that, it is usually because some of those columns hold a
   sentence or two of narrative -- guarantees, error behavior, test notes --
@@ -156,6 +161,10 @@ operating under a token budget. Write for that reader.
   licensing or domain reviewer will not know ML shorthand (IoU, RMSD, DPO,
   pass@k), and an ML reviewer will not know domain shorthand. Example:
   "IoU (intersection over union)."
+- A term's first use resets per document when several documents were split
+  from a former single one. A definition that lives only in a sibling
+  file does not satisfy this rule for the file being read -- each
+  document must stand on its own for its own named reviewer.
 - Avoid idioms, buzzwords, and culturally local references ("ballpark
   figure," "under the hood," "low-hanging fruit"); they do not translate
   and slow down non-native readers.

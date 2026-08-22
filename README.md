@@ -35,7 +35,9 @@ turning product development into an unattended coding loop.
 - Human authority over material decisions, merge, deployment, and rollout.
 - A general-purpose skill-evaluation harness — measure whether a skill
   (CoDev's own, or one you wrote) actually helps, empirically, rather than
-  just trusting that it does.
+  just trusting that it does — plus an optional second engine wrapping
+  NVIDIA's SkillEvaluator for schema/security/quality checks on the skill
+  directory itself.
 - Versioned, conflict-aware installation across existing repositories.
 - No runtime dependency in the software being built.
 
@@ -105,13 +107,18 @@ managed file becomes a visible conflict; CoDev never silently replaces it.
 | `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
 | `codev task start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations\|waive\|reopen\|relink` | Track one task's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
 | `codev git issue-create\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` alone has no task precondition |
-| `codev eval fixture create\|run` / `codev eval snapshot run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode |
+| `codev eval task create\|run` / `codev eval benchmark run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode. `--sandbox docker` opts a task with its own declared `environment` block into container isolation (see `docs/adr/0027-opt-in-docker-sandbox-for-the-native-eval-harness.md`); worktree isolation on the host stays the default. New to this? [`docs/features/skill-eval/how-to-write-a-task.md`](docs/features/skill-eval/how-to-write-a-task.md) walks through writing and testing a task for your own skill, start to finish |
+| `codev eval doctor` / `codev eval report <output-dir>` | Zero-cost readiness check before a real trial run, and a plain-text renderer for a trial's or benchmark's output directory |
+| `codev eval show <skill>` | Render a skill's packaged eval trace (`.agents/skills/<skill>/evals/benchmark.json`, written by an unrestricted `eval benchmark run`) — see `docs/adr/0028-skill-packages-carry-their-own-eval-trace.md` |
+| `codev eval nvidia <verb>` | Second, independent engine wrapping the externally installed NVIDIA SkillEvaluator CLI against a skill directory itself — see [`docs/features/nvidia-skill-evaluator/README.md`](docs/features/nvidia-skill-evaluator/README.md) |
 | `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |
 
-`codev check`, `codev doctor`, `codev fixture create`, and bare `codev eval
-<name>` still work as deprecated aliases for `status`, `status --verbose`,
-`eval fixture create`, and `eval run <name>` — each prints a warning and will
-be removed in a future major version.
+`codev check` and `codev doctor` still work as deprecated aliases for
+`status` and `status --verbose` — each prints a warning and will be removed
+in a future major version. CoDev is Alpha, so the eval harness's own older
+command forms (`fixture`/`run`/`snapshot`) were removed outright rather than
+kept as aliases; see
+[`docs/features/skill-eval-ergonomics/design.md`](docs/features/skill-eval-ergonomics/design.md).
 
 ## GitHub Pull Request reviews
 

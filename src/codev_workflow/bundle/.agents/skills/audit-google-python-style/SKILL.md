@@ -1,6 +1,8 @@
 ---
 name: audit-google-python-style
 description: Audit Python code against the Google Python Style Guide using this repository's Ruff and pymake toolchain plus supplemental analysis, then propose a short grouped remediation plan for explicit human approval before modifying approved source files. Invoke only when the user explicitly requests this audit or invokes $audit-google-python-style. Do not use for ordinary code reviews, pull-request reviews, linting, or implementation tasks.
+metadata:
+  author: Martin Urban <martin.urban@studmail.w-hs.de>
 ---
 
 # Audit Google Python Style

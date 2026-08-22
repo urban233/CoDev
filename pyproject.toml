@@ -77,7 +77,7 @@ codev_workflow = [
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-exclude = ["src/codev_workflow/bundle", ".codev/fixtures/*/repository"]
+exclude = ["src/codev_workflow/bundle", ".codev/eval/tasks/*/repository"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
