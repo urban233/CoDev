@@ -4,6 +4,8 @@ import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 from codev_workflow.eval_checks import (
@@ -128,7 +130,7 @@ class RequireTests(unittest.TestCase):
         require(True, "unused")
 
     def test_false_condition_exits_one(self) -> None:
-        with self.assertRaises(SystemExit) as context:
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit) as context:
             require(False, "boom")
         self.assertEqual(1, context.exception.code)
 

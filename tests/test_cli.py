@@ -66,7 +66,7 @@ class CliTests(unittest.TestCase):
     def test_init_check_diff_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with redirect_stdout(StringIO()):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 self.assertEqual(
                     0,
                     main(
@@ -145,7 +145,8 @@ class CliTests(unittest.TestCase):
             self.assertTrue(
                 (target / ".agents/skills/review-change/SKILL.md").is_file()
             )
-            self.assertEqual(0, main(["check", "--target", str(target)]))
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                self.assertEqual(0, main(["check", "--target", str(target)]))
 
     def test_programming_language_flag_selects_audit_skill(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -208,7 +209,7 @@ class CliTests(unittest.TestCase):
     def test_update_can_add_codex_to_an_existing_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with redirect_stdout(StringIO()):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 self.assertEqual(
                     0,
                     main(
@@ -1665,15 +1666,16 @@ class CliTests(unittest.TestCase):
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
-            code = main(
-                [
-                    "adapter",
-                    "remove",
-                    "codex",
-                    "--target",
-                    str(target),
-                ]
-            )
+            with redirect_stderr(StringIO()):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "codex",
+                        "--target",
+                        str(target),
+                    ]
+                )
             self.assertEqual(2, code)
 
     def test_adapter_remove_not_installed_shows_error(self) -> None:
@@ -1681,15 +1683,16 @@ class CliTests(unittest.TestCase):
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
-            code = main(
-                [
-                    "adapter",
-                    "remove",
-                    "junie",
-                    "--target",
-                    str(target),
-                ]
-            )
+            with redirect_stderr(StringIO()):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "junie",
+                        "--target",
+                        str(target),
+                    ]
+                )
             self.assertEqual(2, code)
 
     def test_config_set_get_list_round_trip(self) -> None:
@@ -1770,7 +1773,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual([], _apply_deprecated_aliases([]))
 
     def test_eval_task_run_baseline_flag_maps_to_with_skill_false(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             code = main(
                 [
                     "eval",
@@ -1788,12 +1794,18 @@ class CliTests(unittest.TestCase):
         self.assertFalse(evaluate_mock.call_args.kwargs["with_skill"])
 
     def test_eval_task_run_defaults_to_with_skill(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertTrue(evaluate_mock.call_args.kwargs["with_skill"])
 
     def test_eval_task_run_agent_flag_overrides_opencode_executable(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(
                 [
                     "eval",
@@ -1813,17 +1825,26 @@ class CliTests(unittest.TestCase):
         )
 
     def test_eval_task_run_without_agent_flag_omits_opencode_kwarg(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertNotIn("opencode", evaluate_mock.call_args.kwargs)
 
     def test_eval_task_run_defaults_sandbox_to_worktree(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertEqual("worktree", evaluate_mock.call_args.kwargs["sandbox"])
 
     def test_eval_task_run_sandbox_docker_flag_is_forwarded(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(
                 [
                     "eval",

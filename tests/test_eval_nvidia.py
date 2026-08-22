@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -131,7 +133,10 @@ class NvidiaEngineTests(unittest.TestCase):
                 which.side_effect = lambda name: (
                     str(executable) if name == str(executable) else None
                 )
-                with self.assertRaises(EvaluationError) as context:
+                with (
+                    redirect_stderr(StringIO()),
+                    self.assertRaises(EvaluationError) as context,
+                ):
                     run_verb(
                         "tier3-evaluate",
                         target=root,
@@ -158,7 +163,10 @@ class NvidiaEngineTests(unittest.TestCase):
                 which.side_effect = lambda name: (
                     str(executable) if name == str(executable) else None
                 )
-                with self.assertRaises(EvaluationError) as context:
+                with (
+                    redirect_stderr(StringIO()),
+                    self.assertRaises(EvaluationError) as context,
+                ):
                     run_verb(
                         "tier3-evaluate",
                         target=root,

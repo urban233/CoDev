@@ -13,7 +13,12 @@ the same facts into a separate brief and design.
 
 Read `references/interview-coverage.md` completely before beginning the
 interview. Read `assets/specification.template.md` completely before creating or
-revising the artifact.
+revising the artifact. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the specification's prose. Read
+`.agents/skills/testing-craft/references/test-strategy.md` completely
+before completing the interview's Testing and evaluation section
+(`references/interview-coverage.md` `## 13. Testing and evaluation`).
 
 ## 1. Confirm this is the right path
 
@@ -25,7 +30,7 @@ Redirect instead when:
 - a bounded brownfield feature needs `define-product` and, if material,
   `design-solution`;
 - a local fix or refactor can start with `build-change`;
-- an accepted specification needs milestones and work items from
+- an accepted specification needs milestones and tasks from
   `plan-delivery`; or
 - the request is to implement code.
 

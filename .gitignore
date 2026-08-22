@@ -16,3 +16,8 @@ dist/
 .codev/work/escalations.jsonl
 
 real-use-cases
+
+# codev:start
+# CoDev local escalation log (ADR-0003) -- not shared or committed.
+.codev/task/escalations.jsonl
+# codev:end

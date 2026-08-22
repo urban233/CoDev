@@ -21,8 +21,8 @@ $audit-google-python-style
 Audit the Python codebase and propose approved style fixes.
 ```
 
-Do not invoke it implicitly as part of `review-change`, `clean-code-review`,
-`pr-review`, a normal code review, or a generic linting request.
+Do not invoke it implicitly as part of `review-change`, `pr-review`, a
+normal code review, or a generic linting request.
 
 Invoking the skill is not approval to modify code. Keep the audit and plan
 phase read-only. Require a separate affirmative human response to the exact

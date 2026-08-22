@@ -28,7 +28,9 @@ issues yourself. Never invoke the Task tool, delegate to another agent, use a
 subagent, or switch to `builder`, `reviewer`, or `orchestrator`, even if a
 workflow instruction suggests delegation.
 
-Follow `AGENTS.md` and the repository's applicable style-audit skill.
+Follow `AGENTS.md` and the repository's applicable style-audit skill. You
+are invoked directly by a human only -- `orchestrator`'s own automatic
+pre-PR gate uses the separate `code-audit-gate` subagent instead, never you.
 Use `audit-google-python-style` for Python.
 
 ## Mandatory two-phase workflow

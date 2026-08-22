@@ -20,6 +20,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+
 API_ROOT = "https://api.github.com"
 FETCH_PARTS = ("metadata", "diff", "files", "commits", "reviews", "comments", "checks")
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -39,10 +40,10 @@ def _gh_executable() -> str | None:
         return found
     if os.name == "nt":
         for candidate in (
-            Path(os.environ.get("PROGRAMFILES", "C:\\Program Files"))
+            Path(os.environ.get("ProgramFiles", "C:\\Program Files"))
             / "GitHub CLI"
             / "gh.exe",
-            Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)"))
+            Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"))
             / "GitHub CLI"
             / "gh.exe",
             Path(os.environ.get("LOCALAPPDATA", ""))
@@ -74,7 +75,9 @@ def _request(
     if use_gh:
         gh_executable = _gh_executable()
         if gh_executable is None:
-            raise ReviewError("gh CLI was not found; install it or set CODEV_GH_PATH")
+            raise ReviewError(
+                "gh CLI was not found; install it or set CODEV_GH_PATH"
+            )
         endpoint = url.removeprefix(f"{API_ROOT}/")
         command = [
             gh_executable,
@@ -192,9 +195,7 @@ def _marker(finding_id: str) -> str:
     return f"<!-- codev:pr-review:{finding_id} -->"
 
 
-def validate_payload(
-    payload: object, head_sha: str, diff: str
-) -> list[dict[str, object]]:
+def validate_payload(payload: object, head_sha: str, diff: str) -> list[dict[str, object]]:
     if not isinstance(payload, dict):
         raise ReviewError("review payload must be a JSON object")
     if payload.get("head_sha") != head_sha:
@@ -220,33 +221,19 @@ def validate_payload(
         path = item.get("path")
         subject_type = item.get("subject_type", "line")
         if not isinstance(path, str) or path not in diff_lines:
-            raise ReviewError(
-                f"comment {finding_id} targets a file absent from the PR diff"
-            )
+            raise ReviewError(f"comment {finding_id} targets a file absent from the PR diff")
         if subject_type == "file":
             if any(key in item for key in ("line", "start_line", "side", "start_side")):
-                raise ReviewError(
-                    f"file comment {finding_id} must not include line coordinates"
-                )
-            validated.append(
-                {
-                    "path": path,
-                    "subject_type": "file",
-                    "body": f"{_marker(finding_id)}\n{body}",
-                }
-            )
+                raise ReviewError(f"file comment {finding_id} must not include line coordinates")
+            validated.append({"path": path, "subject_type": "file", "body": f"{_marker(finding_id)}\n{body}"})
             continue
         side = item.get("side")
         line = item.get("line")
         if side not in {"LEFT", "RIGHT"} or not isinstance(line, int):
-            raise ReviewError(
-                f"inline comment {finding_id} needs line and LEFT/RIGHT side"
-            )
+            raise ReviewError(f"inline comment {finding_id} needs line and LEFT/RIGHT side")
         allowed = diff_lines[path].left if side == "LEFT" else diff_lines[path].right
         if line not in allowed:
-            raise ReviewError(
-                f"comment {finding_id} line {line} is not present in the PR diff"
-            )
+            raise ReviewError(f"comment {finding_id} line {line} is not present in the PR diff")
         comment: dict[str, object] = {
             "path": path,
             "line": line,
@@ -257,18 +244,10 @@ def validate_payload(
             start_line = item.get("start_line")
             start_side = item.get("start_side")
             if not isinstance(start_line, int) or start_side not in {"LEFT", "RIGHT"}:
-                raise ReviewError(
-                    f"multi-line comment {finding_id} has invalid start coordinates"
-                )
-            start_allowed = (
-                diff_lines[path].left
-                if start_side == "LEFT"
-                else diff_lines[path].right
-            )
+                raise ReviewError(f"multi-line comment {finding_id} has invalid start coordinates")
+            start_allowed = diff_lines[path].left if start_side == "LEFT" else diff_lines[path].right
             if start_line not in start_allowed:
-                raise ReviewError(
-                    f"comment {finding_id} start line is not present in the PR diff"
-                )
+                raise ReviewError(f"comment {finding_id} start line is not present in the PR diff")
             comment.update(start_line=start_line, start_side=start_side)
         validated.append(comment)
     return validated
@@ -320,9 +299,7 @@ def _fetch_data(
         "commits": f"{root}/commits?per_page=100",
         "reviews": f"{root}/reviews?per_page=100",
         "comments": f"{root}/comments?per_page=100",
-        "checks": (
-            f"{API_ROOT}/repos/{args.repo}/commits/{head_sha}/check-runs?per_page=100"
-        ),
+        "checks": f"{API_ROOT}/repos/{args.repo}/commits/{head_sha}/check-runs?per_page=100",
     }
     for part, endpoint in endpoints.items():
         if part in selected:
@@ -379,9 +356,7 @@ def publish(args: argparse.Namespace) -> int:
         raise ReviewError("GitHub PR response contained no head SHA")
     expected = args.commit or payload.get("head_sha")
     if expected != head_sha:
-        raise ReviewError(
-            f"stale PR: expected head {expected}, current head is {head_sha}"
-        )
+        raise ReviewError(f"stale PR: expected head {expected}, current head is {head_sha}")
     if not isinstance(diff, str):
         raise ReviewError("GitHub did not return a textual PR diff")
     comments = validate_payload(payload, head_sha, diff)
@@ -398,19 +373,8 @@ def publish(args: argparse.Namespace) -> int:
             use_gh=use_gh,
         )
         if isinstance(old, list):
-            existing = {
-                marker
-                for item in old
-                if isinstance(item, dict)
-                for marker in re.findall(
-                    r"<!-- codev:pr-review:[^ ]+ -->", str(item.get("body", ""))
-                )
-            }
-        comments = [
-            item
-            for item in comments
-            if not any(marker in str(item.get("body", "")) for marker in existing)
-        ]
+            existing = {marker for item in old if isinstance(item, dict) for marker in re.findall(r"<!-- codev:pr-review:[^ ]+ -->", str(item.get("body", "")))}
+        comments = [item for item in comments if not any(marker in str(item.get("body", "")) for marker in existing)]
     review = {"commit_id": head_sha, "body": summary, "comments": comments}
     if args.submit:
         review["event"] = "COMMENT" if args.submit == "comment" else "REQUEST_CHANGES"
@@ -423,18 +387,9 @@ def publish(args: argparse.Namespace) -> int:
             body=review,
             use_gh=use_gh,
         )
-        print(
-            json.dumps(
-                {"published": True, "pending": not args.submit, "response": response},
-                indent=2,
-            )
-        )
+        print(json.dumps({"published": True, "pending": not args.submit, "response": response}, indent=2))
     else:
-        print(
-            json.dumps(
-                {"published": False, "pending": True, "request": review}, indent=2
-            )
-        )
+        print(json.dumps({"published": False, "pending": True, "request": review}, indent=2))
     return 0
 
 
@@ -466,14 +421,8 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
         help="Authentication backend (default: gh when no token environment variable)",
     )
-    parser.add_argument(
-        "--publish", action="store_true", help="Post the review to GitHub"
-    )
-    parser.add_argument(
-        "--submit",
-        choices=("comment", "request-changes"),
-        help="Submit instead of leaving pending",
-    )
+    parser.add_argument("--publish", action="store_true", help="Post the review to GitHub")
+    parser.add_argument("--submit", choices=("comment", "request-changes"), help="Submit instead of leaving pending")
     args = parser.parse_args(argv)
     try:
         if args.fetch:

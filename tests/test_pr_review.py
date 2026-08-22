@@ -6,6 +6,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -151,6 +153,7 @@ class PullRequestReviewTests(unittest.TestCase):
                     publish_review.os.environ,
                     {"GITHUB_TOKEN": "", "GH_TOKEN": ""},
                 ),
+                redirect_stderr(StringIO()),
             ):
                 result = publish_review.main(
                     ["--repo", "owner/repo", "--pr", "42", "--review", str(review)]
