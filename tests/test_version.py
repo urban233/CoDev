@@ -59,7 +59,7 @@ class VersionScriptTests(unittest.TestCase):
     def test_dry_run_does_not_write(self) -> None:
         changed = version.replace_in_repository(self.root, "0.1.1", "0.1.2", True)
 
-        self.assertEqual(3, len(changed))
+        self.assertEqual(len(version.VERSION_FILES), len(changed))
         for relative_path in version.VERSION_FILES:
             content = (self.root / relative_path).read_text(encoding="utf-8")
             if relative_path == Path("CHANGELOG.md"):

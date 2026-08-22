@@ -19,6 +19,7 @@ VERSION_FILES = (
     Path("CHANGELOG.md"),
     Path("pyproject.toml"),
     Path("src/codev_workflow/__init__.py"),
+    Path("packaging/BUILD.bazel"),
 )
 
 

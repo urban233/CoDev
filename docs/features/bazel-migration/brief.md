@@ -34,6 +34,12 @@ it, never hand-edited.
 - `just test`, `just lint`, `just fmt`, `just typecheck`, and `just build`
   each complete with the same pass/fail verdict as today's equivalent raw
   command, with zero interactive prompts.
+- `just test-all` exercises the test suite under all three supported
+  Python versions (3.11, 3.12, 3.13), each genuinely selecting its own
+  toolchain and pip hub, not silently reusing the default.
+- `just wheel` produces a wheel matching `python -m build`'s real output
+  file-for-file and passing `twine check`; `just verify-wheel-parity`
+  makes that an automated, repeatable check.
 - A second `bazel test //...` run with no source changes is a 100% cache hit.
 - `requirements_lock.txt` (Bazel's pip lock) can be regenerated from
   `uv.lock` by one `just lock` command and CI fails if the checked-in file
@@ -78,23 +84,38 @@ it, never hand-edited.
   entry point for build/test/lint/type-check work.
 - CI's `test` and `quality` jobs call `just` recipes instead of raw
   `python -m ...` invocations.
+- Per-version `pip.parse` hubs (3.11, 3.12, alongside the default 3.13),
+  so `just test`/`bazel test` can genuinely select any of the three
+  supported Python versions, not just the default. Added after initially
+  scoping this out as unnecessary for a pure-Python project -- reversed
+  once a concrete counterexample from this repo's own history surfaced
+  ([487a273](https://github.com/urban233/CoDev/commit/487a273), a real
+  Python-3.12-and-Windows-specific bug); see design.md's "Toolchain and
+  Multi-Python Strategy".
+- `py_binary` targets for the two release-process scripts
+  (`validate-development-workflow.py`, `evaluate-development-workflow.py`).
+- A `py_wheel` verification build (`//packaging:wheel`) proven, by direct
+  comparison, to match `python -m build`'s real wheel file-for-file and
+  metadata-field-for-field, and wired into CI as an additional check --
+  not as the actual publish path (see "Not planned" and design.md's "PyPI
+  Packaging" for the structural gaps that keep it a verification build).
 
 ### Next
 
-- Collapsing the Python-version leg of the CI matrix onto hermetic toolchain
-  switching on fewer runners, once the OS leg (which is the one that has
-  actually caught real bugs, e.g. Windows executable resolution) is proven
-  stable under Bazel.
-- A `py_wheel`-built distribution as an alternative to `python -m build`,
-  once the existing `package-data` glob is proven reproducible under Bazel's
-  sandboxing.
+- Collapsing the *OS* leg of the CI matrix onto Bazel is not planned (see
+  below); if it ever were, the Python-version leg would already be
+  covered, unlike when this section was first written.
 
 ### Not planned
 
 - Replacing `pyproject.toml`/`uv` as the source of Python packaging metadata
   and dependency declarations.
 - Replacing the PyPI release pipeline (`python -m build` + `twine` +
-  trusted-publisher CI) described in `docs/releasing.md`.
+  trusted-publisher CI) described in `docs/releasing.md`. `//packaging:wheel`
+  is a verification build proven equivalent, not the actual publish path --
+  see design.md's "PyPI Packaging" for the structural gaps (older
+  `Metadata-Version`, no sdist) that make replacing the real pipeline the
+  wrong call for now.
 - Any `aspect_rules_py`, `aspect_rules_lint`, `aspect_bazel_lib`, or other
   Aspect Build convenience ruleset.
 - Any third-party community Bazel ruleset for ruff or mypy specifically
@@ -102,7 +123,8 @@ it, never hand-edited.
   of `rules_python`'s native `py_console_script_binary`.
 - `rules_python`'s gazelle extension, or any other BUILD-file generator.
 - Changing the CI OS matrix shape (`ubuntu-latest`, `windows-latest`,
-  `macos-latest` stay).
+  `macos-latest` stay) -- Bazel's multi-version testing is verified on
+  Linux (CI) and macOS (the dev machine) only, not Windows.
 
 ## Constraints
 
@@ -129,9 +151,13 @@ for the two corrections it produced.
 |---|---|---|---|
 | `rules_python` 2.3.x still exposes `pip.parse`, `python.toolchain`, and `py_console_script_binary` with the same shape as prior 0.x/1.x releases | Read the actual 2.3.x release notes/API docs at implementation time | Implementer | Confirmed: 2.3.2 built and ran correctly; `py_console_script_binary` needed an explicit `script =` for mypy and does not apply to ruff (native-binary wheel, no `entry_points.txt` -- `bazel_skylib`'s `native_binary` used instead) |
 | `uv export` produces a `pip.parse`-compatible `requirements_lock.txt` (including hashes) from this repo's `uv.lock` without manual edits | Run `uv export` against the current `uv.lock` and feed the output to `pip.parse` in a throwaway workspace | Implementer | Confirmed, with a correction: `--all-extras` is required, not optional -- without it `uv export --no-emit-project` silently drops the `dev` extra (ruff/mypy/build/twine) entirely |
-| Bazel-sandboxed `mypy` can still see enough of `src/` to satisfy the existing `[tool.mypy]` `strict = true` configuration | Run `mypy` under a `py_console_script_binary` target against the full `src/codev_workflow` tree | Implementer | Wiring confirmed correct (target builds and runs); the actual strict-mode violation count against the real tree is the one item still pending, tracked in `design.md`'s Open Questions |
+| Bazel-sandboxed `mypy` can still see enough of `src/` to satisfy the existing `[tool.mypy]` `strict = true` configuration | Run `mypy` under a `py_console_script_binary` target against the full `src/codev_workflow` tree | Implementer | Confirmed: `Success: no issues found in 31 source files` |
 
 ## Acceptance
 
 - [x] Outcome, scope, non-goals, and success measures accepted by the
   accountable human. (Martin Urban, 2026-08-22)
+- [x] Extended scope (multi-version Python coverage, release scripts as
+  Bazel targets, `py_wheel` verification build) accepted and implemented.
+  (Martin Urban, 2026-08-22) -- see design.md's Acceptance section for the
+  verification evidence behind each.

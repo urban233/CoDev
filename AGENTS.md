@@ -21,11 +21,13 @@ CoDev's build/test/lint/type-check tooling runs on Bazel 9 + `rules_python`
 2.3.x, automated through a root `Justfile`. See
 `docs/features/bazel-migration/brief.md` and
 `docs/features/bazel-migration/design.md` for the accepted design and the
-verified compatibility spike behind it. CI has not yet been migrated to
-this (see the design doc's implementation plan, step 8) -- until then, CI
-still runs the raw `python -m unittest discover -s tests -v`,
-`python -m compileall -q src tests`, `python -m ruff check .`,
-`python -m ruff format --check .`, and `python -m mypy` commands directly.
+verified compatibility spike behind it. `.github/workflows/ci.yml`'s
+`quality` job and one `test` matrix leg (Ubuntu, Python 3.13) call `just`
+recipes; the other eight `test` matrix legs still run the raw
+`python -m unittest discover -s tests -v` / `compileall` /
+`validate-development-workflow.py` / `evaluate-development-workflow.py`
+commands directly, since Bazel's multi-version testing is verified on
+Linux and macOS only, not Windows (see design.md's "CI Migration").
 
 `just` (casey/just) is the required entry point for local build, test,
 lint, format, and type-check work -- never invoke `bazel` or raw
@@ -45,17 +47,29 @@ addition in `src/codev_workflow/BUILD.bazel`.
 |---|---|
 | `just lock` | Regenerate the Bazel pip lock from `uv.lock` via `uv export --all-extras` (never hand-edit the generated lock; `uv.lock` stays authoritative) |
 | `just build` | `bazel build //...` |
-| `just test [args]` | `bazel test //...`, extra args/targets pass through |
+| `just test [args]` | `bazel test //tests/...` under the default toolchain (3.13); extra args/targets pass through |
+| `just test-3-12` / `just test-3-11` | Same, under the 3.12 / 3.11 toolchain and pip hub |
+| `just test-all` | All three Python versions |
 | `just lint` | Ruff check, via `bazel_skylib`'s `native_binary` wrapping the pip-resolved ruff wheel -- no Aspect Build ruleset |
 | `just fmt` | Ruff format (mutates files) |
 | `just fmt-check` | Ruff format, check-only -- what CI runs |
 | `just typecheck` | Mypy, `strict = true` per `pyproject.toml`, via `rules_python`'s `py_console_script_binary` |
 | `just lock-check` | Fail if `requirements_lock.txt` has drifted from `uv.lock` -- what CI runs |
+| `just validate-catalog` | `bazel run //scripts:validate_development_workflow` against the bundle |
+| `just self-test-evaluator` | `bazel run //scripts:evaluate_development_workflow -- --self-test` |
+| `just wheel` | Build the PyPI wheel via `py_wheel` -- a verification build, not the published artifact |
+| `just verify-wheel-parity` | Diff the Bazel wheel's manifest against a fresh `python -m build` wheel and `twine check` it |
 | `just ci` | Aggregate of the above, matching CI's `quality`/`test` jobs |
 
 `pyproject.toml`/`uv.lock` remain the sole source of Python dependency and
 packaging metadata, and `docs/releasing.md`'s `python -m build` + `twine`
-release pipeline is unchanged by this migration.
+release pipeline is unchanged by this migration -- `//packaging:wheel` is a
+verification build proven equivalent to it, not a replacement for it.
+`packaging/BUILD.bazel` carries a third, hand-kept copy of the package
+version alongside `pyproject.toml`/`src/codev_workflow/__init__.py`;
+`scripts/version.py`'s bump command and `scripts/verify_release.py`'s
+consistency check both cover it now, so a manual edit that misses it is
+caught, not silently allowed to drift.
 
 <!-- codev:start -->
 ## CoDev human-AI delivery

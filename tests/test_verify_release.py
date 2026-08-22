@@ -23,6 +23,12 @@ class ReleaseVerificationTests(unittest.TestCase):
         )
         self.runtime_path = self.root / "src/codev_workflow/__init__.py"
         self.runtime_path.write_text('__version__ = "0.1.3"\n', encoding="utf-8")
+        (self.root / "packaging").mkdir()
+        self.bazel_wheel_path = self.root / "packaging/BUILD.bazel"
+        self.bazel_wheel_path.write_text(
+            'py_wheel(\n    name = "wheel",\n    version = "0.1.3",\n)\n',
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -42,6 +48,25 @@ class ReleaseVerificationTests(unittest.TestCase):
     def test_mismatched_tag_fails(self) -> None:
         with self.assertRaisesRegex(ValueError, "tag v0.1.4"):
             verify_release.verify(self.root, "v0.1.4")
+
+    def test_mismatched_bazel_wheel_version_fails(self) -> None:
+        self.bazel_wheel_path.write_text(
+            'py_wheel(\n    name = "wheel",\n    version = "0.1.2",\n)\n',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "packaging/BUILD.bazel py_wheel version 0.1.2"
+        ):
+            verify_release.verify(self.root, "v0.1.3")
+
+    def test_missing_bazel_wheel_version_fails(self) -> None:
+        self.bazel_wheel_path.write_text(
+            'py_wheel(\n    name = "wheel",\n)\n', encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(ValueError, "could not find py_wheel version"):
+            verify_release.verify(self.root, "v0.1.3")
 
     def test_metadata_only_mode_skips_release_checks(self) -> None:
         with (

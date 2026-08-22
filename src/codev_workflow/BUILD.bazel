@@ -3,8 +3,15 @@ load("@rules_python//python:defs.bzl", "py_library")
 py_library(
     name = "codev_workflow",
     srcs = glob(["*.py"]),
-    data = glob(["bundle/**"]),
+    data = glob(
+        ["bundle/**"],
+        exclude = ["bundle/**/__pycache__/**", "bundle/**/*.pyc"],
+    ),
     imports = [".."],
-    deps = ["@pip//pre_commit"],
+    deps = select({
+        "@rules_python//python/config_settings:is_python_3.11": ["@pip_311//pre_commit"],
+        "@rules_python//python/config_settings:is_python_3.12": ["@pip_312//pre_commit"],
+        "//conditions:default": ["@pip//pre_commit"],
+    }),
     visibility = ["//visibility:public"],
 )

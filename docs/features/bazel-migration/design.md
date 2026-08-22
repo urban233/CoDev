@@ -66,11 +66,18 @@ already-working path.
 - Any third-party community Bazel ruleset that wraps ruff or mypy as its own
   repository rule, in place of `rules_python`'s native
   `py_console_script_binary`.
-- Changing the CI OS matrix (`ubuntu-latest`/`windows-latest`/`macos-latest`)
-  or collapsing the Python-version matrix -- see brief.md's "Next" section.
-- A `py_wheel`-built PyPI distribution -- deferred until the existing
-  `package-data` bundle glob (`src/codev_workflow/bundle/**`, see
-  `pyproject.toml`) is proven reproducible under Bazel's sandbox.
+- Changing the CI OS matrix (`ubuntu-latest`/`windows-latest`/`macos-latest`).
+  Python-version coverage under Bazel is now in scope (see "Toolchain and
+  Multi-Python Strategy"); the OS matrix itself is not -- Bazel's
+  multi-version testing is only verified on Linux (via CI) and macOS (this
+  machine), not Windows.
+- Treating the `py_wheel`-built distribution
+  (`//packaging:wheel`) as the actual published PyPI artifact. It is
+  built, verified byte-for-byte against `python -m build`'s real output,
+  and checked in CI (see "PyPI Packaging") -- but `python -m build` +
+  `twine` stays the artifact that is actually published, given the known,
+  structural `Metadata-Version`/`License-Expression`/sdist gaps documented
+  there.
 
 ## Current System and Evidence
 
@@ -116,11 +123,14 @@ already-working path.
 |---|---|---|---|
 | `MODULE.bazel` / `.bazelversion` / `.bazelrc` | Declare Bazel 9 + `rules_python` 2.3.x, register hermetic toolchains and the pip hub | Repo root | New |
 | `requirements_lock.txt` | pip-compatible, hash-verified lock generated from `uv.lock`, consumed by `pip.parse` | Generated, checked in | New |
-| `BUILD.bazel` (`src/codev_workflow/`, `tests/`, `scripts/`) | Declare `py_library`/`py_test` targets, hand-written | Repo contributors | New, hand-maintained |
-| Root `BUILD.bazel` + `tools/*.sh` | Declares the `ruff`/`mypy` runnable targets and their workspace-root wrapper scripts | Repo root | New, hand-maintained |
-| `Justfile` | Single command surface: lock, build, test, lint, fmt, typecheck, ci | Repo root | New |
+| `BUILD.bazel` (`src/codev_workflow/`, `tests/`, `scripts/`) | Declare `py_library`/`py_test`/`py_binary` targets, hand-written | Repo contributors | New, hand-maintained |
+| `evals/development-workflow/BUILD.bazel` | `exports_files` for `scenarios.json`, consumed as `data` by the evaluator `py_binary` | Repo contributors | New, hand-maintained |
+| Root `BUILD.bazel` + `tools/*.sh` | Declares the `ruff`/`mypy` runnable targets and their workspace-root wrapper scripts; `exports_files` for `README.md`/`LICENSE` | Repo root | New, hand-maintained |
+| `packaging/BUILD.bazel` | `py_package`/`py_wheel` verification build of the PyPI wheel | Repo root | New |
+| `Justfile` | Single command surface: lock, build, test(-all), lint, fmt(-check), typecheck, lock-check, validate-catalog, self-test-evaluator, wheel, verify-wheel-parity, ci | Repo root | New |
 | `AGENTS.md` | Documents the `just` surface as the required entry point for agents | Repo root | Extend |
-| `.github/workflows/ci.yml` | `test`/`quality` jobs call `just` recipes instead of raw commands | CI | Extend |
+| `.github/workflows/ci.yml` | `test`'s Ubuntu/3.13 leg and `quality` job call `just` recipes | CI | Extend |
+| `scripts/version.py` / `scripts/verify_release.py` | `VERSION_FILES` and version-consistency checks extended to cover `packaging/BUILD.bazel`'s hand-kept version literal | Repo root | Extend |
 | `pyproject.toml` / `uv.lock` | Remains the authoritative Python packaging and dependency source | Repo root | Unchanged |
 | `docs/releasing.md` release pipeline | Remains on `python -m build` + `twine` | Repo root | Unchanged |
 
@@ -132,22 +142,27 @@ MODULE.bazel.lock          # Bazel's own bzlmod resolution lock; commit it,
                             # same reproducibility rationale as uv.lock
 .bazelversion               # pins an exact Bazel release (9.2.0)
 .bazelrc                    # shared flags (see "CI Migration")
-BUILD.bazel                # ruff/mypy runnable targets
+BUILD.bazel                # ruff/mypy runnable targets; exports README.md/LICENSE
 tools/
   ruff.sh                  # cd-to-workspace-root wrapper (see "Tooling Integration")
   mypy.sh                  # cd-to-workspace-root wrapper
-requirements_lock.txt      # generated from uv.lock, hash-verified
+requirements_lock.txt      # generated from uv.lock, hash-verified; one lock, three hubs
 Justfile
 .tools/                    # gitignored: repo-local `just` binary, not committed
 src/codev_workflow/
-  BUILD.bazel              # hand-written: one py_library target
+  BUILD.bazel              # hand-written: one py_library target, select()-ed pip deps
   <module>.py
 tests/
   BUILD.bazel              # hand-written: one py_test target per file
   test_<module>.py
 scripts/
-  BUILD.bazel              # hand-written: one py_library target
+  BUILD.bazel              # hand-written: py_library + two py_binary targets
   <script>.py
+evals/development-workflow/
+  BUILD.bazel              # exports_files(["scenarios.json"])
+  scenarios.json
+packaging/
+  BUILD.bazel              # py_package + py_wheel (verification build, see "PyPI Packaging")
 ```
 
 `src/codev_workflow/bundle/` (non-Python package data) is deliberately left
@@ -337,22 +352,286 @@ existing `requires-python = ">=3.11"` and the CI matrix's `3.11`/`3.12`/
 `3.13` legs) for macOS, Linux, and Windows without depending on whatever
 Python happens to be on a runner's `PATH`.
 
-**Registering a toolchain is not the same as being able to select it.**
-This was checked directly rather than assumed: `bazel test
---python_version=3.11 //tests:test_config` builds and passes without error,
-but `bazel cquery --python_version=3.11 //tests:test_config` shows the
-resolved runtime is still `python_3_13` -- the flag is silently a no-op for
-this target graph. None of the `py_library`/`py_test` targets declare a
-`python_version`, and `pip.parse` only resolved a hub for `3.13`, so there
-is nothing for the flag to actually switch to. Making `--python_version`
-meaningfully select 3.11/3.12 would require a `pip.parse` hub per version
-(three `requirements_lock*.txt` files, or per-version `select()`s in every
-`deps` list) -- explicitly out of scope for V1 per "Dependency Lock
-Strategy" and brief.md's "Not planned". Consequence: **Bazel currently
-only ever tests under Python 3.13**, regardless of what `--python_version`
-is passed. "CI Migration" below reflects this -- the `test` job's
-3.11/3.12 legs keep running today's raw commands rather than routing
-through Bazel.
+**Registering a toolchain is not the same as being able to select it --
+and the flag that actually does select it is not the one you'd guess.**
+This design originally shipped believing `--python_version=3.11` was a
+silent no-op for this target graph (verified at the time: `bazel cquery
+--python_version=3.11 //tests:test_config` still resolved `python_3_13`).
+That conclusion was correct for the flag tried, but incomplete -- there
+are *two* different flags with overlapping names. The bare
+`--python_version` is not a `rules_python` setting at all here; the one
+that actually drives toolchain and `pip.parse`-hub resolution is the fully
+qualified Starlark build setting:
+
+```bash
+bazel test '--@rules_python//python/config_settings:python_version=3.11' //tests/...
+```
+
+Confirmed with the same cquery check that caught the original problem:
+under this flag, `deps(//tests:test_config)` resolves to
+`python_3_11_*//:py3_runtime` and (once a `pip_311` hub exists, see below)
+`pip_311//pre_commit`, not `python_3_13`/`pip`. `bazel test` under this
+flag genuinely executes with the 3.11 interpreter -- this is not the same
+false confidence the original `--python_version` check produced.
+
+**Multi-version hubs.** `pip.parse` needs one hub per Python version a
+target should be selectable under. Rather than three separate
+`requirements_lock_3.1{1,2,3}.txt` files, this checks out simpler: `uv
+export --python 3.11/3.12/3.13` were compared directly and produce
+byte-identical dependency content for this project's dependency set (no
+package here has version-specific wheel selection across 3.11-3.13), so
+all three hubs resolve from the same `requirements_lock.txt`:
+
+```python
+pip.parse(
+    hub_name="pip", python_version="3.13", requirements_lock="//:requirements_lock.txt"
+)
+pip.parse(
+    hub_name="pip_312",
+    python_version="3.12",
+    requirements_lock="//:requirements_lock.txt",
+)
+pip.parse(
+    hub_name="pip_311",
+    python_version="3.11",
+    requirements_lock="//:requirements_lock.txt",
+)
+use_repo(pip, "pip", "pip_311", "pip_312")
+```
+
+`src/codev_workflow/BUILD.bazel`'s `deps` then `select()`s the matching
+hub using `rules_python`'s generated per-version `config_setting`s
+(`@rules_python//python/config_settings:is_python_3.11` etc., confirmed to
+exist via `bazel query`):
+
+```python
+deps = (
+    select(
+        {
+            "@rules_python//python/config_settings:is_python_3.11": [
+                "@pip_311//pre_commit"
+            ],
+            "@rules_python//python/config_settings:is_python_3.12": [
+                "@pip_312//pre_commit"
+            ],
+            "//conditions:default": ["@pip//pre_commit"],
+        }
+    ),
+)
+```
+
+Verified end to end: `bazel test
+'--@rules_python//python/config_settings:python_version=3.11'
+//tests/...` and the 3.12 equivalent each report `Executed 17 out of 17
+tests: 17 tests pass` for real (not a cache hit reusing the 3.13 run) --
+matching the non-Bazel `python -m unittest` baseline under all three
+interpreters.
+
+**One scoping gotcha this produced:** the root `BUILD.bazel`'s `ruff`/
+`mypy` targets are pinned to the `pip` (3.13) hub only. Running `bazel
+test '--@rules_python//...:python_version=3.11' //...` (the whole-repo
+wildcard) fails at analysis time, because Bazel must configure every
+target the pattern matches -- including those single-version tool
+targets -- even though `test` only executes test rules. `just`'s
+per-version test recipes scope to `//tests/...`, not `//...`, to avoid
+this; see "Justfile Design".
+
+**Why this is in scope after all.** The original design deferred
+per-version Bazel coverage as unnecessary, reasoning CoDev is pure Python.
+That reasoning doesn't fully hold: this repository's own history has a
+real, version-specific bug --
+[487a273](https://github.com/urban233/CoDev/commit/487a273), "Fix NVIDIA
+engine executable resolution on Python 3.12+ Windows" -- caught by exactly
+the 3.12 CI leg that reasoning would have left uncovered under Bazel. The
+raw CI matrix already covers this today regardless of what Bazel does;
+extending Bazel to match closes the gap between "what CI actually
+exercises" and "what `just test`/`just ci` locally exercises," which is
+the more relevant risk for an agent or contributor running `just` instead
+of raw commands.
+
+### Release-Process Scripts as Bazel Targets
+
+`scripts/validate-development-workflow.py` and
+`scripts/evaluate-development-workflow.py` (hyphenated filenames, so no
+`main =` inference -- set explicitly) are pure-stdlib, so wiring them in is
+mechanical: `py_binary` targets in `scripts/BUILD.bazel`, alongside the
+existing `scripts` `py_library`.
+
+```python
+py_binary(
+    name="validate_development_workflow",
+    srcs=["validate-development-workflow.py"],
+    main="validate-development-workflow.py",
+    data=["//src/codev_workflow:codev_workflow"],
+)
+
+py_binary(
+    name="evaluate_development_workflow",
+    srcs=["evaluate-development-workflow.py"],
+    main="evaluate-development-workflow.py",
+    data=[
+        "//evals/development-workflow:scenarios.json",
+        "//src/codev_workflow:codev_workflow",
+    ],
+)
+```
+
+Both scripts default `--repo` to `Path(__file__).resolve().parents[1]`,
+not the invocation directory -- this was checked, not assumed, since it's
+exactly the kind of path-resolution assumption that broke ruff/mypy under
+`bazel run` (see "Tooling Integration" below). It turns out fine here for
+a different reason: under `bazel run`, `__file__` resolves through
+Bazel's runfiles symlinks back to the real source tree, not a sandboxed
+copy, so `validate_development_workflow` needs no
+`BUILD_WORKSPACE_DIRECTORY` wrapper. `evaluate_development_workflow`'s
+`--repo .` self-test additionally reads
+`evals/development-workflow/scenarios.json`, which is outside
+`src/codev_workflow/` entirely -- a small `evals/development-workflow/
+BUILD.bazel` with `exports_files(["scenarios.json"])` makes that file
+referenceable as `data` from another package. Verified: `bazel run
+//scripts:validate_development_workflow -- --repo
+src/codev_workflow/bundle` and `bazel run
+//scripts:evaluate_development_workflow -- --repo . --self-test` both
+match their non-Bazel `python scripts/...` baselines exactly (`Workflow
+validation passed: 12 skills, 3 guides, and 0 handbooks, plus 7 behavioral
+scenarios` / `Workflow evaluator self-test passed`).
+
+### PyPI Packaging (`py_wheel`)
+
+The highest-risk piece of this migration, because the output is the
+artifact that actually reaches users' installs. Verified by direct,
+repeated comparison against `python -m build`'s real wheel -- file
+manifest, METADATA content, and the exact CI smoke-test assertion -- not
+by trusting the tool's defaults.
+
+**This is a verification build, not a replacement for the release
+pipeline.** `python -m build` + `twine` (`docs/releasing.md`) remain the
+actual PyPI publish path; see brief.md's Non-goals for why the gaps below
+make that the right call for now.
+
+**Setup: `packaging/BUILD.bazel`**, using `rules_python`'s native
+`py_package` (collects a first-party package's transitive files) and
+`py_wheel` (builds the wheel):
+
+```python
+py_package(
+    name="codev_workflow_pkg",
+    packages=["src.codev_workflow"],
+    deps=["//src/codev_workflow:codev_workflow"],
+)
+
+py_wheel(
+    name="wheel",
+    distribution="open-codev-workflow",
+    version="0.3.0",  # hand-kept in sync -- see "Version sync" below
+    python_tag="py3",
+    python_requires=">=3.11",
+    author="Martin Urban",
+    summary="Human-guided AI software delivery for real repositories.",
+    license="BSD-3-Clause",
+    description_file="//:README.md",
+    description_content_type="text/markdown",
+    project_urls={"Homepage": "...", "Repository": "...", "Issues": "..."},
+    classifiers=[...],  # mirrors pyproject.toml's [project] classifiers
+    requires=["pre-commit>=4.6.1"],
+    extra_requires={"dev": ["build>=1.2.2", "mypy>=1.15", "ruff>=0.11", "twine>=6.1"]},
+    entry_points={"console_scripts": ["codev = codev_workflow.cli:main"]},
+    extra_distinfo_files={
+        "//:LICENSE": "licenses/LICENSE",
+        ":top_level_txt": "top_level.txt",  # write_file; setuptools emits this, py_wheel doesn't
+    },
+    strip_path_prefixes=["src"],
+    deps=[":codev_workflow_pkg"],
+)
+```
+
+Three real, non-obvious things surfaced by actually building and diffing,
+not by reading the rule's documentation:
+
+- **`py_package`'s `packages` filters by repo-relative path, not Python
+  import path.** `packages = ["codev_workflow"]` (the intuitive choice)
+  matches nothing -- the rule's implementation compares each input's
+  `short_path` (e.g. `src/codev_workflow/cli.py`) against the filter as a
+  literal path prefix, unaware of `imports = [".."]` or any import-path
+  remapping. `packages = ["src.codev_workflow"]` (dots become `/`) is what
+  actually matches. First attempt produced a wheel with only `dist-info`
+  and zero package content -- a completely silent, non-erroring failure
+  mode worth flagging for anyone else hitting this.
+- **`homepage` and `project_urls["Homepage"]` conflict, not stack.**
+  Setting both produces a legacy `Home-page:` METADATA header that the
+  real setuptools 77+ wheel no longer emits (it uses `Project-URL:
+  Homepage, ...` once `Homepage` is in `project.urls`). Diffing METADATA
+  byte-for-byte against the baseline caught this; the fix is to drop the
+  `homepage` attribute entirely and rely on `project_urls` alone.
+  Confirmed the same way: `strip_path_prefixes = ["src"]` was necessary to
+  turn `src/codev_workflow/...` paths into `codev_workflow/...` in the
+  wheel, matching the manifest exactly.
+- **`data = glob(["bundle/**"])` is not hermetic without an exclusion.**
+  Building the wheel initially included four stray
+  `__pycache__/*.pyc` files that happened to exist on this machine's
+  checkout from earlier local test runs -- Bazel's `glob()` matches
+  whatever is actually on disk at analysis time, so a build's output can
+  depend on incidental local state, not just checked-in sources. Fixed
+  for both the wheel and the existing test/dev `data` glob on
+  `src/codev_workflow/BUILD.bazel`: `exclude = ["bundle/**/__pycache__/**",
+  "bundle/**/*.pyc"]`.
+
+**Confirmed working, not merely built:**
+
+- File manifest: byte-for-byte identical set of 149 files against the
+  real `python -m build` wheel (`diff` of sorted `unzip -l` output is
+  empty).
+- Sample file content (`cli.py`): byte-identical.
+- `METADATA`: every field `py_wheel` supports matches after the fixes
+  above (`Author`, `Summary`, `License`, all three `Project-URL`s,
+  classifiers, `Requires-Python`, `Requires-Dist` for both the base and
+  `dev`-extra requirements).
+- `twine check` on the Bazel-built wheel: `PASSED`.
+- The exact CI wheel-smoke-test assertion (install with `--no-deps`,
+  `codev --version`, and the literal sorted-filename assertion against
+  `bundle/.codex/agents`) run against the Bazel wheel: passes unmodified.
+
+**Known, accepted gaps -- structural to `rules_python`'s `py_wheel`, not
+closeable via BUILD-file attributes:**
+
+- `Metadata-Version: 2.1` (Bazel) vs `2.4` (setuptools 77+). `py_wheel`'s
+  generator predates PEP 639 license-expression metadata. 2.1 is a valid,
+  fully PyPI-accepted metadata version; the gap is only that it can't
+  carry the newer optional fields below.
+- `License: BSD-3-Clause` (legacy field) instead of `License-Expression:
+  BSD-3-Clause` (PEP 639, what `license = "..."` produces in the real
+  wheel) -- consequence of the same generator-version gap. No
+  `License-File:` / `Dynamic: license-file` pair either, for the same
+  reason.
+- No `Keywords:` header -- `py_wheel` has no attribute for it.
+- `extra == "dev"` uses single quotes (`extra == 'dev'`) instead of
+  double (`extra == "dev"`) in `Requires-Dist` marker syntax. Cosmetic:
+  both are valid PEP 508 marker syntax that `pip`/`packaging` parse
+  identically.
+- No sdist equivalent. `rules_python` has no stable `py_sdist`-equivalent
+  rule; only the wheel is reproduced.
+
+None of these caused `twine check` or the smoke test to fail, but they are
+real, and are the reason this stays a verification build rather than the
+publish path.
+
+**Version sync.** `py_wheel`'s `version` attribute is a plain string, not
+something it can read live from `pyproject.toml`, so
+`packaging/BUILD.bazel` becomes a *third* place carrying the version
+literal, alongside `pyproject.toml` and `src/codev_workflow/__init__.py`.
+Two safety nets close this, not just documentation:
+`scripts/version.py`'s `VERSION_FILES` tuple (used by the release version
+bump) now includes `packaging/BUILD.bazel`, and
+`scripts/verify_release.py`'s `verify()` gained a `read_bazel_wheel_version`
+check (a targeted regex read, since Starlark isn't parseable by the
+existing `tomllib`/`ast` readers already used for the other two files)
+that fails release verification if it drifts -- covered by two new tests
+in `tests/test_verify_release.py`.
+
+**CI wiring** (`just wheel` builds it; `just verify-wheel-parity` builds
+both the Bazel wheel and a throwaway `python -m build` wheel, diffs their
+manifests, and runs `twine check` on the Bazel one -- wired into `quality`
+right after the existing wheel smoke test, and into `just ci`).
 
 ### Tooling Integration: Ruff and Mypy (native `rules_python`, no third-party ruleset)
 
@@ -529,8 +808,21 @@ build:
     bazel build //...
 
 # Pass extra bazel test flags/targets through, e.g. `just test //tests:test_cli`.
+# Runs under the default toolchain (3.13); see test-all for every supported
+# version. Scoped to //tests/... rather than //... -- the root BUILD.bazel's
+# ruff/mypy targets are pinned to the 3.13 pip hub and fail to even analyze
+# under a --python_version override for a different hub.
 test *args:
-    bazel test //... {{args}}
+    bazel test //tests/... {{args}}
+
+test-3-12 *args:
+    bazel test --@rules_python//python/config_settings:python_version=3.12 //tests/... {{args}}
+
+test-3-11 *args:
+    bazel test --@rules_python//python/config_settings:python_version=3.11 //tests/... {{args}}
+
+# Run the test suite under every supported Python version (3.11, 3.12, 3.13).
+test-all: test test-3-12 test-3-11
 
 lint:
     bazel run //:ruff -- check .
@@ -558,49 +850,89 @@ lock-check:
         exit 1
     fi
 
+validate-catalog:
+    bazel run //scripts:validate_development_workflow -- --repo src/codev_workflow/bundle
+
+self-test-evaluator:
+    bazel run //scripts:evaluate_development_workflow -- --repo . --self-test
+
+# Build the wheel via py_wheel. This is a verification build, matched
+# file-for-file and metadata-field-for-field against `python -m build`'s
+# output -- it is not the actual release artifact. `python -m build` +
+# twine stay the real PyPI publish path (docs/releasing.md); see
+# docs/features/bazel-migration/design.md's "PyPI Packaging" section for
+# the known gaps (older Metadata-Version, no sdist).
+wheel:
+    bazel build //packaging:wheel
+
+# Verify the Bazel wheel still matches python -m build's real output.
+verify-wheel-parity: wheel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf /tmp/codev-wheel-parity
+    mkdir -p /tmp/codev-wheel-parity
+    uv run python -m build --outdir /tmp/codev-wheel-parity/setuptools-dist > /dev/null
+    setuptools_whl=$(ls /tmp/codev-wheel-parity/setuptools-dist/*.whl)
+    bazel_whl=$(bazel cquery --output=files //packaging:wheel 2>/dev/null)
+    unzip -l "$setuptools_whl" | awk '{print $4}' | sed '/^$/d' | sort > /tmp/codev-wheel-parity/setuptools.manifest
+    unzip -l "$bazel_whl" | awk '{print $4}' | sed '/^$/d' | sort > /tmp/codev-wheel-parity/bazel.manifest
+    if ! diff -q /tmp/codev-wheel-parity/setuptools.manifest /tmp/codev-wheel-parity/bazel.manifest > /dev/null; then
+        echo "Bazel wheel file manifest has diverged from python -m build's output:" >&2
+        diff /tmp/codev-wheel-parity/setuptools.manifest /tmp/codev-wheel-parity/bazel.manifest >&2 || true
+        exit 1
+    fi
+    uv run twine check "$bazel_whl"
+
 # Everything CI's quality gate checks, in one command.
-ci: lint fmt-check typecheck lock-check test
+ci: lint fmt-check typecheck lock-check test-all validate-catalog self-test-evaluator verify-wheel-parity
 ```
 
-`fmt-check` and `lock-check` were added after the original sketch above:
-CI needs a non-mutating format check (`fmt` itself rewrites files, which is
-wrong for CI to do silently) and the staleness check promised in the brief
-needed a real recipe, not just a description. `uv export -o` was also found
-to echo the full lock file to stdout even though `-o` already writes it to
-disk -- silenced with `> /dev/null` in both `lock` and `lock-check` so CI
-logs stay readable.
+`fmt-check`, `lock-check`, `test-3-11`/`test-3-12`/`test-all`,
+`validate-catalog`, `self-test-evaluator`, `wheel`, and
+`verify-wheel-parity` were all added after the original single-`test`/
+single-Python sketch above, as the scope grew to cover every Python
+version, the two release scripts, and the wheel. Two implementation
+details worth calling out: `uv export -o` was found to echo the full lock
+file to stdout even though `-o` already writes it to disk -- silenced with
+`> /dev/null` in `lock`/`lock-check`/`verify-wheel-parity`; and `test`/
+`test-3-11`/`test-3-12` scope to `//tests/...` rather than `//...` because
+the root `BUILD.bazel`'s single-version-pinned `ruff`/`mypy` targets fail
+to even analyze under a different hub's `--python_version` override (see
+"Toolchain and Multi-Python Strategy").
 
 ### CI Migration
 
 Landed in `.github/workflows/ci.yml`. The `quality` job (Ubuntu, Python
-3.13 only -- the one leg Bazel's single pip hub actually covers, see
-"Toolchain and Multi-Python Strategy") switches its ruff/mypy steps to
-`just lint`, `just fmt-check`, and `just typecheck`, and adds `just
-lock-check` as a new step (fails if `requirements_lock.txt` has drifted
-from `uv.lock`). `python -m build`/`twine check`/the wheel smoke test are
-untouched, per this design's non-goals. Bazel and `just` are provisioned
-via [`bazel-contrib/setup-bazel`](https://github.com/bazel-contrib/setup-bazel)
+3.13 only) switches its ruff/mypy steps to `just lint`, `just fmt-check`,
+and `just typecheck`, adds `just lock-check` (fails if
+`requirements_lock.txt` has drifted from `uv.lock`), and adds `just
+verify-wheel-parity` right after the existing wheel smoke test (builds
+the Bazel wheel, diffs its manifest against the `python -m build` wheel
+already produced earlier in the same job, and runs `twine check` on the
+Bazel one). `python -m build`/`twine check dist/*`/the wheel smoke test
+against `dist/*.whl` are themselves untouched -- `dist/*.whl` stays the
+artifact that gets uploaded and eventually published, per this design's
+non-goals. Bazel and `just` are provisioned via
+[`bazel-contrib/setup-bazel`](https://github.com/bazel-contrib/setup-bazel)
 (the actively maintained action; `bazelbuild/setup-bazelisk` is archived)
 and [`extractions/setup-just`](https://github.com/extractions/setup-just),
 and `uv` via [`astral-sh/setup-uv`](https://github.com/astral-sh/setup-uv)
-for the `lock-check` step -- all three published actions from their
-respective upstream projects, not an OS package manager and not an Aspect
-action.
+(needed by `lock-check` and `verify-wheel-parity`) -- all three published
+actions from their respective upstream projects, not an OS package manager
+and not an Aspect action.
 
-The `test` job's `{ubuntu,windows,macos}-latest` x `{3.11,3.12,3.13}` matrix
-is **unchanged** -- its raw `unittest discover`/`compileall` steps still run
-for all nine combinations, because Bazel's pip hub only resolves for Python
-3.13 (see "Toolchain and Multi-Python Strategy"; passing `--python_version`
-without a per-version hub was verified to silently keep using the 3.13
-toolchain rather than erroring, so pretending Bazel covers 3.11/3.12 would
-be actively misleading). One supplementary step was added, gated to
-`matrix.os == 'ubuntu-latest' && matrix.python == '3.13'`: `just test`
-after the existing checks, on the exact combination Bazel supports. It adds
-real signal (the first confirmation the Bazel graph also works on Linux,
-not just the macOS machine it was built and verified on) without replacing
-or weakening any existing coverage. Collapsing the Python-version leg onto
-per-version hermetic toolchain switching, so Bazel could cover all three
-versions, is deferred -- see brief.md's "Next" section.
+The `test` job's `{ubuntu,windows,macos}-latest` x `{3.11,3.12,3.13}`
+matrix is **unchanged** -- its raw `unittest discover`/`compileall`/
+catalog-validation/evaluator-self-test steps still run for all nine
+combinations; nothing was removed. Three supplementary steps were added,
+gated to `matrix.os == 'ubuntu-latest' && matrix.python == '3.13'`: `just
+test-all` (all three Python versions, see "Toolchain and Multi-Python
+Strategy" for how that actually selects toolchains), `just
+validate-catalog`, and `just self-test-evaluator`. These add real signal
+(the first confirmation the whole Bazel graph -- not just tests, the
+release scripts too -- also works on Linux, not just the macOS machine it
+was built and verified on) without replacing or weakening any existing
+coverage.
 
 A `.bazelrc` sets shared, CI-appropriate flags (remote cache wiring is
 deliberately out of scope for V1 -- local disk cache only until the
@@ -629,18 +961,28 @@ this change; its content mirrors the "Justfile Design" recipe table above.
 | `rules_python` gazelle extension | Fully automatic target + deps upkeep, scales to a large/nested source tree | New `bazel_dep`, a manifest file (`gazelle_python.yaml`), a "DO NOT EDIT" generated-file convention -- more moving parts than this repository's size justifies | Rejected |
 | One `py_test` per `tests/test_*.py` (via the `BUILD.bazel` glob loop) | Per-file caching, parallelism, isolated failures | More targets to reason about than one aggregate suite | Chosen |
 | One aggregate `py_test` running `unittest discover` | Minimal target count; closest port of today's command | Loses per-file caching/parallelism, the main reason to move test execution into Bazel at all | Rejected |
-| `py_wheel` for PyPI packaging now | Fully Bazel-native release build | Existing `package-data` bundle glob and the working trusted-publisher CI pipeline are both currently untested under Bazel sandboxing; higher risk for no V1 benefit | Deferred (brief.md "Next") |
+| `py_wheel` as a verification build, `python -m build` stays canonical | Proves Bazel packaging parity continuously in CI without betting the real release on it | Two wheel-build code paths to keep in sync (mitigated by `just verify-wheel-parity` + the version-sync checks) | Chosen |
+| `py_wheel` as the actual PyPI publish path | Fully Bazel-native release build, one fewer tool | Structural gaps found by direct comparison: older `Metadata-Version` (2.1 vs 2.4), `License:` instead of `License-Expression:`, no `Keywords:`, no sdist equivalent -- real regressions for a package that already publishes today | Rejected for now |
+| Three separate `requirements_lock_3.1{1,2,3}.txt` files for multi-version hubs | Each hub resolved against a version-specific export, in case content ever diverges | `uv export --python 3.11/3.12/3.13` verified byte-identical for this dependency set -- three files would be redundant duplication with no behavior difference | Rejected |
+| One `requirements_lock.txt` feeding three `pip.parse` hubs (`pip`, `pip_311`, `pip_312`) | Single generated file stays the only lock artifact; still three real, independently-selectable hubs | Would silently stop being correct if a future dependency ever needs different wheels per version (not currently the case, verified) | Chosen |
 
 ## Quality and Risk
 
 - **Security/privacy:** `requirements_lock.txt` keeps hash verification, so
   Bazel's pip resolution has the same supply-chain guarantee `uv.lock`
   already provides; dropping hashes for convenience is explicitly rejected
-  above.
+  above. `//packaging:wheel` is a verification build only (see "PyPI
+  Packaging"), so its known metadata gaps never reach a real install --
+  the artifact users actually get is still `python -m build`'s output.
 - **Reliability/concurrency:** Bazel's sandboxed, content-addressed actions
   make `bazel test //...` reruns and parallel `bazel build`/`bazel test`
   invocations safe by construction; this is a property gained, not a new
-  risk introduced.
+  risk introduced. One hermeticity gap was found and closed rather than
+  left as a latent risk: `src/codev_workflow/BUILD.bazel`'s `data =
+  glob(["bundle/**"])` initially picked up stray `__pycache__/*.pyc` files
+  that happened to exist on the build machine from earlier local test
+  runs -- a build whose output depends on incidental local filesystem
+  state, not just checked-in sources. Fixed with an explicit `exclude`.
 - **Observability/cost:** `just <recipe>` output is the underlying `bazel`
   command's normal stdout/stderr; no new logging layer is introduced. Local
   disk caching only for V1 keeps this change free of new infrastructure
@@ -665,38 +1007,46 @@ this change; its content mirrors the "Justfile Design" recipe table above.
 
 - Every existing `tests/test_*.py` file must pass under its hand-written
   `py_test` target with the same pass/fail verdict as today's
-  `python -m unittest discover -s tests -v`. **Verified**: symlinking the
-  real `src/` and `tests/` into a throwaway workspace with the BUILD shape
-  in "BUILD File Strategy" reproduces all 17/17 passes.
+  `python -m unittest discover -s tests -v`, **under all three supported
+  Python versions**. **Verified**: `bazel test //tests/...` under the
+  default (3.13), and under
+  `--@rules_python//python/config_settings:python_version=3.12`/`3.11`,
+  each report `Executed 17 out of 17 tests: 17 tests pass` -- the 3.11/3.12
+  runs execute for real (not cache hits reusing 3.13), confirmed by `bazel
+  cquery` showing the matching `python_3_11`/`python_3_12` runtime and
+  `pip_311`/`pip_312` hub resolved. Matches `uv run python -m unittest
+  discover -s tests -v`'s `Ran 551 tests ... OK` baseline (551, not 17:
+  `unittest discover` counts individual test methods; `py_test` counts
+  files).
 - `bazel run //:ruff -- check .` and `bazel run //:ruff -- format --check .`
-  must report the same violations (zero, on a clean tree) as today's
-  `python -m ruff` invocations. **Verified** for `check` (`All checks
-  passed!` against the real `src/codev_workflow`); `format --check` follows
-  the same wrapper and was not separately re-run.
+  must report the same violations as today's `python -m ruff` invocations.
+  **Verified**: both report zero violations against the real repository
+  root, matching `uv run ruff check .`/`ruff format --check .` (a set of
+  71 pre-existing errors and 6 unformatted files was found and fixed
+  during this work -- unrelated to the Bazel wiring itself, which
+  reproduced them identically before the fix; see brief.md's history for
+  that fix).
 - `bazel run //:mypy` must report the same violations as today's
   `python -m mypy`, with `strict = true` still enforced. **Verified**:
   `bazel run //:mypy -- --config-file=pyproject.toml src/codev_workflow
   tests` reports `Success: no issues found in 31 source files`, matching a
   clean `strict = true` baseline.
+- `bazel run //scripts:validate_development_workflow` and `bazel run
+  //scripts:evaluate_development_workflow -- --self-test` must match their
+  non-Bazel baselines. **Verified**: both report the identical pass
+  messages (`Workflow validation passed: 12 skills, 3 guides, and 0
+  handbooks, plus 7 behavioral scenarios` / `Workflow evaluator self-test
+  passed`).
+- `//packaging:wheel` must match `python -m build`'s real wheel --
+  manifest, `twine check`, and the CI smoke-test assertion. **Verified**:
+  see "PyPI Packaging" for the full comparison; `just verify-wheel-parity`
+  automates this check going forward.
 - A deliberately staled `requirements_lock.txt` (edited out of sync with
   `uv.lock`) must fail the CI staleness check.
 - A second, no-change `bazel test //...` run must be a full cache hit,
-  verifying the design's stated cache-hit success measure. **Verified** in
-  the spike; not re-verified against the real repository's files
-  (mechanically identical, so not expected to differ).
-
-**Note on "same violations as today":** `bazel run //:ruff -- check .` was
-also run against the real repository root (not just `src/codev_workflow`)
-and reports 71 pre-existing errors, concentrated in
-`.agents/skills/technical-writing-style/scripts/check_structure.py`,
-identical in count and content to `uv run ruff check .` run outside Bazel.
-`bazel run //:ruff -- format --check .` likewise reports the same 6 files
-needing reformatting as the non-Bazel invocation. Both are **pre-existing
-repository state, unrelated to this migration** -- confirmed by running the
-existing non-Bazel command side by side and getting byte-for-byte the same
-result. The design's job was to prove behavioral equivalence with today's
-tooling, not to achieve a clean lint tree; equivalence is what was
-confirmed. Fixing those violations is a separate, out-of-scope change.
+  verifying the design's stated cache-hit success measure. **Verified**
+  against the real repository files: `Executed 0 out of 17 tests: 17
+  tests pass`.
 
 ## Migration, Rollout, Rollback, and Cleanup
 
@@ -714,27 +1064,31 @@ Suggested phased rollout, each phase independently landable and revertable:
 5. `Justfile` finalized; `AGENTS.md` section added.
 6. CI's `test`/`quality` jobs switch to `just` recipes, with the
    stale-lock check added.
+7. Per-version `pip.parse` hubs (`pip_311`, `pip_312`) and `select()`-ed
+   deps; `just test-all` exercises all three Python versions.
+8. `py_binary` targets for the two release scripts, plus the small
+   `evals/development-workflow/BUILD.bazel` their self-test needs.
+9. `packaging/BUILD.bazel`'s `py_wheel` verification build, plus the
+   version-sync safety net in `scripts/version.py`/`verify_release.py`.
 
-Rollback at any phase before step 6 is deleting the new files; rollback after
-step 6 is reverting the CI workflow change back to raw commands, since
-nothing else in the repository depends on Bazel existing. Cleanup: none of
-these steps create files outside `MODULE.bazel`, `MODULE.bazel.lock`,
-`.bazelrc`, `.bazelversion`, `BUILD.bazel` files, `requirements_lock.txt`,
-`tools/*.sh`, and `Justfile` -- all new, all deletable independently of
-`pyproject.toml`/`uv.lock`. `.tools/just` is gitignored and never committed
-in the first place.
+Rollback at any phase is deleting that phase's new files; nothing in the
+repository outside `MODULE.bazel`, `MODULE.bazel.lock`, `.bazelrc`,
+`.bazelversion`, `BUILD.bazel` files, `requirements_lock.txt`, `tools/*.sh`,
+`Justfile`, and `packaging/` depends on Bazel existing --
+`pyproject.toml`/`uv.lock`/the `pip install -e .` loop and the actual
+`python -m build` release pipeline are untouched throughout. `.tools/just`
+is gitignored and never committed in the first place.
 
 ## Open Questions
 
-None remain open. All three questions from the original design were
-resolved by actually running the spike against real `rules_python` 2.3.2,
-Bazel 9.2.0, and this repository's own `uv.lock`/`src`/`tests`, rather than
-left as paper assumptions -- see "Dependency Lock Strategy" and "Tooling
-Integration" above for what changed as a result (`--all-extras` required,
-`imports`/`data` needed on the `py_library`, ruff needs `native_binary` not
-`py_console_script_binary`, `bazel run` needs the
-`BUILD_WORKSPACE_DIRECTORY` wrapper), and the "Test Strategy" note above for
-the final mypy confirmation (`Success: no issues found in 31 source files`).
+None remain open. Every question from the original design, and every one
+that came up while extending it to multi-version testing, the release
+scripts, and packaging, was resolved by actually running it against real
+`rules_python` 2.3.2, Bazel 9.2.0, and this repository's own files, rather
+than left as a paper assumption -- see "Dependency Lock Strategy",
+"Toolchain and Multi-Python Strategy", "Tooling Integration",
+"Release-Process Scripts as Bazel Targets", and "PyPI Packaging" above for
+what each investigation actually found.
 
 ## Implementation Plan
 
@@ -760,25 +1114,45 @@ the final mypy confirmation (`Success: no issues found in 31 source files`).
    `script = "mypy"` + `sh_binary` wrapper) targets, with
    `tools/ruff.sh`/`tools/mypy.sh`. Confirmed against the real repository:
    `bazel run //:ruff -- check .` and `bazel run //:ruff -- format --check
-   .` report the same violations as `uv run ruff check .`/`ruff format
-   --check .` (71 pre-existing errors, 6 files needing reformatting --
-   unrelated to this migration, see "Test Strategy"); `bazel run //:mypy`
-   reports `Success: no issues found in 31 source files`.
+   .` match `uv run ruff check .`/`ruff format --check .` exactly (both
+   now clean -- see "Test Strategy"); `bazel run //:mypy` reports `Success:
+   no issues found in 31 source files`.
 6. **Done.** Root `Justfile` with `lock`, `build`, `test`, `lint`, `fmt`,
    `typecheck`, `ci` recipes; `just --list` and `just lint`/`just
    typecheck` verified against the real repository. `just` itself is
    installed as a repo-local, gitignored binary at `.tools/just` (no
    system-wide/Homebrew install), per the accountable human's choice.
-7. **Done.** The `AGENTS.md` section is in place (update its "planned, not
-   yet implemented" framing now that steps 1-6 have landed).
+7. **Done.** The `AGENTS.md` section is in place, updated to describe the
+   implemented state rather than a plan.
 8. **Done.** `quality` job's ruff/mypy steps now call `just lint`/`just
    fmt-check`/`just typecheck`, with `just lock-check` added; `test` job
-   gained one supplementary `just test` step gated to
-   `ubuntu-latest`/Python 3.13. `release-integrity`, `prepare-release`,
-   `attest`, and `publish` are untouched. YAML-validated locally (not yet
-   run on an actual GitHub Actions runner -- that happens on push/PR).
+   gained supplementary `just`-based steps gated to `ubuntu-latest`/Python
+   3.13. `release-integrity`, `prepare-release`, `attest`, and `publish`
+   are untouched. YAML-validated locally (not yet run on an actual GitHub
+   Actions runner -- that happens on push/PR).
 9. Document the new workflow in `docs/releasing.md` only if the release
    process itself changes -- it should not, per this design's non-goals.
+10. **Done.** Per-version `pip.parse` hubs (`pip_311`, `pip_312`) and
+    `select()`-ed `deps` on `src/codev_workflow/BUILD.bazel`; `just
+    test-all` verified to actually execute (not cache-reuse) under all
+    three interpreters, matching `--@rules_python//python/config_settings:
+    python_version=X.Y`'s real toolchain/hub resolution (`bazel cquery`
+    confirmed) -- not the bare `--python_version` flag the original spike
+    (incorrectly) concluded was a no-op for the whole graph.
+11. **Done.** `scripts/BUILD.bazel` gained `py_binary` targets for
+    `validate-development-workflow.py`/`evaluate-development-workflow.py`;
+    `evals/development-workflow/BUILD.bazel` added so the evaluator
+    self-test's `scenarios.json` dependency resolves. Both verified against
+    their non-Bazel baselines.
+12. **Done.** `packaging/BUILD.bazel`'s `py_package`/`py_wheel`
+    verification build, matched file-for-file and metadata-field-for-field
+    against `python -m build`'s real wheel, `twine check`-clean, and
+    passing the exact CI smoke-test assertion. `just wheel`/`just
+    verify-wheel-parity` recipes; `quality` job runs the latter after its
+    existing wheel smoke test. `scripts/version.py`'s `VERSION_FILES` and
+    `scripts/verify_release.py`'s `verify()` extended to keep
+    `packaging/BUILD.bazel`'s hand-kept version literal in sync, with new
+    tests in `tests/test_verify_release.py`.
 
 ## Acceptance
 
@@ -796,3 +1170,13 @@ the final mypy confirmation (`Success: no issues found in 31 source files`).
 - [x] Accountable human accepts implementation planning against this
   design. (Martin Urban, 2026-08-22) -- implementation starts at step 1,
   the compatibility spike, below.
+- [x] Extended scope -- multi-version Python coverage under Bazel, the two
+  release scripts as Bazel targets, and a `py_wheel` verification
+  build -- accepted by the accountable human. (Martin Urban, 2026-08-22)
+  Each was implemented and verified, not merely designed: real
+  toolchain/hub switching confirmed via `bazel cquery` for 3.11/3.12 (see
+  "Toolchain and Multi-Python Strategy"), both release scripts confirmed
+  against their non-Bazel baselines, and the wheel confirmed
+  file-for-file, `twine check`-clean, and passing the exact CI smoke-test
+  assertion against `python -m build`'s real output (see "PyPI
+  Packaging").

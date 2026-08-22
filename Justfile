@@ -15,8 +15,21 @@ build:
     bazel build //...
 
 # Pass extra bazel test flags/targets through, e.g. `just test //tests:test_cli`.
+# Runs under the default toolchain (3.13); see test-all for every supported
+# version. Scoped to //tests/... rather than //... -- the root BUILD.bazel's
+# ruff/mypy targets are pinned to the 3.13 pip hub and fail to even analyze
+# under a --python_version override for a different hub.
 test *args:
-    bazel test //... {{args}}
+    bazel test //tests/... {{args}}
+
+test-3-12 *args:
+    bazel test --@rules_python//python/config_settings:python_version=3.12 //tests/... {{args}}
+
+test-3-11 *args:
+    bazel test --@rules_python//python/config_settings:python_version=3.11 //tests/... {{args}}
+
+# Run the test suite under every supported Python version (3.11, 3.12, 3.13).
+test-all: test test-3-12 test-3-11
 
 lint:
     bazel run //:ruff -- check .
@@ -44,5 +57,38 @@ lock-check:
         exit 1
     fi
 
+validate-catalog:
+    bazel run //scripts:validate_development_workflow -- --repo src/codev_workflow/bundle
+
+self-test-evaluator:
+    bazel run //scripts:evaluate_development_workflow -- --repo . --self-test
+
+# Build the wheel via py_wheel. This is a verification build, matched
+# file-for-file and metadata-field-for-field against `python -m build`'s
+# output -- it is not the actual release artifact. `python -m build` +
+# twine stay the real PyPI publish path (docs/releasing.md); see
+# docs/features/bazel-migration/design.md's "PyPI Packaging" section for
+# the known gaps (older Metadata-Version, no sdist).
+wheel:
+    bazel build //packaging:wheel
+
+# Verify the Bazel wheel still matches python -m build's real output.
+verify-wheel-parity: wheel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf /tmp/codev-wheel-parity
+    mkdir -p /tmp/codev-wheel-parity
+    uv run python -m build --outdir /tmp/codev-wheel-parity/setuptools-dist > /dev/null
+    setuptools_whl=$(ls /tmp/codev-wheel-parity/setuptools-dist/*.whl)
+    bazel_whl=$(bazel cquery --output=files //packaging:wheel 2>/dev/null)
+    unzip -l "$setuptools_whl" | awk '{print $4}' | sed '/^$/d' | sort > /tmp/codev-wheel-parity/setuptools.manifest
+    unzip -l "$bazel_whl" | awk '{print $4}' | sed '/^$/d' | sort > /tmp/codev-wheel-parity/bazel.manifest
+    if ! diff -q /tmp/codev-wheel-parity/setuptools.manifest /tmp/codev-wheel-parity/bazel.manifest > /dev/null; then
+        echo "Bazel wheel file manifest has diverged from python -m build's output:" >&2
+        diff /tmp/codev-wheel-parity/setuptools.manifest /tmp/codev-wheel-parity/bazel.manifest >&2 || true
+        exit 1
+    fi
+    uv run twine check "$bazel_whl"
+
 # Everything CI's quality gate checks, in one command.
-ci: lint fmt-check typecheck lock-check test
+ci: lint fmt-check typecheck lock-check test-all validate-catalog self-test-evaluator verify-wheel-parity

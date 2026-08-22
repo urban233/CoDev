@@ -1,0 +1,80 @@
+"""PyPI wheel build via rules_python's native py_wheel/py_package.
+
+Mirrors pyproject.toml's [project] and [tool.setuptools] tables. Version is
+hand-kept in sync with pyproject.toml/src/codev_workflow/__init__.py -- see
+docs/features/bazel-migration/design.md's "PyPI Packaging" section.
+"""
+
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@rules_python//python:packaging.bzl", "py_package", "py_wheel")
+
+# setuptools emits this automatically; py_wheel does not, so it's added
+# explicitly via extra_distinfo_files below to match the existing
+# `python -m build` wheel's manifest exactly.
+write_file(
+    name = "top_level_txt",
+    out = "top_level.txt",
+    content = ["codev_workflow"],
+)
+
+py_package(
+    name = "codev_workflow_pkg",
+    # py_package filters by each input's repo-relative short_path (e.g.
+    # "src/codev_workflow/cli.py"), not the Python import path -- "src.
+    # codev_workflow" (dots -> slashes) is required here, "codev_workflow"
+    # alone matches nothing. Confirmed by testing: the latter produced a
+    # wheel with only dist-info, no package content.
+    packages = ["src.codev_workflow"],
+    deps = ["//src/codev_workflow:codev_workflow"],
+)
+
+py_wheel(
+    name = "wheel",
+    distribution = "open-codev-workflow",
+    version = "0.3.0",
+    python_tag = "py3",
+    python_requires = ">=3.11",
+    author = "Martin Urban",
+    summary = "Human-guided AI software delivery for real repositories.",
+    # No separate `homepage` attr: that emits a legacy `Home-page:` header
+    # setuptools 77+ no longer writes once `Homepage` is in project_urls --
+    # confirmed by diffing against the real `python -m build` METADATA.
+    license = "BSD-3-Clause",
+    description_file = "//:README.md",
+    description_content_type = "text/markdown",
+    project_urls = {
+        "Homepage": "https://github.com/urban233/CoDev",
+        "Repository": "https://github.com/urban233/CoDev",
+        "Issues": "https://github.com/urban233/CoDev/issues",
+    },
+    classifiers = [
+        "Development Status :: 3 - Alpha",
+        "Environment :: Console",
+        "Intended Audience :: Developers",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Topic :: Software Development :: Quality Assurance",
+    ],
+    requires = ["pre-commit>=4.6.1"],
+    # Mirrors pyproject.toml's [project.optional-dependencies] dev extra.
+    extra_requires = {
+        "dev": [
+            "build>=1.2.2",
+            "mypy>=1.15",
+            "ruff>=0.11",
+            "twine>=6.1",
+        ],
+    },
+    entry_points = {
+        "console_scripts": ["codev = codev_workflow.cli:main"],
+    },
+    extra_distinfo_files = {
+        "//:LICENSE": "licenses/LICENSE",
+        ":top_level_txt": "top_level.txt",
+    },
+    strip_path_prefixes = ["src"],
+    deps = [":codev_workflow_pkg"],
+)

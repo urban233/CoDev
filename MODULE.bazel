@@ -21,11 +21,26 @@ use_repo(python, "python_3_11", "python_3_12", "python_3_13")
 
 # requirements_lock.txt is generated from uv.lock via `just lock`
 # (`uv export --frozen --no-emit-project --all-extras`). uv.lock stays the
-# source of truth -- never hand-edit requirements_lock.txt.
+# source of truth -- never hand-edit requirements_lock.txt. One hub per
+# toolchain version: verified that `uv export --python 3.11/3.12/3.13`
+# produce byte-identical dependency content for this project (no
+# version-specific wheel selection in this dependency set), so all three
+# hubs are resolved from the same requirements_lock.txt -- not because
+# they're assumed equivalent, but because that was checked directly.
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
     hub_name = "pip",
     python_version = "3.13",
     requirements_lock = "//:requirements_lock.txt",
 )
-use_repo(pip, "pip")
+pip.parse(
+    hub_name = "pip_312",
+    python_version = "3.12",
+    requirements_lock = "//:requirements_lock.txt",
+)
+pip.parse(
+    hub_name = "pip_311",
+    python_version = "3.11",
+    requirements_lock = "//:requirements_lock.txt",
+)
+use_repo(pip, "pip", "pip_311", "pip_312")
