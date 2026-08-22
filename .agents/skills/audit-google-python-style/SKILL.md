@@ -1,6 +1,9 @@
 ---
 name: audit-google-python-style
 description: Audit Python code against the Google Python Style Guide and automatically fix all deterministic style violations to produce clean, conformant code. Invoke only for an explicit Google Python Style audit request.
+license: BSD-3-Clause
+metadata:
+  author: Martin Urban <martin.urban@studmail.w-hs.de>, Hannah Kullik <hannah.kullik@studmail.w-hs.de>
 ---
 
 # Google Python Style audit

@@ -95,7 +95,15 @@ PRE_PR_CLEANUP_AGENT_TEMPLATES = {
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
     "orchestrator": {
         "model": "openai/gpt-5.6-luna",
-        "description": "Human-controlled workflow and work-item orchestrator",
+        "description": "Human-controlled workflow and task orchestrator",
+    },
+    "planner": {
+        "model": "openai/gpt-5.6-luna",
+        "description": (
+            "Human-controlled entry point for Specify, Understand, Design, "
+            "and Plan work -- decoupled from execution"
+        ),
+        "mode": "primary",
     },
     "code-audit": {
         "model": "openai/gpt-5.6-luna",
@@ -121,7 +129,7 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5.6-luna",
         "description": (
             "Narrow, fast independent check that the inner loop's change "
-            "matches the work item and passes local QA"
+            "matches the task and passes local QA"
         ),
     },
     "outer-loop-runner": {
@@ -185,7 +193,7 @@ acceptance, merge, deployment, migration, publication, and rollout expansion.
 
 GITIGNORE_BLOCK = """# codev:start
 # CoDev local escalation log (ADR-0003) -- not shared or committed.
-.codev/work/escalations.jsonl
+.codev/task/escalations.jsonl
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
@@ -359,6 +367,7 @@ def _render_code_audit_agent(template: bytes, programming_language: str) -> byte
         )
     )
     permissions = "".join(f"    {name}: allow\n" for name in selected_skills)
+    junie_skills = "[" + ", ".join(f'"{name}"' for name in selected_skills) + "]"
     if programming_language == "none":
         instructions = (
             "Do not assume a programming language or invoke language-specific "
@@ -380,6 +389,7 @@ def _render_code_audit_agent(template: bytes, programming_language: str) -> byte
     rendered = rendered.replace("{{DESCRIPTION_SCOPE}}", scopes[programming_language])
     rendered = rendered.replace("{{SKILL_PERMISSIONS}}", permissions.rstrip("\n"))
     rendered = rendered.replace("{{LANGUAGE_INSTRUCTIONS}}", instructions)
+    rendered = rendered.replace("{{JUNIE_SKILLS}}", junie_skills)
     return rendered.encode("utf-8")
 
 
@@ -1250,6 +1260,109 @@ def plan_remove(target: Path) -> Plan:
             elif remove_opencode_config:
                 plan.deletions.add(target / ".opencode" / "opencode.json")
                 plan.operations.append(Operation("remove", ".opencode/opencode.json"))
+    return plan
+
+
+def plan_adapter_remove(target: Path, platform: str) -> Plan:
+    """Preflight removal of a single adapter from an existing installation."""
+
+    if platform not in VALID_PLATFORMS:
+        raise CoDevError(f"unknown platform: {platform!r}")
+
+    target = target.resolve()
+    lock = _read_lock(target)
+    installed = lock.get("platforms", [])
+    if platform not in installed:
+        raise CoDevError(
+            f"adapter {platform!r} is not installed; "
+            f"installed adapters: {', '.join(installed)}"
+        )
+    if len(installed) < 2:
+        raise CoDevError(
+            f"{platform!r} is the only installed adapter; "
+            "use 'codev remove' to uninstall completely"
+        )
+
+    remaining = tuple(p for p in installed if p != platform)
+    programming_language = lock.get("programming_language", "none")
+    new_files = _bundle_files(remaining, programming_language)
+
+    files = lock["files"]
+    if not all(
+        isinstance(path, str) and isinstance(value, str)
+        for path, value in files.items()
+    ):
+        raise CoDevError("lock file contains an invalid managed-file entry")
+    integrations = lock.get("integrations")
+    if not isinstance(integrations, dict):
+        raise CoDevError("lock file contains invalid integrations")
+
+    plan = Plan()
+    for relative, expected_hash in sorted(files.items()):
+        if relative in new_files:
+            continue
+        destination = target / Path(relative)
+        if not destination.exists():
+            continue
+        if not destination.is_file():
+            plan.operations.append(
+                Operation("conflict", relative, "managed path is not a file")
+            )
+        elif _sha256(destination.read_bytes()) != expected_hash:
+            plan.operations.append(
+                Operation("conflict", relative, "managed file has local changes")
+            )
+        else:
+            plan.deletions.add(destination)
+            plan.operations.append(Operation("remove", relative))
+
+    if platform == "opencode":
+        try:
+            opencode_content, remove_opencode_config, detail = (
+                _prepare_opencode_removal(target, integrations)
+            )
+        except CoDevError as error:
+            plan.operations.append(
+                Operation("conflict", ".opencode/opencode.json", str(error))
+            )
+        else:
+            if opencode_content is not None:
+                plan.writes[target / ".opencode" / "opencode.json"] = opencode_content
+                plan.operations.append(
+                    Operation("integrate", ".opencode/opencode.json", detail)
+                )
+            elif remove_opencode_config:
+                plan.deletions.add(target / ".opencode" / "opencode.json")
+                plan.operations.append(Operation("remove", ".opencode/opencode.json"))
+
+    managed_opencode_agents: dict[str, str] = {}
+    schema_managed = False
+    agent_container_managed = False
+    config_file_managed = False
+    default_agent_managed = False
+    if "opencode" in remaining:
+        managed_opencode_agents = integrations.get("opencode_agent_hashes", {})
+        if not isinstance(managed_opencode_agents, dict) or not all(
+            isinstance(name, str) and isinstance(value, str)
+            for name, value in managed_opencode_agents.items()
+        ):
+            raise CoDevError("lock file has invalid OpenCode agent hashes")
+        schema_managed = bool(integrations.get("opencode_schema_managed"))
+        agent_container_managed = bool(
+            integrations.get("opencode_agent_container_managed")
+        )
+        config_file_managed = bool(integrations.get("opencode_config_file_managed"))
+        default_agent_managed = bool(integrations.get("opencode_default_agent_managed"))
+    plan.lock = _new_lock(
+        remaining,
+        new_files,
+        programming_language=programming_language,
+        default_agent_managed=default_agent_managed,
+        managed_opencode_agents=managed_opencode_agents,
+        opencode_schema_managed=schema_managed,
+        opencode_agent_container_managed=agent_container_managed,
+        opencode_config_file_managed=config_file_managed,
+    )
     return plan
 
 

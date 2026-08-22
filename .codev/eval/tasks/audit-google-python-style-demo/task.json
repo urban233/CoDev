@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "audit-google-python-style-demo",
+  "description": "Actor audits a small package with a planted private-helper missing-docstring violation (this skill's distinctive 'no exemption for private symbols' policy), a wildcard import, and a semicolon-joined statement. Verifier checks the plan flags the private-helper violation, requests approval, and leaves every source file unmodified -- Phase A must stay read-only.",
+  "skill": "audit-google-python-style",
+  "category": "plan-phase-audit",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

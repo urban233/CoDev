@@ -1,6 +1,7 @@
 ---
 name: specify-project
 description: Interview a developer one question at a time to create or revise a canonical SPECIFICATION.md that combines an accepted product frame with a high-level technical blueprint. Use for a new greenfield product, a whole-product redesign, or an explicit request for a comprehensive project specification. Do not use for a bounded feature, implementation plan, roadmap, task breakdown, or code change.
+license: BSD-3-Clause
 ---
 
 # Specify Project

@@ -64,7 +64,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         self.assertFalse(any(path.endswith(".template") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(13, len(skills))
+        self.assertEqual(15, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/design-skill-eval/SKILL.md").is_file()
@@ -272,6 +272,7 @@ class InstallerTests(unittest.TestCase):
                 "lightweight-reviewer.toml",
                 "orchestrator.toml",
                 "outer-loop-runner.toml",
+                "planner.toml",
                 "reviewer.toml",
                 "rollout-specialist.toml",
                 "security-data-specialist.toml",
@@ -302,6 +303,7 @@ class InstallerTests(unittest.TestCase):
                 ".codex/agents/lightweight-reviewer.toml",
                 ".codex/agents/orchestrator.toml",
                 ".codex/agents/outer-loop-runner.toml",
+                ".codex/agents/planner.toml",
                 ".codex/agents/reviewer.toml",
                 ".codex/agents/rollout-specialist.toml",
                 ".codex/agents/security-data-specialist.toml",
@@ -408,7 +410,7 @@ class InstallerTests(unittest.TestCase):
         gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(installer.GITIGNORE_START, gitignore)
         self.assertIn(installer.GITIGNORE_END, gitignore)
-        self.assertIn(".codev/work/escalations.jsonl", gitignore)
+        self.assertIn(".codev/task/escalations.jsonl", gitignore)
         lock = json.loads((self.target / ".codev" / "lock.json").read_text())
         self.assertIn("gitignore_block_hash", lock["integrations"])
 
@@ -784,6 +786,80 @@ class InternalDevToolingExcludedFromBundleTests(unittest.TestCase):
         self.assertEqual([], leaked)
 
 
+class SkillCardAndLicenseTests(unittest.TestCase):
+    """Every bundled skill carries a real `license` frontmatter field and a
+    filled-out `skill-card.md`, per docs/adr/0029-adopt-skill-cards-and-
+    license-metadata.md. Both ship to an installed project automatically --
+    `_walk_bundle()` copies every file under bundle/, no separate install-time
+    logic exists for either -- so walking the bundle here is the real,
+    installed-project view, not a shortcut around it."""
+
+    _REQUIRED_SKILL_CARD_SECTIONS = (
+        "**Description:**",
+        "**Owner:**",
+        "**License / Terms of Use:**",
+        "**Use Case:**",
+        "**Deployment Geography for Use:**",
+        "**Requirements / Dependencies:**",
+        "**Known Risks and Mitigations:**",
+        "**References:**",
+        "**Skill Output:**",
+        "**Skill Version:**",
+        "**Ethical Considerations:**",
+    )
+
+    def _bundled_skill_names(self, files: dict[str, bytes]) -> set[str]:
+        return {
+            path.split("/")[2]
+            for path in files
+            if path.startswith(".agents/skills/") and path.endswith("/SKILL.md")
+        }
+
+    def test_every_bundled_skill_declares_a_license(self) -> None:
+        files = installer._walk_bundle()
+        names = self._bundled_skill_names(files)
+        self.assertTrue(names)
+        for name in sorted(names):
+            with self.subTest(skill=name):
+                text = files[f".agents/skills/{name}/SKILL.md"].decode("utf-8")
+                lines = text.splitlines()
+                end = lines.index("---", 1)
+                license_lines = [
+                    line for line in lines[1:end] if line.startswith("license:")
+                ]
+                self.assertEqual(
+                    1, len(license_lines), f"{name}: expected exactly one license field"
+                )
+                self.assertIn("BSD-3-Clause", license_lines[0])
+
+    def test_every_bundled_skill_has_a_filled_out_skill_card(self) -> None:
+        files = installer._walk_bundle()
+        names = self._bundled_skill_names(files)
+        for name in sorted(names):
+            with self.subTest(skill=name):
+                path = f".agents/skills/{name}/skill-card.md"
+                self.assertIn(path, files, f"{name}: missing skill-card.md")
+                text = files[path].decode("utf-8")
+                self.assertIn(f"# Skill Card: {name}", text)
+                for section in self._REQUIRED_SKILL_CARD_SECTIONS:
+                    with self.subTest(section=section):
+                        self.assertIn(section, text)
+                # A skill card copied from the template without being filled
+                # in still contains its bracketed placeholder prose -- catch
+                # that instead of silently accepting an unfilled copy.
+                self.assertNotIn("[", text)
+                self.assertNotIn("]", text)
+
+    def test_skill_card_template_is_bundled_and_lists_every_section(self) -> None:
+        files = installer._walk_bundle()
+        path = "docs/codev/onboarding/skill-card.template.md"
+        self.assertIn(path, files)
+        text = files[path].decode("utf-8")
+        for section in self._REQUIRED_SKILL_CARD_SECTIONS:
+            with self.subTest(section=section):
+                self.assertIn(section, text)
+
+
 class CodeownersInitTests(unittest.TestCase):
     def test_writes_a_starter_file_under_dot_github(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -832,6 +908,194 @@ class CodeownersInitTests(unittest.TestCase):
             destination = installer.codeowners_init(target)
             text = destination.read_text(encoding="utf-8")
         self.assertIn("# path/pattern  @your-team-here", text)
+
+
+class AdapterRemoveTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.target = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def install(
+        self,
+        platforms: tuple[str, ...] = ("all",),
+        programming_language: str = "none",
+    ) -> installer.Plan:
+        plan = installer.plan_init(self.target, platforms, programming_language)
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        return plan
+
+    def test_remove_opencode_from_multi_platform_install(self) -> None:
+        self.install(("codex", "opencode"))
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".opencode").exists())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["codex"], lock["platforms"])
+        self.assertFalse(any(p.startswith(".opencode/") for p in lock["files"]))
+
+    def test_remove_codex_from_multi_platform_install(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "codex")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".codex").exists())
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["opencode"], lock["platforms"])
+        self.assertFalse(any(p.startswith(".codex/") for p in lock["files"]))
+
+    def test_remove_shared_skills_preserved(self) -> None:
+        self.install(("codex", "opencode"))
+        skills_before = sorted(
+            str(p.relative_to(self.target))
+            for p in (self.target / ".agents" / "skills").glob("*")
+        )
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+
+        skills_after = sorted(
+            str(p.relative_to(self.target))
+            for p in (self.target / ".agents" / "skills").glob("*")
+        )
+        self.assertEqual(skills_before, skills_after)
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(any(p.startswith(".agents/skills/") for p in lock["files"]))
+
+    def test_remove_last_platform_rejected(self) -> None:
+        self.install(("codex",))
+
+        with self.assertRaises(installer.CoDevError) as ctx:
+            installer.plan_adapter_remove(self.target, "codex")
+        self.assertIn("codev remove", str(ctx.exception))
+
+    def test_remove_not_installed_platform_raises(self) -> None:
+        self.install(("codex",))
+
+        with self.assertRaises(installer.CoDevError) as ctx:
+            installer.plan_adapter_remove(self.target, "junie")
+        self.assertIn("not installed", str(ctx.exception))
+
+    def test_remove_unknown_platform_raises(self) -> None:
+        self.install(("codex",))
+        with self.assertRaises(installer.CoDevError):
+            installer.plan_adapter_remove(self.target, "bogus")
+
+    def test_remove_conflict_on_local_edit(self) -> None:
+        self.install(("codex", "opencode"))
+        agent = self.target / ".opencode" / "agents" / "builder.md"
+        original = agent.read_text(encoding="utf-8")
+        agent.write_text(original + "\nlocal edit\n", encoding="utf-8")
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+
+        self.assertTrue(plan.conflicts)
+        self.assertTrue(agent.exists())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_remove_opencode_cleans_config_managed_entries(self) -> None:
+        self.install(("codex", "opencode"))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertIn("agent", config)
+        self.assertIn("$schema", config)
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse(config_path.exists())
+
+    def test_remove_opencode_preserves_user_owned_config(self) -> None:
+        self.install(("codex", "opencode"))
+        config_path = self.target / ".opencode" / "opencode.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["theme"] = "custom"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        remaining = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual("custom", remaining["theme"])
+        self.assertNotIn("agent", remaining)
+        self.assertNotIn("$schema", remaining)
+
+    def test_remove_produces_valid_lock(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, lock["schema_version"])
+        self.assertEqual(["codex"], lock["platforms"])
+        remaining_files = set(lock["files"])
+        for rel in remaining_files:
+            self.assertTrue(
+                (self.target / rel).is_file(),
+                f"lock references missing file {rel}",
+            )
+
+    def test_remove_then_add_back_round_trip(self) -> None:
+        self.install(("codex", "opencode"))
+        remove_plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(remove_plan.conflicts)
+        installer.apply_plan(self.target, remove_plan)
+
+        add_plan = installer.plan_update(self.target, ["opencode"])
+        self.assertFalse(add_plan.conflicts)
+        installer.apply_plan(self.target, add_plan)
+
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_dry_run_does_not_modify_files(self) -> None:
+        self.install(("codex", "opencode"))
+        plan = installer.plan_adapter_remove(self.target, "opencode")
+        self.assertFalse(plan.conflicts)
+        self.assertTrue(plan.changed)
+
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("opencode", lock["platforms"])
+
+    def test_remove_junie_from_multi_platform(self) -> None:
+        self.install(("codex", "junie"))
+        self.assertTrue((self.target / ".junie" / "agents" / "builder.md").is_file())
+
+        plan = installer.plan_adapter_remove(self.target, "junie")
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".junie").exists())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
 
 
 if __name__ == "__main__":

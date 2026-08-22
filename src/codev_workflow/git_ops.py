@@ -26,15 +26,15 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Guarded git/GitHub mutation surface for one CoDev work item.
+"""Guarded git/GitHub mutation surface for one CoDev task.
 
 Agents may not run raw `git commit`, `git push`, or `gh pr create` -- those
 stay denied in every platform adapter's permission block. This module is the
-only path to mutating the repository or GitHub for a work item, and it
+only path to mutating the repository or GitHub for a task, and it
 mechanically enforces what ADR-0002 and ADR-0003 require: operate only on
-the branch created for this work item, never the repository's default
+the branch created for this task, never the repository's default
 branch, never a force-push (not exposed as an option at all), and
-independently re-verify `codev work check` before opening or readying a pull
+independently re-verify `codev task check` before opening or readying a pull
 request rather than trusting the caller already did.
 
 See docs/adr/0002-inner-loop-self-healing-and-pr-open.md and
@@ -48,30 +48,40 @@ import os
 import re
 import shutil
 import subprocess
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
-from codev_workflow import config, work
+from codev_workflow import config, task
 from codev_workflow.installer import CoDevError, _read_lock
 
 GIT_STATE_FILENAME = "git-state.json"
+PR_TEMPLATE_PATH = Path(".github/pull_request_template.md")
+_PR_TEMPLATE_MARKERS = (
+    "summary",
+    "validation",
+    "changed-files",
+    "review",
+    "tracking",
+    "closes",
+)
 
 
 class GitOpsError(Exception):
     """Raised when a guarded git/GitHub operation cannot proceed safely."""
 
 
-def branch_name_for(work_item_id: str) -> str:
-    return f"codev/{work_item_id}"
+def branch_name_for(task_id: str) -> str:
+    return f"codev/{task_id}"
 
 
-def _work_item_dir(target: Path, work_item_id: str) -> Path:
-    work._validate_id(work_item_id)
-    return target / Path(work.WORK_DIR_RELATIVE.as_posix()) / work_item_id
+def _task_dir(target: Path, task_id: str) -> Path:
+    task._validate_id(task_id)
+    return target / Path(task.TASK_DIR_RELATIVE.as_posix()) / task_id
 
 
-def _git_state_path(target: Path, work_item_id: str) -> Path:
-    return _work_item_dir(target, work_item_id) / GIT_STATE_FILENAME
+def _git_state_path(target: Path, task_id: str) -> Path:
+    return _task_dir(target, task_id) / GIT_STATE_FILENAME
 
 
 def _gh_executable() -> str | None:
@@ -184,12 +194,26 @@ def detect_identity(*, target: Path) -> str | None:
     return None
 
 
+def has_github_remote(*, target: Path) -> bool:
+    """Best-effort: does this repository resolve to a real GitHub remote?
+
+    Never raises -- backs `codev task start`'s issue-linkage gate (ADR-0020),
+    which must not turn into a hard GitHub dependency for a repository that
+    has none, the same restraint `detect_identity` already applies.
+    """
+    try:
+        _run_gh(["repo", "view", "--json", "url"], cwd=target)
+    except GitOpsError:
+        return False
+    return True
+
+
 def fetch_issue(number: int, *, target: Path) -> dict[str, str]:
     """Read-only lookup of a GitHub issue's title and URL.
 
     Unlike detect_identity, this raises on failure: it only runs when a
     human explicitly passes --github-issue, so a bad issue number should
-    fail loudly rather than silently start a work item with no summary.
+    fail loudly rather than silently start a task with no summary.
     """
     raw = _run_gh(["issue", "view", str(number), "--json", "title,url"], cwd=target)
     try:
@@ -210,12 +234,12 @@ def create_issue(
     target: Path,
     assignees: list[str] | None = None,
 ) -> str:
-    """Create a new GitHub issue. Has no work-item precondition.
+    """Create a new GitHub issue. Has no task precondition.
 
     Unlike branch|commit|push|open-pr|mark-ready, this runs *before*
-    codev work start exists for the item -- pushing a delivery-plan work
-    item to GitHub happens ahead of starting round-state tracking on it, so
-    there is nothing yet to call codev work check against.
+    codev task start exists for the item -- pushing a delivery-plan task
+    to GitHub happens ahead of starting round-state tracking on it, so
+    there is nothing yet to call codev task check against.
     """
     args = ["issue", "create", "--title", title, "--body", body]
     for assignee in assignees or []:
@@ -314,6 +338,66 @@ def _closes_issue_number(link_ref: str | None, *, target: Path) -> int | None:
     return int(match["number"])
 
 
+def _with_closes_line(body: str, link_ref: str | None, *, target: Path) -> str:
+    """Append `Closes #N` when link_ref names this repo's own GitHub issue.
+
+    Shared by every code path that writes a pull request body -- open_pr's
+    initial body and mark_ready's regenerated one alike -- so the auto-close
+    link, once earned, cannot be silently dropped by whichever call happens
+    to run last.
+    """
+    issue_number = _closes_issue_number(link_ref, target=target)
+    return f"{body}\n\nCloses #{issue_number}" if issue_number else body
+
+
+def _render_pr_template(task_id: str, *, target: Path) -> str:
+    """Render task evidence into the repository's managed PR template.
+
+    Older or project-owned templates remain untouched: their absence or an
+    incompatible shape falls back to the established standalone description.
+    """
+    description = task.describe(task_id, target=target)
+    generated = task.pr_description(task_id, target=target)
+    template_path = target / PR_TEMPLATE_PATH
+    if not template_path.is_file():
+        warnings.warn(
+            f"{PR_TEMPLATE_PATH} is absent; using CoDev's generated PR body instead",
+            stacklevel=2,
+        )
+        return _with_closes_line(generated, description.get("link_ref"), target=target)
+
+    template = template_path.read_text(encoding="utf-8")
+    markers = {marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS}
+    missing = [marker for marker, token in markers.items() if token not in template]
+    if missing:
+        warnings.warn(
+            f"{PR_TEMPLATE_PATH} is not CoDev-compatible (missing "
+            f"{', '.join(missing)}); using CoDev's generated PR body instead",
+            stacklevel=2,
+        )
+        return _with_closes_line(generated, description.get("link_ref"), target=target)
+
+    generated_without_trailing_newline = generated.rstrip()
+    validation = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[-1]
+    validation = validation.split("\n\nTask: ", 1)[0]
+    summary = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[0]
+    issue_number = _closes_issue_number(description.get("link_ref"), target=target)
+    changed = changed_files(task_id, target=target)
+    values = {
+        "summary": summary,
+        "validation": validation,
+        "changed-files": ", ".join(changed) if changed else "none recorded",
+        "review": (
+            f"Latest task review: {description['latest_decision'] or 'in progress'}."
+        ),
+        "tracking": generated_without_trailing_newline.rsplit("\n\n", 1)[-1],
+        "closes": f"Closes #{issue_number}" if issue_number else "",
+    }
+    for marker, token in markers.items():
+        template = template.replace(token, values[marker])
+    return template.rstrip()
+
+
 def current_branch(target: Path) -> str:
     return _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=target)
 
@@ -336,11 +420,11 @@ def default_branch(target: Path) -> str:
     )
 
 
-def create_branch(work_item_id: str, base_snapshot: str, *, target: Path) -> str:
-    state_path = _git_state_path(target, work_item_id)
+def create_branch(task_id: str, base_snapshot: str, *, target: Path) -> str:
+    state_path = _git_state_path(target, task_id)
     if state_path.exists():
-        raise GitOpsError(f"work item {work_item_id!r} already has a branch recorded")
-    branch = branch_name_for(work_item_id)
+        raise GitOpsError(f"task {task_id!r} already has a branch recorded")
+    branch = branch_name_for(task_id)
     _run_git(["checkout", "-b", branch, base_snapshot], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"branch": branch, "base_snapshot": base_snapshot}
@@ -350,24 +434,24 @@ def create_branch(work_item_id: str, base_snapshot: str, *, target: Path) -> str
     return branch
 
 
-def _load_git_state(work_item_id: str, *, target: Path) -> dict[str, Any]:
-    state_path = _git_state_path(target, work_item_id)
+def _load_git_state(task_id: str, *, target: Path) -> dict[str, Any]:
+    state_path = _git_state_path(target, task_id)
     if not state_path.exists():
         raise GitOpsError(
-            f"work item {work_item_id!r} has no branch yet; call create_branch first"
+            f"task {task_id!r} has no branch yet; call create_branch first"
         )
     return cast("dict[str, Any]", json.loads(state_path.read_text(encoding="utf-8")))
 
 
-def changed_files(work_item_id: str, *, target: Path) -> list[str]:
-    """Read-only, best-effort list of paths changed on the work item's branch.
+def changed_files(task_id: str, *, target: Path) -> list[str]:
+    """Read-only, best-effort list of paths changed on the task's branch.
 
     Returns an empty list rather than raising when the item has no branch
     recorded yet -- this backs status --verbose's informational overlap
     check, not a hard requirement.
     """
     try:
-        git_state = _load_git_state(work_item_id, target=target)
+        git_state = _load_git_state(task_id, target=target)
     except GitOpsError:
         return []
     try:
@@ -380,17 +464,17 @@ def changed_files(work_item_id: str, *, target: Path) -> list[str]:
     return [line for line in output.splitlines() if line]
 
 
-def own_branch(work_item_id: str, *, target: Path) -> str:
-    return cast(str, _load_git_state(work_item_id, target=target)["branch"])
+def own_branch(task_id: str, *, target: Path) -> str:
+    return cast(str, _load_git_state(task_id, target=target)["branch"])
 
 
-def _ensure_on_own_branch(work_item_id: str, *, target: Path) -> str:
-    branch = own_branch(work_item_id, target=target)
+def _ensure_on_own_branch(task_id: str, *, target: Path) -> str:
+    branch = own_branch(task_id, target=target)
     actual = current_branch(target)
     if actual != branch:
         raise GitOpsError(
-            f"refusing to act: checked out branch is {actual!r}, expected the work "
-            f"item's own branch {branch!r}"
+            f"refusing to act: checked out branch is {actual!r}, expected the "
+            f"task's own branch {branch!r}"
         )
     return branch
 
@@ -426,7 +510,7 @@ def _dirty_paths(target: Path) -> list[str]:
     return paths
 
 
-def _refuse_if_mixed_dirty_paths(work_item_id: str, *, target: Path) -> None:
+def _refuse_if_mixed_dirty_paths(task_id: str, *, target: Path) -> None:
     """Refuse a path-less `git add -A` when the dirty worktree mixes
     CoDev-managed changes with everything else -- prevents concurrent
     workflow-file edits from silently riding along in a product commit.
@@ -440,7 +524,7 @@ def _refuse_if_mixed_dirty_paths(work_item_id: str, *, target: Path) -> None:
     other_dirty = sorted(path for path in dirty if path not in managed)
     if managed_dirty and other_dirty:
         raise GitOpsError(
-            f"refusing to commit {work_item_id!r}: the worktree mixes "
+            f"refusing to commit {task_id!r}: the worktree mixes "
             f"CoDev-managed changes ({', '.join(managed_dirty)}) with other "
             f"changes ({', '.join(other_dirty)}) -- use --paths or --staged "
             "to commit them separately"
@@ -448,7 +532,7 @@ def _refuse_if_mixed_dirty_paths(work_item_id: str, *, target: Path) -> None:
 
 
 def commit(
-    work_item_id: str,
+    task_id: str,
     message: str,
     *,
     target: Path,
@@ -463,23 +547,23 @@ def commit(
         raise GitOpsError("--paths and --staged are mutually exclusive")
     if (round_number is None) != (evidence is None):
         raise GitOpsError("--round and --evidence must be given together")
-    _ensure_on_own_branch(work_item_id, target=target)
+    _ensure_on_own_branch(task_id, target=target)
     if staged:
         pass
     elif paths:
         _run_git(["add", "--", *paths], cwd=target)
     else:
-        _refuse_if_mixed_dirty_paths(work_item_id, target=target)
+        _refuse_if_mixed_dirty_paths(task_id, target=target)
         _run_git(["add", "-A"], cwd=target)
     _run_git(["commit", "-m", message], cwd=target)
     head = current_head(target)
     if round_number is not None:
-        work.record_builder(work_item_id, round_number, head, evidence, target=target)
+        task.record_builder(task_id, round_number, head, evidence, target=target)
     return head
 
 
-def push(work_item_id: str, *, target: Path) -> None:
-    branch = _ensure_on_own_branch(work_item_id, target=target)
+def push(task_id: str, *, target: Path) -> None:
+    branch = _ensure_on_own_branch(task_id, target=target)
     default = default_branch(target)
     if branch == default:
         raise GitOpsError(
@@ -500,20 +584,21 @@ def _existing_pr_url(branch: str, *, target: Path) -> str | None:
 
 
 def open_pr(
-    work_item_id: str,
+    task_id: str,
     title: str,
     body: str,
     *,
     target: Path,
     base: str | None = None,
+    use_template: bool = False,
 ) -> str:
-    branch = _ensure_on_own_branch(work_item_id, target=target)
+    branch = _ensure_on_own_branch(task_id, target=target)
     head = current_head(target)
-    result = work.check(work_item_id, head, target=target)
-    description = work.describe(work_item_id, target=target)
+    result = task.check(task_id, head, target=target)
+    description = task.describe(task_id, target=target)
     # ok_ready_for_pr is produced exactly once, at the inner-to-outer
     # transition -- it never recurs. An item can reach the outer phase
-    # without ever passing through it (codev work reopen recovering
+    # without ever passing through it (codev task reopen recovering
     # straight into the outer phase, or a direct-review entry), so once
     # there, any non-stop check() result is eligible too: the guard that
     # actually matters is "no pull request already exists" below, checked
@@ -523,7 +608,7 @@ def open_pr(
     )
     if not eligible:
         raise GitOpsError(
-            "refusing to open a pull request: codev work check returned "
+            "refusing to open a pull request: codev task check returned "
             f"{result.reason!r} ({result.message}); a pull request may only be "
             "opened at the ok_ready_for_pr checkpoint, or for an item already in "
             "the outer phase with none yet"
@@ -540,9 +625,11 @@ def open_pr(
         resolved_base = configured_base.value if configured_base else None
     if resolved_base is None:
         resolved_base = default_branch(target)
-    link_ref = description.get("link_ref")
-    issue_number = _closes_issue_number(link_ref, target=target)
-    final_body = f"{body}\n\nCloses #{issue_number}" if issue_number else body
+    final_body = (
+        _render_pr_template(task_id, target=target)
+        if use_template
+        else _with_closes_line(body, description.get("link_ref"), target=target)
+    )
     return _run_gh(
         [
             "pr",
@@ -564,15 +651,15 @@ def open_pr(
 _MARK_READY_REASONS = ("ok_approve", "ok_approve_with_deferrals")
 
 
-def mark_ready(work_item_id: str, *, target: Path) -> None:
-    branch = _ensure_on_own_branch(work_item_id, target=target)
+def mark_ready(task_id: str, *, target: Path) -> None:
+    branch = _ensure_on_own_branch(task_id, target=target)
     head = current_head(target)
-    result = work.check(work_item_id, head, target=target)
+    result = task.check(task_id, head, target=target)
     if result.reason not in _MARK_READY_REASONS:
         raise GitOpsError(
-            "refusing to mark the pull request ready: codev work check returned "
+            "refusing to mark the pull request ready: codev task check returned "
             f"{result.reason!r}, not one of {_MARK_READY_REASONS} ({result.message})"
         )
-    body = work.pr_description(work_item_id, target=target)
-    _run_gh(["pr", "edit", branch, "--body", body], cwd=target)
+    final_body = _render_pr_template(task_id, target=target)
+    _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)

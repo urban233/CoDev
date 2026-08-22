@@ -36,11 +36,60 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from codev_workflow.cli import _apply_deprecated_aliases, _format_snapshot_report, main
-from codev_workflow.work import CheckResult
+from codev_workflow.cli import (
+    _apply_deprecated_aliases,
+    _format_benchmark_report,
+    _skill_name,
+    main,
+)
+from codev_workflow.task import CheckResult
 
 
 class CliTests(unittest.TestCase):
+    def test_open_pr_uses_template_only_for_automatic_bodies(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            body_file = target / "body.md"
+            body_file.write_text("from file", encoding="utf-8")
+            cases: tuple[tuple[list[str], str, bool], ...] = (
+                ([], "generated", True),
+                (["--body", "literal"], "literal", False),
+                (["--body-file", str(body_file)], "from file", False),
+            )
+            with (
+                patch(
+                    "codev_workflow.cli.task_module.pr_description",
+                    return_value="generated",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.open_pr",
+                    return_value="https://github.com/o/r/pull/1",
+                ) as open_pr,
+            ):
+                for extra_args, expected_body, expected_template in cases:
+                    with self.subTest(extra_args=extra_args):
+                        with redirect_stdout(StringIO()):
+                            result = main(
+                                [
+                                    "git",
+                                    "open-pr",
+                                    "--id",
+                                    "item-1",
+                                    "--title",
+                                    "title",
+                                    "--target",
+                                    str(target),
+                                    *extra_args,
+                                ]
+                            )
+                        self.assertEqual(0, result)
+                        self.assertEqual(expected_body, open_pr.call_args.args[2])
+                        self.assertEqual(
+                            expected_template,
+                            open_pr.call_args.kwargs["use_template"],
+                        )
+                        open_pr.reset_mock()
+
     def test_init_check_diff_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -214,7 +263,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(0, main(["check", "--target", str(target)]))
             self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
 
-    def test_work_lifecycle_round_trip(self) -> None:
+    def test_task_lifecycle_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             findings_path = target / "findings.json"
@@ -243,7 +292,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "start",
                             "--id",
                             "item-1",
@@ -260,7 +309,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -283,7 +332,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -298,7 +347,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -317,16 +366,16 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     0,
-                    main(["work", "status", "--id", "item-1", "--target", str(target)]),
+                    main(["task", "status", "--id", "item-1", "--target", str(target)]),
                 )
                 self.assertEqual(
-                    0, main(["work", "log", "--id", "item-1", "--target", str(target)])
+                    0, main(["task", "log", "--id", "item-1", "--target", str(target)])
                 )
                 self.assertEqual(
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "close",
                             "--id",
                             "item-1",
@@ -338,7 +387,100 @@ class CliTests(unittest.TestCase):
                     ),
                 )
 
-    def test_work_reopen_after_close_round_trip(self) -> None:
+    def test_task_record_reviewer_accepts_specialist_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            empty_findings_path = target / "empty-findings.json"
+            empty_findings_path.write_text("[]", encoding="utf-8")
+            empty_evidence_path = target / "empty-evidence.json"
+            empty_evidence_path.write_text("{}", encoding="utf-8")
+            selection_path = target / "selection.json"
+            selection_path.write_text(
+                json.dumps({"specialists": ["rollout-specialist"]}),
+                encoding="utf-8",
+            )
+            with redirect_stdout(StringIO()):
+                main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                main(
+                    [
+                        "task",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--role",
+                        "reviewer",
+                        "--head",
+                        "base-sha",
+                        "--findings",
+                        str(empty_findings_path),
+                        "--decision",
+                        "READY_FOR_OUTER_LOOP",
+                        "--target",
+                        str(target),
+                    ]
+                )
+                main(
+                    [
+                        "task",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "2",
+                        "--role",
+                        "builder",
+                        "--head",
+                        "head-2",
+                        "--evidence",
+                        str(empty_evidence_path),
+                        "--target",
+                        str(target),
+                    ]
+                )
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "task",
+                            "record",
+                            "--id",
+                            "item-1",
+                            "--round",
+                            "2",
+                            "--role",
+                            "reviewer",
+                            "--head",
+                            "head-2",
+                            "--findings",
+                            str(empty_findings_path),
+                            "--selection",
+                            str(selection_path),
+                            "--decision",
+                            "READY_FOR_HUMAN_APPROVAL",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                log = StringIO()
+                with redirect_stdout(log):
+                    main(["task", "log", "--id", "item-1", "--target", str(target)])
+        self.assertIn("specialists: rollout-specialist", log.getvalue())
+
+    def test_task_reopen_after_close_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -346,7 +488,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "start",
                             "--id",
                             "item-1",
@@ -361,7 +503,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "close",
                             "--id",
                             "item-1",
@@ -377,7 +519,7 @@ class CliTests(unittest.TestCase):
             with redirect_stderr(errors):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -388,7 +530,7 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(2, code)
-            self.assertIn("codev work reopen", errors.getvalue())
+            self.assertIn("codev task reopen", errors.getvalue())
 
             out = StringIO()
             with redirect_stdout(out):
@@ -396,7 +538,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "reopen",
                             "--id",
                             "item-1",
@@ -415,7 +557,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -426,9 +568,9 @@ class CliTests(unittest.TestCase):
                         ]
                     ),
                 )
-            self.assertIn("Reopened work item item-1", out.getvalue())
+            self.assertIn("Reopened task item-1", out.getvalue())
 
-    def test_work_start_github_issue_populates_link_and_summary(self) -> None:
+    def test_task_start_github_issue_populates_link_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             issue = {"title": "Fix the thing", "url": "https://github.com/o/r/issues/7"}
@@ -444,7 +586,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -458,12 +600,12 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(0, code)
             fetch_issue.assert_called_once_with(7, target=target.resolve())
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
             self.assertEqual("Fix the thing", state["summary"])
 
-    def test_work_start_explicit_summary_wins_over_github_issue(self) -> None:
+    def test_task_start_explicit_summary_wins_over_github_issue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             issue = {"title": "Issue title", "url": "https://github.com/o/r/issues/7"}
@@ -479,7 +621,7 @@ class CliTests(unittest.TestCase):
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -493,11 +635,11 @@ class CliTests(unittest.TestCase):
                         str(target),
                     ]
                 )
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("My own summary", state["summary"])
 
-    def test_work_start_owner_defaults_to_detected_identity(self) -> None:
+    def test_task_start_owner_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -509,7 +651,7 @@ class CliTests(unittest.TestCase):
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -520,11 +662,11 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             detect_identity.assert_called_once_with(target=target.resolve())
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("octocat", state["owner"])
 
-    def test_work_start_entry_takeover_stays_in_inner_phase(self) -> None:
+    def test_task_start_entry_takeover_stays_in_inner_phase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -536,7 +678,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -549,12 +691,12 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(0, code)
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("takeover", state["entry"])
             self.assertEqual("inner", state["rounds"][0]["phase"])
 
-    def test_work_start_entry_direct_review_opens_outer_phase(self) -> None:
+    def test_task_start_entry_direct_review_opens_outer_phase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -566,7 +708,7 @@ class CliTests(unittest.TestCase):
             ):
                 code = main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -579,18 +721,18 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(0, code)
-            state_path = target / ".codev" / "work" / "item-1" / "round-state.json"
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual("direct-review", state["entry"])
             self.assertEqual("outer", state["rounds"][0]["phase"])
 
-    def test_work_start_rejects_unknown_entry(self) -> None:
+    def test_task_start_rejects_unknown_entry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -603,7 +745,184 @@ class CliTests(unittest.TestCase):
                     ]
                 )
 
-    def test_work_triage_by_defaults_to_detected_identity(self) -> None:
+    def test_task_start_refuses_without_issue_linkage_when_repo_has_github(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            errors = StringIO()
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                redirect_stderr(errors),
+            ):
+                code = main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("--no-github-issue", errors.getvalue())
+            self.assertFalse(
+                (target / ".codev" / "task" / "item-1" / "round-state.json").exists()
+            )
+
+    def test_task_start_no_github_issue_flag_bypasses_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--no-github-issue",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_task_start_link_flag_bypasses_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=True,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--link",
+                        "docs/codev/work/item-1/implementation-plan.md",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_task_start_allowed_without_a_gate_check_when_repo_has_no_github(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=False,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                code = main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+
+    def test_git_relink_by_github_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            issue = {"title": "Fix the thing", "url": "https://github.com/o/r/issues/7"}
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.has_github_remote",
+                    return_value=False,
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value=None,
+                ),
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.fetch_issue",
+                    return_value=issue,
+                ) as fetch_issue,
+                redirect_stdout(StringIO()) as out,
+            ):
+                code = main(
+                    [
+                        "task",
+                        "relink",
+                        "--id",
+                        "item-1",
+                        "--github-issue",
+                        "7",
+                        "--by",
+                        "octocat",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            fetch_issue.assert_called_once_with(7, target=target.resolve())
+            self.assertIn("Relinked task item-1", out.getvalue())
+            state_path = target / ".codev" / "task" / "item-1" / "round-state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual("https://github.com/o/r/issues/7", state["link_ref"])
+            self.assertEqual(1, len(state["link_ref_updates"]))
+            self.assertEqual("octocat", state["link_ref_updates"][0]["by"])
+
+    def test_task_triage_by_defaults_to_detected_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             triage_path = target / "triage.json"
@@ -613,12 +932,12 @@ class CliTests(unittest.TestCase):
                     "codev_workflow.cli.git_ops_module.detect_identity",
                     return_value="octocat",
                 ) as detect_identity,
-                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                patch("codev_workflow.cli.task_module.record_triage") as record_triage,
                 redirect_stdout(StringIO()),
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "triage",
                         "--id",
                         "item-1",
@@ -639,7 +958,7 @@ class CliTests(unittest.TestCase):
                 by="octocat",
             )
 
-    def test_work_triage_explicit_by_skips_detection(self) -> None:
+    def test_task_triage_explicit_by_skips_detection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             triage_path = target / "triage.json"
@@ -648,12 +967,12 @@ class CliTests(unittest.TestCase):
                 patch(
                     "codev_workflow.cli.git_ops_module.detect_identity"
                 ) as detect_identity,
-                patch("codev_workflow.cli.work_module.record_triage") as record_triage,
+                patch("codev_workflow.cli.task_module.record_triage") as record_triage,
                 redirect_stdout(StringIO()),
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "triage",
                         "--id",
                         "item-1",
@@ -676,18 +995,18 @@ class CliTests(unittest.TestCase):
                 by="explicit-triager",
             )
 
-    def test_work_check_prints_triage_note(self) -> None:
+    def test_task_check_prints_triage_note(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
                 patch(
-                    "codev_workflow.cli.work_module.check",
+                    "codev_workflow.cli.task_module.check",
                     return_value=CheckResult(True, "ok_continue", "proceed"),
                 ),
                 patch(
-                    "codev_workflow.cli.work_module.triage_note",
+                    "codev_workflow.cli.task_module.triage_note",
                     return_value=(
-                        "note: octocat both owns this work item and triaged this round"
+                        "note: octocat both owns this task and triaged this round"
                     ),
                 ),
             ):
@@ -695,7 +1014,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     code = main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -708,20 +1027,20 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("note: octocat", output.getvalue())
 
-    def test_work_check_omits_note_when_none(self) -> None:
+    def test_task_check_omits_note_when_none(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
                 patch(
-                    "codev_workflow.cli.work_module.check",
+                    "codev_workflow.cli.task_module.check",
                     return_value=CheckResult(True, "ok_continue", "proceed"),
                 ),
-                patch("codev_workflow.cli.work_module.triage_note", return_value=None),
+                patch("codev_workflow.cli.task_module.triage_note", return_value=None),
                 redirect_stdout(StringIO()) as output,
             ):
                 main(
                     [
-                        "work",
+                        "task",
                         "check",
                         "--id",
                         "item-1",
@@ -847,7 +1166,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(2, code)
             self.assertIn("already exists", errors.getvalue())
 
-    def test_work_escalate_and_escalations_round_trip(self) -> None:
+    def test_task_escalate_and_escalations_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -855,7 +1174,7 @@ class CliTests(unittest.TestCase):
                     0,
                     main(
                         [
-                            "work",
+                            "task",
                             "escalate",
                             "--id",
                             "item-1",
@@ -875,12 +1194,12 @@ class CliTests(unittest.TestCase):
             output = StringIO()
             with redirect_stdout(output):
                 self.assertEqual(
-                    0, main(["work", "escalations", "--target", str(target)])
+                    0, main(["task", "escalations", "--target", str(target)])
                 )
         self.assertIn("item-1", output.getvalue())
         self.assertIn("stop_round_cap", output.getvalue())
 
-    def test_work_check_repeated_finding_exits_nonzero(self) -> None:
+    def test_task_check_repeated_finding_exits_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             finding = [
@@ -903,7 +1222,7 @@ class CliTests(unittest.TestCase):
             with redirect_stdout(StringIO()):
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -921,7 +1240,7 @@ class CliTests(unittest.TestCase):
                     if round_number > 1:
                         main(
                             [
-                                "work",
+                                "task",
                                 "record",
                                 "--id",
                                 "item-1",
@@ -939,7 +1258,7 @@ class CliTests(unittest.TestCase):
                         )
                     main(
                         [
-                            "work",
+                            "task",
                             "record",
                             "--id",
                             "item-1",
@@ -961,7 +1280,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stderr(errors):
                     code = main(
                         [
-                            "work",
+                            "task",
                             "check",
                             "--id",
                             "item-1",
@@ -973,7 +1292,7 @@ class CliTests(unittest.TestCase):
                     )
             self.assertEqual(1, code)
 
-    def test_status_reports_bundle_health_adapters_and_work_items(self) -> None:
+    def test_status_reports_bundle_health_adapters_and_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
@@ -988,7 +1307,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1007,7 +1326,7 @@ class CliTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["healthy"])
             self.assertEqual(["codex"], payload["adapters"])
-            self.assertEqual(1, payload["work_items_in_progress"])
+            self.assertEqual(1, payload["tasks_in_progress"])
             self.assertNotIn("python_version", payload)
 
     def test_status_verbose_adds_environment_fields(self) -> None:
@@ -1032,7 +1351,7 @@ class CliTests(unittest.TestCase):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1046,7 +1365,7 @@ class CliTests(unittest.TestCase):
                 )
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-2",
@@ -1060,7 +1379,7 @@ class CliTests(unittest.TestCase):
                 )
             with patch(
                 "codev_workflow.cli.git_ops_module.changed_files",
-                side_effect=lambda work_item_id, target: ["shared.py"],
+                side_effect=lambda task_id, target: ["shared.py"],
             ):
                 output = StringIO()
                 with redirect_stdout(output):
@@ -1081,7 +1400,7 @@ class CliTests(unittest.TestCase):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
                 main(
                     [
-                        "work",
+                        "task",
                         "start",
                         "--id",
                         "item-1",
@@ -1100,7 +1419,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     main(["status", "--target", str(target), "--verbose", "--json"])
             payload = json.loads(output.getvalue())
-            self.assertEqual({"alice": 1}, payload["work_items_in_progress_by_owner"])
+            self.assertEqual({"alice": 1}, payload["tasks_in_progress_by_owner"])
             self.assertEqual([], payload["changed_file_overlaps"])
 
     def test_status_without_verbose_omits_owner_and_overlap_keys(self) -> None:
@@ -1112,7 +1431,7 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(output):
                     main(["status", "--target", str(target), "--json"])
             payload = json.loads(output.getvalue())
-            self.assertNotIn("work_items_in_progress_by_owner", payload)
+            self.assertNotIn("tasks_in_progress_by_owner", payload)
             self.assertNotIn("changed_file_overlaps", payload)
 
     def test_doctor_alias_forwards_to_verbose_status(self) -> None:
@@ -1176,7 +1495,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            self.assertEqual(10, len(payload["findings"]))
+            self.assertEqual(11, len(payload["findings"]))
 
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1191,6 +1510,104 @@ class CliTests(unittest.TestCase):
                 code = main(["adapter", "verify", "codex", "--target", str(target)])
             self.assertEqual(1, code)
             self.assertIn("FAILED", output.getvalue())
+
+    def test_adapter_remove_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "adapter",
+                        "add",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertTrue((target / ".opencode" / "agents" / "builder.md").is_file())
+            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+
+            self.assertEqual(
+                0,
+                main(
+                    [
+                        "adapter",
+                        "remove",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                ),
+            )
+            self.assertFalse((target / ".opencode").exists())
+            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+            listing = StringIO()
+            with redirect_stdout(listing):
+                main(["adapter", "list", "--target", str(target), "--json"])
+            self.assertEqual(["codex"], json.loads(listing.getvalue()))
+
+    def test_adapter_remove_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(
+                    [
+                        "adapter",
+                        "add",
+                        "opencode",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "opencode",
+                        "--target",
+                        str(target),
+                        "--dry-run",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertIn("Dry run", output.getvalue())
+            self.assertTrue((target / ".opencode" / "agents" / "builder.md").is_file())
+
+    def test_adapter_remove_single_platform_shows_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+            code = main(
+                [
+                    "adapter",
+                    "remove",
+                    "codex",
+                    "--target",
+                    str(target),
+                ]
+            )
+            self.assertEqual(2, code)
+
+    def test_adapter_remove_not_installed_shows_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "codex"])
+            code = main(
+                [
+                    "adapter",
+                    "remove",
+                    "junie",
+                    "--target",
+                    str(target),
+                ]
+            )
+            self.assertEqual(2, code)
 
     def test_config_set_get_list_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1245,14 +1662,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("upgrade", output.getvalue().lower())
 
     def test_deprecated_aliases_rewrite_to_new_command_forms(self) -> None:
-        self.assertEqual(
-            ["eval", "fixture", "create", "name", "--target", "T"],
-            _apply_deprecated_aliases(["fixture", "create", "name", "--target", "T"]),
-        )
-        self.assertEqual(
-            ["eval", "run", "name", "--target", "T"],
-            _apply_deprecated_aliases(["eval", "name", "--target", "T"]),
-        )
+        # CoDev is Alpha: eval's old command forms (fixture/run/snapshot) were
+        # removed outright rather than aliased. Only the unrelated
+        # check/doctor top-level aliases remain.
         self.assertEqual(
             ["status", "--target", "T"],
             _apply_deprecated_aliases(["check", "--target", "T"]),
@@ -1264,63 +1676,113 @@ class CliTests(unittest.TestCase):
 
     def test_new_command_forms_pass_through_unchanged(self) -> None:
         self.assertEqual(
-            ["eval", "run", "name"], _apply_deprecated_aliases(["eval", "run", "name"])
+            ["eval", "task", "run", "name"],
+            _apply_deprecated_aliases(["eval", "task", "run", "name"]),
         )
         self.assertEqual(
-            ["eval", "fixture", "create", "name"],
-            _apply_deprecated_aliases(["eval", "fixture", "create", "name"]),
+            ["eval", "task", "create", "name"],
+            _apply_deprecated_aliases(["eval", "task", "create", "name"]),
         )
         self.assertEqual(["status"], _apply_deprecated_aliases(["status"]))
         self.assertEqual([], _apply_deprecated_aliases([]))
 
-    def test_eval_run_without_skill_flag_maps_to_with_skill_false(self) -> None:
+    def test_eval_task_run_baseline_flag_maps_to_with_skill_false(self) -> None:
         with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
             code = main(
                 [
                     "eval",
+                    "task",
                     "run",
                     "name",
                     "--target",
                     "T",
                     "--output",
                     "O",
-                    "--without-skill",
+                    "--baseline",
                 ]
             )
         self.assertEqual(0, code)
         self.assertFalse(evaluate_mock.call_args.kwargs["with_skill"])
 
-    def test_eval_run_defaults_to_with_skill(self) -> None:
+    def test_eval_task_run_defaults_to_with_skill(self) -> None:
         with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
-            main(["eval", "run", "name", "--target", "T", "--output", "O"])
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertTrue(evaluate_mock.call_args.kwargs["with_skill"])
 
-    def test_eval_snapshot_run_prints_category_matrix(self) -> None:
+    def test_eval_task_run_agent_flag_overrides_opencode_executable(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(
+                [
+                    "eval",
+                    "task",
+                    "run",
+                    "name",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--agent",
+                    "/path/to/fake-agent.py",
+                ]
+            )
+        self.assertEqual(
+            "/path/to/fake-agent.py", evaluate_mock.call_args.kwargs["opencode"]
+        )
+
+    def test_eval_task_run_without_agent_flag_omits_opencode_kwarg(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
+        self.assertNotIn("opencode", evaluate_mock.call_args.kwargs)
+
+    def test_eval_task_run_defaults_sandbox_to_worktree(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
+        self.assertEqual("worktree", evaluate_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_task_run_sandbox_docker_flag_is_forwarded(self) -> None:
+        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+            main(
+                [
+                    "eval",
+                    "task",
+                    "run",
+                    "name",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--sandbox",
+                    "docker",
+                ]
+            )
+        self.assertEqual("docker", evaluate_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_benchmark_run_prints_category_matrix(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 5,
             "categories": {
                 "security": {
                     "with_skill_percentage": 100.0,
-                    "without_skill_percentage": 50.0,
+                    "baseline_percentage": 50.0,
                     "delta": 50.0,
                 }
             },
             "overall": {
                 "with_skill_percentage": 100.0,
-                "without_skill_percentage": 50.0,
+                "baseline_percentage": 50.0,
                 "delta": 50.0,
             },
         }
         with patch(
-            "codev_workflow.cli.run_snapshot", return_value=report
-        ) as snapshot_mock:
+            "codev_workflow.cli.run_benchmark", return_value=report
+        ) as benchmark_mock:
             output = StringIO()
             with redirect_stdout(output):
                 code = main(
                     [
                         "eval",
-                        "snapshot",
+                        "benchmark",
                         "run",
                         "review-change",
                         "--target",
@@ -1332,8 +1794,8 @@ class CliTests(unittest.TestCase):
                     ]
                 )
         self.assertEqual(0, code)
-        snapshot_mock.assert_called_once()
-        self.assertEqual(5, snapshot_mock.call_args.kwargs["repetitions"])
+        benchmark_mock.assert_called_once()
+        self.assertEqual(5, benchmark_mock.call_args.kwargs["repetitions"])
         printed = output.getvalue()
         self.assertIn("Skill: review-change (5 repetitions)", printed)
         self.assertIn("security", printed)
@@ -1341,27 +1803,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("+50.0pp", printed)
         self.assertIn("Full report:", printed)
 
-    def test_eval_snapshot_run_forwards_repeated_category_flags(self) -> None:
+    def test_eval_benchmark_run_forwards_repeated_category_flags(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 1,
             "categories": {},
             "overall": {
                 "with_skill_percentage": 0.0,
-                "without_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
                 "delta": 0.0,
             },
         }
         with (
             patch(
-                "codev_workflow.cli.run_snapshot", return_value=report
-            ) as snapshot_mock,
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
             redirect_stdout(StringIO()),
         ):
             main(
                 [
                     "eval",
-                    "snapshot",
+                    "benchmark",
                     "run",
                     "review-change",
                     "--target",
@@ -1376,30 +1838,30 @@ class CliTests(unittest.TestCase):
             )
         self.assertEqual(
             ["security", "correctness"],
-            snapshot_mock.call_args.kwargs["only_categories"],
+            benchmark_mock.call_args.kwargs["only_categories"],
         )
 
-    def test_eval_snapshot_run_defaults_categories_to_none(self) -> None:
+    def test_eval_benchmark_run_defaults_categories_to_none(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 1,
             "categories": {},
             "overall": {
                 "with_skill_percentage": 0.0,
-                "without_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
                 "delta": 0.0,
             },
         }
         with (
             patch(
-                "codev_workflow.cli.run_snapshot", return_value=report
-            ) as snapshot_mock,
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
             redirect_stdout(StringIO()),
         ):
             main(
                 [
                     "eval",
-                    "snapshot",
+                    "benchmark",
                     "run",
                     "review-change",
                     "--target",
@@ -1408,31 +1870,392 @@ class CliTests(unittest.TestCase):
                     "O",
                 ]
             )
-        self.assertIsNone(snapshot_mock.call_args.kwargs["only_categories"])
+        self.assertIsNone(benchmark_mock.call_args.kwargs["only_categories"])
 
-    def test_format_snapshot_report_aligns_columns_and_sorts_categories(self) -> None:
+    def test_eval_benchmark_run_packages_by_default(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertTrue(benchmark_mock.call_args.kwargs["package"])
+
+    def test_eval_benchmark_run_no_package_flag_forwards_false(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--no-package",
+                ]
+            )
+        self.assertFalse(benchmark_mock.call_args.kwargs["package"])
+
+    def test_eval_benchmark_run_agent_flag_overrides_opencode(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--agent",
+                    "./fake-agent.py",
+                ]
+            )
+        self.assertEqual("./fake-agent.py", benchmark_mock.call_args.kwargs["opencode"])
+
+    def test_eval_benchmark_run_omits_opencode_kwarg_without_agent_flag(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertNotIn("opencode", benchmark_mock.call_args.kwargs)
+
+    def test_eval_benchmark_run_defaults_sandbox_to_worktree(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                ]
+            )
+        self.assertEqual("worktree", benchmark_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_benchmark_run_sandbox_flag_forwards_docker(self) -> None:
+        report = {
+            "skill": "review-change",
+            "repetitions": 1,
+            "categories": {},
+            "overall": {
+                "with_skill_percentage": 0.0,
+                "baseline_percentage": 0.0,
+                "delta": 0.0,
+            },
+        }
+        with (
+            patch(
+                "codev_workflow.cli.run_benchmark", return_value=report
+            ) as benchmark_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(
+                [
+                    "eval",
+                    "benchmark",
+                    "run",
+                    "review-change",
+                    "--target",
+                    "T",
+                    "--output",
+                    "O",
+                    "--sandbox",
+                    "docker",
+                ]
+            )
+        self.assertEqual("docker", benchmark_mock.call_args.kwargs["sandbox"])
+
+    def test_eval_show_prints_packaged_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evals_dir = root / ".agents" / "skills" / "review-change" / "evals"
+            evals_dir.mkdir(parents=True)
+            trace = {
+                "skill": "review-change",
+                "repetitions": 3,
+                "generated_at": "2026-08-22T00:00:00+00:00",
+                "categories": {
+                    "security": {
+                        "with_skill_percentage": 100.0,
+                        "baseline_percentage": 50.0,
+                        "delta": 50.0,
+                    }
+                },
+                "overall": {
+                    "with_skill_percentage": 100.0,
+                    "baseline_percentage": 50.0,
+                    "delta": 50.0,
+                },
+            }
+            (evals_dir / "benchmark.json").write_text(json.dumps(trace))
+
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(["eval", "show", "review-change", "--target", str(root)])
+        self.assertEqual(0, code)
+        printed = output.getvalue()
+        self.assertIn("Skill: review-change (3 repetitions)", printed)
+        self.assertIn("security", printed)
+        self.assertIn("Generated: 2026-08-22T00:00:00+00:00", printed)
+        self.assertIn("Trace file:", printed)
+
+    def test_eval_show_reports_missing_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = StringIO()
+            errors = StringIO()
+            with redirect_stdout(output), redirect_stderr(errors):
+                code = main(["eval", "show", "never-evaluated", "--target", str(root)])
+        self.assertEqual(1, code)
+        self.assertIn("no eval trace found", errors.getvalue())
+        self.assertIn("codev eval benchmark run never-evaluated", errors.getvalue())
+
+    def test_skill_name_strips_a_pasted_agents_skills_path(self) -> None:
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(".agents/skills/audit-google-python-style"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(".agents/skills/audit-google-python-style/"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name("./.agents/skills/audit-google-python-style"),
+        )
+        self.assertEqual(
+            "audit-google-python-style",
+            _skill_name(
+                "/Users/rootm/github_repos/CoDev/.agents/skills/"
+                "audit-google-python-style"
+            ),
+        )
+
+    def test_skill_name_leaves_a_bare_name_unchanged(self) -> None:
+        self.assertEqual("review-change", _skill_name("review-change"))
+
+    def test_eval_show_accepts_a_pasted_agents_skills_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            evals_dir = root / ".agents" / "skills" / "review-change" / "evals"
+            evals_dir.mkdir(parents=True)
+            trace = {
+                "skill": "review-change",
+                "repetitions": 1,
+                "categories": {},
+                "overall": {
+                    "with_skill_percentage": 100.0,
+                    "baseline_percentage": 0.0,
+                    "delta": 100.0,
+                },
+            }
+            (evals_dir / "benchmark.json").write_text(json.dumps(trace))
+
+            output = StringIO()
+            with redirect_stdout(output):
+                code = main(
+                    [
+                        "eval",
+                        "show",
+                        ".agents/skills/review-change",
+                        "--target",
+                        str(root),
+                    ]
+                )
+        self.assertEqual(0, code)
+        self.assertIn("Skill: review-change", output.getvalue())
+
+    def test_eval_nvidia_validate_forwards_target_output_and_extra(self) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=True
+            ) as verb_mock,
+            redirect_stdout(StringIO()) as output,
+        ):
+            code = main(
+                [
+                    "eval",
+                    "nvidia",
+                    "validate",
+                    "SKILL",
+                    "--output",
+                    "O",
+                    "--extra=--llm",
+                ]
+            )
+        self.assertEqual(0, code)
+        verb_mock.assert_called_once()
+        args, kwargs = verb_mock.call_args
+        self.assertEqual("validate", args[0])
+        self.assertEqual(Path("SKILL"), kwargs["target"])
+        self.assertEqual(Path("O"), kwargs["output"])
+        self.assertEqual(["--llm"], kwargs["extra_flags"])
+        self.assertEqual(900, kwargs["timeout_seconds"])
+        self.assertIn("Evaluation passed: O", output.getvalue())
+
+    def test_eval_nvidia_verb_without_target_requirement_omits_skill_path(
+        self,
+    ) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=True
+            ) as verb_mock,
+            redirect_stdout(StringIO()),
+        ):
+            main(["eval", "nvidia", "models", "--output", "O"])
+        self.assertIsNone(verb_mock.call_args.kwargs["target"])
+
+    def test_eval_nvidia_tier3_evaluate_is_a_nested_subcommand(self) -> None:
+        with (
+            patch(
+                "codev_workflow.cli._run_nvidia_verb", return_value=False
+            ) as verb_mock,
+            redirect_stdout(StringIO()),
+        ):
+            code = main(
+                [
+                    "eval",
+                    "nvidia",
+                    "tier3",
+                    "evaluate",
+                    "SKILL",
+                    "--output",
+                    "O",
+                    "--timeout",
+                    "60",
+                ]
+            )
+        self.assertEqual(1, code)
+        self.assertEqual("tier3-evaluate", verb_mock.call_args.args[0])
+        self.assertEqual(60, verb_mock.call_args.kwargs["timeout_seconds"])
+
+    def test_eval_nvidia_is_not_rewritten_by_deprecated_alias_handling(self) -> None:
+        self.assertEqual(
+            ["eval", "nvidia", "validate", "SKILL"],
+            _apply_deprecated_aliases(["eval", "nvidia", "validate", "SKILL"]),
+        )
+
+    def test_format_benchmark_report_aligns_columns_and_sorts_categories(self) -> None:
         report = {
             "skill": "review-change",
             "repetitions": 3,
             "categories": {
                 "security": {
                     "with_skill_percentage": 100.0,
-                    "without_skill_percentage": 66.7,
+                    "baseline_percentage": 66.7,
                     "delta": 33.3,
                 },
                 "architecture_scope": {
                     "with_skill_percentage": 50.0,
-                    "without_skill_percentage": 50.0,
+                    "baseline_percentage": 50.0,
                     "delta": 0.0,
                 },
             },
             "overall": {
                 "with_skill_percentage": 75.0,
-                "without_skill_percentage": 58.4,
+                "baseline_percentage": 58.4,
                 "delta": 16.7,
             },
         }
-        table = _format_snapshot_report(report)
+        table = _format_benchmark_report(report)
         lines = table.splitlines()
         # Category rows are sorted alphabetically; Overall always comes last,
         # set off by its own separator line, regardless of category order.

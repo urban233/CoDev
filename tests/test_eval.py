@@ -65,10 +65,11 @@ from codev_workflow.eval import (
     _sync_directory,
     _validate_bundle,
     _write_output,
-    create_fixture,
+    create_task,
     evaluate,
-    run_snapshot,
-    validate_fixture,
+    package_benchmark_trace,
+    run_benchmark,
+    validate_task,
 )
 from codev_workflow.eval import (
     _copy_seed_tree as real_copy_seed_tree,
@@ -80,7 +81,7 @@ from codev_workflow.eval import (
     _git as real_git,
 )
 from codev_workflow.eval import (
-    _read_fixture_source as real_read_fixture_source,
+    _read_task_source as real_read_task_source,
 )
 from codev_workflow.eval import (
     _remove as real_remove,
@@ -89,15 +90,15 @@ from codev_workflow.eval import (
     _run as real_run,
 )
 from codev_workflow.eval import (
-    _write_fixture_file as real_write_fixture_file,
+    _write_task_file as real_write_task_file,
 )
 
 
-class FixtureContractTests(unittest.TestCase):
+class TaskContractTests(unittest.TestCase):
     def _repo(self, root: Path) -> None:
         subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
         (root / "source.txt").write_text("seed", encoding="utf-8")
-        # Matches create_fixture()'s starter "skill" placeholder, so
+        # Matches create_task()'s starter "skill" placeholder, so
         # evaluate()'s default with_skill=True has something to stage
         # without every test needing to opt out or set up its own skill.
         skill_dir = root / ".agents" / "skills" / "replace-with-skill-name"
@@ -127,9 +128,9 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            self.assertEqual("seed", (fixture / "repository/source.txt").read_text())
-            self.assertEqual("sample", validate_fixture(fixture).name)
+            task = create_task("sample", root, ["source.txt"])
+            self.assertEqual("seed", (task / "repository/source.txt").read_text())
+            self.assertEqual("sample", validate_task(task).name)
 
     def test_create_preserves_binary_regular_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -138,9 +139,9 @@ class FixtureContractTests(unittest.TestCase):
             binary = root / "image.bin"
             contents = bytes([0, 159, 255, 1, 2])
             binary.write_bytes(contents)
-            fixture = create_fixture("binary", root, ["image.bin"])
-            self.assertEqual(contents, (fixture / "repository/image.bin").read_bytes())
-            self.assertEqual("binary", validate_fixture(fixture).name)
+            task = create_task("binary", root, ["image.bin"])
+            self.assertEqual(contents, (task / "repository/image.bin").read_bytes())
+            self.assertEqual("binary", validate_task(task).name)
 
     def test_seed_copy_rejects_external_symlink_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -162,13 +163,11 @@ class FixtureContractTests(unittest.TestCase):
                 if calls == 2:
                     original.unlink()
                     original.symlink_to(external)
-                return real_read_fixture_source(
-                    path, expected_identity, expected_digest
-                )
+                return real_read_task_source(path, expected_identity, expected_digest)
 
             with (
                 patch(
-                    "codev_workflow.eval._read_fixture_source",
+                    "codev_workflow.eval._read_task_source",
                     side_effect=replace_on_copy,
                 ),
                 self.assertRaises(EvaluationError),
@@ -179,7 +178,7 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             sentinel = root / "actor-ran"
@@ -192,7 +191,7 @@ class FixtureContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             actor.chmod(actor.stat().st_mode | 0o111)
-            real_prompt = fixture / "prompt.md"
+            real_prompt = task / "prompt.md"
 
             def mutate_after_seed(source: Path, destination: Path) -> None:
                 real_copy_seed_tree(source, destination)
@@ -215,7 +214,7 @@ class FixtureContractTests(unittest.TestCase):
                 "error", json.loads((output / "result.json").read_text())["outcome"]
             )
 
-    def test_windows_fixture_branch_is_portable_when_mocked(self) -> None:
+    def test_windows_task_branch_is_portable_when_mocked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -233,8 +232,8 @@ class FixtureContractTests(unittest.TestCase):
                 ),
                 patch("codev_workflow.eval._windows_reparse_safe"),
             ):
-                fixture = create_fixture("windows-branch", root, ["source.txt"])
-            self.assertEqual("seed", (fixture / "repository/source.txt").read_text())
+                task = create_task("windows-branch", root, ["source.txt"])
+            self.assertEqual("seed", (task / "repository/source.txt").read_text())
 
     def test_execution_environment_is_allowlisted(self) -> None:
         with patch.dict(
@@ -249,7 +248,7 @@ class FixtureContractTests(unittest.TestCase):
         ):
             environment = _isolated_env()
         # PATH is prepended with sys.executable's own directory (guarantees a
-        # working "python"/"python3" for fixture verifiers), so it no longer
+        # working "python"/"python3" for task verifiers), so it no longer
         # equals the original value verbatim -- it must still end with it.
         self.assertTrue(environment["PATH"].endswith(os.pathsep + "/safe/bin"))
         self.assertIn(str(Path(sys.executable).resolve().parent), environment["PATH"])
@@ -270,8 +269,8 @@ class FixtureContractTests(unittest.TestCase):
                 patch("codev_workflow.eval._windows_reparse_safe"),
                 self.assertRaises(EvaluationError),
             ):
-                create_fixture("windows-reparse", root, ["source.txt"])
-            self.assertFalse((root / ".codev/fixtures/windows-reparse").exists())
+                create_task("windows-reparse", root, ["source.txt"])
+            self.assertFalse((root / ".codev/eval/tasks/windows-reparse").exists())
 
     def test_create_rejects_traversal_symlink_exclusion_and_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -281,10 +280,10 @@ class FixtureContractTests(unittest.TestCase):
             outside.write_text("outside", encoding="utf-8")
             for include in ["../outside.txt", ".git"]:
                 with self.assertRaises(EvaluationError):
-                    create_fixture("unsafe", root, [include])
+                    create_task("unsafe", root, [include])
             (root / "link").symlink_to(outside)
             with self.assertRaises(EvaluationError):
-                create_fixture("linked", root, ["link"])
+                create_task("linked", root, ["link"])
             inside = root / "inside"
             inside.mkdir()
             (inside / "file.txt").write_text("inside", encoding="utf-8")
@@ -292,18 +291,18 @@ class FixtureContractTests(unittest.TestCase):
             (root / "inside-dir-link").symlink_to(inside, target_is_directory=True)
             for name in ["inside-file-link", "inside-dir-link"]:
                 with self.assertRaises(EvaluationError):
-                    create_fixture(f"linked-{name}", root, [name])
-            create_fixture("same", root, ["source.txt"])
+                    create_task(f"linked-{name}", root, [name])
+            create_task("same", root, ["source.txt"])
             with self.assertRaises(EvaluationError):
-                create_fixture("same", root, ["source.txt"])
+                create_task("same", root, ["source.txt"])
 
     def test_create_rejects_recursive_destination_self_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            (root / ".codev/fixtures").mkdir(parents=True)
+            (root / ".codev/eval/tasks").mkdir(parents=True)
             with self.assertRaises(EvaluationError):
-                create_fixture("recursive", root, [".codev"])
+                create_task("recursive", root, [".codev"])
 
     def test_create_rejects_duplicate_directory_and_nested_file_includes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -312,9 +311,9 @@ class FixtureContractTests(unittest.TestCase):
             (root / "src").mkdir()
             (root / "src/file.txt").write_text("file", encoding="utf-8")
             with self.assertRaises(EvaluationError):
-                create_fixture("duplicate-dir", root, ["src", "src"])
+                create_task("duplicate-dir", root, ["src", "src"])
             with self.assertRaises(EvaluationError):
-                create_fixture("duplicate-nested", root, ["src", "src/file.txt"])
+                create_task("duplicate-nested", root, ["src", "src/file.txt"])
 
     def test_create_case_variant_destinations_follow_filesystem_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -323,61 +322,61 @@ class FixtureContractTests(unittest.TestCase):
             (root / "Case.txt").write_text("upper", encoding="utf-8")
             (root / "case.txt").write_text("lower", encoding="utf-8")
             with self.assertRaises(EvaluationError):
-                create_fixture("case-variant", root, ["Case.txt", "case.txt"])
+                create_task("case-variant", root, ["Case.txt", "case.txt"])
 
-    def test_create_rejects_case_variant_fixture_names(self) -> None:
+    def test_create_rejects_case_variant_task_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("Foo", root, ["source.txt"])
+            create_task("Foo", root, ["source.txt"])
             with self.assertRaises(EvaluationError):
-                create_fixture("foo", root, ["source.txt"])
+                create_task("foo", root, ["source.txt"])
 
     def test_validation_rejects_unknown_fields_and_invalid_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            metadata = json.loads((fixture / "fixture.json").read_text())
+            task = create_task("sample", root, ["source.txt"])
+            metadata = json.loads((task / "task.json").read_text())
             metadata["unexpected"] = True
-            (fixture / "fixture.json").write_text(json.dumps(metadata))
+            (task / "task.json").write_text(json.dumps(metadata))
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_schema_versions_reject_boolean_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            identity = json.loads((fixture / "fixture.json").read_text())
+            task = create_task("sample", root, ["source.txt"])
+            identity = json.loads((task / "task.json").read_text())
             identity["schema_version"] = True
-            (fixture / "fixture.json").write_text(json.dumps(identity))
+            (task / "task.json").write_text(json.dumps(identity))
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
             identity["schema_version"] = 1
-            (fixture / "fixture.json").write_text(json.dumps(identity))
-            verifier = json.loads((fixture / "verifier.json").read_text())
+            (task / "task.json").write_text(json.dumps(identity))
+            verifier = json.loads((task / "verifier.json").read_text())
             verifier["schema_version"] = True
-            (fixture / "verifier.json").write_text(json.dumps(verifier))
+            (task / "verifier.json").write_text(json.dumps(verifier))
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_verifier_rejects_nul_argument(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            verifier = json.loads((fixture / "verifier.json").read_text())
+            task = create_task("sample", root, ["source.txt"])
+            verifier = json.loads((task / "verifier.json").read_text())
             verifier["command"] = ["python\x00bad"]
-            (fixture / "verifier.json").write_text(json.dumps(verifier))
+            (task / "verifier.json").write_text(json.dumps(verifier))
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_persisted_evidence_redacts_process_and_json_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             verifier_code = (
                 "import sys; "
                 "print('{'+chr(34)+'client_token_value'+chr(34)+':'+chr(34)"
@@ -386,7 +385,7 @@ class FixtureContractTests(unittest.TestCase):
                 "print('{'+chr(34)+'secret_value'+chr(34)+':'+chr(34)"
                 "+'verifier-error'+chr(34)+'}', file=sys.stderr)"
             )
-            (fixture / "verifier.json").write_text(
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -436,9 +435,9 @@ class FixtureContractTests(unittest.TestCase):
             )
             actor.chmod(actor.stat().st_mode | 0o111)
             self.assertTrue(evaluate("sample", root, output, opencode=str(actor)))
-            actor_output = (output / "actor-output.txt").read_text(encoding="utf-8")
-            self.assertIn("keep", actor_output)
-            self.assertNotIn("actor-compound", actor_output)
+            trajectory_text = (output / "trajectory.json").read_text(encoding="utf-8")
+            self.assertIn("keep", trajectory_text)
+            self.assertNotIn("actor-compound", trajectory_text)
             for path in output.iterdir():
                 if path.is_file():
                     content = path.read_text(encoding="utf-8")
@@ -457,7 +456,7 @@ class FixtureContractTests(unittest.TestCase):
                         "diff.patch",
                         ".codev-eval-commit.json",
                         "verifier-stderr.txt",
-                        "actor-output.txt",
+                        "trajectory.json",
                     }:
                         self.assertIn("keep", content)
 
@@ -492,7 +491,7 @@ class FixtureContractTests(unittest.TestCase):
             self._repo(root)
             protected = root / "protected.txt"
             protected.write_text("local change", encoding="utf-8")
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             phase = root / "phase.py"
             verdict = json.dumps(
                 {
@@ -535,7 +534,7 @@ class FixtureContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             phase.chmod(phase.stat().st_mode | 0o111)
-            (fixture / "verifier.json").write_text(
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -562,8 +561,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -749,23 +748,23 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            fifo = fixture / "repository/fifo"
+            task = create_task("sample", root, ["source.txt"])
+            fifo = task / "repository/fifo"
             getattr(os, "mkfifo")(fifo)  # noqa: B009 -- not in stubs on all platforms
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires os.mkfifo")
     def test_validation_rejects_special_contract_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            prompt = fixture / "prompt.md"
+            task = create_task("sample", root, ["source.txt"])
+            prompt = task / "prompt.md"
             prompt.unlink()
             getattr(os, "mkfifo")(prompt)  # noqa: B009 -- not in stubs on all platforms
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_recovery_rejects_traversal_and_symlink_manifest_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1128,12 +1127,12 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            prompt = fixture / "prompt.md"
+            task = create_task("sample", root, ["source.txt"])
+            prompt = task / "prompt.md"
             prompt.unlink()
             prompt.symlink_to(root / "source.txt")
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_validation_rejects_symlinked_repository_directory_inside_target(
         self,
@@ -1141,14 +1140,14 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             inside = root / "inside-directory"
             inside.mkdir()
             (inside / "file.txt").write_text("inside", encoding="utf-8")
-            link = fixture / "repository/inside-link"
+            link = task / "repository/inside-link"
             link.symlink_to(inside, target_is_directory=True)
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_output_must_be_existing_and_empty_is_checked_by_eval_boundary(
         self,
@@ -1156,7 +1155,7 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("sample", root, ["source.txt"])
+            create_task("sample", root, ["source.txt"])
             # This contract is checked before any temporary sandbox is made.
             output = root / "output"
             self.assertFalse(output.exists())
@@ -1165,8 +1164,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1212,8 +1211,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1248,13 +1247,174 @@ class FixtureContractTests(unittest.TestCase):
             self.assertEqual(["run", "--format", "json"], calls[0]["argv"][:3])
             self.assertNotIn(str(root), calls[1]["cwd"])
 
+    def test_evaluate_runs_declarative_checks_json_instead_of_verifier(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").unlink()
+            (task / "checks.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checks": [
+                            {
+                                "type": "command_succeeds",
+                                "argv": [sys.executable, "-c", "pass"],
+                            }
+                        ],
+                    }
+                )
+            )
+            output = root.parent / f"evidence-{root.name}"
+            output.mkdir()
+            opencode = self._opencode(root)
+            self.assertTrue(evaluate("sample", root, output, opencode=str(opencode)))
+            result = json.loads((output / "result.json").read_text())
+            self.assertEqual("passed", result["verifier"]["status"])
+
+    def test_evaluate_reports_declarative_check_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").unlink()
+            (task / "checks.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checks": [
+                            {
+                                "type": "command_succeeds",
+                                "argv": [sys.executable, "-c", "exit(1)"],
+                            }
+                        ],
+                    }
+                )
+            )
+            output = root.parent / f"evidence-{root.name}"
+            output.mkdir()
+            opencode = self._opencode(root)
+            self.assertFalse(evaluate("sample", root, output, opencode=str(opencode)))
+            result = json.loads((output / "result.json").read_text())
+            self.assertEqual("failed", result["verifier"]["status"])
+            self.assertIn("exited 1", (output / "verifier-stderr.txt").read_text())
+
+    def _fake_docker(self, root: Path) -> Path:
+        executable = root / "fake-docker.py"
+        log = root / "docker-calls.jsonl"
+        executable.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys, pathlib, subprocess\n"
+            f"log = pathlib.Path({str(log)!r})\n"
+            "argv = sys.argv[1:]\n"
+            "log.open('a').write(json.dumps({'argv': argv}) + '\\n')\n"
+            "# Run the wrapped command directly, unsandboxed -- this fake\n"
+            "# stands in for the container, it does not actually isolate.\n"
+            "inner = argv[argv.index('my-image:latest') + 1:]\n"
+            "result = subprocess.run(inner)\n"
+            "sys.exit(result.returncode)\n",
+            encoding="utf-8",
+        )
+        executable.chmod(executable.stat().st_mode | 0o111)
+        return executable
+
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "this test's fake docker stub re-execs the fake actor script as its "
+        "own child process, which needs a .py-is-directly-executable "
+        "association this repo does not assume on Windows -- Windows "
+        "support for DockerEnvironment is already documented deferred risk "
+        "(ADR-0027), not something this specific test should force",
+    )
+    def test_evaluate_with_docker_sandbox_runs_actor_through_docker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("sample", root, ["source.txt"])
+            metadata = json.loads((task / "task.json").read_text())
+            metadata["environment"] = {"backend": "docker", "image": "my-image:latest"}
+            (task / "task.json").write_text(json.dumps(metadata))
+            (task / "verifier.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "command": [sys.executable, "-c", "pass"],
+                        "timeout_seconds": 5,
+                    }
+                )
+            )
+            output = root.parent / f"evidence-{root.name}"
+            output.mkdir()
+            opencode = self._opencode(root)
+            docker = self._fake_docker(root)
+            self.assertTrue(
+                evaluate(
+                    "sample",
+                    root,
+                    output,
+                    opencode=str(opencode),
+                    sandbox="docker",
+                    docker=str(docker),
+                )
+            )
+            result = json.loads((output / "result.json").read_text())
+            self.assertEqual("completed", result["actor"]["status"])
+            calls = [
+                json.loads(line)
+                for line in (root / "docker-calls.jsonl").read_text().splitlines()
+            ]
+            self.assertEqual(1, len(calls))
+            self.assertEqual("run", calls[0]["argv"][0])
+            self.assertIn("my-image:latest", calls[0]["argv"])
+
+    def test_evaluate_docker_sandbox_requires_environment_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            create_task("sample", root, ["source.txt"])
+            output = root.parent / f"evidence-{root.name}"
+            output.mkdir()
+            with self.assertRaises(EvaluationError):
+                evaluate("sample", root, output, sandbox="docker")
+
+    def test_evaluate_rejects_unknown_sandbox(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            create_task("sample", root, ["source.txt"])
+            output = root.parent / f"evidence-{root.name}"
+            output.mkdir()
+            with self.assertRaises(EvaluationError):
+                evaluate("sample", root, output, sandbox="not-a-real-sandbox")
+
+    def test_validate_task_rejects_both_verifier_and_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("sample", root, ["source.txt"])
+            (task / "checks.json").write_text(
+                json.dumps({"schema_version": 1, "checks": []})
+            )
+            with self.assertRaises(EvaluationError):
+                validate_task(task)
+
+    def test_validate_task_rejects_neither_verifier_nor_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").unlink()
+            with self.assertRaises(EvaluationError):
+                validate_task(task)
+
     @unittest.skipUnless(os.name == "posix", "uses POSIX-only pathspec syntax")
     def test_diff_evidence_includes_actor_commit_and_untracked_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1355,8 +1515,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1478,12 +1638,12 @@ class FixtureContractTests(unittest.TestCase):
                 _write_output(output, {"one.txt": "one", "two.txt": "two"})
             self.assertEqual("caller replacement", first_destination.read_text())
 
-    def test_fixture_failure_preserves_caller_replacement(self) -> None:
+    def test_task_failure_preserves_caller_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             (root / "second.txt").write_text("second", encoding="utf-8")
-            destination = root / ".codev/fixtures/race"
+            destination = root / ".codev/eval/tasks/race"
             calls = 0
 
             def race_copy(
@@ -1499,19 +1659,19 @@ class FixtureContractTests(unittest.TestCase):
                     shutil.rmtree(destination)
                     destination.mkdir()
                     (destination / "caller.txt").write_text("caller", encoding="utf-8")
-                    raise OSError("injected fixture failure")
-                real_write_fixture_file(
+                    raise OSError("injected task failure")
+                real_write_task_file(
                     source, repository_fd, relative, expected_identity, expected_digest
                 )
 
             with (
-                patch("codev_workflow.eval._write_fixture_file", side_effect=race_copy),
+                patch("codev_workflow.eval._write_task_file", side_effect=race_copy),
                 self.assertRaises(OSError),
             ):
-                create_fixture("race", root, ["source.txt", "second.txt"])
+                create_task("race", root, ["source.txt", "second.txt"])
             self.assertEqual("caller", (destination / "caller.txt").read_text())
 
-    def test_fixture_source_replacement_cannot_copy_external_content(self) -> None:
+    def test_task_source_replacement_cannot_copy_external_content(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
@@ -1527,7 +1687,7 @@ class FixtureContractTests(unittest.TestCase):
             ) -> None:
                 source_path.unlink()
                 source_path.symlink_to(external)
-                real_write_fixture_file(
+                real_write_task_file(
                     source_path,
                     repository_fd,
                     relative,
@@ -1537,16 +1697,16 @@ class FixtureContractTests(unittest.TestCase):
 
             with (
                 patch(
-                    "codev_workflow.eval._write_fixture_file",
+                    "codev_workflow.eval._write_task_file",
                     side_effect=replace_source,
                 ),
                 self.assertRaises(EvaluationError),
             ):
-                create_fixture("source-race", root, ["source.txt"])
+                create_task("source-race", root, ["source.txt"])
             self.assertEqual("external content", external.read_text())
-            self.assertFalse((root / ".codev/fixtures/source-race").exists())
+            self.assertFalse((root / ".codev/eval/tasks/source-race").exists())
 
-    def test_directory_include_candidate_mutation_fails_without_partial_fixture(
+    def test_directory_include_candidate_mutation_fails_without_partial_task(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1576,7 +1736,7 @@ class FixtureContractTests(unittest.TestCase):
                     calls += 1
                     if calls == 1:
                         _mutate()
-                    real_write_fixture_file(
+                    real_write_task_file(
                         source,
                         repository_fd,
                         relative,
@@ -1586,13 +1746,13 @@ class FixtureContractTests(unittest.TestCase):
 
                 with (
                     patch(
-                        "codev_workflow.eval._write_fixture_file",
+                        "codev_workflow.eval._write_task_file",
                         side_effect=mutate_copy,
                     ),
                     self.assertRaises(EvaluationError),
                 ):
-                    create_fixture(name, root, ["source-dir"])
-                self.assertFalse((root / ".codev/fixtures" / name).exists())
+                    create_task(name, root, ["source-dir"])
+                self.assertFalse((root / ".codev/eval/tasks" / name).exists())
                 if name == "add-race":
                     (source_dir / "added.txt").unlink()
                 else:
@@ -1602,8 +1762,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1640,8 +1800,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1669,7 +1829,7 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("sample", root, ["source.txt"])
+            create_task("sample", root, ["source.txt"])
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor.py"
@@ -1694,7 +1854,7 @@ class FixtureContractTests(unittest.TestCase):
                 evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["actor"]["status"])
-            for name in ("actor-events.jsonl", "actor-output.txt"):
+            for name in ("trajectory.json",):
                 self.assertTrue((output / name).is_file())
                 self.assertIn(name, result["artifacts"].values())
 
@@ -1702,9 +1862,9 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             command = [sys.executable, "-c", "pass"]
-            (fixture / "verifier.json").write_text(
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {"schema_version": 1, "command": command, "timeout_seconds": 5}
                 )
@@ -1734,8 +1894,7 @@ class FixtureContractTests(unittest.TestCase):
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["verifier"]["status"])
             for name in (
-                "actor-events.jsonl",
-                "actor-output.txt",
+                "trajectory.json",
                 "verifier-stdout.txt",
                 "verifier-stderr.txt",
             ):
@@ -1746,8 +1905,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1783,7 +1942,7 @@ class FixtureContractTests(unittest.TestCase):
                 evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["judge"]["status"])
-            for name in ("judge-events.jsonl", "judge-output.json"):
+            for name in ("judge-trajectory.json", "judge-output.json"):
                 self.assertTrue((output / name).is_file())
                 self.assertIn(name, result["artifacts"].values())
 
@@ -1791,7 +1950,7 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("sample", root, ["source.txt"])
+            create_task("sample", root, ["source.txt"])
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor-fail.py"
@@ -1805,14 +1964,13 @@ class FixtureContractTests(unittest.TestCase):
             self.assertEqual("failed", result["actor"]["status"])
             self.assertEqual(3, result["actor"]["exit_code"])
             self.assertEqual("skipped", result["verifier"]["status"])
-            self.assertEqual("", (output / "actor-events.jsonl").read_text())
-            self.assertEqual("", (output / "actor-output.txt").read_text())
+            self.assertEqual("", (output / "trajectory.json").read_text())
 
     def test_invalid_utf8_actor_output_is_structured_and_safe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("sample", root, ["source.txt"])
+            create_task("sample", root, ["source.txt"])
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "invalid-actor.py"
@@ -1826,18 +1984,18 @@ class FixtureContractTests(unittest.TestCase):
                 evaluate("sample", root, output, opencode=str(actor))
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("error", result["outcome"])
-            self.assertEqual("", (output / "actor-events.jsonl").read_text())
+            self.assertEqual("", (output / "trajectory.json").read_text())
 
     def test_invalid_utf8_verifier_output_is_persisted_safely(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
+            task = create_task("sample", root, ["source.txt"])
             verifier = (
                 "import sys; sys.stdout.buffer.write(b'\\xff\\n'); "
                 "sys.stderr.buffer.write(b'\\xfe\\n')"
             )
-            (fixture / "verifier.json").write_text(
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1881,8 +2039,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1908,17 +2066,17 @@ class FixtureContractTests(unittest.TestCase):
             result = json.loads((output / "result.json").read_text())
             self.assertEqual("malformed", result["judge"]["status"])
             self.assertIn(
-                "\ufffd", (output / "judge-events.jsonl").read_text(encoding="utf-8")
+                "\ufffd", (output / "judge-trajectory.json").read_text(encoding="utf-8")
             )
 
     def test_timed_out_actor_with_partial_output_is_completed_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            metadata = json.loads((fixture / "fixture.json").read_text())
+            task = create_task("sample", root, ["source.txt"])
+            metadata = json.loads((task / "task.json").read_text())
             metadata["actor_timeout_seconds"] = 1
-            (fixture / "fixture.json").write_text(json.dumps(metadata))
+            (task / "task.json").write_text(json.dumps(metadata))
             output = root.parent / f"evidence-{root.name}"
             output.mkdir()
             actor = root / "actor-timeout.py"
@@ -1934,15 +2092,14 @@ class FixtureContractTests(unittest.TestCase):
             self.assertEqual("timeout", result["actor"]["status"])
             self.assertTrue(result["actor"]["timeout"])
             self.assertEqual("skipped", result["judge"]["status"])
-            self.assertEqual("", (output / "actor-events.jsonl").read_text())
-            self.assertEqual("", (output / "actor-output.txt").read_text())
+            self.assertEqual("", (output / "trajectory.json").read_text())
 
     def test_malformed_judge_records_launched_status_and_duration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -1973,8 +2130,8 @@ class FixtureContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            (fixture / "verifier.json").write_text(
+            task = create_task("sample", root, ["source.txt"])
+            (task / "verifier.json").write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
@@ -2031,31 +2188,31 @@ class SkillSnapshotTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-    def _tag_fixture(self, fixture: Path, skill: str, category: str) -> None:
-        identity = json.loads((fixture / "fixture.json").read_text())
+    def _tag_task(self, task: Path, skill: str, category: str) -> None:
+        identity = json.loads((task / "task.json").read_text())
         identity["skill"] = skill
         identity["category"] = category
-        (fixture / "fixture.json").write_text(json.dumps(identity), encoding="utf-8")
+        (task / "task.json").write_text(json.dumps(identity), encoding="utf-8")
 
-    def test_validate_fixture_rejects_missing_skill_or_category(self) -> None:
+    def test_validate_task_rejects_missing_skill_or_category(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            identity = json.loads((fixture / "fixture.json").read_text())
+            task = create_task("sample", root, ["source.txt"])
+            identity = json.loads((task / "task.json").read_text())
             del identity["skill"]
-            (fixture / "fixture.json").write_text(json.dumps(identity))
+            (task / "task.json").write_text(json.dumps(identity))
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
-    def test_validate_fixture_rejects_empty_category(self) -> None:
+    def test_validate_task_rejects_empty_category(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            self._tag_fixture(fixture, "review-change", "")
+            task = create_task("sample", root, ["source.txt"])
+            self._tag_task(task, "review-change", "")
             with self.assertRaises(EvaluationError):
-                validate_fixture(fixture)
+                validate_task(task)
 
     def test_stage_skill_copies_skill_and_agents_md_block_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2087,8 +2244,8 @@ class SkillSnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            fixture = create_fixture("sample", root, ["source.txt"])
-            self._tag_fixture(fixture, "sample-skill", "example")
+            task = create_task("sample", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "example")
             # sys.executable is a real, resolvable executable, so evaluate()
             # gets past its git/opencode availability check and reaches the
             # staging decision point for both conditions; it then fails for
@@ -2119,18 +2276,18 @@ class SkillSnapshotTests(unittest.TestCase):
                 self.assertEqual(root.resolve(), stage_skill.call_args.args[1])
                 self.assertEqual("sample-skill", stage_skill.call_args.args[2])
 
-    def test_run_snapshot_reports_percentage_and_delta_per_category(self) -> None:
+    def test_run_benchmark_reports_percentage_and_delta_per_category(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             self._install_skill(root, "sample-skill")
-            first = create_fixture("first", root, ["source.txt"])
-            self._tag_fixture(first, "sample-skill", "alpha")
-            second = create_fixture("second", root, ["source.txt"])
-            self._tag_fixture(second, "sample-skill", "alpha")
-            third = create_fixture("third", root, ["source.txt"])
-            self._tag_fixture(third, "sample-skill", "beta")
-            output = root.parent / f"snapshot-{root.name}"
+            first = create_task("first", root, ["source.txt"])
+            self._tag_task(first, "sample-skill", "alpha")
+            second = create_task("second", root, ["source.txt"])
+            self._tag_task(second, "sample-skill", "alpha")
+            third = create_task("third", root, ["source.txt"])
+            self._tag_task(third, "sample-skill", "beta")
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
 
             def fake_evaluate(
@@ -2140,49 +2297,51 @@ class SkillSnapshotTests(unittest.TestCase):
                 git: str = "git",
                 opencode: str = "opencode",
                 with_skill: bool = True,
+                sandbox: str = "worktree",
+                docker: str = "docker",
             ) -> bool:
                 (run_output / "result.json").write_text("{}", encoding="utf-8")
                 return with_skill
 
             with patch("codev_workflow.eval.evaluate", side_effect=fake_evaluate):
-                report = run_snapshot("sample-skill", root, output, repetitions=2)
+                report = run_benchmark("sample-skill", root, output, repetitions=2)
 
             self.assertEqual({"alpha", "beta"}, set(report["categories"]))
             alpha = report["categories"]["alpha"]
             self.assertEqual(100.0, alpha["with_skill_percentage"])
-            self.assertEqual(0.0, alpha["without_skill_percentage"])
+            self.assertEqual(0.0, alpha["baseline_percentage"])
             self.assertEqual(100.0, alpha["delta"])
             self.assertEqual(
-                {"passed": 2, "total": 2}, alpha["fixtures"]["first"]["with_skill"]
+                {"passed": 2, "total": 2}, alpha["tasks"]["first"]["with_skill"]
             )
             self.assertEqual(
-                {"passed": 0, "total": 2}, alpha["fixtures"]["first"]["without_skill"]
+                {"passed": 0, "total": 2}, alpha["tasks"]["first"]["baseline"]
             )
             beta = report["categories"]["beta"]
             self.assertEqual(100.0, beta["delta"])
-            self.assertTrue((output / "snapshot.json").is_file())
-            on_disk = json.loads((output / "snapshot.json").read_text())
+            self.assertTrue((output / "benchmark.json").is_file())
+            on_disk = json.loads((output / "benchmark.json").read_text())
             self.assertEqual(report, on_disk)
 
-    def test_run_snapshot_records_infrastructure_errors_as_failed_runs(self) -> None:
+    def test_run_benchmark_records_infrastructure_errors_as_failed_runs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             self._install_skill(root, "sample-skill")
-            fixture = create_fixture("first", root, ["source.txt"])
-            self._tag_fixture(fixture, "sample-skill", "alpha")
-            output = root.parent / f"snapshot-{root.name}"
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
 
             with patch(
                 "codev_workflow.eval.evaluate",
                 side_effect=EvaluationError("actor launch failed"),
             ):
-                report = run_snapshot("sample-skill", root, output, repetitions=1)
+                report = run_benchmark("sample-skill", root, output, repetitions=1)
 
             alpha = report["categories"]["alpha"]
             self.assertEqual(0.0, alpha["with_skill_percentage"])
-            self.assertEqual(0.0, alpha["without_skill_percentage"])
+            self.assertEqual(0.0, alpha["baseline_percentage"])
             error_file = (
                 output
                 / "sample-skill"
@@ -2190,43 +2349,70 @@ class SkillSnapshotTests(unittest.TestCase):
                 / "first"
                 / "with_skill"
                 / "1"
-                / "snapshot-error.txt"
+                / "benchmark-error.txt"
             )
             self.assertIn("actor launch failed", error_file.read_text())
 
-    def test_run_snapshot_rejects_zero_repetitions(self) -> None:
+    def test_run_benchmark_rejects_zero_repetitions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            output = root.parent / f"snapshot-{root.name}"
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
             with self.assertRaises(EvaluationError):
-                run_snapshot("any-skill", root, output, repetitions=0)
+                run_benchmark("any-skill", root, output, repetitions=0)
 
-    def test_run_snapshot_rejects_skill_with_no_matching_fixtures(self) -> None:
+    def test_run_benchmark_rejects_skill_with_no_matching_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
-            create_fixture("first", root, ["source.txt"])
-            output = root.parent / f"snapshot-{root.name}"
+            create_task("first", root, ["source.txt"])
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
             with self.assertRaises(EvaluationError):
-                run_snapshot("no-such-skill", root, output)
+                run_benchmark("no-such-skill", root, output)
 
-    def test_run_snapshot_only_categories_restricts_which_fixtures_run(self) -> None:
+    def test_run_benchmark_forwards_sandbox_and_docker_to_evaluate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             self._install_skill(root, "sample-skill")
-            first = create_fixture("first", root, ["source.txt"])
-            self._tag_fixture(first, "sample-skill", "alpha")
-            second = create_fixture("second", root, ["source.txt"])
-            self._tag_fixture(second, "sample-skill", "beta")
-            output = root.parent / f"snapshot-{root.name}"
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
+            output.mkdir()
+
+            with patch(
+                "codev_workflow.eval.evaluate", return_value=True
+            ) as evaluate_mock:
+                run_benchmark(
+                    "sample-skill",
+                    root,
+                    output,
+                    repetitions=1,
+                    sandbox="docker",
+                    docker="/usr/bin/docker",
+                )
+
+            evaluate_mock.assert_called()
+            for call in evaluate_mock.call_args_list:
+                self.assertEqual("docker", call.kwargs["sandbox"])
+                self.assertEqual("/usr/bin/docker", call.kwargs["docker"])
+
+    def test_run_benchmark_only_categories_restricts_which_tasks_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            first = create_task("first", root, ["source.txt"])
+            self._tag_task(first, "sample-skill", "alpha")
+            second = create_task("second", root, ["source.txt"])
+            self._tag_task(second, "sample-skill", "beta")
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
 
             with patch("codev_workflow.eval.evaluate", return_value=True):
-                report = run_snapshot(
+                report = run_benchmark(
                     "sample-skill",
                     root,
                     output,
@@ -2235,25 +2421,123 @@ class SkillSnapshotTests(unittest.TestCase):
                 )
 
             self.assertEqual({"beta"}, set(report["categories"]))
-            self.assertNotIn("first", report["categories"]["beta"]["fixtures"])
-            self.assertIn("second", report["categories"]["beta"]["fixtures"])
+            self.assertNotIn("first", report["categories"]["beta"]["tasks"])
+            self.assertIn("second", report["categories"]["beta"]["tasks"])
 
-    def test_run_snapshot_rejects_unknown_category(self) -> None:
+    def test_run_benchmark_rejects_unknown_category(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self._repo(root)
             self._install_skill(root, "sample-skill")
-            fixture = create_fixture("first", root, ["source.txt"])
-            self._tag_fixture(fixture, "sample-skill", "alpha")
-            output = root.parent / f"snapshot-{root.name}"
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
             output.mkdir()
             with self.assertRaises(EvaluationError):
-                run_snapshot(
+                run_benchmark(
                     "sample-skill",
                     root,
                     output,
                     only_categories=["no-such-category"],
                 )
+
+    def test_run_benchmark_packages_eval_trace_into_installed_skill(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
+            output.mkdir()
+
+            with patch("codev_workflow.eval.evaluate", return_value=True):
+                report = run_benchmark("sample-skill", root, output, repetitions=1)
+
+            evals_dir = root / ".agents" / "skills" / "sample-skill" / "evals"
+            trace_path = evals_dir / "benchmark.json"
+            self.assertTrue(trace_path.is_file())
+            trace = json.loads(trace_path.read_text())
+            self.assertIn("generated_at", trace)
+            del trace["generated_at"]
+            self.assertEqual(report, trace)
+            markdown = (evals_dir / "BENCHMARK.md").read_text()
+            self.assertIn("sample-skill", markdown)
+            self.assertIn("alpha", markdown)
+            self.assertIn("Overall", markdown)
+
+    def test_run_benchmark_skips_packaging_for_category_restricted_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
+            output.mkdir()
+
+            with patch("codev_workflow.eval.evaluate", return_value=True):
+                run_benchmark(
+                    "sample-skill",
+                    root,
+                    output,
+                    repetitions=1,
+                    only_categories=["alpha"],
+                )
+
+            evals_dir = root / ".agents" / "skills" / "sample-skill" / "evals"
+            self.assertFalse(evals_dir.exists())
+
+    def test_run_benchmark_no_package_flag_skips_packaging(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            self._install_skill(root, "sample-skill")
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "sample-skill", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
+            output.mkdir()
+
+            with patch("codev_workflow.eval.evaluate", return_value=True):
+                run_benchmark(
+                    "sample-skill", root, output, repetitions=1, package=False
+                )
+
+            evals_dir = root / ".agents" / "skills" / "sample-skill" / "evals"
+            self.assertFalse(evals_dir.exists())
+
+    def test_run_benchmark_skips_packaging_when_skill_not_installed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._repo(root)
+            task = create_task("first", root, ["source.txt"])
+            self._tag_task(task, "never-installed", "alpha")
+            output = root.parent / f"benchmark-{root.name}"
+            output.mkdir()
+
+            with patch("codev_workflow.eval.evaluate", return_value=True):
+                report = run_benchmark("never-installed", root, output, repetitions=1)
+
+            self.assertEqual(100.0, report["overall"]["with_skill_percentage"])
+            self.assertFalse((root / ".agents" / "skills" / "never-installed").exists())
+
+    def test_package_benchmark_trace_returns_none_when_skill_not_installed(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = {
+                "schema_version": 1,
+                "skill": "never-installed",
+                "repetitions": 1,
+                "categories": {},
+                "overall": {
+                    "with_skill_percentage": 0.0,
+                    "baseline_percentage": 0.0,
+                    "delta": 0.0,
+                },
+            }
+            self.assertIsNone(package_benchmark_trace(root, "never-installed", report))
 
 
 if __name__ == "__main__":

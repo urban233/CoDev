@@ -1,6 +1,7 @@
 ---
 name: audit-google-typescript-style
 description: Audit TypeScript and TSX code against the Google TypeScript Style Guide using GTS plus supplemental analysis, then propose a short grouped remediation plan for explicit human approval before modifying approved source files. Invoke only when the user explicitly requests this audit or invokes $audit-google-typescript-style. Do not use for ordinary code reviews, pull-request reviews, linting, or implementation tasks.
+license: BSD-3-Clause
 ---
 
 # Audit Google TypeScript Style
