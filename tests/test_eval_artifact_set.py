@@ -199,7 +199,12 @@ class ArtifactSetRealSkillTests(unittest.TestCase):
         self.assertIn(f"Skill: {_SKILL_NAME}", show_printed)
         self.assertIn("plan-phase-audit", show_printed)
         self.assertIn("+100.0pp", show_printed)
-        self.assertIn(str(trace_path), show_printed)
+        # `codev eval show` resolves --target before building this path
+        # (cli.py's _run_eval_show_command), which on Windows can expand an
+        # 8.3 short alias (e.g. RUNNER~1) in the temp-dir prefix to its long
+        # form -- resolve the same way here so the comparison isn't
+        # comparing two spellings of the identical path.
+        self.assertIn(str(trace_path.resolve()), show_printed)
         self.assertIn(trace["generated_at"], show_printed)
 
     def test_category_restricted_run_never_packages_and_show_reports_that(

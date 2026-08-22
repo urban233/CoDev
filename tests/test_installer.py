@@ -794,7 +794,7 @@ class SkillCardAndLicenseTests(unittest.TestCase):
         for name in sorted(names):
             with self.subTest(skill=name):
                 text = files[f".agents/skills/{name}/SKILL.md"].decode("utf-8")
-                lines = text.split("\n")
+                lines = text.splitlines()
                 end = lines.index("---", 1)
                 license_lines = [
                     line for line in lines[1:end] if line.startswith("license:")

@@ -1291,6 +1291,14 @@ class TaskContractTests(unittest.TestCase):
         executable.chmod(executable.stat().st_mode | 0o111)
         return executable
 
+    @unittest.skipIf(
+        sys.platform == "win32",
+        "this test's fake docker stub re-execs the fake actor script as its "
+        "own child process, which needs a .py-is-directly-executable "
+        "association this repo does not assume on Windows -- Windows "
+        "support for DockerEnvironment is already documented deferred risk "
+        "(ADR-0027), not something this specific test should force",
+    )
     def test_evaluate_with_docker_sandbox_runs_actor_through_docker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
