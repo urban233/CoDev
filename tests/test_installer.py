@@ -798,7 +798,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual([], unresolved)
         self.assertFalse((self.target / Path(relative)).exists())
         replanned = [
-            item for item in installer.plan_update(self.target).operations
+            item
+            for item in installer.plan_update(self.target).operations
             if item.path == relative
         ]
         self.assertEqual(["add"], [item.kind for item in replanned])

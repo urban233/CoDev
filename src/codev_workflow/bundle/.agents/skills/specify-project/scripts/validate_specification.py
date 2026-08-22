@@ -8,7 +8,6 @@ import re
 import sys
 from pathlib import Path
 
-
 REQUIRED_METADATA = (
     "Status",
     "Product frame",

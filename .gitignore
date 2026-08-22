@@ -11,6 +11,12 @@ dist/
 .idea
 .DS_Store
 
+# Bazel output symlinks and repo-local tool binaries (see
+# docs/features/bazel-migration/design.md) -- never committed. Anchored to
+# the repo root so this doesn't also match docs/features/bazel-migration/.
+/bazel-*
+.tools/
+
 # Local escalation log (ADR-0003) -- deliberately not shared/committed, this
 # project's own dogfood usage of `codev work`.
 .codev/work/escalations.jsonl

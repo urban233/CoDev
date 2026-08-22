@@ -1,0 +1,31 @@
+"""CoDev build graph. See docs/features/bazel-migration/design.md."""
+
+module(name = "codev_workflow", version = "0.0.0")
+
+bazel_dep(name = "rules_python", version = "2.3.2")
+bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    python_version = "3.13",
+    is_default = True,
+)
+python.toolchain(
+    python_version = "3.12",
+)
+python.toolchain(
+    python_version = "3.11",
+)
+use_repo(python, "python_3_11", "python_3_12", "python_3_13")
+
+# requirements_lock.txt is generated from uv.lock via `just lock`
+# (`uv export --frozen --no-emit-project --all-extras`). uv.lock stays the
+# source of truth -- never hand-edit requirements_lock.txt.
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pip",
+    python_version = "3.13",
+    requirements_lock = "//:requirements_lock.txt",
+)
+use_repo(pip, "pip")

@@ -55,9 +55,7 @@ class ResolveNonInteractiveTests(unittest.TestCase):
         resolutions = resolve_non_interactive(plan, installer.Resolution.KEEP)
         self.assertEqual({}, resolutions)
         self.assertTrue(
-            SPECIAL_INTEGRATION_PATHS.issuperset(
-                item.path for item in plan.operations
-            )
+            SPECIAL_INTEGRATION_PATHS.issuperset(item.path for item in plan.operations)
         )
 
     def test_override_falls_back_to_skip_when_upstream_has_nothing_to_offer(

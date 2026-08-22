@@ -29,10 +29,43 @@ _METADATA_FIELD_PATTERN = re.compile(r"^\*\*[^*]+:\*\*")
 _LIST_ITEM_PATTERN = re.compile(r"^([-*+]|\d+\.)\s")
 _STOPWORDS = frozenset(
     {
-        "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
-        "has", "have", "if", "in", "into", "is", "it", "its", "no", "not",
-        "of", "on", "only", "or", "our", "that", "the", "their", "then",
-        "this", "to", "was", "were", "when", "which", "with",
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "but",
+        "by",
+        "for",
+        "from",
+        "has",
+        "have",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "no",
+        "not",
+        "of",
+        "on",
+        "only",
+        "or",
+        "our",
+        "that",
+        "the",
+        "their",
+        "then",
+        "this",
+        "to",
+        "was",
+        "were",
+        "when",
+        "which",
+        "with",
     }
 )
 _MIN_DUPLICATE_WORDS = 8
@@ -96,19 +129,33 @@ def _check_links(
             if target.startswith(("http://", "https://", "mailto:")):
                 continue
             path_part, _, anchor = target.partition("#")
-            resolved = (file_path.parent / path_part).resolve() if path_part else file_path
+            resolved = (
+                (file_path.parent / path_part).resolve() if path_part else file_path
+            )
             if path_part and not resolved.is_file():
                 findings.append(
-                    Finding("violation", "broken-link", file_path.name, line_number, 1,
-                             f"Link target does not exist: {target!r}.")
+                    Finding(
+                        "violation",
+                        "broken-link",
+                        file_path.name,
+                        line_number,
+                        1,
+                        f"Link target does not exist: {target!r}.",
+                    )
                 )
                 continue
             if anchor:
                 key = resolved.name if path_part else file_path.name
                 if anchor not in all_headings.get(key, set()):
                     findings.append(
-                        Finding("violation", "broken-anchor", file_path.name, line_number, 1,
-                                 f"No heading in {key!r} produces anchor #{anchor}.")
+                        Finding(
+                            "violation",
+                            "broken-anchor",
+                            file_path.name,
+                            line_number,
+                            1,
+                            f"No heading in {key!r} produces anchor #{anchor}.",
+                        )
                     )
     return findings
 
@@ -128,9 +175,15 @@ def _check_stacked_headings(file_path: pathlib.Path, lines: list[str]) -> list[F
             and _HEADING_PATTERN.match(lines[index + 2])
         ):
             findings.append(
-                Finding("violation", "stacked-heading", file_path.name, index + 1, 1,
-                         f"{lines[index].strip()!r} has no content before "
-                         f"{lines[index + 2].strip()!r}.")
+                Finding(
+                    "violation",
+                    "stacked-heading",
+                    file_path.name,
+                    index + 1,
+                    1,
+                    f"{lines[index].strip()!r} has no content before "
+                    f"{lines[index + 2].strip()!r}.",
+                )
             )
     return findings
 
@@ -165,9 +218,15 @@ def _check_tables(file_path: pathlib.Path, lines: list[str]) -> list[Finding]:
         header, data_rows = rows[0], rows[1:]
         if len(header) > _WIDE_TABLE_COLUMNS:
             findings.append(
-                Finding("review", "wide-table", file_path.name, start_line, 1,
-                         f"Table {header!r} has {len(header)} columns; move dense "
-                         "columns into a bulleted block under each row instead.")
+                Finding(
+                    "review",
+                    "wide-table",
+                    file_path.name,
+                    start_line,
+                    1,
+                    f"Table {header!r} has {len(header)} columns; move dense "
+                    "columns into a bulleted block under each row instead.",
+                )
             )
         if len(data_rows) >= _REDUNDANT_COLUMN_MIN_ROWS:
             for col_index, col_name in enumerate(header):
@@ -177,18 +236,30 @@ def _check_tables(file_path: pathlib.Path, lines: list[str]) -> list[Finding]:
                 most_common = max(values, key=values.count)
                 if values.count(most_common) / len(values) >= _REDUNDANT_COLUMN_RATIO:
                     findings.append(
-                        Finding("review", "redundant-column", file_path.name, start_line, 1,
-                                 f"Column {col_name!r} is {most_common!r} in "
-                                 f"{values.count(most_common)}/{len(values)} rows; state it "
-                                 "once in prose and drop the column.")
+                        Finding(
+                            "review",
+                            "redundant-column",
+                            file_path.name,
+                            start_line,
+                            1,
+                            f"Column {col_name!r} is {most_common!r} in "
+                            f"{values.count(most_common)}/{len(values)} rows; state it "
+                            "once in prose and drop the column.",
+                        )
                     )
         for row in data_rows:
             for cell in row:
                 if len(cell) > _DENSE_CELL_CHARS or re.search(r"\.\s+[A-Z]", cell):
                     findings.append(
-                        Finding("review", "dense-cell", file_path.name, start_line, 1,
-                                 f"Cell carries prose, not a comparable value: "
-                                 f"{cell[:80]!r}...")
+                        Finding(
+                            "review",
+                            "dense-cell",
+                            file_path.name,
+                            start_line,
+                            1,
+                            f"Cell carries prose, not a comparable value: "
+                            f"{cell[:80]!r}...",
+                        )
                     )
     return findings
 
@@ -262,7 +333,11 @@ def _check_cross_file_duplicates(
                     if overlap >= _DUPLICATE_JACCARD_THRESHOLD:
                         findings.append(
                             Finding(
-                                "review", "cross-file-duplicate", file_a, line_a, 1,
+                                "review",
+                                "cross-file-duplicate",
+                                file_a,
+                                line_a,
+                                1,
                                 f"{overlap:.0%} word overlap with {file_b}:{line_b} -- "
                                 "state this fact once and link to it instead of "
                                 f"restating it. {file_a}: {text_a[:70]!r}... / "
@@ -302,10 +377,16 @@ def _target_files(args: argparse.Namespace) -> list[pathlib.Path]:
 def main() -> int:
     """Run the structural audit and emit JSON-lines findings."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("files", nargs="*", help="Explicit Markdown files to check together.")
     parser.add_argument(
-        "--root", type=pathlib.Path, default=pathlib.Path.cwd(),
-        help="When no files are given, check every *.md file directly in this directory.",
+        "files", nargs="*", help="Explicit Markdown files to check together."
+    )
+    parser.add_argument(
+        "--root",
+        type=pathlib.Path,
+        default=pathlib.Path.cwd(),
+        help=(
+            "When no files are given, check every *.md file directly in this directory."
+        ),
     )
     args = parser.parse_args()
     files = _target_files(args)

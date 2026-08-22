@@ -1,0 +1,10 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "codev_workflow",
+    srcs = glob(["*.py"]),
+    data = glob(["bundle/**"]),
+    imports = [".."],
+    deps = ["@pip//pre_commit"],
+    visibility = ["//visibility:public"],
+)
