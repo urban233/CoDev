@@ -27,6 +27,12 @@ catalog.
 The installer discovers package data recursively, so adding a bundled file does
 not require maintaining a second file list.
 
+Every bundled skill carries a `skill-card.md` alongside its `SKILL.md` --
+owner, license, use case, dependencies, and known risks, filled out with real
+facts rather than left as a template placeholder -- and a `license`
+frontmatter field on `SKILL.md` itself. See
+`docs/adr/0029-adopt-skill-cards-and-license-metadata.md`.
+
 `AGENTS.md` and `.opencode/opencode.json` are integrations rather than copied
 files. CoDev owns one marked block in `AGENTS.md` and selected missing values
 in OpenCode configuration, preserving all project-owned content. Junie

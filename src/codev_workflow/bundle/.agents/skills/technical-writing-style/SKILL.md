@@ -1,6 +1,7 @@
 ---
 name: technical-writing-style
 description: Provides the Google-derived technical writing style reference and revision method for any reviewer-facing technical document -- a specification, brief, design, delivery plan, or launch plan. The planning skills (`specify-project`, `define-product`, `design-solution`, `plan-delivery`, `launch-product`) read this skill's reference before drafting or revising prose. Invoke directly to audit or revise the writing quality of an existing document without changing its technical meaning.
+license: BSD-3-Clause
 ---
 
 # Technical Writing Style

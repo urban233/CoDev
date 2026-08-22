@@ -1,6 +1,7 @@
 ---
 name: design-skill-eval
 description: Guide a developer through designing and scaffolding one new task for an installed skill's performance-evaluation corpus -- pick a falsifiable ground truth, write a prompt that never names the skill, a deterministic verifier, and a judge rubric, then tag it with the right skill and category so `codev eval benchmark run` discovers it. Use when adding eval coverage for an existing skill, or bootstrapping the first task for a skill that has none. Do not use to run an existing benchmark, to build or edit the skill under test itself, or for general code review.
+license: BSD-3-Clause
 ---
 
 # Design Skill Eval

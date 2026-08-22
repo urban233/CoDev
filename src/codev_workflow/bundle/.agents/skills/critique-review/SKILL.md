@@ -1,6 +1,7 @@
 ---
 name: critique-review
 description: Turn an existing code-review finding, presubmit failure, or lint result into a precise, reviewable suggested diff while preserving independent read-only review and requiring an explicit developer or build-change handoff before any file is modified.
+license: BSD-3-Clause
 ---
 
 # Critique Review

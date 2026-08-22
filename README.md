@@ -216,6 +216,7 @@ my-project/
 ├── AGENTS.md                         # a managed policy block; local text survives
 ├── .gitignore                        # a managed block ignoring the local escalation log
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
+│   └── <name>/skill-card.md          # owner, license, use case, risks -- see ADR-0029
 ├── .agents/agents/                   # Antigravity workflow and audit agents
 ├── .codex/agents/                    # Codex workflow and audit agents
 ├── .opencode/agents/                 # OpenCode workflow and audit agents

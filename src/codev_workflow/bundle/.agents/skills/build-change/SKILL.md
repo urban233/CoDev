@@ -1,6 +1,7 @@
 ---
 name: build-change
 description: Pair with a developer to investigate, plan, implement, test, and prepare one bounded code change, bug fix, refactor, or delivery-plan task. Use when the user wants hands-on AI-assisted coding with frequent checkpoints and human control rather than a long autonomous implementation loop. Ground every plan in the current repository and keep changes small and reviewable.
+license: BSD-3-Clause
 ---
 
 # Build Change

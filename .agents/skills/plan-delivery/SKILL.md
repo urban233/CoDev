@@ -1,6 +1,7 @@
 ---
 name: plan-delivery
 description: Turn an accepted product or feature brief and any required design into a lightweight, team-profile-aware multi-developer delivery plan. Use when a team needs outcome-based milestones, unassigned capability lanes or ready work items, owners, independent reviewers, simple dependencies, integration checkpoints, WIP limits, risks, or rolling-wave planning. Do not create a separate architecture or capacity bureaucracy.
+license: BSD-3-Clause
 ---
 
 # Plan Delivery

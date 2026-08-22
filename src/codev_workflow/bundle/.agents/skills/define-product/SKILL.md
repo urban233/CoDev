@@ -1,6 +1,7 @@
 ---
 name: define-product
 description: Turn a software idea, product proposal, or feature request into a clear product or feature brief and select the lightest safe workflow. Use when a developer needs help clarifying users, outcomes, scope, success measures, constraints, assumptions, or whether work is a quick change, feature, or product. Do not design the technical solution or create implementation tasks.
+license: BSD-3-Clause
 ---
 
 # Define Product

@@ -1,6 +1,7 @@
 ---
 name: review-change
 description: Independently review a pull request, commit, patch, or working-tree diff for correctness, regressions, security, test quality, maintainability, scope, and conformance to an accepted brief or design. Use when a developer requests code review, a second AI pass, pre-merge assurance, or an evidence-based quality gate. Review only the exact supplied snapshot and do not modify code unless explicitly asked afterward. Its natural home is a diff with no task and no open pull request — once a CoDev-built task has an open PR, the outer loop's specialist review covers this same ground automatically.
+license: BSD-3-Clause
 ---
 
 # Review Change

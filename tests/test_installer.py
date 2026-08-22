@@ -758,6 +758,80 @@ class InternalDevToolingExcludedFromBundleTests(unittest.TestCase):
         self.assertEqual([], leaked)
 
 
+class SkillCardAndLicenseTests(unittest.TestCase):
+    """Every bundled skill carries a real `license` frontmatter field and a
+    filled-out `skill-card.md`, per docs/adr/0029-adopt-skill-cards-and-
+    license-metadata.md. Both ship to an installed project automatically --
+    `_walk_bundle()` copies every file under bundle/, no separate install-time
+    logic exists for either -- so walking the bundle here is the real,
+    installed-project view, not a shortcut around it."""
+
+    _REQUIRED_SKILL_CARD_SECTIONS = (
+        "**Description:**",
+        "**Owner:**",
+        "**License / Terms of Use:**",
+        "**Use Case:**",
+        "**Deployment Geography for Use:**",
+        "**Requirements / Dependencies:**",
+        "**Known Risks and Mitigations:**",
+        "**References:**",
+        "**Skill Output:**",
+        "**Skill Version:**",
+        "**Ethical Considerations:**",
+    )
+
+    def _bundled_skill_names(self, files: dict[str, bytes]) -> set[str]:
+        return {
+            path.split("/")[2]
+            for path in files
+            if path.startswith(".agents/skills/") and path.endswith("/SKILL.md")
+        }
+
+    def test_every_bundled_skill_declares_a_license(self) -> None:
+        files = installer._walk_bundle()
+        names = self._bundled_skill_names(files)
+        self.assertTrue(names)
+        for name in sorted(names):
+            with self.subTest(skill=name):
+                text = files[f".agents/skills/{name}/SKILL.md"].decode("utf-8")
+                lines = text.split("\n")
+                end = lines.index("---", 1)
+                license_lines = [
+                    line for line in lines[1:end] if line.startswith("license:")
+                ]
+                self.assertEqual(
+                    1, len(license_lines), f"{name}: expected exactly one license field"
+                )
+                self.assertIn("BSD-3-Clause", license_lines[0])
+
+    def test_every_bundled_skill_has_a_filled_out_skill_card(self) -> None:
+        files = installer._walk_bundle()
+        names = self._bundled_skill_names(files)
+        for name in sorted(names):
+            with self.subTest(skill=name):
+                path = f".agents/skills/{name}/skill-card.md"
+                self.assertIn(path, files, f"{name}: missing skill-card.md")
+                text = files[path].decode("utf-8")
+                self.assertIn(f"# Skill Card: {name}", text)
+                for section in self._REQUIRED_SKILL_CARD_SECTIONS:
+                    with self.subTest(section=section):
+                        self.assertIn(section, text)
+                # A skill card copied from the template without being filled
+                # in still contains its bracketed placeholder prose -- catch
+                # that instead of silently accepting an unfilled copy.
+                self.assertNotIn("[", text)
+                self.assertNotIn("]", text)
+
+    def test_skill_card_template_is_bundled_and_lists_every_section(self) -> None:
+        files = installer._walk_bundle()
+        path = "docs/codev/onboarding/skill-card.template.md"
+        self.assertIn(path, files)
+        text = files[path].decode("utf-8")
+        for section in self._REQUIRED_SKILL_CARD_SECTIONS:
+            with self.subTest(section=section):
+                self.assertIn(section, text)
+
+
 class CodeownersInitTests(unittest.TestCase):
     def test_writes_a_starter_file_under_dot_github(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

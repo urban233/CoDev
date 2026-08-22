@@ -1,6 +1,7 @@
 ---
 name: testing-craft
 description: Provides Google-derived testing strategy, test-writing craft, and test-suite health reference, distilled from Software Engineering at Google (the Flamingo book), the Google Testing Blog, and Google's published testing-infrastructure research. `specify-project` and `design-solution` read the strategy reference before deciding test scope, `build-change` reads the writing-craft reference before adding or updating tests, and `correctness-tests-specialist` uses both as review criteria. Invoke directly to design a test strategy, audit an existing suite's health, or triage a flaky or brittle test.
+license: BSD-3-Clause
 ---
 
 # Testing Craft
