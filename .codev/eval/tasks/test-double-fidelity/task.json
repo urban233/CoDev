@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "test-double-fidelity",
+  "description": "Actor reviews an already-written test that mocks a cheap, real, in-memory scaler and model (StandardScaler/CheckpointedRegressor) instead of using them directly, and reports or fixes what it finds. This is testing-craft's own 'audit an existing test suite' direct-invocation shape, not an implement-and-test task that would naturally route through build-change instead -- so staging testing-craft alone is a fair test of whether it changes what the actor notices.",
+  "skill": "testing-craft",
+  "category": "test_doubles_fidelity",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

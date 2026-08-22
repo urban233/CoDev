@@ -49,13 +49,21 @@ it to one of four steps:
 | **Review** (`review-change`, plus an automatic pass) | Is this exact change correct, safe, and consistent with what we agreed? | Catching that a SMILES canonicalizer drops E/Z stereochemistry for one specific ring class — a real, narrow correctness bug, not a style nit. |
 | **Ship** | Are we ready to expose this, and how will we know it's working? | Rolling a new ML-based hepatotoxicity filter out to 10% of incoming compound batches before trusting it on the full screening queue. |
 
-Two of the ten installed skills sit outside this table because they don't
+Two of the twelve installed skills sit outside this table because they don't
 fit the four-step shape: `pr-review` reviews a GitHub Pull Request that
 already exists (possibly not even yours), and `critique-review` turns an
 existing finding into a concrete suggested diff — it's a bridge from a
-review to a fix, not a review itself. `design-skill-eval` is a different
-kind of tool again: it scaffolds evaluation fixtures so you can measure
-whether a skill actually helps, empirically, rather than just trusting it.
+review to a fix, not a review itself. `design-skill-eval`,
+`technical-writing-style`, and `testing-craft` are different kinds of
+tools again: `design-skill-eval` scaffolds evaluation tasks so you can
+measure whether a skill actually helps, empirically, rather than just
+trusting it; `technical-writing-style` is what the other planning skills
+read automatically before drafting prose, and what you can invoke directly
+to revise the writing quality of an existing document; and `testing-craft`
+is what `specify-project`, `design-solution`, and `build-change` read
+automatically before they design or write test content, and what you can
+invoke directly to design a test strategy, audit an existing test suite's
+health, or triage a flaky test.
 
 ## Two steps that only show up sometimes
 
@@ -95,7 +103,7 @@ five specialist reviewers — correctness, security, concurrency,
 architecture, rollout — examine it in parallel and hand you exactly the
 findings that need a decision. You triage; CoDev does not decide for you
 which finding matters. `review-change` still exists for the case none of
-that covers: a diff with no work item and no open PR yet, reviewed on
+that covers: a diff with no task and no open PR yet, reviewed on
 demand.
 
 ## Multi-developer, briefly
@@ -109,8 +117,10 @@ discovering the mismatch after both branches are done.
 
 ## Where to go next
 
-- Commands for a normal work item:
+- Commands for a normal task:
   [Normal Development Workflow](normal-development-workflow.md)
+- Copy-paste prompts for starting a task or outer-loop review:
+  [starting-prompts.md](starting-prompts.md)
 - Worked walkthroughs, start to finish: [examples.md](examples.md)
 - The full command/skill/agent reference: `docs/product-map.md`
 - How the bundle installs and updates: `docs/architecture.md`

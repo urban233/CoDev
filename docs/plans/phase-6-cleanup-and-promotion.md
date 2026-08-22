@@ -6,7 +6,7 @@ config foundation, work lifecycle, CLI grammar consolidation, structural
 adapter parity, eval/CI maturity - all implemented in the working tree. See
 `CHANGELOG.md`'s `[Unreleased]` section for the authoritative list of what
 shipped; this document does not repeat it.
-**Risk:** normal - work item 1 is a deliberate breaking change and needs one
+**Risk:** normal - task 1 is a deliberate breaking change and needs one
 human decision before it starts.
 
 ## Context
@@ -16,7 +16,7 @@ in it has been started. It was deliberately not begun in the same session
 that built Phases 1-5, so it gets picked up fresh with its own review rather
 than being rushed at the end of a long implementation run.
 
-## Work item 1 - Remove the deprecated CLI aliases
+## Task 1 - Remove the deprecated CLI aliases
 
 **Change:** Delete `_apply_deprecated_aliases` and its call site in
 `src/codev_workflow/cli.py::main`. After this, `codev check`, `codev
@@ -54,7 +54,7 @@ alias-dependent tests updated or removed, not incidentally passing; grep the
 bundle and root docs (`README.md`, `docs/`) for the four retired command
 spellings to confirm nothing still recommends them.
 
-## Work item 2 - Reconcile skill-eval Windows-support docs
+## Task 2 - Reconcile skill-eval Windows-support docs
 
 **Change:** `docs/features/skill-eval/README.md`'s "Platform and known
 risks" section and `docs/features/skill-eval/design.md`'s "Goals" section
@@ -82,7 +82,7 @@ sentence contradicts what `eval.py` actually does. No code changes, so no
 test-suite implication beyond re-running
 `scripts/validate-development-workflow.py`.
 
-## Work item 3 - Promote past Alpha (conditional - likely not yet ready)
+## Task 3 - Promote past Alpha (conditional - likely not yet ready)
 
 **Change:** `pyproject.toml`'s `Development Status :: 3 - Alpha` classifier
 becomes `4 - Beta` (or later `5 - Production/Stable`).
@@ -90,13 +90,13 @@ becomes `4 - Beta` (or later `5 - Production/Stable`).
 **Stop condition:** the original plan gated this explicitly on Phases 1-5
 having "shipped and held for one full release cycle." As of this writing,
 Phases 1-5 exist in the working tree but have not shipped in any tagged
-release. Do not do this work item in the same pass as items 1 and 2 -
+release. Do not do this task in the same pass as items 1 and 2 -
 revisit it only after the next tagged release has been out and stable for a
 cycle. If picking this document up shortly after items 1-2 land, the correct
 action is usually to stop and report that this item's precondition isn't met
 yet, not to complete it anyway.
 
-## Work item 4 - Reconcile other stale docs found during review
+## Task 4 - Reconcile other stale docs found during review
 
 Found by actually running the tooling against this repo's own installation,
 not by inspection alone - see "Known gaps" below for the live evidence.
@@ -108,7 +108,7 @@ not by inspection alone - see "Known gaps" below for the live evidence.
   copy and `src/codev_workflow/bundle/docs/for-human/development-guide.md`)
   says "Stop after two failed attempts with the same root cause; escalate to
   the human" as if it were still pure convention. It is now mechanically
-  enforced for the builder/reviewer round loop by `codev work check`'s
+  enforced for the builder/reviewer round loop by `codev task check`'s
   `stop_round_cap` and `stop_repeated_finding` outcomes - update the row to
   say so, while keeping in mind the *builder's own* single-session retry loop
   (a different, smaller thing - see `build-change/SKILL.md` step 3) is still

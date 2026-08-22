@@ -5,6 +5,232 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-22
+
+### Added
+- `codev eval nvidia <verb>`, a second, independent evaluation engine
+  wrapping the external NVIDIA SkillEvaluator CLI against a skill directory
+  itself -- Tier 1 static/security checks, Tier 2 semantic dedup, and Tier 3
+  live agent evaluation. A thin, credential-explicit subprocess wrapper
+  sharing this project's existing subprocess execution, environment
+  isolation, durable publication, and redaction primitives, rather than one
+  shared behavioral interface across two engines with different units of
+  evaluation (ADR-0026). Documented in
+  `docs/features/nvidia-skill-evaluator/{brief,design,README,how-to,
+  setup-guide,walkthrough-audit-google-python-style}.md`.
+- An opt-in Docker sandbox for the native skill-evaluation harness: a task
+  can declare `"environment": {"backend": "docker", "image": "..."}` in its
+  `task.json`, then `--sandbox docker` on either `codev eval task run` or
+  `codev eval benchmark run` runs the actor inside that container instead of
+  the host worktree. CoDev never builds, pulls, or ships the image itself
+  (ADR-0027).
+- A declarative `checks.json` alternative to hand-written verifier scripts
+  (`eval_checks.py`): four built-in check types (`json_field_equals`,
+  `finding_matches`, `files_unchanged_except`, `command_succeeds`) plus
+  shared helpers (`load_structured_output`, `finding_matches`,
+  `changed_paths_since_seed`, `require`) importable from a custom
+  `verifier.json` script too.
+- `codev eval doctor` (zero-cost readiness check for `git`/`opencode`) and
+  `codev eval report <output-dir>` (plain-text rendering of a trial's or
+  benchmark's output directory).
+- `--agent <path>` on both `codev eval task run` and `codev eval benchmark
+  run`: override the resolved OpenCode executable with a fake-agent stub
+  script for a zero-cost dry run of verifier/checks logic before spending
+  real model budget.
+- A packaged eval trace: an unrestricted `codev eval benchmark run <skill>`
+  now writes `.agents/skills/<skill>/evals/benchmark.json` and a Markdown
+  rendering at `evals/BENCHMARK.md` into the skill's own directory,
+  mirroring NVIDIA SkillEvaluator's Recommended Artifact Set for a skill
+  package (ADR-0028). `codev eval show <skill>` reads it back as text.
+  `--no-package` opts out; a `--category`-restricted run never packages,
+  since a partial run shouldn't silently claim full coverage.
+- `skill-card.md` for every bundled skill (Description, Owner, License/Terms
+  of Use, Use Case, Deployment Geography, Requirements/Dependencies, Known
+  Risks and Mitigations, References, Skill Output, Skill Version, Ethical
+  Considerations) and a `license` frontmatter field on every bundled
+  `SKILL.md`, adopting the rest of NVIDIA's Recommended Artifact Set that
+  ADR-0028 had deferred (ADR-0029). A bundled
+  `docs/codev/onboarding/skill-card.template.md` is the copy-this-file
+  starting point for a new skill.
+- `docs/features/skill-eval/how-to-write-a-task.md`: a start-to-finish,
+  junior-developer-facing tutorial for writing and testing a new eval task,
+  built around one real worked example, including a zero-cost fake-agent
+  testing workflow and the packaged-trace/`eval show` step.
+- `tests/test_eval_artifact_set.py` and `tests/test_eval_docker_benchmark.py`:
+  integration tests against the real, bundled `audit-google-python-style`
+  skill and its real `audit-google-python-style-demo` task, copied into an
+  isolated temporary repository so the real bundle is never mutated. The
+  latter builds and runs an actual local Docker image/container, skipped
+  gracefully (never failed) when Docker isn't available.
+
+### Changed
+- The native skill-evaluation harness's vocabulary now matches the field's
+  standard terms: fixture -> task, snapshot -> benchmark, `--without-skill`
+  -> `--baseline`, all scoped under `codev eval` so nothing collides with
+  `codev task`'s own work-item tracker.
+- `audit-google-python-style-demo`'s rubric criterion R2 was rewritten to
+  match its own flat JSON output schema (a specific `category` and an
+  actionable `summary` per finding) instead of asking for a grouped or
+  sectioned plan the schema has no field to express.
+
+### Removed
+- `codev fixture`, `codev run`, `codev eval snapshot run`, and
+  `.codev/fixtures/` -- removed outright in favor of `codev eval task
+  create/run`, `codev eval benchmark run`, and `.codev/eval/tasks/`. CoDev is
+  Alpha, so this is a clean break, not an aliased migration; every
+  previously-committed fixture was migrated to the new corpus in the same
+  change.
+
+### Fixed
+- `codev git open-pr` and `codev git mark-ready` now render CoDev task
+  evidence into the installed `.github/pull_request_template.md`, so draft
+  and ready pull requests retain the repository's template structure. The
+  bundled template defines markers for the task summary, validation, changed
+  files, review decision, tracking information, and same-repository
+  `Closes #N` linkage. Repositories with a missing or incompatible template
+  retain the previous generated-body behavior with a warning; explicit
+  `--body` and `--body-file` inputs still bypass automatic rendering.
+- `codev eval show` and `codev eval benchmark run` no longer mangle a skill
+  argument pasted as a path (e.g. `.agents/skills/<name>`, copied while
+  browsing) into a nonsense doubled path -- both now strip that prefix and
+  accept the bare skill name either way.
+
+## [0.2.4] - 2026-08-19
+
+### Added
+- `planner`, a fifth primary agent (ADR-0024): a human-started entry point
+  for the Specify/Understand/Design/Plan phases, decoupled from
+  `orchestrator`'s Build/Review/Ship scope -- wraps `specify-project`,
+  `define-product`, `design-solution`, and `plan-delivery` in one session,
+  and never invokes `builder`/`reviewer`/`orchestrator`. Gains an
+  issue-only short circuit: given an accepted design or decision, draft a
+  task and run `codev git issue-create` directly, skipping
+  `plan-delivery`'s milestone/work-list machinery, and stop there --
+  starting the task remains `orchestrator`'s job in a later session.
+  `adapter.py` and `installer.py` register it the same way as every other
+  role.
+- `.github/pull_request_template.md` and `.github/ISSUE_TEMPLATE/task.md`:
+  installed into every adopting repository the same way every other bundle
+  file is (no new CLI surface). Adapted from an external design-doc-template
+  review into CoDev's own vocabulary -- risk labels match
+  `implementation-plan.template.md`'s existing `low`/`normal`/`high`/
+  `critical` scale rather than inventing a new one, "Stop if" reuses the
+  Focus card's existing term, and the `[unverified]` inline-assumption
+  marker is adopted as a new lightweight convention. `codev git
+  issue-create` already covers the CLI side (title/body/assignees, no
+  labels yet -- flagged as a possible follow-up, not built here).
+- ADRs, formalized as a first-class CoDev concept (ADR-0025):
+  `design-solution`'s decision asset is renamed `assets/adr.template.md`
+  (was `decision.template.md`), with an explicit storage convention
+  (`docs/adr/NNNN-slug.md`, sequential numbering) and an append-only rule
+  once `Accepted` -- a reversal writes a new ADR and marks the old one
+  `Superseded by ADR-NNNN`, never edits it. Skill-guided, not
+  CLI-scaffolded, matching every other planning artifact. This repository
+  now documents its own ADR convention at `docs/adr/README.md` too.
+
+### Changed
+- Junie subagent frontmatter now carries real per-agent configuration instead
+  of just `name`/`description`: `tools` (an explicit allowlist that drops
+  `Write`/`Edit` from every reviewer, specialist, and coordinator that never
+  edits code), `model` (tiered `opus`/`sonnet`/`gemini-flash` by task depth --
+  `opus` for the four outer-loop specialists, `reviewer`, `code-audit`, and
+  `planner`; `sonnet` for `orchestrator`, `builder`, `outer-loop-runner`,
+  `rollout-specialist`; `gemini-flash` for the narrow, mechanical
+  `lightweight-reviewer` and `code-audit-gate`), `reasoningLevel`
+  (`high`/`medium` mirroring the existing Codex bundle's
+  `model_reasoning_effort` split), `maxTurns` as a hard safety backstop,
+  `permissionMode` (`acceptEdits` for the two autonomous self-fixing agents,
+  `default` elsewhere), and `skills` naming each agent's actual repository
+  skill(s). `code-audit`/`code-audit-gate`'s `skills` list is rendered per
+  the installed programming language via a new `{{JUNIE_SKILLS}}`
+  placeholder in `installer.py::_render_code_audit_agent`, mirroring the
+  `{{SKILL_PERMISSIONS}}` mechanism already used for opencode's equivalent
+  field.
+- **Breaking:** "work item" is renamed to "task" throughout (ADR-0023): the
+  `codev work ...` CLI group is now `codev task ...`, `.codev/work/` is now
+  `.codev/task/`, and the `work_item_id` round-state field is now `task_id`.
+  `ROUND_SCHEMA_VERSION` moves to 3; a schema-2 `round-state.json` is
+  rejected with a clear error rather than migrated, the same precedent
+  ADR-0003 set for the schema-1-to-2 bump -- an in-flight task must finish
+  or restart under the previous CoDev version. `codev status --json`'s
+  `work_items_in_progress`/`work_items_in_progress_by_owner` fields are now
+  `tasks_in_progress`/`tasks_in_progress_by_owner`. The `docs/codev/work/`
+  planning-artifact convention is now `docs/codev/task/`. All four platform
+  adapters, `adapter.py`'s required-marker checks, and every skill/doc
+  referencing the old terminology are updated together.
+
+### Fixed
+- `[tool.setuptools.package-data]` in `pyproject.toml` was missing an entry
+  for `bundle/.github/`, so the new `pull_request_template.md` and
+  `ISSUE_TEMPLATE/task.md` were silently absent from every built wheel --
+  caught by `scripts/verify_release.py::verify_bundle_packaging` before this
+  release shipped, the same gap that check exists to catch (its own
+  docstring cites a prior real incident of exactly this shape).
+
+## [0.2.3] - 2026-08-14
+
+### Fixed
+- `codev git mark-ready` no longer silently drops `Closes #N` from the pull
+  request body. `open_pr` appended it correctly; `mark_ready` -- which runs
+  at the end of every outer-loop pass -- regenerated the body from
+  `work.pr_description()` alone and never called `_closes_issue_number()`,
+  so the auto-close link was lost from the *final* PR body every time, even
+  when `link_ref` was a correct issue URL. Both now share one
+  `_with_closes_line()` helper. `tests/test_git_ops.py::MarkReadyTests`
+  gains a regression test.
+
+### Added
+- `docs/codev/onboarding/starting-prompts.md`: copy-paste starting prompts
+  for the next work item and for outer-loop review, cross-linked from
+  `onboarding-guide.md`. The outer-loop prompt explicitly asks for the
+  numbered specialist menu and to wait for selection before dispatching --
+  a prompt-level reinforcement of ADR-0021's permission gate, on every
+  platform, not only OpenCode.
+- `codev work relink --id <id> --github-issue N|--link <ref> [--by <name>]`
+  (ADR-0020): corrects `link_ref` after `codev work start` already ran.
+  `--github-issue` can only be resolved at `start()` time and `link_ref` was
+  otherwise write-once for an item's life, with no way to recover from a
+  human catching a missing issue link mid-session -- traced directly to a
+  real session where the only available "fix" was noting the link in the
+  implementation plan's prose, never in state, so `Closes #N` could never
+  fire for that item. Modeled on `waive()`: appends to a new additive
+  `link_ref_updates` list rather than silently overwriting history;
+  `codev work log` renders each correction.
+- `codev work start` refuses to proceed when the repository has a GitHub
+  remote and neither `--github-issue`, `--link`, nor the new
+  `--no-github-issue` acknowledgment flag was given (ADR-0020) -- turns a
+  workflow decision that previously depended entirely on prompt convention
+  into a CLI-level gate, the same "refuse until resolved" shape
+  `codev diff`/`codev update` already use for install conflicts. New
+  best-effort `git_ops.has_github_remote()`, modeled on `detect_identity()`,
+  backs the check without introducing a hard GitHub dependency.
+
+### Design
+- ADR-0020 -- the mechanical issue-linkage gate and `relink` above.
+- ADR-0021 -- OpenCode's `outer-loop-runner` specialist-dispatch permission
+  gate. ADR-0018's own conclusion was that no CLI mechanism can prevent an
+  agent from skipping the numbered specialist menu; a second real session,
+  run on 0.2.2 with that fix's prompt text confirmed present, reproduced the
+  identical skip verbatim. OpenCode's bundled agent file already exposes a
+  real per-subagent permission gate and already uses it elsewhere in the
+  same file (`bash: "*": ask`) -- it was simply configured to `allow` all
+  five specialists. They now require `ask`. Codex/Antigravity/Junie have no
+  equivalent lever today and remain prompt-only, a documented asymmetry
+  rather than a silent one. `adapter.py` gains `_SPECIALIST_ALLOW_MARKERS`
+  so a future edit cannot quietly revert this.
+- ADR-0022 -- bundled workflow-instruction hardening: `orchestrator` (all
+  four platforms) now checks and creates a missing GitHub issue itself
+  instead of only passing one through when it already exists; every
+  `codev git issue-create` call site now instructs `--body-file` over
+  inline `--body` for text with shell metacharacters (unused since ADR-0014,
+  confirmed the literal cause of two separate body-corruption incidents);
+  `orchestrator` now actually populates `codev work start --description`
+  from the approved implementation plan's Approach/Risks, a CLI argument
+  that has existed, unreferenced by any prompt, since ADR-0014;
+  `outer-loop-runner` step 1 now narrates that its fetch is read-only before
+  running it. `adapter.py`'s `_REQUIRED_MARKERS["orchestrator"]` gains
+  `"codev git issue-create"` and `"--no-github-issue"`.
+
 ## [0.2.2] - 2026-08-13
 
 ### Changed

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "skill": "audit-google-python-style",
+  "repetitions": 1,
+  "categories": {
+    "plan-phase-audit": {
+      "tasks": {
+        "audit-google-python-style-demo": {
+          "with_skill": {
+            "passed": 1,
+            "total": 1
+          },
+          "baseline": {
+            "passed": 0,
+            "total": 1
+          }
+        }
+      },
+      "with_skill_percentage": 100.0,
+      "baseline_percentage": 0.0,
+      "delta": 100.0
+    }
+  },
+  "overall": {
+    "with_skill_percentage": 100.0,
+    "baseline_percentage": 0.0,
+    "delta": 100.0
+  },
+  "generated_at": "2026-08-22T01:58:35.145042+00:00"
+}

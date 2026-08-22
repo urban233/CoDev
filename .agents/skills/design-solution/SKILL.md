@@ -1,6 +1,7 @@
 ---
 name: design-solution
 description: Create or revise a practical technical design for a significant feature, product, migration, or cross-component change. Use when engineers need architecture, component ownership, APIs or contracts, data flow, trade-offs, risk controls, test strategy, or rollout design before implementation. Skip this skill for local low-risk changes with an obvious implementation.
+license: BSD-3-Clause
 ---
 
 # Design Solution

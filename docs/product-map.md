@@ -10,7 +10,7 @@ model (how the bundle is built, installed, and updated); this document is
 the product itself — the skills, agents, and CLI surface a developer
 actually uses once CoDev is installed.
 
-Surface inventory current as of 2026-08-13.
+Surface inventory current as of 2026-08-20.
 
 ## Identity
 
@@ -19,8 +19,26 @@ their own product in a repository that has CoDev installed. Every command,
 skill, and agent below exists to serve that one relationship — a human
 directing AI-assisted work in their own repository. Where CoDev's own
 repository uses these same capabilities on itself (running its own eval
-fixtures against its own skills), that is CoDev dogfooding its product, not
+tasks against its own skills), that is CoDev dogfooding its product, not
 a second audience the product is designed for.
+
+## Terminology
+
+One concept, one name, checked here rather than left to drift per document
+(the discipline a companion review of external design-doc conventions
+surfaced as CoDev's one gap, see ADR-0023). Where a rename supersedes an
+older term, only the new term is current — the old one survives only inside
+already-published ADRs and historical session transcripts, which are not
+rewritten.
+
+| Concept | Current term | Superseded |
+|---|---|---|
+| The unit `codev task` tracks round-state for | **task**, `task_id` | work item, `work_item_id` (ADR-0023) |
+| Round-state's on-disk location | `.codev/task/` | `.codev/work/` (ADR-0023) |
+| GitHub's tracker artifact for a task | **issue** | ticket, bug |
+| Session entry point for Specify/Understand/Design/Plan | **`planner`** | — (new, ADR-0024) |
+| Session entry point for Build/Review/Ship | **`orchestrator`** | — |
+| A durable, cross-cutting decision that outlives one design document | **ADR** (Architecture Decision Record), `design-solution`'s `assets/adr.template.md`, stored at `docs/adr/NNNN-slug.md` | decision, `assets/decision.template.md` (ADR-0025) |
 
 ## The phase spine
 
@@ -31,7 +49,7 @@ Specify -> Understand -> Design -> Plan -> Build -> Review -> Ship -> Launch
 Build and Ship are the only universal phases — every path reaches them, down
 to the smallest case (a bounded fix with an obvious implementation, no
 upstream artifact at all). Everything else is an on-ramp or off-ramp that a
-given work item may skip, matching the existing design principle "deeper
+given task may skip, matching the existing design principle "deeper
 design and delivery planning appear only when risk or coordination requires
 them" (README, Design principles).
 
@@ -57,36 +75,39 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | Command | Phase | Purpose |
 |---|---|---|
 | `init` / `diff` / `update` / `remove` | Cross-cutting | Install, preview, apply, or remove the bundle itself |
-| `status [--verbose] [--json]` | Cross-cutting | Bundle health, installed adapters, open work items, WIP-per-owner and changed-file overlap |
+| `status [--verbose] [--json]` | Cross-cutting | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap |
 | `adapter list/add/verify` | Cross-cutting | Manage and structurally verify one platform adapter |
 | `config get/set/list` | Cross-cutting | Layered configuration (flags > env > project > global > default) |
 | `self version/update` | Cross-cutting | Installed-tool version and upgrade guidance |
 | `codeowners init` | Ship (one-time setup) | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
-| `work start/record/check/close/status/log/triage/escalate/escalations` | Build, Review | Read/write one work item's round state; read-only w.r.t. product source (ADR-0001). `start --entry {takeover,direct-review}` (ADR-0006) marks whether the item's code is unfinished human work joining the inner loop, or finished human work going straight to the outer loop |
-| `git issue-create/branch/commit/push/open-pr/mark-ready` | Understand (issue-create only), Build, Ship | The only path to mutating the repository or GitHub; `issue-create` alone has no work-item precondition |
-| `eval fixture create/run` / `eval snapshot run` | Cross-cutting | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode; not limited to CoDev's bundled skills |
+| `task start/record/check/close/status/log/triage/escalate/escalations` | Build, Review | Read/write one task's round state; read-only w.r.t. product source (ADR-0001). `start --entry {takeover,direct-review}` (ADR-0006) marks whether the item's code is unfinished human work joining the inner loop, or finished human work going straight to the outer loop |
+| `git issue-create/branch/commit/push/open-pr/mark-ready` | Understand (issue-create only), Build, Ship | The only path to mutating the repository or GitHub; `issue-create` alone has no task precondition |
+| `eval task create/run` / `eval benchmark run` | Cross-cutting | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode; not limited to CoDev's bundled skills |
+| `eval show <skill>` | Cross-cutting | Render a skill's packaged eval trace (`.agents/skills/<skill>/evals/benchmark.json`), written automatically by an unrestricted `eval benchmark run` (ADR-0028) |
 
 ### Named skills (all manually invoked by name, unless noted)
 
 | Skill | Phase | Invocation today |
 |---|---|---|
-| `specify-project` | Specify | Manual |
-| `define-product` | Understand | Manual, or selected by `orchestrator` when a build surfaces an unresolved product question |
-| `design-solution` | Design | Manual, or selected by `orchestrator` when a build surfaces an architectural question |
-| `plan-delivery` | Plan | Manual, or selected by `orchestrator` when a build surfaces a dependency/assignment problem |
+| `specify-project` | Specify | Manual, or the human-started entry point for a `planner` session |
+| `define-product` | Understand | Manual, selected by `orchestrator` when a build surfaces an unresolved product question, or the entry point for a `planner` session |
+| `design-solution` | Design | Manual, selected by `orchestrator` when a build surfaces an architectural question, or the entry point for a `planner` session |
+| `plan-delivery` | Plan | Manual, selected by `orchestrator` when a build surfaces a dependency/assignment problem, or the entry point for a `planner` session |
 | `build-change` | Build | Selected by `orchestrator` to frame every three-agent build, or manual standalone |
-| `review-change` | Review | Manual only — the zero-ceremony path for a diff with no work item and no open PR |
+| `review-change` | Review | Manual only — the zero-ceremony path for a diff with no task and no open PR |
 | `critique-review` | Review (downstream) | Manual only — consumes another review's findings, does not itself review |
 | `pr-review` | Review (existing PR) | Manual only as a guided skill; its fetch *script* is reused mechanically by `outer-loop-runner` step 1 |
 | `audit-google-python-style` | Review / pre-Ship | Manual only, by explicit design ("invoke only when the user explicitly requests") |
 | `audit-google-typescript-style` | Review / pre-Ship | Manual only, by explicit design |
 | `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-runner` step 1 |
-| `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval fixture for an existing skill |
+| `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval task for an existing skill |
+| `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-delivery`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
+| `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
 | `launch-product` | Launch | Manual — not referenced by `orchestrator` |
 
 Per ADR-0005, the review family is now two clusters rather than an
 undifferentiated six: `review-change`, `pr-review`, and `critique-review`
-stay manual/on-demand, each for a genuinely on-demand case (no work item, an
+stay manual/on-demand, each for a genuinely on-demand case (no task, an
 already-posted PR, or a downstream finding-to-diff bridge); `code-audit` and
 the two `audit-google-*-style` skills it dispatches are mechanical,
 catalog-driven, and no longer purely manual — a pre-PR gate runs
@@ -101,10 +122,11 @@ rail.
 | Agent | Phase | Invocation today |
 |---|---|---|
 | `orchestrator` | Build (session entry point) | Human-started; chains the rest of this table automatically within one session |
+| `planner` | Specify, Understand, Design, Plan (session entry point) | Human-started, separate entry point from `orchestrator`; wraps `specify-project`/`define-product`/`design-solution`/`plan-delivery` in one session and never invokes `builder`/`reviewer`/`orchestrator` (ADR-0024). Can short-circuit straight to `codev git issue-create` once a task is ready, without a delivery plan |
 | `builder` | Build | Auto-invoked by `orchestrator` |
 | `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `orchestrator`, fresh context each round |
 | `outer-loop-runner` | Review -> Ship (session entry point) | Human-started, separate entry point from `orchestrator`; does not run on a PR event |
-| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005) |
+| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005); `correctness-tests-specialist` judges `test_quality` against `testing-craft`'s references |
 | `code-audit` | Review / pre-Ship | Human-invoked only (ADR-0015): the full two-phase, human-approval-gated audit-and-fix workflow. No longer has an automatic pre-PR invocation mode — that responsibility moved entirely to `code-audit-gate` below, since Phase 1's audit-only pass never needed the approval gate that makes this agent `mode: primary` in the first place |
 | `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `orchestrator`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
 
@@ -119,12 +141,30 @@ correctly on-demand, unchanged. `orchestrator`'s Build-only scope (never
 naming `specify-project`/`launch-product`) is confirmed deliberate, not a
 gap — neither phase has a build-and-review loop to orchestrate.
 
-**Resolved and implemented (ADR-0006):** work-item entry modes give
+**Resolved and implemented (ADR-0024):** the Specify/Understand/Design/Plan
+phases gain their own human-started session entry point, `planner`, decoupled
+from `orchestrator`'s Build/Review/Ship scope above — the two are
+independent entry points a human chooses between, neither invoking the
+other. `planner` also gains an issue-only short circuit: given an accepted
+design or decision, draft a task and run `codev git issue-create` directly,
+skipping `plan-delivery`'s milestone/work-list machinery, and stop —
+`orchestrator`'s existing step-5 fallback (create the issue itself if still
+missing) is unchanged and still correct either way.
+
+**Resolved and implemented (ADR-0025):** `design-solution`'s decision asset
+is formalized into an explicit ADR practice — renamed `assets/adr.template.md`
+(was `decision.template.md`), with a fixed storage convention
+(`docs/adr/NNNN-slug.md`, sequential four-digit numbering) and an explicit
+append-only rule once `Accepted` (a later reversal writes a new ADR and marks
+the old one `Superseded by ADR-NNNN`, never edits it). This repository now
+practices it on itself too, documented at `docs/adr/README.md`.
+
+**Resolved and implemented (ADR-0006):** task entry modes give
 human-authored work a first-class path into the inner/outer loop instead of
 funneling everything through `review-change`. `--entry takeover` opens round
 1 in the inner phase and tells `builder` to continue an already-started
 human diff rather than replace it; `--entry direct-review` opens round 1
-directly in the outer phase, and `codev work check` now reports
+directly in the outer phase, and `codev task check` now reports
 `ok_ready_for_pr` for a fresh `direct-review` item with nothing recorded yet
 — previously indistinguishable from `stop_drift`. A guided "next item from
 the shelf" CLI command was considered and dropped in the same ADR: GitHub's
@@ -151,13 +191,16 @@ the reviewer round is recorded, so it never opens the outer phase at all.
 
 ## Non-goals
 
-- Does not change `codev work`'s round-state schema or file-based storage
-  (ADR-0001's decision stands) beyond ADR-0006's additive `entry` field.
+- Does not change `codev task`'s round-state schema or file-based storage
+  beyond ADR-0006's additive `entry` field and ADR-0023's terminology
+  rename (`work item` -> `task`, `.codev/work/` -> `.codev/task/`,
+  `work_item_id` -> `task_id`) — ADR-0001's underlying decision to track
+  state as local JSON files still stands.
 - Does not propose dropping or merging any of the four platform adapters
   (OpenCode, Codex, Junie, Antigravity).
 - Does not relax `code-audit`'s no-delegation guardrail — the guardrail is
   about it calling other agents, not about being called by `orchestrator`,
   and ADR-0005 left it textually unchanged.
 - Does not restructure the CLI's command tree (e.g. moving `codeowners`
-  under `git`, splitting `work`'s subcommands) — surfaced in the inventory
+  under `git`, splitting `task`'s subcommands) — surfaced in the inventory
   above, not decided here.

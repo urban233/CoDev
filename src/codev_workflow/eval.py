@@ -1,4 +1,4 @@
-"""Local fixture creation and OpenCode skill evaluation."""
+"""Local task creation and OpenCode skill evaluation."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -434,7 +435,7 @@ def _isolated_env() -> dict[str, str]:
             "GIT_CONFIG_SYSTEM": os.devnull,
         }
     )
-    # Guarantee a working "python"/"python3" for fixture verifiers by
+    # Guarantee a working "python"/"python3" for task verifiers by
     # prepending the interpreter actually running CoDev, rather than
     # depending on whatever those bare names happen to resolve to elsewhere
     # on PATH. On Windows in particular, "python3" commonly resolves only to
@@ -452,7 +453,7 @@ _BARE_PYTHON_NAMES = {"python", "python3"}
 def _resolve_verifier_command(command: list[str]) -> list[str]:
     """Replace a bare "python"/"python3" verifier command with sys.executable.
 
-    A fixture's verifier.json is static, portable data with no templating,
+    A task's verifier.json is static, portable data with no templating,
     so it can only reasonably assume "some Python is available" -- it can't
     know in advance which one. Prepending sys.executable's directory to PATH
     covers scripts a verifier shells out to internally, but the top-level
@@ -495,31 +496,39 @@ def _secret_excludes() -> list[str]:
     ]
 
 
-def _fixture_path(target: Path, name: str) -> Path:
+def _task_path(target: Path, name: str) -> Path:
     if not _NAME.fullmatch(name):
-        raise EvaluationError("invalid fixture name")
+        raise EvaluationError("invalid task name")
     target = target.resolve()
-    fixtures = target / ".codev" / "fixtures"
-    _no_symlink(fixtures, target)
-    root = fixtures / name
+    tasks = target / ".codev" / "eval" / "tasks"
+    _no_symlink(tasks, target)
+    root = tasks / name
     _no_symlink(root, target)
     try:
-        root.resolve().relative_to(fixtures.resolve())
+        root.resolve().relative_to(tasks.resolve())
     except ValueError as exc:
-        raise EvaluationError("fixture is outside the fixtures directory") from exc
+        raise EvaluationError("task is outside the tasks directory") from exc
     return root
 
 
 @dataclass(frozen=True)
-class Fixture:
+class Task:
     root: Path
     name: str
     skill: str
     category: str
     actor_timeout: int
     judge_timeout: int
-    command: list[str]
-    verifier_timeout: int
+    # None unless the task opts into Docker isolation (ADR-0027); when set,
+    # always {"backend": "docker", "image": "..."} -- CoDev never fills in or
+    # defaults the image itself.
+    environment: dict[str, str] | None
+    # Exactly one of (command, verifier_timeout) or checks is populated --
+    # a task declares either a custom verifier.json script or a declarative
+    # checks.json, never both. See eval_checks.run_declarative_checks.
+    command: list[str] | None
+    verifier_timeout: int | None
+    checks: list[dict[str, Any]] | None
     prompt: bytes
     rubric: bytes
     prompt_fingerprint: tuple[int, int, int, int]
@@ -531,7 +540,7 @@ class Fixture:
 def _file_fingerprint(path: Path) -> tuple[int, int, int, int]:
     info = os.lstat(path)
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-        raise EvaluationError(f"fixture snapshot is not a regular file: {path}")
+        raise EvaluationError(f"task fingerprint is not a regular file: {path}")
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
 
 
@@ -539,9 +548,9 @@ def _assert_file_snapshot(path: Path, fingerprint: tuple[int, int, int, int]) ->
     try:
         current = _file_fingerprint(path)
     except OSError as exc:
-        raise EvaluationError(f"fixture snapshot changed: {path}") from exc
+        raise EvaluationError(f"task fingerprint changed: {path}") from exc
     if current != fingerprint:
-        raise EvaluationError(f"fixture snapshot changed: {path}")
+        raise EvaluationError(f"task fingerprint changed: {path}")
 
 
 def _assert_snapshot_digest(
@@ -551,29 +560,38 @@ def _assert_snapshot_digest(
     try:
         current_digest = hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError as exc:
-        raise EvaluationError(f"fixture snapshot changed: {path}") from exc
+        raise EvaluationError(f"task fingerprint changed: {path}") from exc
     if current_digest != digest:
-        raise EvaluationError(f"fixture snapshot changed: {path}")
+        raise EvaluationError(f"task fingerprint changed: {path}")
 
 
-def validate_fixture(root: Path) -> Fixture:
+def validate_task(root: Path) -> Task:
     if not root.is_dir() or root.is_symlink():
-        raise EvaluationError(f"fixture does not exist: {root}")
+        raise EvaluationError(f"task does not exist: {root}")
     _no_symlink(root, root.parent.parent.parent)
     required = [
         root / name
         for name in (
-            "fixture.json",
+            "task.json",
             "prompt.md",
             "rubric.md",
-            "verifier.json",
             "repository",
         )
     ]
     for path in required:
         if path.is_symlink() or (path.name != "repository" and not path.is_file()):
             raise EvaluationError(f"symlink is not allowed: {path}")
-    identity_path = root / "fixture.json"
+    verifier_path = root / "verifier.json"
+    checks_path = root / "checks.json"
+    has_verifier = verifier_path.is_file() and not verifier_path.is_symlink()
+    has_checks = checks_path.is_file() and not checks_path.is_symlink()
+    if verifier_path.is_symlink() or checks_path.is_symlink():
+        raise EvaluationError("symlink is not allowed: verifier.json/checks.json")
+    if has_verifier == has_checks:
+        raise EvaluationError(
+            "a task must declare exactly one of verifier.json or checks.json"
+        )
+    identity_path = root / "task.json"
     identity_text = identity_path.read_text(encoding="utf-8")
     _assert_safe_content(identity_text, identity_path)
     identity = _json(identity_path)
@@ -587,23 +605,35 @@ def validate_fixture(root: Path) -> Fixture:
             "category",
             "actor_timeout_seconds",
             "judge_timeout_seconds",
+            "environment",
         },
         identity_path,
     )
     name = identity.get("name")
     if not isinstance(name, str) or not name or name != root.name:
-        raise EvaluationError("fixture name must match its directory")
+        raise EvaluationError("task name must match its directory")
     description = identity.get("description")
     if not isinstance(description, str) or not description.strip():
-        raise EvaluationError("fixture description must be nonempty")
+        raise EvaluationError("task description must be nonempty")
     skill = identity.get("skill")
     if not isinstance(skill, str) or not _NAME.fullmatch(skill):
-        raise EvaluationError("fixture skill must be a nonempty skill-like name")
+        raise EvaluationError("task skill must be a nonempty skill-like name")
     category = identity.get("category")
     if not isinstance(category, str) or not _NAME.fullmatch(category):
-        raise EvaluationError("fixture category must be a nonempty skill-like name")
+        raise EvaluationError("task category must be a nonempty skill-like name")
     actor = _positive_int(identity.get("actor_timeout_seconds"), "actor timeout")
     judge = _positive_int(identity.get("judge_timeout_seconds"), "judge timeout")
+    environment = identity.get("environment")
+    if environment is not None and (
+        not isinstance(environment, dict)
+        or set(environment) != {"backend", "image"}
+        or environment.get("backend") != "docker"
+        or not isinstance(environment.get("image"), str)
+        or not environment["image"]
+    ):
+        raise EvaluationError(
+            'task environment must be {"backend": "docker", "image": "..."}'
+        )
     snapshots: dict[str, tuple[bytes, tuple[int, int, int, int]]] = {}
     for filename in ("prompt.md", "rubric.md"):
         try:
@@ -614,23 +644,39 @@ def validate_fixture(root: Path) -> Fixture:
             snapshots[filename] = (content_bytes, _file_fingerprint(content_path))
         except (OSError, UnicodeError) as exc:
             raise EvaluationError(f"{filename} must be UTF-8 text") from exc
-    verifier_path = root / "verifier.json"
-    _assert_safe_content(verifier_path.read_text(encoding="utf-8"), verifier_path)
-    verifier = _json(verifier_path)
-    _strict(verifier, {"schema_version", "command", "timeout_seconds"}, verifier_path)
-    command = verifier.get("command")
-    if (
-        not isinstance(command, list)
-        or not command
-        or any(
-            not isinstance(item, str) or not item or "\x00" in item for item in command
+    command: list[str] | None = None
+    timeout: int | None = None
+    checks: list[dict[str, Any]] | None = None
+    if has_verifier:
+        _assert_safe_content(verifier_path.read_text(encoding="utf-8"), verifier_path)
+        verifier = _json(verifier_path)
+        _strict(
+            verifier, {"schema_version", "command", "timeout_seconds"}, verifier_path
         )
-    ):
-        raise EvaluationError("verifier command must be a nonempty argv array")
-    timeout = _positive_int(verifier.get("timeout_seconds"), "verifier timeout")
+        command = verifier.get("command")
+        if (
+            not isinstance(command, list)
+            or not command
+            or any(
+                not isinstance(item, str) or not item or "\x00" in item
+                for item in command
+            )
+        ):
+            raise EvaluationError("verifier command must be a nonempty argv array")
+        timeout = _positive_int(verifier.get("timeout_seconds"), "verifier timeout")
+    else:
+        _assert_safe_content(checks_path.read_text(encoding="utf-8"), checks_path)
+        checks_doc = _json(checks_path)
+        _strict(checks_doc, {"schema_version", "checks"}, checks_path)
+        checks = checks_doc.get("checks")
+        if not isinstance(checks, list) or not checks:
+            raise EvaluationError("checks.json must contain a nonempty checks array")
+        for entry in checks:
+            if not isinstance(entry, dict) or not isinstance(entry.get("type"), str):
+                raise EvaluationError("each checks.json entry must have a string type")
     repository = root / "repository"
     if not repository.is_dir() or repository.is_symlink():
-        raise EvaluationError("fixture repository must be a directory")
+        raise EvaluationError("task repository must be a directory")
     for item in repository.rglob("*"):
         if item.is_symlink() or _is_secret_path(item.relative_to(repository)):
             raise EvaluationError(f"unsafe repository seed path: {item}")
@@ -643,15 +689,17 @@ def validate_fixture(root: Path) -> Fixture:
                 raise EvaluationError(
                     f"repository seed content is not safe: {item}"
                 ) from exc
-    return Fixture(
+    return Task(
         root,
         name,
         skill,
         category,
         actor,
         judge,
+        environment,
         command,
         timeout,
+        checks,
         snapshots["prompt.md"][0],
         snapshots["rubric.md"][0],
         snapshots["prompt.md"][1],
@@ -686,7 +734,7 @@ def _source_identity(path: Path) -> tuple[int, int]:
     try:
         return _path_identity(path)
     except OSError as exc:
-        raise EvaluationError(f"fixture source changed during copy: {path}") from exc
+        raise EvaluationError(f"task source changed during copy: {path}") from exc
 
 
 def _remove_owned_file(
@@ -739,9 +787,7 @@ def _secure_directory_fd(path: Path, boundary: Path) -> int | Path:
             _no_symlink(current, boundary)
         return current
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-        raise EvaluationError(
-            "fixture creation requires no-follow directory primitives"
-        )
+        raise EvaluationError("task creation requires no-follow directory primitives")
     relative = path.absolute().relative_to(boundary.absolute())
     flags = os.O_RDONLY | os.__dict__["O_DIRECTORY"] | os.__dict__["O_NOFOLLOW"]
     current_fd = os.open(boundary, flags)
@@ -769,10 +815,10 @@ def _secure_child_directory(
         except FileExistsError as error:
             if require_new:
                 raise EvaluationError(
-                    f"fixture destination was created concurrently: {child}"
+                    f"task destination was created concurrently: {child}"
                 ) from error
         if not child.is_dir() or child.is_symlink():
-            raise EvaluationError(f"unsafe fixture destination: {child}")
+            raise EvaluationError(f"unsafe task destination: {child}")
         _no_symlink(child, parent_fd)
         return child
     # parent_fd is only ever a POSIX dir_fd (int) here; the Path branch above
@@ -783,7 +829,7 @@ def _secure_child_directory(
     except FileExistsError as error:
         if require_new:
             raise EvaluationError(
-                f"fixture destination was created concurrently: {name}"
+                f"task destination was created concurrently: {name}"
             ) from error
     return os.open(name, flags, dir_fd=parent_fd)
 
@@ -796,7 +842,7 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
     if handle == -1 or kernel32.GetFileType(handle) != 1:
         if handle != -1:
             kernel32.CloseHandle(handle)
-        raise EvaluationError(f"fixture source is not a regular file: {source}")
+        raise EvaluationError(f"task source is not a regular file: {source}")
     file_descriptor = -1
     try:
         import msvcrt
@@ -805,12 +851,12 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
         handle = -1
         source_info = os.fstat(file_descriptor)
         if not stat.S_ISREG(source_info.st_mode):
-            raise EvaluationError(f"fixture source is not a regular file: {source}")
+            raise EvaluationError(f"task source is not a regular file: {source}")
         source_bytes = b"".join(iter(lambda: os.read(file_descriptor, 1 << 20), b""))
         return source_bytes, (source_info.st_dev, source_info.st_ino)
     except (OSError, ValueError) as exc:
         raise EvaluationError(
-            f"fixture source could not be opened safely: {source}"
+            f"task source could not be opened safely: {source}"
         ) from exc
     finally:
         if file_descriptor != -1:
@@ -819,7 +865,7 @@ def _read_windows_source(source: Path) -> tuple[bytes, tuple[int, int]]:
             kernel32.CloseHandle(handle)
 
 
-def _read_fixture_source(
+def _read_task_source(
     source: Path, expected_identity: tuple[int, int], expected_digest: str
 ) -> bytes:
     opened_identity: tuple[int, int] | None = None
@@ -829,14 +875,12 @@ def _read_fixture_source(
     else:
         if not hasattr(os, "O_NOFOLLOW"):
             raise EvaluationError(
-                "fixture source copying requires no-follow file primitives"
+                "task source copying requires no-follow file primitives"
             )
         try:
             source_fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
         except OSError as exc:
-            raise EvaluationError(
-                f"fixture source changed during copy: {source}"
-            ) from exc
+            raise EvaluationError(f"task source changed during copy: {source}") from exc
         try:
             source_info = os.fstat(source_fd)
             chunks: list[bytes] = []
@@ -854,27 +898,27 @@ def _read_fixture_source(
     else:
         actual_identity = (source_info.st_dev, source_info.st_ino)
     if not stat.S_ISREG(source_info.st_mode) or actual_identity != expected_identity:
-        raise EvaluationError(f"fixture source changed during copy: {source}")
+        raise EvaluationError(f"task source changed during copy: {source}")
     if hashlib.sha256(source_bytes).hexdigest() != expected_digest:
-        raise EvaluationError(f"fixture source content changed during copy: {source}")
+        raise EvaluationError(f"task source content changed during copy: {source}")
     _scan_bytes(source_bytes, source)
     return source_bytes
 
 
-def _write_fixture_file(
+def _write_task_file(
     source: Path,
     repository_fd: int | Path,
     relative: Path,
     expected_identity: tuple[int, int],
     expected_digest: str,
 ) -> None:
-    source_bytes = _read_fixture_source(source, expected_identity, expected_digest)
+    source_bytes = _read_task_source(source, expected_identity, expected_digest)
     if isinstance(repository_fd, Path):
         current = repository_fd
         for part in relative.parts[:-1]:
             next_path = _secure_child_directory(current, part)
             if not isinstance(next_path, Path):
-                raise EvaluationError("invalid fixture directory handle")
+                raise EvaluationError("invalid task directory handle")
             current = next_path
         destination = current / relative.name
         _no_symlink(destination, current)
@@ -892,7 +936,7 @@ def _write_fixture_file(
         for part in relative.parts[:-1]:
             next_fd = _secure_child_directory(current_fd, part)
             if not isinstance(next_fd, int):
-                raise EvaluationError("invalid fixture directory handle")
+                raise EvaluationError("invalid task directory handle")
             os.close(current_fd)
             current_fd = next_fd
         # POSIX-only path, same reasoning as _secure_child_directory above.
@@ -909,20 +953,20 @@ def _write_fixture_file(
         os.close(current_fd)
 
 
-def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
+def create_task(name: str, target: Path, includes: list[str]) -> Path:
     target = target.resolve()
     if not target.is_dir() or not (target / ".git").exists():
         raise EvaluationError("target must be an existing Git repository")
     if not includes:
         raise EvaluationError("at least one include path is required")
-    destination = _fixture_path(target, name)
-    fixtures = destination.parent
-    if fixtures.is_dir() and any(
-        entry.name.casefold() == name.casefold() for entry in fixtures.iterdir()
+    destination = _task_path(target, name)
+    tasks = destination.parent
+    if tasks.is_dir() and any(
+        entry.name.casefold() == name.casefold() for entry in tasks.iterdir()
     ):
-        raise EvaluationError(f"fixture name collides case-insensitively: {name}")
+        raise EvaluationError(f"task name collides case-insensitively: {name}")
     if destination.exists() or destination.is_symlink():
-        raise EvaluationError(f"fixture already exists: {destination}")
+        raise EvaluationError(f"task already exists: {destination}")
     selected = [_relative_safe(target, item) for item in includes]
     destination_resolved = destination.resolve()
     planned_destinations: set[str] = set()
@@ -937,9 +981,7 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
             except ValueError:
                 pass
             else:
-                raise EvaluationError(
-                    "include directory contains the fixture destination"
-                )
+                raise EvaluationError("include directory contains the task destination")
         candidates = [source, *source.rglob("*")] if source.is_dir() else [source]
         candidate_sets[source] = tuple(candidates)
         for candidate in candidates:
@@ -965,11 +1007,11 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 destination_key = relative.as_posix().casefold()
                 duplicate = destination_key in planned_destinations
                 if duplicate:
-                    raise EvaluationError(f"duplicate fixture destination: {relative}")
+                    raise EvaluationError(f"duplicate task destination: {relative}")
                 planned_destinations.add(destination_key)
     parent = destination.parent
     if parent.exists() and (parent.is_symlink() or not parent.is_dir()):
-        raise EvaluationError(f"unsafe fixture destination: {parent}")
+        raise EvaluationError(f"unsafe task destination: {parent}")
     destination_identity: tuple[int, int] | None = None
     destination_fd: int | Path | None = None
     repository_fd: int | Path | None = None
@@ -984,10 +1026,10 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                 os.close(destination_parent_fd)
         destination_identity = _path_identity(destination)
         if destination_fd is None:
-            raise EvaluationError("fixture destination creation failed")
+            raise EvaluationError("task destination creation failed")
         repository_fd = _secure_child_directory(destination_fd, "repository")
         if repository_fd is None:
-            raise EvaluationError("fixture repository creation failed")
+            raise EvaluationError("task repository creation failed")
         for source, relative in selected:
             if source.is_dir():
                 try:
@@ -1019,7 +1061,7 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                         ) from exc
                     if file.is_file() and not _is_secret_path(file.relative_to(target)):
                         _no_symlink(file, target)
-                        _write_fixture_file(
+                        _write_task_file(
                             file,
                             repository_fd,
                             file.relative_to(target),
@@ -1037,10 +1079,8 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                     ) from exc
             else:
                 if _source_identity(source) != candidate_identities[source]:
-                    raise EvaluationError(
-                        f"fixture source changed during copy: {source}"
-                    )
-                _write_fixture_file(
+                    raise EvaluationError(f"task source changed during copy: {source}")
+                _write_task_file(
                     source,
                     repository_fd,
                     relative,
@@ -1048,7 +1088,7 @@ def create_fixture(name: str, target: Path, includes: list[str]) -> Path:
                     source_digests[source],
                 )
         contract_files = {
-            "fixture.json": json.dumps(
+            "task.json": json.dumps(
                 {
                     "schema_version": 1,
                     "name": name,
@@ -1108,6 +1148,35 @@ class Run:
     code: int | None
     timed_out: bool
     duration: float
+
+
+def _run_declarative_verifier(checks: list[dict[str, Any]], worktree: Path) -> Run:
+    """Run a task's checks.json in-process, as a Run-shaped result.
+
+    Every check function resolves relative paths and git state against the
+    current working directory, so this temporarily chdirs to the worktree --
+    the same directory a custom verifier.json command already runs in via
+    its own `cwd` argument to `_run`. Each check type already bounds its own
+    subprocess calls (git, `command_succeeds`'s own timeout), so no separate
+    outer timeout is enforced here.
+    """
+    from codev_workflow.eval_checks import run_declarative_checks
+
+    start = time.monotonic()
+    previous_cwd = Path.cwd()
+    try:
+        os.chdir(worktree)
+        passed, message = run_declarative_checks(checks)
+    finally:
+        os.chdir(previous_cwd)
+    duration = time.monotonic() - start
+    return Run(
+        stdout="" if passed else "",
+        stderr=message,
+        code=0 if passed else 1,
+        timed_out=False,
+        duration=duration,
+    )
 
 
 def _stop(process: subprocess.Popen[Any]) -> None:
@@ -1469,6 +1538,27 @@ def _actor_artifacts(raw: str) -> tuple[str, str]:
     return event_stream, "".join(output)
 
 
+def _build_trajectory(event_stream: str, final_output: str | None = None) -> str:
+    """Merge a redacted JSONL event stream (and, for the actor, its final text
+    output) into one trajectory.json document: {"schema_version": 1, "steps":
+    [...]}. A line that is not valid JSON (the fallback shape
+    _safe_process_output falls back to for non-JSONL text) becomes a plain
+    string step rather than being dropped, so this never loses evidence.
+    """
+    steps: list[dict[str, Any]] = []
+    for index, line in enumerate(
+        line for line in event_stream.splitlines() if line.strip()
+    ):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            event = line
+        steps.append({"index": index, "event": event})
+    if final_output:
+        steps.append({"index": len(steps), "final_output": final_output})
+    return json.dumps({"schema_version": 1, "steps": steps}, ensure_ascii=False) + "\n"
+
+
 def _manifest(files: dict[str, str]) -> list[dict[str, Any]]:
     return [
         {
@@ -1622,7 +1712,7 @@ def _validate_recovery_manifest(output: Path, manifest: Any) -> set[str]:
 
 
 def _copy_seed_tree(source: Path, destination: Path) -> None:
-    """Copy a validated fixture repository without following replacement links."""
+    """Copy a validated task repository without following replacement links."""
     _no_symlink(source, source.parent)
     source_identity = _source_identity(source)
     entries = tuple([source, *source.rglob("*")])
@@ -1631,16 +1721,16 @@ def _copy_seed_tree(source: Path, destination: Path) -> None:
         _no_symlink(entry, source)
         identity = _source_identity(entry)
         if entry.is_file():
-            data = _read_fixture_source(
+            data = _read_task_source(
                 entry, identity, hashlib.sha256(entry.read_bytes()).hexdigest()
             )
             expected[entry] = (identity, hashlib.sha256(data).hexdigest())
         elif entry.is_dir():
             expected[entry] = (identity, None)
         else:
-            raise EvaluationError(f"fixture repository entry is not regular: {entry}")
+            raise EvaluationError(f"task repository entry is not regular: {entry}")
     if _source_identity(source) != source_identity:
-        raise EvaluationError("fixture repository changed during copy")
+        raise EvaluationError("task repository changed during copy")
     destination.mkdir()
     for entry in entries:
         if entry == source:
@@ -1649,22 +1739,18 @@ def _copy_seed_tree(source: Path, destination: Path) -> None:
         target = destination / relative
         identity, digest = expected[entry]
         if _source_identity(entry) != identity:
-            raise EvaluationError(
-                f"fixture repository entry changed during copy: {entry}"
-            )
+            raise EvaluationError(f"task repository entry changed during copy: {entry}")
         if entry.is_dir():
             target.mkdir()
         else:
-            _write_fixture_file(
-                entry, destination, relative, identity, cast(str, digest)
-            )
+            _write_task_file(entry, destination, relative, identity, cast(str, digest))
 
 
 def _stage_skill(seed: Path, target: Path, skill: str) -> None:
     """Copy an installed skill (plus its AGENTS.md routing block) into a seed.
 
     This is the entire "with skill" condition for a performance snapshot
-    (see run_snapshot()): the prompt never names the skill, so the only
+    (see run_benchmark()): the prompt never names the skill, so the only
     thing that differs between the with- and without-skill conditions is
     whether the actor can discover and read the skill on its own -- exactly
     as it would in a real repository that has the skill installed, rather
@@ -1954,9 +2040,18 @@ def evaluate(
     git: str = "git",
     opencode: str = "opencode",
     with_skill: bool = True,
+    sandbox: str = "worktree",
+    docker: str = "docker",
 ) -> bool:
+    if sandbox not in ("worktree", "docker"):
+        raise EvaluationError(f"unknown sandbox: {sandbox!r}")
     target = target.resolve()
-    fixture = validate_fixture(_fixture_path(target, name))
+    task = validate_task(_task_path(target, name))
+    if sandbox == "docker" and task.environment is None:
+        raise EvaluationError(
+            "--sandbox docker requires the task to declare an environment "
+            'block ({"backend": "docker", "image": "..."}) in its task.json'
+        )
     try:
         output.resolve().relative_to(target)
     except ValueError:
@@ -1987,9 +2082,12 @@ def evaluate(
     opencode = _resolve_windows_shim(resolved_opencode)
     result: dict[str, Any] = {
         "schema_version": 1,
-        "fixture": {"name": name, "path": str(Path(".codev") / "fixtures" / name)},
-        "skill": fixture.skill,
-        "category": fixture.category,
+        "task": {
+            "name": name,
+            "path": str(Path(".codev") / "eval" / "tasks" / name),
+        },
+        "skill": task.skill,
+        "category": task.category,
         "with_skill": with_skill,
         "actor": {"status": "skipped"},
         "verifier": {"status": "skipped"},
@@ -2003,9 +2101,9 @@ def evaluate(
         seed, worktree = base / "seed", base / "worktree"
         judge_dir: Path | None = None
         try:
-            _copy_seed_tree(fixture.root / "repository", seed)
+            _copy_seed_tree(task.root / "repository", seed)
             if with_skill:
-                _stage_skill(seed, target, fixture.skill)
+                _stage_skill(seed, target, task.skill)
             for args in (
                 ["init"],
                 ["config", "user.email", "codev@example.invalid"],
@@ -2025,28 +2123,50 @@ def evaluate(
             )
             if run.code != 0:
                 raise EvaluationError(f"git worktree phase failed: {run.stderr}")
-            files["actor-events.jsonl"] = ""
-            files["actor-output.txt"] = ""
+            files["trajectory.json"] = ""
             try:
                 _assert_snapshot_digest(
-                    fixture.root / "prompt.md",
-                    fixture.prompt_fingerprint,
-                    fixture.prompt_digest,
+                    task.root / "prompt.md",
+                    task.prompt_fingerprint,
+                    task.prompt_digest,
                 )
-                actor = _run(
-                    [
-                        opencode,
-                        "run",
-                        "--format",
-                        "json",
-                        "--dir",
-                        str(worktree),
-                        fixture.prompt.decode("utf-8"),
-                    ],
-                    worktree,
-                    fixture.actor_timeout,
-                    env=_isolated_env(),
-                )
+                actor_argv = [
+                    opencode,
+                    "run",
+                    "--format",
+                    "json",
+                    "--dir",
+                    str(worktree),
+                    task.prompt.decode("utf-8"),
+                ]
+                if sandbox == "docker":
+                    assert task.environment is not None
+                    from codev_workflow.eval_environment import DockerEnvironment
+
+                    resolved_docker = shutil.which(docker)
+                    if resolved_docker is None and Path(docker).is_file():
+                        resolved_docker = str(Path(docker).resolve())
+                    if resolved_docker is None:
+                        raise EvaluationError(
+                            "this task's environment declares docker, but no "
+                            f"`{docker}` executable is on PATH"
+                        )
+                    docker_environment = DockerEnvironment(
+                        image=task.environment["image"], docker=resolved_docker
+                    )
+                    actor = docker_environment.run(
+                        actor_argv,
+                        worktree,
+                        task.actor_timeout,
+                        env=_isolated_env(),
+                    )
+                else:
+                    actor = _run(
+                        actor_argv,
+                        worktree,
+                        task.actor_timeout,
+                        env=_isolated_env(),
+                    )
             except EvaluationError as exc:
                 result["actor"] = {
                     "status": "error",
@@ -2071,26 +2191,31 @@ def evaluate(
             try:
                 actor_events, actor_output = _actor_artifacts(actor.stdout)
             except EvaluationError:
-                files["actor-events.jsonl"] = ""
-                files["actor-output.txt"] = ""
+                files["trajectory.json"] = ""
                 if continue_evaluation:
                     result["actor"]["status"] = "malformed"
                     raise
             else:
-                files["actor-events.jsonl"] = actor_events
-                files["actor-output.txt"] = actor_output
+                files["trajectory.json"] = _build_trajectory(
+                    actor_events, final_output=actor_output
+                )
             if not continue_evaluation:
                 result["outcome"] = "failed"
             if continue_evaluation:
                 files["verifier-stdout.txt"] = ""
                 files["verifier-stderr.txt"] = ""
                 try:
-                    verifier = _run(
-                        _resolve_verifier_command(fixture.command),
-                        worktree,
-                        fixture.verifier_timeout,
-                        env=_isolated_env(),
-                    )
+                    if task.checks is not None:
+                        verifier = _run_declarative_verifier(task.checks, worktree)
+                    else:
+                        assert task.command is not None
+                        assert task.verifier_timeout is not None
+                        verifier = _run(
+                            _resolve_verifier_command(task.command),
+                            worktree,
+                            task.verifier_timeout,
+                            env=_isolated_env(),
+                        )
                 except EvaluationError as exc:
                     result["verifier"] = {
                         "status": "error",
@@ -2126,14 +2251,14 @@ def evaluate(
                         ) from exc
                     judge_dir = base / "judge"
                     judge_dir.mkdir()
-                    files["judge-events.jsonl"] = ""
+                    files["judge-trajectory.json"] = ""
                     files["judge-output.json"] = ""
                     _assert_snapshot_digest(
-                        fixture.root / "rubric.md",
-                        fixture.rubric_fingerprint,
-                        fixture.rubric_digest,
+                        task.root / "rubric.md",
+                        task.rubric_fingerprint,
+                        task.rubric_digest,
                     )
-                    rubric = _redact_text(fixture.rubric.decode("utf-8"))
+                    rubric = _redact_text(task.rubric.decode("utf-8"))
                     (judge_dir / "rubric.md").write_text(rubric, encoding="utf-8")
                     for filename, content in files.items():
                         (judge_dir / filename).write_bytes(_content_bytes(content))
@@ -2149,7 +2274,7 @@ def evaluate(
                                 _JUDGE_PROMPT,
                             ],
                             judge_dir,
-                            fixture.judge_timeout,
+                            task.judge_timeout,
                             env=_isolated_env(),
                         )
                     except EvaluationError:
@@ -2162,7 +2287,9 @@ def evaluate(
                             "timeout": False,
                         }
                         raise
-                    files["judge-events.jsonl"] = _safe_process_output(judge.stdout)
+                    files["judge-trajectory.json"] = _build_trajectory(
+                        _safe_process_output(judge.stdout)
+                    )
                     result["judge"] = {
                         "status": "timeout"
                         if judge.timed_out
@@ -2228,37 +2355,37 @@ def evaluate(
     return bool(result["outcome"] == "passed")
 
 
-def _discover_skill_fixtures(target: Path, skill: str) -> dict[str, list[Fixture]]:
-    """Return every valid fixture tagged with `skill`, grouped by category."""
-    fixtures_root = target / ".codev" / "fixtures"
-    by_category: dict[str, list[Fixture]] = {}
-    if not fixtures_root.is_dir():
+def _discover_skill_tasks(target: Path, skill: str) -> dict[str, list[Task]]:
+    """Return every valid task tagged with `skill`, grouped by category."""
+    tasks_root = target / ".codev" / "eval" / "tasks"
+    by_category: dict[str, list[Task]] = {}
+    if not tasks_root.is_dir():
         return by_category
-    for entry in sorted(fixtures_root.iterdir()):
+    for entry in sorted(tasks_root.iterdir()):
         if not entry.is_dir() or entry.is_symlink():
             continue
         try:
-            fixture = validate_fixture(entry)
+            task = validate_task(entry)
         except EvaluationError:
             continue
-        if fixture.skill == skill:
-            by_category.setdefault(fixture.category, []).append(fixture)
+        if task.skill == skill:
+            by_category.setdefault(task.category, []).append(task)
     return by_category
 
 
 def _condition_percentages(
-    with_passed: int, without_passed: int, total_runs: int
+    with_passed: int, baseline_passed: int, total_runs: int
 ) -> dict[str, float]:
     with_pct = 100.0 * with_passed / total_runs if total_runs else 0.0
-    without_pct = 100.0 * without_passed / total_runs if total_runs else 0.0
+    baseline_pct = 100.0 * baseline_passed / total_runs if total_runs else 0.0
     return {
         "with_skill_percentage": round(with_pct, 1),
-        "without_skill_percentage": round(without_pct, 1),
-        "delta": round(with_pct - without_pct, 1),
+        "baseline_percentage": round(baseline_pct, 1),
+        "delta": round(with_pct - baseline_pct, 1),
     }
 
 
-def run_snapshot(
+def run_benchmark(
     skill: str,
     target: Path,
     output: Path,
@@ -2266,12 +2393,15 @@ def run_snapshot(
     only_categories: list[str] | None = None,
     git: str = "git",
     opencode: str = "opencode",
+    package: bool = True,
+    sandbox: str = "worktree",
+    docker: str = "docker",
 ) -> dict[str, Any]:
-    """Run every fixture tagged with `skill`, with it and without it, repeated.
+    """Run every task tagged with `skill`, with it and without it, repeated.
 
     Answers a sharper question than a single evaluate() call: not "did the
     actor catch this defect once," but "does having this skill installed
-    measurably outperform not having it at all." Each fixture runs
+    measurably outperform not having it at all." Each task runs
     `repetitions` times per condition (live model output has real sampling
     variance -- one run is a noisy point estimate, not a score). The prompt
     is identical in both conditions; only whether the skill is discoverable
@@ -2282,7 +2412,21 @@ def run_snapshot(
     cheap trial before committing to the full, live-model-costly corpus) --
     every full evaluate() call is a real actor (and, if the verifier passes,
     judge) run against a live model, so cost scales linearly with how many
-    fixtures times conditions times repetitions actually run.
+    tasks times conditions times repetitions actually run.
+
+    An unrestricted run (``only_categories`` is None) also packages this
+    report into the skill's own directory as its eval trace -- see
+    package_benchmark_trace() and docs/adr/0028-skill-packages-carry-their-own-
+    eval-trace.md. A category-restricted run never packages: it is defined
+    above as a cheap partial trial, and packaging it would silently make a
+    trace claim coverage the run didn't have. Pass ``package=False`` to skip
+    packaging even for an unrestricted run.
+
+    ``sandbox``/``docker`` are forwarded unchanged to every evaluate() call,
+    the same opt-in Docker sandbox `codev eval task run --sandbox docker`
+    uses for a single trial (see docs/adr/0027-opt-in-docker-sandbox-for-the-
+    native-eval-harness.md) -- every task in this benchmark must declare its
+    own environment block to use it, exactly as for a single task run.
     """
     if repetitions < 1:
         raise EvaluationError("repetitions must be at least 1")
@@ -2290,9 +2434,9 @@ def run_snapshot(
     output = output.resolve()
     if not output.is_dir() or output.is_symlink() or any(output.iterdir()):
         raise EvaluationError("output must be an existing empty directory")
-    by_category = _discover_skill_fixtures(target, skill)
+    by_category = _discover_skill_tasks(target, skill)
     if not by_category:
-        raise EvaluationError(f"no fixtures found for skill: {skill}")
+        raise EvaluationError(f"no tasks found for skill: {skill}")
     if only_categories is not None:
         unknown = sorted(set(only_categories) - set(by_category))
         if unknown:
@@ -2304,15 +2448,15 @@ def run_snapshot(
 
     categories: dict[str, Any] = {}
     overall_with_passed = 0
-    overall_without_passed = 0
+    overall_baseline_passed = 0
     overall_total_runs = 0
     for category in sorted(by_category):
-        fixtures_report: dict[str, Any] = {}
-        for fixture in by_category[category]:
+        tasks_report: dict[str, Any] = {}
+        for task in by_category[category]:
             condition_counts: dict[str, int] = {}
             for condition_key, with_skill in (
                 ("with_skill", True),
-                ("without_skill", False),
+                ("baseline", False),
             ):
                 passed_count = 0
                 for repetition in range(1, repetitions + 1):
@@ -2320,47 +2464,47 @@ def run_snapshot(
                         output
                         / skill
                         / category
-                        / fixture.name
+                        / task.name
                         / condition_key
                         / str(repetition)
                     )
                     run_output.mkdir(parents=True)
                     try:
                         if evaluate(
-                            fixture.name,
+                            task.name,
                             target,
                             run_output,
                             git=git,
                             opencode=opencode,
                             with_skill=with_skill,
+                            sandbox=sandbox,
+                            docker=docker,
                         ):
                             passed_count += 1
                     except EvaluationError as exc:
-                        (run_output / "snapshot-error.txt").write_text(
+                        (run_output / "benchmark-error.txt").write_text(
                             str(exc), encoding="utf-8"
                         )
                 condition_counts[condition_key] = passed_count
-            fixtures_report[fixture.name] = {
+            tasks_report[task.name] = {
                 "with_skill": {
                     "passed": condition_counts["with_skill"],
                     "total": repetitions,
                 },
-                "without_skill": {
-                    "passed": condition_counts["without_skill"],
+                "baseline": {
+                    "passed": condition_counts["baseline"],
                     "total": repetitions,
                 },
             }
-        total_runs = len(fixtures_report) * repetitions
-        with_passed = sum(f["with_skill"]["passed"] for f in fixtures_report.values())
-        without_passed = sum(
-            f["without_skill"]["passed"] for f in fixtures_report.values()
-        )
+        total_runs = len(tasks_report) * repetitions
+        with_passed = sum(f["with_skill"]["passed"] for f in tasks_report.values())
+        baseline_passed = sum(f["baseline"]["passed"] for f in tasks_report.values())
         categories[category] = {
-            "fixtures": fixtures_report,
-            **_condition_percentages(with_passed, without_passed, total_runs),
+            "tasks": tasks_report,
+            **_condition_percentages(with_passed, baseline_passed, total_runs),
         }
         overall_with_passed += with_passed
-        overall_without_passed += without_passed
+        overall_baseline_passed += baseline_passed
         overall_total_runs += total_runs
 
     report: dict[str, Any] = {
@@ -2369,10 +2513,146 @@ def run_snapshot(
         "repetitions": repetitions,
         "categories": categories,
         "overall": _condition_percentages(
-            overall_with_passed, overall_without_passed, overall_total_runs
+            overall_with_passed, overall_baseline_passed, overall_total_runs
         ),
     }
-    (output / "snapshot.json").write_text(
+    (output / "benchmark.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
     )
+    if package and only_categories is None:
+        package_benchmark_trace(target, skill, report)
     return report
+
+
+def package_benchmark_trace(
+    target: Path, skill: str, report: dict[str, Any]
+) -> Path | None:
+    """Write `report` into the skill's own directory as its eval trace.
+
+    Mirrors NVIDIA SkillEvaluator's Recommended Artifact Set (see
+    docs/adr/0028-skill-packages-carry-their-own-eval-trace.md): a released
+    skill package carries evidence of its own measured effect
+    (``evals/benchmark.json``, ``evals/BENCHMARK.md``), not just
+    instructions. `codev eval show` reads this back.
+
+    Returns the ``evals/`` directory written, or None if `skill` isn't
+    installed under ``.agents/skills/`` in `target` -- packaging is skipped,
+    not fatal, since the caller's own `output` directory already durably
+    holds the full report regardless of whether packaging succeeds.
+    """
+    skill_dir = target / ".agents" / "skills" / skill
+    if not skill_dir.is_dir():
+        return None
+    evals_dir = skill_dir / "evals"
+    evals_dir.mkdir(exist_ok=True)
+    trace = {**report, "generated_at": datetime.now(UTC).isoformat()}
+    (evals_dir / "benchmark.json").write_text(
+        json.dumps(trace, indent=2) + "\n", encoding="utf-8"
+    )
+    (evals_dir / "BENCHMARK.md").write_text(
+        _render_benchmark_markdown(trace), encoding="utf-8"
+    )
+    return evals_dir
+
+
+def _render_benchmark_markdown(report: dict[str, Any]) -> str:
+    """Render a packaged benchmark trace as a human-readable Markdown table."""
+    rows = [(category, data) for category, data in sorted(report["categories"].items())]
+    rows.append(("**Overall**", report["overall"]))
+    lines = [
+        f"# `{report['skill']}` -- Evaluation Trace",
+        "",
+        f"Generated: {report.get('generated_at', 'unknown')}",
+        f"Repetitions per task: {report['repetitions']}",
+        "",
+        "| Category | With skill | Baseline | Delta |",
+        "| --- | --- | --- | --- |",
+    ]
+    for name, data in rows:
+        lines.append(
+            f"| {name} | {data['with_skill_percentage']}% | "
+            f"{data['baseline_percentage']}% | {data['delta']:+.1f}pp |"
+        )
+    lines += [
+        "",
+        "Full per-task trial evidence is in `evals/benchmark.json` (this "
+        "table's underlying data) and in the `--output` directory passed to "
+        "`codev eval benchmark run` when this trace was generated.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# --- Public engine-integration surface -------------------------------------
+#
+# A second evaluation engine (codev_workflow.eval_nvidia, wrapping the
+# external NVIDIA SkillEvaluator CLI) needs the same subprocess execution,
+# environment isolation, durable publication, and redaction primitives this
+# module already uses for the OpenCode actor/judge, without depending on its
+# underscore-prefixed internals. These four wrappers are the deliberately
+# small, stable surface for that reuse; each delegates unchanged to existing,
+# tested behavior. See docs/adr/0026-external-evaluation-engines-are-thin-
+# subprocess-wrappers.md.
+#
+# The three below (git_run, capture_diff, copy_seed_tree) are the equivalent
+# surface for codev_workflow.eval_environment's Environment abstraction (see
+# docs/adr/0027-opt-in-docker-sandbox-for-the-native-eval-harness.md):
+# WorktreeEnvironment is this same worktree logic wearing the Environment
+# protocol, not a reimplementation of it.
+
+
+def run_process(
+    argv: list[str],
+    cwd: Path,
+    timeout: int,
+    env: dict[str, str] | None = None,
+) -> Run:
+    """Run one subprocess with this module's timeout/cleanup/escaping rules."""
+    return _run(argv, cwd, timeout, env=env)
+
+
+def isolated_subprocess_env(
+    *, extra_allowed: frozenset[str] = frozenset()
+) -> dict[str, str]:
+    """The base isolated environment, plus a caller-named extra allowlist.
+
+    ``extra_allowed`` must be curated by the caller to exactly what its own
+    subprocess needs -- this never becomes a passthrough of the calling
+    process's full environment.
+    """
+    env = _isolated_env()
+    if not extra_allowed:
+        return env
+    allowed_upper = {name.upper() for name in extra_allowed}
+    for key, value in os.environ.items():
+        if key.upper() in allowed_upper:
+            env[key] = value
+    return env
+
+
+def publish_result_bundle(output: Path, files: dict[str, str]) -> None:
+    """Atomically publish an evidence bundle using the shared commit-marker
+    convention (staged writes, ``.codev-eval-commit.json`` written last)."""
+    _write_output(output, files)
+
+
+def redact_process_text(value: str) -> str:
+    """Redact likely secrets from captured subprocess stdout/stderr text."""
+    return _safe_process_output(value)
+
+
+def git_run(git: str, args: list[str], cwd: Path, timeout: int = 60) -> Run:
+    """Run one git subcommand with this module's hook/config-isolation rules."""
+    return _git(git, args, cwd, timeout=timeout)
+
+
+def capture_diff(git: str, cwd: Path, seed_commit: str) -> str:
+    """Redacted diff of `cwd` against `seed_commit`, including untracked files."""
+    return _capture_diff(git, cwd, seed_commit)
+
+
+def copy_seed_tree(source: Path, destination: Path) -> None:
+    """Copy a validated task's repository/ seed without following replacement
+    links -- the same symlink-safe copy evaluate() uses for its own worktree
+    seed."""
+    _copy_seed_tree(source, destination)

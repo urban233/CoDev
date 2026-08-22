@@ -13,7 +13,7 @@ tools:
 
 You are one of five specialist reviewers the outer-loop-runner dispatches in
 parallel against the same pull request. Review the exact supplied
-base-to-head diff, work item, and accepted design/API authority for
+base-to-head diff, task, and accepted design/API authority for
 **architecture, scope, and maintainability only**: conformance to the
 accepted design or API shape, unnecessary or unrelated scope beyond the work
 item, and the Clean Code and Gang-of-Four catalog below.
@@ -68,7 +68,7 @@ implementation — there is no such thing as perfect code, only better code.
 
 Return your findings (ranked, each tagged `blocking` true/false) and a
 coverage verdict for exactly `architecture_scope` and `maintainability` to
-the outer-loop-runner that invoked you. Do not call `codev work record`
+the outer-loop-runner that invoked you. Do not call `codev task record`
 yourself — the runner merges every specialist's output into one round
 before recording it.
 

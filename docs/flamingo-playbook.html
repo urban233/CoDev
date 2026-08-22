@@ -1,0 +1,815 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@500;600;700;800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>The Flamingo Playbook</title>
+
+<style>
+  :root{
+    --paper:#EEF1EE;
+    --card:#FFFFFF;
+    --card-2:#E7EBE6;
+    --ink:#1B2523;
+    --ink-soft:#55625B;
+    --ink-faint:#5E6D65;
+    --accent:#E14D73;
+    --accent-text:#B23A5C;
+    --accent-ink:#7A1F38;
+    --accent-soft:#FBE6EC;
+    --teal:#2A6D66;
+    --teal-soft:#E3EFEC;
+    --line:#D6DBD3;
+    --line-strong:#B9C1B6;
+    --font-head:'Libre Franklin',system-ui,'Segoe UI',sans-serif;
+    --font-body:'Source Serif 4',Georgia,'Times New Roman',serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#14181A;
+      --card:#1B211F;
+      --card-2:#212824;
+      --ink:#E9ECE6;
+      --ink-soft:#A9B2A7;
+      --ink-faint:#828C84;
+      --accent:#F27A97;
+      --accent-text:#F6A0B7;
+      --accent-ink:#FBDCE3;
+      --accent-soft:#332027;
+      --teal:#63C0B6;
+      --teal-soft:#1B2C29;
+      --line:#2B322E;
+      --line-strong:#3A423D;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14181A;
+    --card:#1B211F;
+    --card-2:#212824;
+    --ink:#E9ECE6;
+    --ink-soft:#A9B2A7;
+    --ink-faint:#828C84;
+    --accent:#F27A97;
+    --accent-text:#F6A0B7;
+    --accent-ink:#FBDCE3;
+    --accent-soft:#332027;
+    --teal:#63C0B6;
+    --teal-soft:#1B2C29;
+    --line:#2B322E;
+    --line-strong:#3A423D;
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:17px;
+    line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--teal);text-decoration-color:var(--line-strong);text-underline-offset:3px;}
+  a:hover{color:var(--accent-text);}
+  a:focus-visible, button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  h1,h2,h3,h4{font-family:var(--font-head);color:var(--ink);text-wrap:balance;margin:0;}
+  code, .mono{font-family:var(--font-mono);}
+  ::selection{background:var(--accent-soft);color:var(--accent-ink);}
+
+  /* ---------- Shell layout ---------- */
+  .shell{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 28px 96px;
+  }
+  header.masthead{
+    max-width:1180px;
+    margin:0 auto;
+    padding:56px 28px 34px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    letter-spacing:.11em;
+    text-transform:uppercase;
+    color:var(--accent-text);
+    display:flex;
+    align-items:center;
+    gap:.6em;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;}
+  h1.title{
+    font-size:clamp(2.1rem, 4.4vw, 3.15rem);
+    font-weight:800;
+    letter-spacing:-0.01em;
+    line-height:1.04;
+    max-width:16ch;
+  }
+  .dek{
+    font-family:var(--font-body);
+    font-size:1.16rem;
+    color:var(--ink-soft);
+    max-width:56ch;
+    margin-top:18px;
+    line-height:1.55;
+  }
+  .colophon{
+    margin-top:28px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px 12px;
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    color:var(--ink-faint);
+  }
+  .colophon span{
+    border:1px solid var(--line);
+    border-radius:100px;
+    padding:5px 12px;
+    background:var(--card);
+  }
+
+  /* ---------- Glance strip ---------- */
+  .glance{
+    max-width:1180px;
+    margin:0 auto;
+    padding:34px 28px 0;
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    border-radius:14px;
+    overflow:hidden;
+  }
+  .glance .stat{
+    background:var(--card);
+    padding:20px 18px;
+  }
+  .glance .stat .num{
+    font-family:var(--font-mono);
+    font-variant-numeric:tabular-nums;
+    font-size:1.5rem;
+    font-weight:600;
+    color:var(--accent);
+    line-height:1.1;
+  }
+  .glance .stat .lbl{
+    margin-top:6px;
+    font-size:13px;
+    color:var(--ink-soft);
+    line-height:1.35;
+  }
+
+  /* ---------- Body grid: nav + content ---------- */
+  .layout{
+    max-width:1180px;
+    margin:0 auto;
+    padding:44px 28px 0;
+    display:grid;
+    grid-template-columns:216px minmax(0,1fr);
+    gap:56px;
+    align-items:start;
+  }
+  nav.toc{
+    position:sticky;
+    top:24px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    font-family:var(--font-mono);
+    font-size:12.8px;
+  }
+  nav.toc a{
+    color:var(--ink-soft);
+    text-decoration:none;
+    padding:6px 0 6px 14px;
+    border-left:2px solid var(--line);
+    transition:color .12s, border-color .12s;
+  }
+  nav.toc a:hover{color:var(--ink);border-left-color:var(--line-strong);}
+  nav.toc .toc-num{color:var(--ink-faint);margin-right:.6em;}
+
+  main{min-width:0;}
+  section.chapter{
+    padding-top:6px;
+    margin-bottom:64px;
+    scroll-margin-top:24px;
+  }
+  section.chapter .chap-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    margin-bottom:20px;
+  }
+  section.chapter .chap-no{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--accent-text);
+    border:1px solid var(--accent);
+    border-radius:100px;
+    padding:2px 10px;
+    flex:none;
+  }
+  section.chapter h2{
+    font-size:1.62rem;
+    font-weight:700;
+    letter-spacing:-.01em;
+  }
+  section.chapter > p, section.chapter > .prose p{
+    max-width:68ch;
+  }
+  .prose p{margin:0 0 16px;}
+  .prose p:last-child{margin-bottom:0;}
+  .lede{
+    font-size:1.08rem;
+    color:var(--ink-soft);
+    max-width:64ch;
+    margin-bottom:22px;
+  }
+
+  blockquote{
+    margin:22px 0;
+    padding:4px 0 4px 20px;
+    border-left:3px solid var(--accent);
+    font-style:italic;
+    color:var(--ink);
+    max-width:60ch;
+  }
+  blockquote cite{
+    display:block;
+    margin-top:8px;
+    font-family:var(--font-mono);
+    font-style:normal;
+    font-size:12.5px;
+    color:var(--ink-faint);
+  }
+
+  .source-tag{
+    margin-top:18px;
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-faint);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .source-tag::before{content:"§";color:var(--teal);}
+
+  /* ---------- reusable pieces ---------- */
+  .card-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:14px;
+    margin:20px 0;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .card h4{
+    font-size:.92rem;
+    font-weight:700;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .card h4 .dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex:none;}
+  .card p{font-size:.92rem;color:var(--ink-soft);margin:0;line-height:1.5;}
+
+  table.data{
+    width:100%;
+    border-collapse:collapse;
+    margin:18px 0;
+    font-size:.92rem;
+  }
+  table.data caption{
+    text-align:left;
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--ink-faint);
+    margin-bottom:8px;
+    caption-side:top;
+  }
+  table.data th{
+    text-align:left;
+    font-family:var(--font-head);
+    font-size:.82rem;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--ink-soft);
+    border-bottom:1px solid var(--line-strong);
+    padding:8px 14px 8px 0;
+  }
+  table.data td{
+    padding:11px 14px 11px 0;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+    color:var(--ink);
+  }
+  table.data tr:last-child td{border-bottom:none;}
+  table.data .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--teal);}
+  .table-wrap{overflow-x:auto;}
+
+  /* pyramid */
+  .pyramid-wrap{
+    display:grid;
+    grid-template-columns:1.1fr 1fr;
+    gap:32px;
+    align-items:center;
+    margin:24px 0 8px;
+  }
+  .pyramid-band{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#fff;
+    font-family:var(--font-mono);
+    font-size:.86rem;
+    height:52px;
+    margin:0 auto 3px;
+    border-radius:4px;
+  }
+  .pyramid-band b{font-size:1.05rem;margin-right:.5em;}
+  .anti{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .anti .stack{display:flex;flex-direction:column;gap:3px;}
+  .anti .row{height:16px;border-radius:3px;background:var(--card-2);border:1px solid var(--line);}
+  .anti .lbl{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);margin-top:6px;}
+  .anti h5{font-family:var(--font-head);font-size:.88rem;margin:0 0 8px;color:var(--ink-soft);}
+
+  /* timeline */
+  .timeline{
+    position:relative;
+    margin:20px 0 0;
+    padding-left:26px;
+    border-left:2px solid var(--line);
+  }
+  .tl-item{position:relative;padding-bottom:26px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-item::before{
+    content:"";
+    position:absolute;
+    left:-31px;
+    top:4px;
+    width:10px;height:10px;
+    border-radius:50%;
+    background:var(--accent);
+    border:2px solid var(--paper);
+  }
+  .tl-year{
+    font-family:var(--font-mono);
+    font-size:.82rem;
+    color:var(--accent-text);
+    font-weight:600;
+  }
+  .tl-item h4{font-size:1rem;margin:2px 0 4px;}
+  .tl-item p{font-size:.92rem;color:var(--ink-soft);margin:0;max-width:60ch;}
+
+  /* pull stat row */
+  .stat-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin:22px 0;
+  }
+  .stat-row .box{
+    border:1px solid var(--line);
+    background:var(--card);
+    border-radius:12px;
+    padding:16px;
+  }
+  .stat-row .num{
+    font-family:var(--font-mono);
+    font-variant-numeric:tabular-nums;
+    font-size:1.3rem;
+    color:var(--teal);
+    font-weight:600;
+  }
+  .stat-row .lbl{font-size:.84rem;color:var(--ink-soft);margin-top:4px;}
+
+  .priority-list{list-style:none;margin:20px 0;padding:0;display:flex;flex-direction:column;gap:10px;}
+  .priority-list li{
+    display:grid;
+    grid-template-columns:34px auto 1fr;
+    gap:14px;
+    align-items:start;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:13px 16px;
+  }
+  .priority-list .rank{
+    font-family:var(--font-mono);
+    color:var(--accent-text);
+    font-weight:700;
+  }
+  .priority-list b{font-family:var(--font-head);font-size:.95rem;}
+  .priority-list span{font-size:.88rem;color:var(--ink-soft);}
+
+  .divider{height:1px;background:var(--line);margin:0 0 64px;}
+
+  footer.biblio{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0 28px;
+  }
+  .biblio h3{font-size:1.1rem;margin-bottom:6px;}
+  .biblio .note{font-size:.88rem;color:var(--ink-soft);max-width:64ch;margin-bottom:22px;}
+  .biblio-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:28px 40px;
+  }
+  .biblio-grid h4{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin-bottom:10px;
+  }
+  .biblio-grid ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;}
+  .biblio-grid li{font-size:.9rem;line-height:1.4;}
+  .biblio-grid li .d{display:block;font-size:.78rem;color:var(--ink-faint);}
+
+  .end-note{
+    margin-top:56px;
+    padding-top:24px;
+    border-top:1px solid var(--line);
+    font-size:.85rem;
+    color:var(--ink-faint);
+    max-width:64ch;
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .layout{grid-template-columns:1fr;gap:0;}
+    nav.toc{
+      position:sticky;
+      top:0;
+      z-index:5;
+      flex-direction:row;
+      overflow-x:auto;
+      background:var(--paper);
+      padding:12px 0 14px;
+      border-bottom:1px solid var(--line);
+      margin-bottom:32px;
+      gap:0;
+    }
+    nav.toc a{
+      white-space:nowrap;
+      border-left:none;
+      border-bottom:2px solid var(--line);
+      padding:6px 14px;
+    }
+    .glance{grid-template-columns:repeat(2,1fr);}
+    .card-grid{grid-template-columns:1fr;}
+    .pyramid-wrap{grid-template-columns:1fr;}
+    .stat-row{grid-template-columns:1fr 1fr;}
+    .biblio-grid{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion: no-preference){
+    a{transition:color .12s ease;}
+  }
+</style>
+
+<header class="masthead">
+  <div class="eyebrow">Public-record research brief · testing at Google</div>
+  <h1 class="title">The Flamingo Playbook</h1>
+  <p class="dek">How Google actually tests software, assembled from the company's own record: the O'Reilly book engineers call "the Flamingo book," the internal Testing Blog, published engineering-practices docs, and the peer-reviewed papers Google's own testing infrastructure team has put into the literature.</p>
+  <div class="colophon">
+    <span>Primary source: <em>Software Engineering at Google</em>, O'Reilly 2020</span>
+    <span>+ Google Testing Blog, 2007–2026</span>
+    <span>+ 3 peer-reviewed papers</span>
+    <span>+ google/eng-practices</span>
+  </div>
+</header>
+
+<div class="glance">
+  <div class="stat"><div class="num">80 / 15 / 5</div><div class="lbl">Target mix of small / medium / large tests, by count</div></div>
+  <div class="stat"><div class="num">50,000+</div><div class="lbl">Unique code changes tested per day across Google's monorepo</div></div>
+  <div class="stat"><div class="num">4bn+</div><div class="lbl">Individual test cases run daily by the Test Automation Platform</div></div>
+  <div class="stat"><div class="num">2007</div><div class="lbl">Year "Testing on the Toilet" began — still running today, renamed in 2024</div></div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <a href="#source"><span class="toc-num">00</span>The source material</a>
+    <a href="#why"><span class="toc-num">01</span>Why bother testing</a>
+    <a href="#pyramid"><span class="toc-num">02</span>Size vs. scope</a>
+    <a href="#unit"><span class="toc-num">03</span>Unit tests that last</a>
+    <a href="#doubles"><span class="toc-num">04</span>Test doubles</a>
+    <a href="#larger"><span class="toc-num">05</span>Larger tests</a>
+    <a href="#ci"><span class="toc-num">06</span>Continuous integration</a>
+    <a href="#cd"><span class="toc-num">07</span>Continuous delivery</a>
+    <a href="#signal"><span class="toc-num">08</span>Measuring quality</a>
+    <a href="#culture"><span class="toc-num">09</span>Culture &amp; org</a>
+    <a href="#timeline"><span class="toc-num">10</span>Timeline</a>
+    <a href="#now"><span class="toc-num">11</span>Where it's headed</a>
+    <a href="#sources"><span class="toc-num">12</span>Full bibliography</a>
+  </nav>
+
+  <main>
+
+    <section class="chapter" id="source">
+      <div class="chap-head"><span class="chap-no">00</span><h2>Where this actually comes from</h2></div>
+      <div class="prose">
+        <p>The nickname is real: <em>Software Engineering at Google</em> (Titus Winters, Tom Manshreck, and Hyrum Wright; O'Reilly, March 2020) is known inside and outside Google as <strong>the Flamingo book</strong>, after its cover animal. It's the closest thing to an official account of Google's engineering culture, and four of its 26 chapters — Testing Overview, Unit Testing, Test Doubles, and Larger Testing, plus Continuous Integration and Continuous Delivery later on — are the backbone of what follows. Google republishes the full text for free at <a href="https://abseil.io/resources/swe-book" target="_blank" rel="noopener">abseil.io/resources/swe-book</a> under CC BY-NC-ND 4.0, so it's directly citable rather than secondhand.</p>
+        <p>It isn't the only record. Google's testing culture has been narrated in public for two decades: the earlier book <em>How Google Tests Software</em> (Whittaker, Arbon &amp; Carollo, 2012) covers the organizational model that predates the Flamingo book; the <a href="https://testing.googleblog.com/" target="_blank" rel="noopener">Google Testing Blog</a> has run continuously since 2007; the code-review half of the process is documented separately at <a href="https://google.github.io/eng-practices/" target="_blank" rel="noopener">google.github.io/eng-practices</a>; and Google's testing-infrastructure engineers have published their methods and numbers directly in peer-reviewed venues (ICSE-SEIP, most recently). This brief pulls all four together and flags which claim comes from where.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="why">
+      <div class="chap-head"><span class="chap-no">01</span><h2>Why Google bothers testing at all</h2></div>
+      <p class="lede">The book's own answer isn't "correctness" — it's velocity. A test suite is what lets an engineer change code without re-deriving, by hand, whether they broke anything.</p>
+      <div class="prose">
+        <p>The case study the book leads with is <strong>Google Web Server, 2005</strong>: roughly 80% of production pushes contained a user-visible bug. Google made automated, engineer-written tests mandatory for the team; within a year, emergency pushes had dropped by half — during a period of record growth, not despite it. That episode is treated internally as the moment testing stopped being optional at Google.</p>
+        <p>The philosophy gets a slogan, coined inside the Testing Grouplet and still repeated in code review today:</p>
+      </div>
+      <blockquote>"If you liked it, then you shoulda put a test on it."<cite>The "Beyoncé Rule" — Google's internal shorthand for: test everything you claim works, including performance, accessibility, and failure handling.</cite></blockquote>
+      <div class="card-grid">
+        <div class="card"><h4><span class="dot"></span>Less debugging</h4><p>Tested code carries fewer defects at write-time and stays that way as its dependencies keep changing under it.</p></div>
+        <div class="card"><h4><span class="dot"></span>Confidence to change</h4><p>A green suite is what lets someone refactor code they didn't write without a manual audit first.</p></div>
+        <div class="card"><h4><span class="dot"></span>Living documentation</h4><p>A clear test is a spec that can't silently drift out of sync with the code, the way prose docs do.</p></div>
+        <div class="card"><h4><span class="dot"></span>Design pressure</h4><p>Code that's awkward to test is usually announcing a design flaw — the difficulty is the signal.</p></div>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 11 — Testing Overview</p>
+    </section>
+
+    <section class="chapter" id="pyramid">
+      <div class="chap-head"><span class="chap-no">02</span><h2>Two axes: size and scope</h2></div>
+      <div class="prose">
+        <p>Google dropped the "unit / integration / system" vocabulary decades ago because it conflated two different questions. <strong>Size</strong> asks what resources a test is allowed to touch. <strong>Scope</strong> asks how much of the system it exercises. They're independent: a narrow-scoped test can still be "medium" sized if it needs a real browser, and a broad-scoped test can be "small" if its dependencies are faked.</p>
+      </div>
+      <div class="table-wrap">
+      <table class="data">
+        <caption>Size — what a test is allowed to do</caption>
+        <thead><tr><th>Size</th><th>Process / machine</th><th>I/O, network, sleep</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Small</strong></td><td>Single process</td><td>None permitted — this is what buys speed and determinism</td></tr>
+          <tr><td><strong>Medium</strong></td><td>Multiple processes, one machine</td><td>Blocking calls to <span class="n">localhost</span> only</td></tr>
+          <tr><td><strong>Large</strong></td><td>Multiple machines</td><td>Unrestricted — and therefore slower and less deterministic</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="table-wrap">
+      <table class="data">
+        <caption>Scope — how much of the system a test exercises</caption>
+        <thead><tr><th>Scope</th><th>Validates</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Narrow</strong></td><td>A single class or method, in isolation</td></tr>
+          <tr><td><strong>Medium</strong></td><td>Interaction between a handful of components</td></tr>
+          <tr><td><strong>Broad</strong></td><td>The whole system, or an emergent behaviour of it</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="pyramid-wrap">
+        <div>
+          <div class="pyramid-band" style="width:46%;background:#2F6F68;"><b>5%</b>large</div>
+          <div class="pyramid-band" style="width:68%;background:#3D8074;"><b>15%</b>medium</div>
+          <div class="pyramid-band" style="width:100%;background:#C43A63;"><b>80%</b>small</div>
+        </div>
+        <div class="anti">
+          <div>
+            <h5>Antipattern: ice-cream cone</h5>
+            <div class="stack">
+              <div class="row" style="width:100%;background:var(--accent-soft);"></div>
+              <div class="row" style="width:80%;background:var(--accent-soft);"></div>
+              <div class="row" style="width:30%;"></div>
+            </div>
+            <div class="lbl">mostly slow end-to-end tests, few unit tests underneath</div>
+          </div>
+          <div>
+            <h5>Antipattern: hourglass</h5>
+            <div class="stack">
+              <div class="row" style="width:70%;background:var(--accent-soft);"></div>
+              <div class="row" style="width:20%;"></div>
+              <div class="row" style="width:70%;background:var(--accent-soft);"></div>
+            </div>
+            <div class="lbl">unit and end-to-end both heavy, integration layer starved</div>
+          </div>
+        </div>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 11 — target distribution is by test count, not runtime</p>
+    </section>
+
+    <section class="chapter" id="unit">
+      <div class="chap-head"><span class="chap-no">03</span><h2>Writing unit tests that don't rot</h2></div>
+      <p class="lede">"The ideal test is unchanging: after it's written, it never needs to change unless the requirements of the system under test change." Everything in this chapter defends that one line.</p>
+      <div class="prose">
+        <p>A <strong>brittle</strong> test is one that fails from an unrelated change to production code that introduced no real bug. At Google's scale — thousands of engineers submitting against a shared monorepo — brittle tests don't just annoy their author, they tax everyone who touches that code afterward. The book's countermeasures:</p>
+      </div>
+      <ul class="priority-list" style="grid-template-columns:1fr;">
+        <li style="grid-template-columns:auto 1fr;"><b>Test through the public API</b><span>— exercise the system the way its actual callers do, not its internals. If the test breaks, a real caller would too.</span></li>
+        <li style="grid-template-columns:auto 1fr;"><b>Prefer state over interaction</b><span>— assert on what the system produced, not which internal methods it called along the way to producing it.</span></li>
+        <li style="grid-template-columns:auto 1fr;"><b>One behaviour per test, Given/When/Then</b><span>— name the test after the behaviour, not the method under test, e.g. <code>shouldRejectWithdrawalWhenBalanceIsEmpty</code>.</span></li>
+        <li style="grid-template-columns:auto 1fr;"><b>No control flow</b><span>— no loops or conditionals in test bodies. A test has no tests of its own, so it has to be obviously correct on inspection.</span></li>
+      </ul>
+      <div class="prose">
+        <p>Production code optimizes for DRY; the book argues test code should optimize for <strong>DAMP</strong> — Descriptive And Meaningful Phrases — instead. Some duplication is a fair price for a test that reads top-to-bottom without forcing the reader to jump to a shared helper to understand what's being verified. Google's internal target is roughly <strong>80% narrow unit tests, 20% broader-scoped</strong> — consistent with the pyramid above.</p>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 12 — Unit Testing</p>
+    </section>
+
+    <section class="chapter" id="doubles">
+      <div class="chap-head"><span class="chap-no">04</span><h2>Test doubles — and why Google avoids reaching for mocks first</h2></div>
+      <div class="prose">
+        <p>Google went through the same phase most large codebases do: mocking frameworks arrived, seemed universal, and got used everywhere. The retrospective in the book is blunt — those tests "were easy to write" but "required constant effort to maintain while rarely finding bugs." A February 2024 <a href="https://testing.googleblog.com/2024/02/increase-test-fidelity-by-avoiding-mocks.html" target="_blank" rel="noopener">Testing Blog post</a> by Andrew Trenk and Dillon Bly formalizes the fix as a strict fallback order, ranked by <strong>fidelity</strong> — how closely a test's behaviour matches production's:</p>
+      </div>
+      <ol class="priority-list" style="list-style:none;">
+        <li><span class="rank">1</span><b>Real implementation</b><span>Highest fidelity by definition — the actual code runs. Skip only if it's slow, non-deterministic, or hard to construct (e.g. it dials out to another service).</span></li>
+        <li><span class="rank">2</span><b>Fake</b><span>A lightweight stand-in maintained by the API's own owner (an in-memory database, say) — has its own contract tests, so it can't quietly drift from the real thing.</span></li>
+        <li><span class="rank">3</span><b>Mock / stub, as a last resort</b><span>Its behaviour is hand-specified inside the test, so it can silently diverge from reality — useful mainly for hard-to-trigger paths like a timeout.</span></li>
+      </ol>
+      <div class="prose">
+        <p>Google formalized this with a static-analysis annotation, <code>@DoNotMock</code>, that lets an API owner forbid mocking their type outright — protecting their freedom to change the implementation later without breaking thousands of tests that encoded assumptions about it. The book reserves harsher language for one specific pattern: pure <strong>interaction testing</strong> — asserting that a function was called, rather than what it produced — which engineers there nickname <em>change-detector tests</em>, because they fail on any edit, not just a behavioural one.</p>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 13 — Test Doubles · Testing Blog, Feb 2024</p>
+    </section>
+
+    <section class="chapter" id="larger">
+      <div class="chap-head"><span class="chap-no">05</span><h2>What unit tests can't see: larger testing</h2></div>
+      <p class="lede">Unit tests build confidence in a function. Larger tests exist because a system is more than the sum of its mocked-out parts — configuration, load, and emergent behaviour only show up when the real thing runs.</p>
+      <div class="card-grid">
+        <div class="card"><h4><span class="dot"></span>Functional testing</h4><p>One or more real binaries, hermetic environment, hand-crafted data, assertions against the published API.</p></div>
+        <div class="card"><h4><span class="dot"></span>Browser &amp; device testing</h4><p>Drives the actual UI the way a third party would — coverage a unit test of the underlying code can't provide.</p></div>
+        <div class="card"><h4><span class="dot"></span>Performance / load / stress</h4><p>Simultaneous traffic against isolated, cloud-deployed systems — capacity is an emergent property, untestable in isolation.</p></div>
+        <div class="card"><h4><span class="dot"></span>Deployment / config smoke tests</h4><p>Confirms the system still boots with its real config — Google names bad config as its #1 cause of major outages.</p></div>
+        <div class="card"><h4><span class="dot"></span>Exploratory testing &amp; bug bashes</h4><p>Trained humans probing the public API for the unanticipated — findings graduate into automated regression tests.</p></div>
+        <div class="card"><h4><span class="dot"></span>A/B diff regression</h4><p>One of Google's most common larger tests: replay identical traffic against baseline vs. candidate, diff the output.</p></div>
+        <div class="card"><h4><span class="dot"></span>Probers &amp; canary analysis</h4><p>Read-only assertions running continuously against live production, plus metric-based judging of staged rollouts.</p></div>
+        <div class="card"><h4><span class="dot"></span>DiRT &amp; chaos engineering</h4><p>Google's annual Disaster Recovery Testing simulates large infrastructure failures; chaos engineering injects faults continuously.</p></div>
+      </div>
+      <div class="prose">
+        <p>The math behind why this matters at microservice scale: replace two dependencies with doubles that are each 90% accurate, and the probability of a bug slipping through the seams approaches certainty once the components actually integrate. Larger tests are slow, sometimes nonhermetic, and often owned across team boundaries — Google's answer is to keep them off the fast presubmit path and run them continuously post-submit instead (see §06).</p>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 14 — Larger Testing</p>
+    </section>
+
+    <section class="chapter" id="ci">
+      <div class="chap-head"><span class="chap-no">06</span><h2>Continuous integration at monorepo scale: TAP</h2></div>
+      <div class="prose">
+        <p>Google's CI system, the <strong>Test Automation Platform (TAP)</strong>, processes changes against one shared repository rather than per-project branches. The book's own numbers:</p>
+      </div>
+      <div class="stat-row">
+        <div class="box"><div class="num">50,000+</div><div class="lbl">unique changes tested per day</div></div>
+        <div class="box"><div class="num">4bn+</div><div class="lbl">individual test cases run daily</div></div>
+        <div class="box"><div class="num">~11 min</div><div class="lbl">average presubmit wait time</div></div>
+      </div>
+      <div class="prose">
+        <p>The split is deliberate. <strong>Presubmit</strong> runs only fast, reliable tests — mostly unit tests — before a change merges; empirically, a change that passes presubmit has a 95%+ chance of passing everything else, so Google optimistically lets it merge rather than blocking on slower coverage. <strong>Postsubmit</strong> then runs the larger, slower tests asynchronously against the merged result.</p>
+        <p>Tests are pushed toward <strong>hermetic</strong> — fully self-contained, no shared external state — because that's what makes presubmit fast and deterministic enough to trust. The book's Google Assistant case study: moving to hermetic presubmit testing cut runtime <strong>14×</strong> while eliminating flakiness, by pushing the nonhermetic tests to postsubmit instead of deleting them.</p>
+        <p>Every team designates a rotating <strong>Build Cop</strong>, responsible for an unbroken build regardless of who broke it — their standing playbook is roll back first, investigate after, because a known-good rollback is always faster than a forward fix under time pressure.</p>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 23 — Continuous Integration</p>
+    </section>
+
+    <section class="chapter" id="cd">
+      <div class="chap-head"><span class="chap-no">07</span><h2>Continuous delivery: shipping the tested code</h2></div>
+      <div class="prose">
+        <p>The chapter's thesis is counterintuitive on its face: <strong>faster is safer</strong>. Small, frequent releases carry less risk than large infrequent ones, because each one is a smaller bet and a faster feedback loop.</p>
+      </div>
+      <div class="card-grid">
+        <div class="card"><h4><span class="dot"></span>Feature flags</h4><p>Every change ships flag-guarded, decoupling "deployed" from "visible" — a bad feature turns off without a redeploy.</p></div>
+        <div class="card"><h4><span class="dot"></span>Release trains</h4><p>Search moved to a fixed cadence (every other day) on the premise that "no binary is perfect" — a firm deadline beats chasing zero-bug releases.</p></div>
+        <div class="card"><h4><span class="dot"></span>Canarying</h4><p>Rollout to a growing percentage of users while watching stability metrics, so a regression is caught before it's everyone's problem.</p></div>
+        <div class="card"><h4><span class="dot"></span>Data-driven rollout</h4><p>Staged deploys are themselves A/B-tested against the prior version — "did this release actually help" becomes a statistical question, not a guess.</p></div>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 24 — Continuous Delivery</p>
+    </section>
+
+    <section class="chapter" id="signal">
+      <div class="chap-head"><span class="chap-no">08</span><h2>Measuring whether the tests are any good</h2></div>
+      <div class="prose">
+        <p><strong>Code coverage</strong> gets an explicit demotion in the book: it measures whether a line executed, not whether it was checked for correctness. Teams that treat an 80% target as a ceiling rather than a floor are, in the book's view, optimizing the wrong thing. Google measures two other signals instead, and has published its own numbers on both.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">Flaky tests</h4>
+      <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Metric</th><th>Figure</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>Test runs that come back flaky</td><td class="n">≈1.5%</td><td>Testing Blog, John Micco, 2016</td></tr>
+          <tr><td>Tests that show flakiness at least once</td><td class="n">≈16%</td><td>Testing Blog, John Micco, 2016</td></tr>
+          <tr><td>Point at which engineers stop trusting a suite</td><td class="n">≈1%</td><td><em>Software Engineering at Google</em>, ch. 11 (2020)</td></tr>
+          <tr><td>Google's typical operating flake rate</td><td class="n">≈0.15%</td><td><em>Software Engineering at Google</em>, ch. 11 (2020)</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="prose">
+        <p>Google's testing-infrastructure team also put its methodology into the peer-reviewed literature directly: <a href="https://research.google/pubs/pub45861/" target="_blank" rel="noopener">"Taming Google-Scale Continuous Testing"</a> (Memon et al., ICSE-SEIP 2017) describes how TAP models correlations between code, tests, developers, and languages to cut regression-testing workload without losing signal.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">Mutation testing</h4>
+      <div class="prose">
+        <p>Coverage's replacement metric: deliberately break the code (a "mutant") and check whether the test suite notices. Full mutation analysis is too expensive to run at Google's size, so <a href="https://research.google/pubs/state-of-mutation-testing-at-google/" target="_blank" rel="noopener">"State of Mutation Testing at Google"</a> (Petrovic &amp; Ivanković, ICSE-SEIP 2018) describes a diff-based, probabilistic version that skips "arid" lines — code with no statement coverage, or judged uninteresting — and folds directly into code review.</p>
+      </div>
+      <div class="stat-row">
+        <div class="box"><div class="num">~6,000</div><div class="lbl">engineers seeing mutation results in review</div></div>
+        <div class="box"><div class="num">14,000+</div><div class="lbl">code authors affected</div></div>
+        <div class="box"><div class="num">~30%</div><div class="lbl">of covered diffs analyzed</div></div>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 11 · Testing Blog 2016 · ICSE-SEIP 2017 &amp; 2018 papers</p>
+    </section>
+
+    <section class="chapter" id="culture">
+      <div class="chap-head"><span class="chap-no">09</span><h2>The culture underneath the tooling</h2></div>
+      <div class="prose">
+        <p>Google is explicit that none of the above stuck through mandate. It stuck through a decade of bottom-up organizing by a volunteer group internally called the <strong>Testing Grouplet</strong>, formed in 2006 in direct response to the GWS crisis in §01.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">Testing on the Toilet → Tech on the Toilet</h4>
+      <div class="prose">
+        <p>Their most enduring invention: a one-page flyer, posted in Google restroom stalls worldwide, delivering one testing lesson at a time. First posted in 2006, blogged since 2007, still running today, and written entirely by 20%-time volunteers — anyone at Google, regardless of tenure, can author an episode. Some entries are cited hundreds of times in internal code reviews, among them "Tests Too DRY? Make Them DAMP!" and "Change-Detector Tests Considered Harmful." In December 2024 the series was formally renamed <strong>Tech on the Toilet</strong>, reflecting years of coverage well beyond testing — though the TotT initials, and the red/green lightbulb logo, stayed.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">Test Certified</h4>
+      <div class="prose">
+        <p>A five-level ladder giving teams concrete, public milestones for testing maturity — visible on an internal "TC Ladder" dashboard that made improvement a matter of team standing, not just individual discipline. By the Grouplet's own account it took roughly four years for Test Certified's practices to become standard procedure across most of Google engineering.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">"Test is dead" — and the roles that changed</h4>
+      <div class="prose">
+        <p>The organizational model in <em>How Google Tests Software</em> (2012) split testing into three roles: <strong>Software Engineer in Test (SET)</strong>, <strong>Test Engineer (TE)</strong>, and a Test Engineering Manager over both. That model didn't survive the decade. At GTAC 2011, Alberto Savoia — in a Grim Reaper costume — delivered the keynote <a href="https://www.youtube.com/watch?v=X1jWe5rOu3g" target="_blank" rel="noopener">"Test Is Dead"</a>, arguing dedicated testing roles were no longer necessary now that quality practices had diffused into tooling and into every engineer's job. Google (and soon after, Microsoft) spent the following years phasing out most job titles containing the word "test." Google's own account of the transition is the 2016 Testing Blog post <a href="https://testing.googleblog.com/2016/03/from-qa-to-engineering-productivity.html" target="_blank" rel="noopener">"From QA to Engineering Productivity"</a>: SET evolved into "Software Engineer, Tools &amp; Infrastructure" and then largely folded into general Software Engineer titles inside the org now called <strong>Engineering Productivity (EngProd)</strong>. The underlying belief carried over from the book's era: developers own quality directly, rather than handing it to a separate testing function afterward.</p>
+      </div>
+      <h4 style="font-family:var(--font-head);font-size:1rem;margin:26px 0 4px;">Code review as the other quality gate</h4>
+      <div class="prose">
+        <p>Google made its internal <a href="https://google.github.io/eng-practices/" target="_blank" rel="noopener">code-review guidelines</a> public on 4 September 2019, under CC BY 3.0 — since translated into dozens of languages and adopted well outside Google. Its stated goal isn't gatekeeping: "the primary purpose of code review is to make sure the overall code health of the codebase is improving over time." Reviewers are explicitly asked to check for tests as a normal part of that review, not as a separate process.</p>
+      </div>
+      <p class="source-tag">Software Engineering at Google, ch. 11 · Google Testing Blog · How Google Tests Software (2012) · google/eng-practices</p>
+    </section>
+
+    <section class="chapter" id="timeline">
+      <div class="chap-head"><span class="chap-no">10</span><h2>Twenty years, briefly</h2></div>
+      <div class="timeline">
+        <div class="tl-item"><div class="tl-year">2005</div><h4>The GWS crisis</h4><p>~80% of Google Web Server pushes ship a user-visible bug. Mandatory automated testing follows.</p></div>
+        <div class="tl-item"><div class="tl-year">2006</div><h4>The Testing Grouplet forms</h4><p>A volunteer group sets out to change Google's testing culture from the bottom up.</p></div>
+        <div class="tl-item"><div class="tl-year">2007</div><h4>Testing on the Toilet launches</h4><p>First flyer posted in London; the Google Testing Blog begins archiving episodes the same year.</p></div>
+        <div class="tl-item"><div class="tl-year">2011</div><h4>"Test Is Dead"</h4><p>Alberto Savoia's GTAC keynote; dedicated testing job titles begin disappearing across the industry.</p></div>
+        <div class="tl-item"><div class="tl-year">2012</div><h4><em>How Google Tests Software</em> published</h4><p>Whittaker, Arbon &amp; Carollo document the SET/TE model — just as it starts to wind down.</p></div>
+        <div class="tl-item"><div class="tl-year">2016</div><h4>SET formally folds into EngProd</h4><p>"From QA to Engineering Productivity" post; John Micco publishes Google's flaky-test numbers.</p></div>
+        <div class="tl-item"><div class="tl-year">2017–18</div><h4>The methodology goes peer-reviewed</h4><p>TAP's continuous-testing model and Google's mutation-testing system both appear at ICSE-SEIP.</p></div>
+        <div class="tl-item"><div class="tl-year">2019</div><h4>Code review guidelines go public</h4><p>google/eng-practices released under CC BY 3.0.</p></div>
+        <div class="tl-item"><div class="tl-year">2020</div><h4><em>Software Engineering at Google</em> published</h4><p>The Flamingo book — the current default reference for how Google frames all of the above.</p></div>
+        <div class="tl-item"><div class="tl-year">2024</div><h4>TotT becomes Tech on the Toilet</h4><p>Same initials, same bathrooms, scope widened years earlier to all of software development.</p></div>
+      </div>
+    </section>
+
+    <section class="chapter" id="now">
+      <div class="chap-head"><span class="chap-no">11</span><h2>Where it's headed</h2></div>
+      <div class="prose">
+        <p>The public record here is thinner — Google hasn't published the equivalent of the mutation-testing paper for its internal use of LLMs in test authoring, so this section is deliberately more provisional than the rest. What is on the record: the Testing Blog is still active with fresh TotT-style episodes through 2026, including "The Way of TDD," suggesting test-driven development is being re-emphasized rather than displaced as AI writes more code. Separately, Google has shipped <strong>Stax</strong>, a public developer tool for evaluating non-deterministic LLM outputs — a different problem from generating conventional unit tests, but evidence Google treats "testing AI-generated or AI-facing code" as its own emerging discipline rather than a drop-in extension of the pyramid in §02.</p>
+        <p>Industry-wide, the pattern to watch is Meta's published <em>TestGen-LLM</em> work — not a Google project, but a public data point (73% of its AI-generated test recommendations were accepted by engineers into production) that peer companies are treating LLM-authored tests as additive to, not a replacement for, the human-reviewed fundamentals in §§03–05.</p>
+      </div>
+      <p class="source-tag">Google Testing Blog, 2024–2026 · developers.googleblog.com (Stax) — lower confidence than earlier sections</p>
+    </section>
+
+  </main>
+</div>
+
+<div class="divider"></div>
+
+<footer class="biblio" id="sources">
+  <h3>Full bibliography</h3>
+  <p class="note">Every claim above traces to one of these. Primary Google sources first; independent and historical accounts follow.</p>
+  <div class="biblio-grid">
+    <div>
+      <h4>The books</h4>
+      <ul>
+        <li><a href="https://abseil.io/resources/swe-book" target="_blank" rel="noopener">Software Engineering at Google</a> — Winters, Manshreck, Wright (O'Reilly, 2020), free full text<span class="d">"The Flamingo book" — primary source for §§01–09</span></li>
+        <li><a href="https://www.oreilly.com/library/view/how-google-tests/9780132851572/" target="_blank" rel="noopener">How Google Tests Software</a> — Whittaker, Arbon, Carollo (2012)<span class="d">SET/TE organizational model, now historical</span></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Primary Google sources</h4>
+      <ul>
+        <li><a href="https://testing.googleblog.com/" target="_blank" rel="noopener">Google Testing Blog</a><span class="d">Running since 2007 — TotT archive, culture posts, methodology</span></li>
+        <li><a href="https://google.github.io/eng-practices/" target="_blank" rel="noopener">google/eng-practices</a><span class="d">Public since Sept 2019, CC BY 3.0 — code review standard</span></li>
+        <li><a href="https://testing.googleblog.com/2016/03/from-qa-to-engineering-productivity.html" target="_blank" rel="noopener">"From QA to Engineering Productivity"</a> (2016)<span class="d">Google's own account of the SET → EngProd transition</span></li>
+        <li><a href="https://testing.googleblog.com/2024/02/increase-test-fidelity-by-avoiding-mocks.html" target="_blank" rel="noopener">"Increase Test Fidelity By Avoiding Mocks"</a> (2024)<span class="d">Trenk &amp; Bly — current guidance on test doubles</span></li>
+        <li><a href="https://testing.googleblog.com/2024/12/tech-on-toilet-driving-software.html" target="_blank" rel="noopener">"Tech on the Toilet: Driving Software Excellence…"</a> (2024)<span class="d">TotT's own history and 2024 rename, told internally</span></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Peer-reviewed papers</h4>
+      <ul>
+        <li><a href="https://research.google/pubs/pub45861/" target="_blank" rel="noopener">Taming Google-Scale Continuous Testing</a> — Memon et al., ICSE-SEIP 2017</li>
+        <li><a href="https://research.google/pubs/state-of-mutation-testing-at-google/" target="_blank" rel="noopener">State of Mutation Testing at Google</a> — Petrović &amp; Ivanković, ICSE-SEIP 2018</li>
+        <li><a href="https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html" target="_blank" rel="noopener">Flaky Tests at Google and How We Mitigate Them</a> — John Micco, 2016</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Independent &amp; historical accounts</h4>
+      <ul>
+        <li><a href="https://mike-bland.com/2011/10/18/test-certified.html" target="_blank" rel="noopener">Test Certified</a> &amp; <a href="https://mike-bland.com/2011/10/25/testing-on-the-toilet.html" target="_blank" rel="noopener">Testing on the Toilet</a> — Mike Bland (Testing Grouplet member), first-hand history</li>
+        <li><a href="https://www.youtube.com/watch?v=X1jWe5rOu3g" target="_blank" rel="noopener">GTAC 2011 Opening Keynote: "Test Is Dead"</a> — Alberto Savoia</li>
+      </ul>
+    </div>
+  </div>
+  <p class="end-note">Assembled August 2026 from publicly available material only — nothing here draws on non-public Google information. Figures are as reported in their original source and dated accordingly; where two sources give different numbers for related-but-distinct metrics (see the flaky-test table in §08), both are shown rather than collapsed into one.</p>
+</footer>

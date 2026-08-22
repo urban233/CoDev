@@ -19,7 +19,7 @@ EXPECTED_SKILLS = {
     "define-product": ["assets/brief.template.md"],
     "design-solution": [
         "assets/design.template.md",
-        "assets/decision.template.md",
+        "assets/adr.template.md",
     ],
     "plan-delivery": ["assets/delivery-plan.template.md"],
     "build-change": ["assets/implementation-plan.template.md"],
@@ -28,6 +28,12 @@ EXPECTED_SKILLS = {
     "critique-review": ["assets/suggested-edit.template.md"],
     "launch-product": ["assets/launch-plan.template.md"],
     "design-skill-eval": ["references/eval-design-checklist.md"],
+    "technical-writing-style": ["references/writing-style.md"],
+    "testing-craft": [
+        "references/test-strategy.md",
+        "references/writing-tests.md",
+        "references/test-suite-health.md",
+    ],
 }
 
 EXPECTED_HANDBOOKS: list[str] = []
@@ -96,9 +102,13 @@ def validate_skill(root: Path, name: str, assets: list[str], errors: list[str]) 
 
     text = skill_file.read_text(encoding="utf-8")
     metadata = parse_frontmatter(text, skill_file, errors)
-    if set(metadata) != {"name", "description"}:
+    allowed_fields = {"name", "description", "license"}
+    required_present = {"name", "description"} <= set(metadata)
+    only_allowed = set(metadata) <= allowed_fields
+    if not required_present or not only_allowed:
         errors.append(
-            f"{skill_file}: frontmatter must contain only name and description"
+            f"{skill_file}: frontmatter must contain name and description, "
+            f"plus only {sorted(allowed_fields - {'name', 'description'})}"
         )
     if metadata.get("name") != name:
         errors.append(f"{skill_file}: name must match directory {name!r}")

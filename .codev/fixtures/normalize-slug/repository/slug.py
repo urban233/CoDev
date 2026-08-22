@@ -1,6 +1,0 @@
-"""Small slug helper used by the evaluation fixture."""
-
-
-def slugify(value: str) -> str:
-    """Return a lowercase slug."""
-    return value.lower().replace(" ", "-")

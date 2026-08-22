@@ -1,6 +1,7 @@
 ---
 name: pr-review
 description: Review an existing GitHub Pull Request as an exact merge candidate and prepare evidence-based inline review comments for GitHub. Use only when a developer asks to review a GitHub PR before merge, inspect its PR description and checks, or publish a pending PR review; do not use for general code review, commit review, branch review, or working-tree review.
+license: BSD-3-Clause
 ---
 
 # GitHub Pull Request Review
