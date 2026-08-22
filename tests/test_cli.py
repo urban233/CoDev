@@ -14,6 +14,7 @@ from codev_workflow.cli import (
     _skill_name,
     main,
 )
+from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
 
 
@@ -234,6 +235,116 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(0, main(["check", "--target", str(target)]))
             self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
+
+    def _make_update_conflict(self, target: Path) -> tuple[str, bytes]:
+        """init, then arrange exactly one conflict for the next `update`:
+        `.codex/agents/code-audit.toml` both changes upstream (via a patched
+        `installer._bundle_files`, left active on the test) and picks up a
+        local edit."""
+        with redirect_stdout(StringIO()):
+            self.assertEqual(
+                0,
+                main(
+                    ["init", "--target", str(target), "--agent-platform", "codex"]
+                ),
+            )
+        from codev_workflow import installer as installer_module
+
+        relative = ".codex/agents/code-audit.toml"
+        current_bundle = installer_module._bundle_files(("codex",))
+        changed_bundle = dict(current_bundle)
+        upstream = current_bundle[relative] + b"\n# upstream change\n"
+        changed_bundle[relative] = upstream
+        destination = target / Path(relative)
+        destination.write_bytes(destination.read_bytes() + b"\n# local edit\n")
+        patcher = patch.object(
+            installer_module, "_bundle_files", return_value=changed_bundle
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return relative, upstream
+
+    def test_update_aborts_on_conflict_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._make_update_conflict(target)
+            with redirect_stdout(StringIO()) as out:
+                code = main(["update", "--target", str(target)])
+            self.assertEqual(2, code)
+            self.assertIn("conflict", out.getvalue().lower())
+
+    def test_update_on_conflict_keep_resolves_and_applies_the_rest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, _upstream = self._make_update_conflict(target)
+            local_before = (target / Path(relative)).read_bytes()
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--on-conflict",
+                        "keep",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertEqual(local_before, (target / Path(relative)).read_bytes())
+            with redirect_stdout(StringIO()):
+                self.assertEqual(0, main(["diff", "--target", str(target)]))
+
+    def test_update_on_conflict_override_adopts_upstream(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, upstream = self._make_update_conflict(target)
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--on-conflict",
+                        "override",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertEqual(upstream, (target / Path(relative)).read_bytes())
+
+    def test_update_resolve_and_on_conflict_together_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._make_update_conflict(target)
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()) as err:
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--resolve",
+                        "--on-conflict",
+                        "keep",
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("either --resolve or --on-conflict", err.getvalue())
+
+    def test_update_resolve_flag_runs_the_wizard_and_applies_its_choices(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, upstream = self._make_update_conflict(target)
+            with (
+                redirect_stdout(StringIO()),
+                patch(
+                    "codev_workflow.cli.run_wizard",
+                    return_value={relative: Resolution.OVERRIDE},
+                ) as wizard,
+            ):
+                code = main(["update", "--target", str(target), "--resolve"])
+            self.assertEqual(0, code)
+            wizard.assert_called_once()
+            self.assertEqual(upstream, (target / Path(relative)).read_bytes())
 
     def test_task_lifecycle_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

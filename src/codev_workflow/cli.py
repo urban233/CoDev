@@ -17,6 +17,7 @@ from codev_workflow import git_ops as git_ops_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
+from codev_workflow.conflict_wizard import resolve_non_interactive, run_wizard
 from codev_workflow.eval import (
     EvaluationError,
     create_task,
@@ -27,6 +28,7 @@ from codev_workflow.eval_nvidia import VERBS as _NVIDIA_VERBS
 from codev_workflow.eval_nvidia import run_verb as _run_nvidia_verb
 from codev_workflow.installer import (
     CoDevError,
+    Resolution,
     _read_lock,
     apply_plan,
     check_project,
@@ -128,6 +130,20 @@ def _parser() -> argparse.ArgumentParser:
         choices=("none", "all", "python", "typescript"),
         default=None,
         help="code style audit skills to select",
+    )
+    update.add_argument(
+        "--resolve",
+        action="store_true",
+        help="walk conflicts interactively instead of aborting on them",
+    )
+    update.add_argument(
+        "--on-conflict",
+        choices=("abort", "override", "keep", "copy", "delete", "skip"),
+        default="abort",
+        help="apply one resolution to every conflict, non-interactively "
+        "(default: abort, the previous behavior; skip applies everything "
+        "else and leaves conflicts pending, unlike abort which writes "
+        "nothing)",
     )
 
     remove = commands.add_parser(
@@ -1337,13 +1353,30 @@ def main(argv: Sequence[str] | None = None) -> int:
                 programming_language=args.programming_language,
             )
             print(format_plan(plan))
-            if plan.conflicts:
+            resolve = getattr(args, "resolve", False)
+            on_conflict = getattr(args, "on_conflict", "abort")
+            if resolve and on_conflict != "abort":
+                raise CoDevError("pass either --resolve or --on-conflict, not both")
+            if plan.conflicts and (not resolve and on_conflict == "abort"):
                 print(f"Update stopped: {len(plan.conflicts)} conflict(s).")
                 return 2
             if args.command == "diff":
                 print("Preview complete; no files were written.")
                 return 0
-            apply_plan(target, plan)
+            resolutions = None
+            if plan.conflicts and resolve:
+                resolutions = run_wizard(target, plan)
+            elif plan.conflicts and on_conflict != "abort":
+                resolutions = resolve_non_interactive(plan, Resolution(on_conflict))
+            unresolved = apply_plan(target, plan, resolutions)
+            if unresolved:
+                print(
+                    f"Updated CoDev bundle to {__version__} in {target}; "
+                    f"{len(unresolved)} conflict(s) still unresolved:"
+                )
+                for op in unresolved:
+                    print(f"  CONFLICT  {op.path} — {op.detail}")
+                return 2
             print(f"Updated CoDev bundle to {__version__} in {target}")
             return 0
 

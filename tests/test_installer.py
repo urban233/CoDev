@@ -721,6 +721,128 @@ class InstallerTests(unittest.TestCase):
 
         self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
 
+    def _make_single_file_conflict(self) -> tuple[str, bytes, bytes]:
+        """Install, then create one conflicted managed file: `codex`'s code-
+        audit agent both changes upstream and gets a local edit. Returns
+        (relative path, local bytes, upstream bytes)."""
+        self.install(("codex",))
+        current_bundle = installer._bundle_files(("codex",))
+        relative = ".codex/agents/code-audit.toml"
+        upstream = current_bundle[relative] + b"\n# upstream change\n"
+        changed_bundle = dict(current_bundle)
+        changed_bundle[relative] = upstream
+        destination = (self.target / Path(relative)).resolve()
+        destination.write_bytes(destination.read_bytes() + b"\n# local edit\n")
+        local = destination.read_bytes()
+        self._bundle_patch = patch.object(
+            installer, "_bundle_files", return_value=changed_bundle
+        )
+        self._bundle_patch.start()
+        self.addCleanup(self._bundle_patch.stop)
+        return relative, local, upstream
+
+    def test_apply_plan_with_override_resolution_adopts_upstream(self) -> None:
+        relative, _local, upstream = self._make_single_file_conflict()
+        plan = installer.plan_update(self.target)
+        conflict = next(item for item in plan.conflicts if item.path == relative)
+        self.assertEqual(upstream, conflict.new_content)
+
+        unresolved = installer.apply_plan(
+            self.target, plan, {relative: installer.Resolution.OVERRIDE}
+        )
+
+        self.assertEqual([], unresolved)
+        self.assertEqual(upstream, (self.target / Path(relative)).read_bytes())
+        self.assertEqual([], installer.plan_update(self.target).conflicts)
+
+    def test_apply_plan_with_keep_resolution_preserves_local_as_new_baseline(
+        self,
+    ) -> None:
+        relative, local, _upstream = self._make_single_file_conflict()
+        plan = installer.plan_update(self.target)
+
+        unresolved = installer.apply_plan(
+            self.target, plan, {relative: installer.Resolution.KEEP}
+        )
+
+        self.assertEqual([], unresolved)
+        self.assertEqual(local, (self.target / Path(relative)).read_bytes())
+        self.assertEqual([], installer.plan_update(self.target).conflicts)
+
+    def test_apply_plan_with_copy_resolution_writes_sidecar_and_stays_conflicted(
+        self,
+    ) -> None:
+        relative, local, upstream = self._make_single_file_conflict()
+        plan = installer.plan_update(self.target)
+
+        unresolved = installer.apply_plan(
+            self.target, plan, {relative: installer.Resolution.COPY}
+        )
+
+        self.assertEqual(1, len(unresolved))
+        self.assertEqual(relative, unresolved[0].path)
+        destination = self.target / Path(relative)
+        self.assertEqual(local, destination.read_bytes())
+        sidecar = installer.copy_sidecar_path(destination)
+        self.assertEqual(upstream, sidecar.read_bytes())
+        self.assertTrue(installer.plan_update(self.target).conflicts)
+
+    def test_apply_plan_with_delete_resolution_removes_the_local_file(self) -> None:
+        relative, _local, _upstream = self._make_single_file_conflict()
+        plan = installer.plan_update(self.target)
+
+        unresolved = installer.apply_plan(
+            self.target, plan, {relative: installer.Resolution.DELETE}
+        )
+
+        self.assertEqual([], unresolved)
+        self.assertFalse((self.target / Path(relative)).exists())
+        replanned = [
+            item for item in installer.plan_update(self.target).operations
+            if item.path == relative
+        ]
+        self.assertEqual(["add"], [item.kind for item in replanned])
+
+    def test_apply_plan_leaves_a_skipped_conflict_untouched_but_writes_the_rest(
+        self,
+    ) -> None:
+        self.install(("codex",))
+        current_bundle = installer._bundle_files(("codex",))
+        first, second = sorted(current_bundle)[:2]
+        changed_bundle = dict(current_bundle)
+        changed_bundle[first] += b"\nupstream one\n"
+        changed_bundle[second] += b"\nupstream two\n"
+        first_path = (self.target / Path(first)).resolve()
+        second_path = (self.target / Path(second)).resolve()
+        second_path.write_bytes(second_path.read_bytes() + b"\nlocal edit\n")
+        local_second = second_path.read_bytes()
+
+        with patch.object(installer, "_bundle_files", return_value=changed_bundle):
+            plan = installer.plan_update(self.target)
+            self.assertTrue(plan.conflicts)
+            unresolved = installer.apply_plan(
+                self.target, plan, {second: installer.Resolution.SKIP}
+            )
+
+        self.assertEqual(1, len(unresolved))
+        self.assertEqual(second, unresolved[0].path)
+        self.assertEqual(changed_bundle[first], first_path.read_bytes())
+        self.assertEqual(local_second, second_path.read_bytes())
+
+    def test_apply_plan_override_without_upstream_content_raises(self) -> None:
+        self.install(("codex",))
+        plan = installer.plan_update(self.target)
+        plan.operations.append(
+            installer.Operation("conflict", "no/such/file.md", "manufactured")
+        )
+
+        with self.assertRaises(installer.CoDevError):
+            installer.apply_plan(
+                self.target,
+                plan,
+                {"no/such/file.md": installer.Resolution.OVERRIDE},
+            )
+
 
 class OpencodeAgentConfigCoverageTests(unittest.TestCase):
     def test_every_bundled_opencode_agent_is_registered(self) -> None:
