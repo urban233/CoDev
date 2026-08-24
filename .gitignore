@@ -16,6 +16,7 @@ dist/
 # the repo root so this doesn't also match docs/features/bazel-migration/.
 /bazel-*
 .tools/
+.bazelbsp
 
 # Local escalation log (ADR-0003) -- deliberately not shared/committed, this
 # project's own dogfood usage of `codev work`.
