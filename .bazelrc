@@ -1,0 +1,6 @@
+# Shared Bazel flags for CoDev. See docs/features/bazel-migration/design.md.
+
+# Local disk cache only for V1 -- no remote cache/execution wiring yet.
+build --disk_cache=~/.cache/codev-bazel-disk-cache
+
+test --test_output=errors

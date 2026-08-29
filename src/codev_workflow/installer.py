@@ -35,6 +35,7 @@ import json
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from importlib import resources
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -236,6 +237,34 @@ class Operation:
     kind: str
     path: str
     detail: str = ""
+    # The upstream bundle's replacement bytes for a "conflict" operation, when
+    # one exists -- absent for conflicts where upstream has nothing to offer
+    # (e.g. a managed file upstream no longer ships at all). Lets a conflict
+    # resolver show a diff and write an "override" without recomputing the
+    # bundle a second time.
+    new_content: bytes | None = field(default=None, repr=False, compare=False)
+
+
+class Resolution(StrEnum):
+    """A user's per-file decision for one "conflict" operation.
+
+    OVERRIDE and COPY require the operation's `new_content` to be set --
+    they are not offered for a conflict where upstream has nothing to write
+    (e.g. a managed file the bundle no longer ships). DELETE is only for
+    that case: it adopts upstream's removal instead of retaining the file.
+    """
+
+    OVERRIDE = "override"
+    KEEP = "keep"
+    COPY = "copy"
+    SKIP = "skip"
+    DELETE = "delete"
+
+
+def copy_sidecar_path(destination: Path) -> Path:
+    """Where an upstream conflict's content is written for a `copy` choice."""
+
+    return destination.with_name(destination.name + ".copy")
 
 
 @dataclass
@@ -1002,12 +1031,22 @@ def plan_update(
                 plan.operations.append(Operation("keep", relative, "new file adopted"))
             else:
                 plan.operations.append(
-                    Operation("conflict", relative, "new bundle file collides locally")
+                    Operation(
+                        "conflict",
+                        relative,
+                        "new bundle file collides locally",
+                        new_content=content,
+                    )
                 )
             continue
         if not destination.is_file():
             plan.operations.append(
-                Operation("conflict", relative, "managed file is missing or not a file")
+                Operation(
+                    "conflict",
+                    relative,
+                    "managed file is missing or not a file",
+                    new_content=content,
+                )
             )
             continue
         current_hash = _sha256(destination.read_bytes())
@@ -1018,11 +1057,21 @@ def plan_update(
             plan.writes[destination] = content
         elif new_hash == old_hash:
             plan.operations.append(
-                Operation("conflict", relative, "managed file has local changes")
+                Operation(
+                    "conflict",
+                    relative,
+                    "managed file has local changes",
+                    new_content=content,
+                )
             )
         else:
             plan.operations.append(
-                Operation("conflict", relative, "local and upstream changes overlap")
+                Operation(
+                    "conflict",
+                    relative,
+                    "local and upstream changes overlap",
+                    new_content=content,
+                )
             )
 
     integrations = lock.get("integrations")
@@ -1076,9 +1125,17 @@ def plan_update(
                 plan.operations.append(
                     Operation("keep", ".opencode/opencode.json", opencode.detail)
                 )
+    conflicted_relatives = {
+        item.path for item in plan.operations if item.kind == "conflict"
+    }
+    lockable_files = {
+        relative: content
+        for relative, content in new_files.items()
+        if relative not in conflicted_relatives
+    }
     plan.lock = _new_lock(
         selected,
-        new_files,
+        lockable_files,
         programming_language=selected_language,
         default_agent_managed=default_managed,
         managed_opencode_agents=managed_opencode_agents,
@@ -1366,28 +1423,76 @@ def plan_adapter_remove(target: Path, platform: str) -> Plan:
     return plan
 
 
-def apply_plan(target: Path, plan: Plan) -> None:
-    if plan.conflicts:
-        raise CoDevError("cannot apply a plan that contains conflicts")
+def apply_plan(
+    target: Path, plan: Plan, resolutions: dict[str, Resolution] | None = None
+) -> list[Operation]:
+    """Write `plan` to `target`. Returns conflicts left unresolved.
+
+    With no `resolutions` (the default), behaves exactly as before: any
+    conflict refuses to write anything at all. Passing `resolutions` (from a
+    conflict wizard or a non-interactive `--on-conflict` policy) instead
+    resolves each conflicted path individually -- OVERRIDE adopts upstream,
+    KEEP adopts the current local content as the new accepted baseline, COPY
+    writes upstream's content beside the file without touching it, and
+    DELETE removes a local file upstream no longer ships. A path with no
+    resolution, or resolved SKIP, is left untouched and reported back so the
+    caller can tell the user what's still outstanding; everything else in
+    the plan -- clean operations and every other resolved conflict -- is
+    still applied together.
+    """
+    if resolutions is None:
+        if plan.conflicts:
+            raise CoDevError("cannot apply a plan that contains conflicts")
+        resolutions = {}
     if plan.lock is None and not plan.remove_lock:
         raise CoDevError("installation plan has no lock state")
     target = target.resolve()
-    for path, content in sorted(plan.writes.items(), key=lambda item: str(item[0])):
+    writes = dict(plan.writes)
+    deletions = set(plan.deletions)
+    lock = plan.lock
+    unresolved: list[Operation] = []
+    for op in plan.conflicts:
+        choice = resolutions.get(op.path, Resolution.SKIP)
+        destination = target / Path(op.path)
+        if choice == Resolution.SKIP:
+            unresolved.append(op)
+        elif choice == Resolution.OVERRIDE:
+            if op.new_content is None:
+                raise CoDevError(f"{op.path}: no upstream content to override with")
+            writes[destination] = op.new_content
+            if lock is not None:
+                lock["files"][op.path] = _sha256(op.new_content)
+        elif choice == Resolution.KEEP:
+            if destination.is_file() and lock is not None:
+                lock["files"][op.path] = _sha256(destination.read_bytes())
+        elif choice == Resolution.COPY:
+            if op.new_content is None:
+                raise CoDevError(f"{op.path}: no upstream content to copy")
+            writes[copy_sidecar_path(destination)] = op.new_content
+            unresolved.append(op)
+        elif choice == Resolution.DELETE:
+            if destination.is_file():
+                deletions.add(destination)
+        else:
+            raise CoDevError(f"unknown conflict resolution: {choice!r}")
+
+    for path, content in sorted(writes.items(), key=lambda item: str(item[0])):
         _atomic_write(path, content)
-    for path in sorted(plan.deletions, key=str):
+    for path in sorted(deletions, key=str):
         path.unlink()
-    for path in sorted(plan.deletions, key=str):
+    for path in sorted(deletions, key=str):
         _remove_empty_parent_dirs(path, target)
     if plan.remove_lock:
         lock_path = target / Path(LOCK_PATH.as_posix())
         lock_path.unlink(missing_ok=True)
         _remove_empty_parent_dirs(lock_path, target)
-        return
-    assert plan.lock is not None
-    lock_content = (json.dumps(plan.lock, indent=2, ensure_ascii=False) + "\n").encode(
+        return unresolved
+    assert lock is not None
+    lock_content = (json.dumps(lock, indent=2, ensure_ascii=False) + "\n").encode(
         "utf-8"
     )
     _atomic_write(target / Path(LOCK_PATH.as_posix()), lock_content)
+    return unresolved
 
 
 def check_project(target: Path) -> CheckResult:

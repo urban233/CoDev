@@ -185,6 +185,27 @@ def read_runtime_version(root: Path) -> str:
     raise ValueError("could not find runtime __version__")
 
 
+_BAZEL_WHEEL_VERSION_RE = re.compile(r'^\s*version\s*=\s*"([^"]+)",\s*$', re.MULTILINE)
+
+
+def read_bazel_wheel_version(root: Path) -> str:
+    """Read the version pinned in packaging/BUILD.bazel's py_wheel target.
+
+    Not Starlark-parseable via tomllib/ast like the other two version
+    sources, so this is a targeted regex read rather than a real parse --
+    packaging/BUILD.bazel has exactly one `version = "..."` attribute
+    (py_wheel's), so this is unambiguous.
+    """
+    path = root / "packaging" / "BUILD.bazel"
+    match = _BAZEL_WHEEL_VERSION_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError("could not find py_wheel version in packaging/BUILD.bazel")
+    version = match.group(1)
+    if VERSION_PATTERN.fullmatch(version) is None:
+        raise ValueError(f"invalid Bazel wheel version: {version!r}")
+    return version
+
+
 def verify(root: Path, tag: str | None = None) -> tuple[str, str]:
     project_version = read_project_version(root)
     runtime_version = read_runtime_version(root)
@@ -192,6 +213,12 @@ def verify(root: Path, tag: str | None = None) -> tuple[str, str]:
         raise ValueError(
             "runtime version "
             f"{runtime_version} does not match project version {project_version}"
+        )
+    bazel_wheel_version = read_bazel_wheel_version(root)
+    if bazel_wheel_version != project_version:
+        raise ValueError(
+            "packaging/BUILD.bazel py_wheel version "
+            f"{bazel_wheel_version} does not match project version {project_version}"
         )
     if tag is not None and tag != f"v{project_version}":
         raise ValueError(

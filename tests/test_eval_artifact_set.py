@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -194,7 +194,7 @@ class ArtifactSetRealSkillTests(unittest.TestCase):
 
     def _run(self, argv: list[str]) -> tuple[int, str]:
         output = StringIO()
-        with redirect_stdout(output):
+        with redirect_stdout(output), redirect_stderr(StringIO()):
             code = main(argv)
         return code, output.getvalue()
 

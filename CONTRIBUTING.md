@@ -9,6 +9,24 @@ CoDev accepts focused changes with observable evidence.
 4. Run the commands in the README before requesting review.
 5. Update the changelog when users or installed artifacts are affected.
 
+`tests/` runs as a single `unittest discover` pass (~30s) and has no
+markers-based split, so keep every test in it fast and hermetic by default.
+Three sizes coexist by convention, not by tooling:
+- **small** — in-process only, no subprocess (most of the suite: `task`,
+  `installer`, `cli`, `config`, ...).
+- **medium** — shells out to a real, fast, local binary (`git`, a `python`
+  actor/judge script) inside a scratch `tempfile.TemporaryDirectory()`; still
+  expected to be fast and deterministic.
+- **large** — needs real external infrastructure (a Linux Docker daemon, a
+  live NVIDIA SkillEvaluator credential). These self-skip via a documented
+  `skipUnless`/`skipIf` guard when that infrastructure isn't available —
+  never silently pass, never hard-fail the run for a missing optional
+  dependency. See `tests/test_eval_docker_benchmark.py` and
+  `tests/test_eval_nvidia.py` for the pattern.
+
+A new large test should follow that same skip-gated pattern rather than
+being added to the default run unconditionally.
+
 Changes to bundled skills, agent policy, or workflow rules must also validate
 the behavioral scenario catalog: run `scripts/validate-development-workflow.py
 --repo src/codev_workflow/bundle` and `scripts/evaluate-development-workflow.py

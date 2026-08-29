@@ -1,0 +1,28 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+py_library(
+    name = "scripts",
+    srcs = glob(["*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)
+
+# --repo defaults to Path(__file__).resolve().parents[1], so these two need
+# the bundle (and the rest of the repo) present as data to behave the same
+# under `bazel run` as they do invoked directly with `python`.
+py_binary(
+    name = "validate_development_workflow",
+    srcs = ["validate-development-workflow.py"],
+    main = "validate-development-workflow.py",
+    data = ["//src/codev_workflow:codev_workflow"],
+)
+
+py_binary(
+    name = "evaluate_development_workflow",
+    srcs = ["evaluate-development-workflow.py"],
+    main = "evaluate-development-workflow.py",
+    data = [
+        "//evals/development-workflow:scenarios.json",
+        "//src/codev_workflow:codev_workflow",
+    ],
+)

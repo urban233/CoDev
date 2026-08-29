@@ -1,0 +1,65 @@
+"""CoDev build graph. See docs/features/bazel-migration/design.md."""
+
+module(name = "codev_workflow", version = "0.0.0")
+
+bazel_dep(name = "rules_python", version = "2.3.2")
+bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+# Needed directly (not just transitively) because //packaging:wheel.publish
+# selects on @platforms//os:windows -- bzlmod repo visibility requires the
+# consuming module to declare it, even though something in the graph
+# already pulls it in transitively.
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# Disables implicit __init__.py synthesis (deprecated upstream, see
+# https://github.com/bazel-contrib/rules_python/issues/2945) for our own
+# targets -- confirmed clean via `bazel build //src/... //tests/...
+# //scripts/...` producing zero warnings. `scripts/` and `packaging/` have
+# no __init__.py on disk and don't need one: PEP 420 namespace packages
+# make `from scripts import ...` work without it. Two warnings remain from
+# rules_python's own internal targets (py_console_script_gen_py, used by
+# //:mypy; wheelmaker, used by //packaging:wheel) -- built inside the
+# rules_python repo itself, this config doesn't reach them. Cosmetic,
+# upstream, not ours to fix short of patching rules_python.
+rules_python_config = use_extension("@rules_python//python/extensions:config.bzl", "config")
+rules_python_config.explicit_init_py(default = True)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    python_version = "3.13",
+    is_default = True,
+)
+python.toolchain(
+    python_version = "3.12",
+)
+python.toolchain(
+    python_version = "3.11",
+)
+use_repo(python, "python_3_11", "python_3_12", "python_3_13")
+
+# requirements_lock.txt is generated from uv.lock via `just lock`
+# (`uv export --frozen --no-emit-project --all-extras`). uv.lock stays the
+# source of truth -- never hand-edit requirements_lock.txt. One hub per
+# toolchain version: verified that `uv export --python 3.11/3.12/3.13`
+# produce byte-identical dependency content for this project (no
+# version-specific wheel selection in this dependency set), so all three
+# hubs are resolved from the same requirements_lock.txt -- not because
+# they're assumed equivalent, but because that was checked directly.
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pip",
+    python_version = "3.13",
+    requirements_lock = "//:requirements_lock.txt",
+)
+pip.parse(
+    hub_name = "pip_312",
+    python_version = "3.12",
+    requirements_lock = "//:requirements_lock.txt",
+)
+pip.parse(
+    hub_name = "pip_311",
+    python_version = "3.11",
+    requirements_lock = "//:requirements_lock.txt",
+)
+use_repo(pip, "pip", "pip_311", "pip_312")

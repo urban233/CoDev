@@ -147,6 +147,55 @@ def valid_class(name):
     return bool(re.fullmatch(r"_?[A-Z][A-Za-z0-9]*", name))
 
 
+def confirmed_class_usages(tree):
+    """Return names confirmed as classes by a constructor call or base class.
+
+    A PascalCase import is not always a class -- vendor modules such as Qt's
+    `QtCore` follow the same casing but are only ever used as a namespace
+    (`QtCore.QObject`). Requiring a confirming call or base-class usage keeps
+    `import-class-not-module` from misreading a PascalCase module as a class.
+
+    Args:
+        tree: Parsed module syntax tree.
+    Returns:
+        Names used to construct an instance or as a class base.
+    """
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            names.add(node.func.id)
+        elif isinstance(node, ast.ClassDef):
+            names.update(base.id for base in node.bases if isinstance(base, ast.Name))
+    return names
+
+
+def module_only_exempt(module):
+    """Return whether the guide exempts `module` from the modules-only rule.
+
+    Args:
+        module: Dotted module path from a from-import statement.
+    Returns:
+        Whether Google style guide 2.2 exempts this module.
+    """
+    if module in {"typing", "typing_extensions", "collections.abc"}:
+        return True
+    return module == "six.moves" or module.startswith("six.moves.")
+
+
+def module_only_import(module):
+    """Return the module-only import statement and bound name for `module`.
+
+    Args:
+        module: Dotted module path from a from-import statement.
+    Returns:
+        The replacement import statement and the name it binds.
+    """
+    if "." in module:
+        parent, _, child = module.rpartition(".")
+        return f"from {parent} import {child}", child
+    return f"import {module}", module
+
+
 def meaningful_args(node):
     """Return function parameters that need Args entries.
 
@@ -545,15 +594,17 @@ def _check_section_entries(results, root, path, node, sections, section, require
 class Visitor(ast.NodeVisitor):
     """Collect AST-based audit findings without treating methods as nested functions."""
 
-    def __init__(self, root, path):
+    def __init__(self, root, path, class_usages):
         """Initialize the visitor.
 
         Args:
             root: Audit root.
             path: Source path.
+            class_usages: Names confirmed as classes by call or base-class usage.
         """
         self.root, self.path, self.results, self.scopes = root, path, [], ["module"]
         self.bindings = []
+        self.class_usages = class_usages
 
     def visit_Module(self, node):
         """Track names that can shadow built-ins at module scope.
@@ -587,6 +638,11 @@ class Visitor(ast.NodeVisitor):
             add(self.results, self.root, self.path, node, "no-wildcard-imports", "violation", "Wildcard imports are forbidden.")
         if node.level:
             add(self.results, self.root, self.path, node, "absolute-imports", "violation", "Use an absolute import path.")
+        if not node.level and node.module and node.module != "__future__" and not module_only_exempt(node.module):
+            for alias in node.names:
+                if alias.name != "*" and valid_class(alias.name) and (alias.asname or alias.name) in self.class_usages:
+                    new_import, module_ref = module_only_import(node.module)
+                    add(self.results, self.root, self.path, node, "import-class-not-module", "violation", f"Import the module: use `{new_import}` and reference `{module_ref}.{alias.name}`.")
         if node.module == "typing" and any(alias.name == "Text" for alias in node.names):
             add(self.results, self.root, self.path, node, "no-typing-text", "violation", "Use str instead of typing.Text.")
         if node.module in {"typing", "typing_extensions"} and any(alias.name in {"List", "Dict", "Set", "Tuple"} for alias in node.names):
@@ -731,6 +787,296 @@ class Visitor(ast.NodeVisitor):
         self.scopes.pop()
 
 
+class _BindingCollector(ast.NodeVisitor):
+    """Count every identifier bound anywhere in a module, by binding site.
+
+    A name bound in exactly one place (its import) cannot be shadowed
+    anywhere else in the file, which is what makes it safe for
+    `fix_class_imports` to rewrite that name's usages without full scope
+    resolution. This collector does not special-case `match`-statement
+    capture patterns; a name bound only through one of those is not
+    recognized as a shadow.
+    """
+
+    def __init__(self):
+        """Initialize an empty binding index."""
+        self.bindings = {}
+
+    def _bind(self, name, node):
+        """Record one binding site for a name.
+
+        Args:
+            name: Bound identifier.
+            node: Syntax node that binds it.
+        """
+        self.bindings.setdefault(name, []).append(node)
+
+    def visit_Name(self, node):
+        """Record store and delete targets as binding sites.
+
+        Args:
+            node: Name syntax node.
+        """
+        if isinstance(node.ctx, (ast.Store, ast.Del)):
+            self._bind(node.id, node)
+        self.generic_visit(node)
+
+    def visit_alias(self, node):
+        """Record an import alias as a binding site.
+
+        Args:
+            node: Import alias syntax node.
+        """
+        if node.name != "*":
+            self._bind(node.asname or node.name.split(".")[0], node)
+
+    def visit_arg(self, node):
+        """Record a function parameter as a binding site.
+
+        Args:
+            node: Parameter syntax node.
+        """
+        self._bind(node.arg, node)
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        """Record a function name as a binding site.
+
+        Args:
+            node: Function syntax node.
+        """
+        self._bind(node.name, node)
+        self.generic_visit(node)
+
+    def visit_AsyncFunctionDef(self, node):
+        """Record an async function name as a binding site.
+
+        Args:
+            node: Function syntax node.
+        """
+        self._bind(node.name, node)
+        self.generic_visit(node)
+
+    def visit_ClassDef(self, node):
+        """Record a class name as a binding site.
+
+        Args:
+            node: Class syntax node.
+        """
+        self._bind(node.name, node)
+        self.generic_visit(node)
+
+    def visit_ExceptHandler(self, node):
+        """Record an `except ... as name` target as a binding site.
+
+        Args:
+            node: Exception handler syntax node.
+        """
+        if node.name:
+            self._bind(node.name, node)
+        self.generic_visit(node)
+
+    def visit_Global(self, node):
+        """Record a `global` declaration as a binding site.
+
+        Args:
+            node: Global statement syntax node.
+        """
+        for name in node.names:
+            self._bind(name, node)
+
+    def visit_Nonlocal(self, node):
+        """Record a `nonlocal` declaration as a binding site.
+
+        Args:
+            node: Nonlocal statement syntax node.
+        """
+        for name in node.names:
+            self._bind(name, node)
+
+
+def _line_offsets(source):
+    """Return the character offset at which each 1-indexed source line starts.
+
+    Args:
+        source: Python source text.
+    Returns:
+        Cumulative offsets, one per line plus a trailing sentinel.
+    """
+    offsets = [0]
+    for line in source.splitlines(keepends=True):
+        offsets.append(offsets[-1] + len(line))
+    return offsets
+
+
+def _apply_edits(source, edits):
+    """Replace non-overlapping (line, column) source spans, last edit first.
+
+    Args:
+        source: Python source text.
+        edits: Tuples of (start_line, start_column, end_line, end_column, replacement).
+    Returns:
+        The rewritten source text.
+    """
+    line_offsets = _line_offsets(source)
+    spans = sorted(
+        (
+            (
+                line_offsets[start_line - 1] + start_column,
+                line_offsets[end_line - 1] + end_column,
+                replacement,
+            )
+            for start_line, start_column, end_line, end_column, replacement in edits
+        ),
+        reverse=True,
+    )
+    result = source
+    for start_offset, end_offset, replacement in spans:
+        result = result[:start_offset] + replacement + result[end_offset:]
+    return result
+
+
+def fix_class_imports(source, path, root):
+    """Rewrite unambiguous direct class imports to module-qualified imports.
+
+    Only rewrites a `from module import ClassName` alias when: the file is
+    not an `__init__.py` re-export surface; the name is confirmed as a class
+    by a constructor call or base-class usage elsewhere in the file (so a
+    PascalCase module such as Qt's `QtCore` is never mistaken for a class);
+    the bound name has no other binding anywhere in the file, so every other
+    occurrence must be a plain reference to this import; the class name never
+    appears inside a string literal (a possible forward-reference annotation
+    or a dynamic lookup); and the module-qualified name the rewrite would
+    introduce is not already bound to something else. Every other case is
+    left for `Visitor` to report as a manual finding instead. Each surviving
+    alias becomes its own `from module import name` line, matching the
+    one-symbol-per-import rule; fixing two statements that import from the
+    same module can still leave duplicate module-import lines, which a
+    follow-up Ruff pass consolidates.
+
+    Args:
+        source: Python source text.
+        path: Source path.
+        root: Audit root.
+    Returns:
+        The possibly-rewritten source and findings describing each rewrite.
+    """
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError:
+        return source, []
+    if path.name == "__init__.py":
+        return source, []
+
+    collector = _BindingCollector()
+    collector.visit(tree)
+    binding_counts = {name: len(sites) for name, sites in collector.bindings.items()}
+    class_usages = confirmed_class_usages(tree)
+    string_texts = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    names_by_id = {}
+    for candidate in ast.walk(tree):
+        if isinstance(candidate, ast.Name):
+            names_by_id.setdefault(candidate.id, []).append(candidate)
+
+    def referenced_in_a_string(name):
+        """Return whether `name` appears as a whole word in any string literal.
+
+        Args:
+            name: Candidate identifier.
+        Returns:
+            Whether a string literal in the file mentions the name.
+        """
+        pattern = re.compile(rf"\b{re.escape(name)}\b")
+        return any(pattern.search(text) for text in string_texts)
+
+    edits = []
+    fixes = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level or node.module is None or node.module == "__future__":
+            continue
+        if module_only_exempt(node.module):
+            continue
+        fixable = [
+            alias
+            for alias in node.names
+            if alias.name != "*"
+            and valid_class(alias.name)
+            and (alias.asname or alias.name) in class_usages
+            and binding_counts.get(alias.asname or alias.name, 0) == 1
+            and not referenced_in_a_string(alias.asname or alias.name)
+        ]
+        if not fixable:
+            continue
+        new_import, module_ref = module_only_import(node.module)
+        if binding_counts.get(module_ref, 0) != 0:
+            continue
+        kept = [
+            alias.name if alias.asname is None else f"{alias.name} as {alias.asname}"
+            for alias in node.names
+            if alias not in fixable and alias.name != "*"
+        ]
+        indent = " " * node.col_offset
+        replacement = f"\n{indent}".join(
+            [f"from {node.module} import {name}" for name in kept] + [new_import]
+        )
+        edits.append(
+            (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, replacement)
+        )
+        for alias in fixable:
+            bound_name = alias.asname or alias.name
+            for name_node in names_by_id.get(bound_name, []):
+                edits.append(
+                    (
+                        name_node.lineno,
+                        name_node.col_offset,
+                        name_node.end_lineno,
+                        name_node.end_col_offset,
+                        f"{module_ref}.{alias.name}",
+                    )
+                )
+            fixes.append(
+                Finding(
+                    "fixed",
+                    "import-class-not-module",
+                    path.relative_to(root).as_posix(),
+                    node.lineno,
+                    node.col_offset + 1,
+                    f"Rewrote `{node.module}` import of `{alias.name}` to `{new_import}` "
+                    f"and qualified usages as `{module_ref}.{alias.name}`.",
+                )
+            )
+    if not edits:
+        return source, []
+    return _apply_edits(source, edits), fixes
+
+
+def fix_file(path, root):
+    """Apply the class-import autofix to one file and report what changed.
+
+    Args:
+        path: Source path.
+        root: Audit root.
+    Returns:
+        Findings describing each import this rewrote.
+    """
+    try:
+        with tokenize.open(path) as source_file:
+            source = source_file.read()
+            encoding = source_file.encoding
+    except (OSError, SyntaxError, UnicodeError):
+        return []
+    new_source, fixes = fix_class_imports(source, path, root)
+    if fixes and new_source != source:
+        path.write_text(new_source, encoding=encoding)
+    return fixes
+
+
 def token_findings(source, root, path):
     """Check comments, punctuation, and tokenization.
 
@@ -799,7 +1145,7 @@ def audit(path, root):
     except SyntaxError as error:
         results.append(Finding("violation", "syntax", path.relative_to(root).as_posix(), error.lineno or 1, error.offset or 1, error.msg))
     else:
-        visitor = Visitor(root, path)
+        visitor = Visitor(root, path, confirmed_class_usages(tree))
         visitor.visit(tree)
         results.extend(visitor.results)
         if ast.get_docstring(tree) is None:
@@ -817,13 +1163,27 @@ def main():
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=pathlib.Path, default=pathlib.Path.cwd())
-    root = parser.parse_args().root.resolve()
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help=(
+            "Rewrite unambiguous direct class imports to module imports before "
+            "reporting findings. Only for the approved apply phase; never pass "
+            "this during the read-only audit and plan phase."
+        ),
+    )
+    args = parser.parse_args()
+    root = args.root.resolve()
     paths = sorted(path for path in root.rglob("*.py") if not any(part.lower() in EXCLUDED for part in path.relative_to(root).parts))
+    fixes = [fix for path in paths for fix in fix_file(path, root)] if args.fix else []
     findings = [finding for path in paths for finding in audit(path, root)]
+    for fix in fixes:
+        print(json.dumps(dataclasses.asdict(fix), sort_keys=True))
     for finding in findings:
         print(json.dumps(dataclasses.asdict(finding), sort_keys=True))
     violations = sum(finding.level == "violation" for finding in findings)
-    print(f"Checked {len(paths)} Python files: {violations} violations.", file=sys.stderr)
+    fix_summary = f" {len(fixes)} import(s) rewritten." if args.fix else ""
+    print(f"Checked {len(paths)} Python files: {violations} violations.{fix_summary}", file=sys.stderr)
     return 1 if violations else 0
 
 

@@ -52,6 +52,28 @@ jobs:
           python scripts/evaluate-development-workflow.py
           --repo .
           --self-test
+      # This one matrix leg (Ubuntu, 3.13) also drives the whole Bazel/just
+      # surface for every Bazel-supported Python version (3.11/3.12/3.13 --
+      # see docs/features/bazel-migration/design.md's "Toolchain and
+      # Multi-Python Strategy"), supplementing rather than replacing the
+      # raw-command matrix above. It's also the first real confirmation the
+      # Bazel graph works on Linux, not just the macOS machine it was built
+      # on.
+      - name: Set up Bazel
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        uses: bazel-contrib/setup-bazel@0.19.0
+      - name: Set up just
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        uses: extractions/setup-just@v3
+      - name: Run unit tests under Bazel (Linux, Python 3.11/3.12/3.13)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: just test-all
+      - name: Validate bundled workflow catalog under Bazel
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: just validate-catalog
+      - name: Self-test behavioral evaluator under Bazel
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: just self-test-evaluator
 
   quality:
     runs-on: ubuntu-latest
@@ -63,22 +85,28 @@ jobs:
           cache: pip
       - name: Install development tools
         run: python -m pip install -e ".[dev]"
+      - uses: astral-sh/setup-uv@v6
+      - uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: extractions/setup-just@v3
       - name: Ruff lint
-        run: python -m ruff check .
+        run: just lint
       - name: Ruff format
-        run: python -m ruff format --check .
+        run: just fmt-check
       - name: Type check
-        run: python -m mypy
-      - name: Build distributions
-        run: python -m build
-      - name: Validate distribution metadata
-        run: python -m twine check dist/*
-      - name: Smoke-test built wheel
-        run: |
-          python -m venv .release-venv
-          .release-venv/bin/python -m pip install --no-deps dist/*.whl
-          .release-venv/bin/codev --version
-           .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['architecture-maintainability-specialist.toml', 'builder.toml', 'code-audit-gate.toml.template', 'code-audit.toml.template', 'concurrency-specialist.toml', 'correctness-tests-specialist.toml', 'lightweight-reviewer.toml', 'orchestrator.toml', 'outer-loop-runner.toml', 'planner.toml', 'reviewer.toml', 'rollout-specialist.toml', 'security-data-specialist.toml']"
+        run: just typecheck
+      - name: Verify requirements_lock.txt matches uv.lock
+        run: just lock-check
+      # `just dist` builds python -m build's sdist (py_wheel has no sdist
+      # equivalent) plus the Bazel-built wheel, parity-checking the latter
+      # against python -m build's wheel before swapping it in -- so from
+      # here on, dist/*.whl is the Bazel wheel, the real artifact this job
+      # uploads and prepare-release/attest/publish later consume. Same
+      # command as a human running `just dist && just verify-dist` locally
+      # -- see docs/features/bazel-migration/design.md's "PyPI Packaging".
+      - name: Build release distributions (sdist + Bazel wheel)
+        run: just dist
+      - name: Validate distributions and smoke-test the wheel
+        run: just verify-dist
       - name: Upload tested distributions
         uses: actions/upload-artifact@v4
         with:

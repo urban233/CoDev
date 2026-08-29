@@ -43,6 +43,7 @@ from codev_workflow.cli import (
     main,
 )
 from codev_workflow.git_ops import GitOpsError
+from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
 
 
@@ -94,7 +95,7 @@ class CliTests(unittest.TestCase):
     def test_init_check_diff_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with redirect_stdout(StringIO()):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 self.assertEqual(
                     0,
                     main(
@@ -173,7 +174,8 @@ class CliTests(unittest.TestCase):
             self.assertTrue(
                 (target / ".agents/skills/review-change/SKILL.md").is_file()
             )
-            self.assertEqual(0, main(["check", "--target", str(target)]))
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                self.assertEqual(0, main(["check", "--target", str(target)]))
 
     def test_programming_language_flag_selects_audit_skill(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -236,7 +238,7 @@ class CliTests(unittest.TestCase):
     def test_update_can_add_codex_to_an_existing_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            with redirect_stdout(StringIO()):
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 self.assertEqual(
                     0,
                     main(
@@ -263,6 +265,114 @@ class CliTests(unittest.TestCase):
                 )
                 self.assertEqual(0, main(["check", "--target", str(target)]))
             self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
+
+    def _make_update_conflict(self, target: Path) -> tuple[str, bytes]:
+        """init, then arrange exactly one conflict for the next `update`:
+        `.codex/agents/code-audit.toml` both changes upstream (via a patched
+        `installer._bundle_files`, left active on the test) and picks up a
+        local edit."""
+        with redirect_stdout(StringIO()):
+            self.assertEqual(
+                0,
+                main(["init", "--target", str(target), "--agent-platform", "codex"]),
+            )
+        from codev_workflow import installer as installer_module
+
+        relative = ".codex/agents/code-audit.toml"
+        current_bundle = installer_module._bundle_files(("codex",))
+        changed_bundle = dict(current_bundle)
+        upstream = current_bundle[relative] + b"\n# upstream change\n"
+        changed_bundle[relative] = upstream
+        destination = target / Path(relative)
+        destination.write_bytes(destination.read_bytes() + b"\n# local edit\n")
+        patcher = patch.object(
+            installer_module, "_bundle_files", return_value=changed_bundle
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return relative, upstream
+
+    def test_update_aborts_on_conflict_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._make_update_conflict(target)
+            with redirect_stdout(StringIO()) as out:
+                code = main(["update", "--target", str(target)])
+            self.assertEqual(2, code)
+            self.assertIn("conflict", out.getvalue().lower())
+
+    def test_update_on_conflict_keep_resolves_and_applies_the_rest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, _upstream = self._make_update_conflict(target)
+            local_before = (target / Path(relative)).read_bytes()
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--on-conflict",
+                        "keep",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertEqual(local_before, (target / Path(relative)).read_bytes())
+            with redirect_stdout(StringIO()):
+                self.assertEqual(0, main(["diff", "--target", str(target)]))
+
+    def test_update_on_conflict_override_adopts_upstream(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, upstream = self._make_update_conflict(target)
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--on-conflict",
+                        "override",
+                    ]
+                )
+            self.assertEqual(0, code)
+            self.assertEqual(upstream, (target / Path(relative)).read_bytes())
+
+    def test_update_resolve_and_on_conflict_together_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._make_update_conflict(target)
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()) as err:
+                code = main(
+                    [
+                        "update",
+                        "--target",
+                        str(target),
+                        "--resolve",
+                        "--on-conflict",
+                        "keep",
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("either --resolve or --on-conflict", err.getvalue())
+
+    def test_update_resolve_flag_runs_the_wizard_and_applies_its_choices(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            relative, upstream = self._make_update_conflict(target)
+            with (
+                redirect_stdout(StringIO()),
+                patch(
+                    "codev_workflow.cli.run_wizard",
+                    return_value={relative: Resolution.OVERRIDE},
+                ) as wizard,
+            ):
+                code = main(["update", "--target", str(target), "--resolve"])
+            self.assertEqual(0, code)
+            wizard.assert_called_once()
+            self.assertEqual(upstream, (target / Path(relative)).read_bytes())
 
     def test_task_lifecycle_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1624,15 +1734,16 @@ class CliTests(unittest.TestCase):
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
-            code = main(
-                [
-                    "adapter",
-                    "remove",
-                    "codex",
-                    "--target",
-                    str(target),
-                ]
-            )
+            with redirect_stderr(StringIO()):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "codex",
+                        "--target",
+                        str(target),
+                    ]
+                )
             self.assertEqual(2, code)
 
     def test_adapter_remove_not_installed_shows_error(self) -> None:
@@ -1640,15 +1751,16 @@ class CliTests(unittest.TestCase):
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "codex"])
-            code = main(
-                [
-                    "adapter",
-                    "remove",
-                    "junie",
-                    "--target",
-                    str(target),
-                ]
-            )
+            with redirect_stderr(StringIO()):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "junie",
+                        "--target",
+                        str(target),
+                    ]
+                )
             self.assertEqual(2, code)
 
     def test_config_set_get_list_round_trip(self) -> None:
@@ -1729,7 +1841,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual([], _apply_deprecated_aliases([]))
 
     def test_eval_task_run_baseline_flag_maps_to_with_skill_false(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             code = main(
                 [
                     "eval",
@@ -1747,12 +1862,18 @@ class CliTests(unittest.TestCase):
         self.assertFalse(evaluate_mock.call_args.kwargs["with_skill"])
 
     def test_eval_task_run_defaults_to_with_skill(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertTrue(evaluate_mock.call_args.kwargs["with_skill"])
 
     def test_eval_task_run_agent_flag_overrides_opencode_executable(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(
                 [
                     "eval",
@@ -1772,17 +1893,26 @@ class CliTests(unittest.TestCase):
         )
 
     def test_eval_task_run_without_agent_flag_omits_opencode_kwarg(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertNotIn("opencode", evaluate_mock.call_args.kwargs)
 
     def test_eval_task_run_defaults_sandbox_to_worktree(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(["eval", "task", "run", "name", "--target", "T", "--output", "O"])
         self.assertEqual("worktree", evaluate_mock.call_args.kwargs["sandbox"])
 
     def test_eval_task_run_sandbox_docker_flag_is_forwarded(self) -> None:
-        with patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock:
+        with (
+            patch("codev_workflow.cli.evaluate", return_value=True) as evaluate_mock,
+            redirect_stdout(StringIO()),
+        ):
             main(
                 [
                     "eval",

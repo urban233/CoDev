@@ -611,7 +611,10 @@ class TaskContractTests(unittest.TestCase):
             )
             actor.chmod(actor.stat().st_mode | 0o111)
             self.assertTrue(evaluate("sample", root, output, opencode=str(actor)))
-            time.sleep(0.2)
+            # Must outlast the child's own 2s sleep: a shorter wait would
+            # pass identically whether cleanup killed the child or cleanup
+            # is a no-op and the child just hasn't finished sleeping yet.
+            time.sleep(2.5)
             self.assertFalse(late.exists())
 
     def test_judge_rejects_false_pass_from_unrelated_or_extra_output(self) -> None:

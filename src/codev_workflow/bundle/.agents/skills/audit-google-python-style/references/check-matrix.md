@@ -4,6 +4,7 @@
 | --- | --- | --- | --- |
 | Syntax and unreadable source | supplemental checker | violation | None; standard library only. |
 | One module/symbol per import; no wildcard imports | supplemental checker | violation | None. |
+| Direct class imports (`from module import ClassName`) | supplemental checker | violation | Exempt: `typing`, `typing_extensions`, `collections.abc`, `six.moves` (guide 2.2). `--fix` (Phase B step 2 only) rewrites a name only when it is confirmed as a class by a call or base-class usage elsewhere in the file (a PascalCase module such as Qt's `QtCore` is never mistaken for a class), has no other binding in the file, never appears inside a string literal, is not in `__init__.py`, and the module name the rewrite would introduce has no existing binding; every other case is left as this same finding for manual resolution. |
 | PascalCase classes; snake_case functions/methods/parameters/bindings; no tmp_ | checker plus actor | violation | Dunder/private names, uppercase constants, and exact AST visitor overrides are documented exceptions. |
 | Mutable function defaults | supplemental checker | violation or review | List/dict/set literals, comprehensions, and confirmed built-in constructors are violations in positional and keyword-only defaults; shadowed or uncertain constructor names require review. |
 | Docstrings and summaries | supplemental checker plus actor | violation | Modules, classes, public/private functions and methods; summaries and logical section descriptions end with periods. |
@@ -16,11 +17,6 @@
 | Exclusions | supplemental checker | policy | Case-insensitive `.agents`, caches, build output, generated, vendor, site-packages, and related excluded components. |
 | Ruff lint and formatting | pymake/Ruff wrapper | report separately | Never run Pylint; report unavailable wrappers honestly. |
 | Types and contextual design | actor judgment | review | Exceptions, state, resources, APIs, and behavior require context. |
-
-Phase A is read-only and ends `APPROVAL REQUIRED`. Phase B is limited to the
-human-approved exact plan. The actor must never inspect, invoke, copy, import, or
-rely on evaluation-only verifier/oracle scripts. `check_audit.py` belongs only to
-the Phase B harness.
 
 ## Independent coverage boundary
 

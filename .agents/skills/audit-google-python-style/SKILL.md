@@ -59,7 +59,9 @@ documentation findings. The actor owns contextual judgment for exceptions,
 resources, state, annotations, design, and consistency. Review these rule
 families independently:
 
-* Imports: one module or symbol per import statement; no wildcard imports.
+* Imports: one module or symbol per import statement; no wildcard imports;
+  import the module, not an individual class, except from `typing`,
+  `typing_extensions`, `collections.abc`, and `six.moves`.
 * Naming: PascalCase classes; snake_case functions, methods, parameters, and
   variables; no `tmp_` bindings; preserve precise dunder/private names,
   uppercase constants, and exact AST visitor dispatch overrides.
@@ -111,11 +113,24 @@ Apply fixes in this order:
    selection. Enable all groups unconditionally. `B006`, naming-convention
    violations (N-rules), docstring content, and all comment findings are flagged
    by Ruff but never auto-fixed; those categories always require manual edits in
-   step 2. Report any unavailable tool honestly; never claim a check passed that
+   step 3. Report any unavailable tool honestly; never claim a check passed that
    did not run.
-2. Make targeted manual edits for remaining `violation`-level findings in this
+2. Run `check_google_rules.py --root <root> --fix` to mechanically rewrite
+   unambiguous `import-class-not-module` findings (a direct
+   `from module import ClassName` instead of the module itself). It reports
+   exactly which imports it rewrote and leaves every case it cannot safely
+   resolve untouched, as an ordinary finding for step 3: a shadowed name, an
+   `__init__.py` re-export surface, a class name referenced inside a string,
+   a name collision with the module it would introduce, or a name never
+   confirmed as a class by a constructor call or base-class usage elsewhere
+   in the file (this last guard keeps a PascalCase module, such as Qt's
+   `QtCore`, from being mistaken for a class). Rewriting two statements that
+   import from the same module can leave duplicate module-import lines;
+   step 1's Ruff pass, re-run in step 4, consolidates them.
+3. Make targeted manual edits for remaining `violation`-level findings in this
    order:
-   - *Imports*: split multi-symbol import and from-import statements; replace
+   - *Imports*: resolve any `import-class-not-module` finding step 2 left
+     unfixed; split multi-symbol import and from-import statements; replace
      wildcard imports with the explicit named symbols actually used in the file
      (scan for unqualified names not defined locally, then cross-reference with
      the imported module's `__all__` to confirm which symbols the wildcard
@@ -141,9 +156,10 @@ Apply fixes in this order:
      period-ended entries; remove backtick and `:class:` markup from docstrings.
    - *Comments*: remove backtick and `:class:` markup; add terminal periods to
      all non-header, non-marker inline comments.
-3. Re-run the supplemental checker; apply targeted fixes for any remaining
-   `violation`-level findings and repeat until the checker reports zero
-   `violation`-level findings in the approved scope.
+4. Re-run the supplemental checker (without `--fix`, since steps 2 and 3
+   already applied every rewrite this scope approves); apply targeted fixes
+   for any remaining `violation`-level findings and repeat until the checker
+   reports zero `violation`-level findings in the approved scope.
 
 For residual `review`-level findings after all violations are resolved, apply a
 fix only when the improvement is unambiguous:
