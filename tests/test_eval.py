@@ -713,8 +713,12 @@ class TaskContractTests(unittest.TestCase):
         # when the real report is present later in the same string.
         raw = "\n".join(
             [
-                json.dumps({"type": "text", "part": {"text": "Understand: I'll begin."}}),
-                json.dumps({"type": "text", "part": {"text": "The target has issues."}}),
+                json.dumps(
+                    {"type": "text", "part": {"text": "Understand: I'll begin."}}
+                ),
+                json.dumps(
+                    {"type": "text", "part": {"text": "The target has issues."}}
+                ),
                 json.dumps({"type": "text", "part": {"text": "COMPLETED."}}),
             ]
         )

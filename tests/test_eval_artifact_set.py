@@ -67,35 +67,56 @@ if skill_present:
                 "id": "f1",
                 "location": "src/pyssa/controllers/delete_project_controller.py",
                 "category": "imports",
-                "summary": "Replace the wildcard `from math import *` with explicit named imports.",
+                "summary": (
+                    "Replace the wildcard `from math import *` with explicit "
+                    "named imports."
+                ),
             }},
             {{
                 "id": "f2",
-                "location": "src/pyssa/controllers/delete_project_controller.py tmp_dialog",
+                "location": (
+                    "src/pyssa/controllers/delete_project_controller.py "
+                    "tmp_dialog"
+                ),
                 "category": "naming",
-                "summary": "Rename the illegal tmp_ binding tmp_dialog to a descriptive name.",
+                "summary": (
+                    "Rename the illegal tmp_ binding tmp_dialog to a "
+                    "descriptive name."
+                ),
             }},
             {{
                 "id": "f3",
-                "location": "src/pyssa/controllers/delete_project_controller.py helper_panel",
+                "location": (
+                    "src/pyssa/controllers/delete_project_controller.py "
+                    "helper_panel"
+                ),
                 "category": "naming",
                 "summary": "Rename class helper_panel to PascalCase HelperPanel.",
             }},
             {{
                 "id": "f4",
-                "location": "src/pyssa/controllers/delete_project_controller.py FormatData",
+                "location": (
+                    "src/pyssa/controllers/delete_project_controller.py "
+                    "FormatData"
+                ),
                 "category": "naming",
                 "summary": "Rename method FormatData to snake_case format_data.",
             }},
             {{
                 "id": "f5",
-                "location": "src/pyssa/controllers/delete_project_controller.py get_view",
+                "location": (
+                    "src/pyssa/controllers/delete_project_controller.py "
+                    "get_view"
+                ),
                 "category": "documentation",
                 "summary": "Add a missing docstring to method get_view.",
             }},
             {{
                 "id": "f6",
-                "location": "src/pyssa/controllers/delete_project_controller.py __init__ a_parent",
+                "location": (
+                    "src/pyssa/controllers/delete_project_controller.py "
+                    "__init__ a_parent"
+                ),
                 "category": "documentation",
                 "summary": "Document the missing Args entry for parameter a_parent.",
             }},

@@ -35,16 +35,23 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-
+from types import ModuleType
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER_PATH = ROOT / ".agents/skills/audit-google-python-style/scripts/check_google_rules.py"
-BUNDLED_CHECKER_PATH = ROOT / "src/codev_workflow/bundle/.agents/skills/audit-google-python-style/scripts/check_google_rules.py"
+CHECKER_PATH = (
+    ROOT / ".agents/skills/audit-google-python-style/scripts/check_google_rules.py"
+)
+BUNDLED_CHECKER_PATH = (
+    ROOT / "src/codev_workflow/bundle/.agents/skills/audit-google-python-style/"
+    "scripts/check_google_rules.py"
+)
 
 
-def load_module(path: Path, name: str):
+def load_module(path: Path, name: str) -> ModuleType:
     """Load a Python module from a concrete repository path."""
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules[name] = module
@@ -59,15 +66,15 @@ BUNDLED_CHECKER = load_module(BUNDLED_CHECKER_PATH, "bundled_google_style_checke
 class GoogleStyleParserTests(unittest.TestCase):
     """Cover parser contracts that previously produced false-clean results."""
 
-    def audit_checker(self, source: str, checker=CHECKER):
+    def audit_checker(self, source: str, checker: Any = CHECKER) -> list[Any]:
         """Audit temporary source with the supplemental checker."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / "sample.py"
             path.write_text(source, encoding="utf-8")
-            return checker.audit(path, root)
+            return cast(list[Any], checker.audit(path, root))
 
-    def test_checker_raise_matching_and_nested_scope(self):
+    def test_checker_raise_matching_and_nested_scope(self) -> None:
         """Require matching qualified raises but ignore nested contracts."""
         source = '''"""Module summary."""
 
@@ -120,7 +127,7 @@ def wrong():
         self.assertTrue(any(finding.level == "violation" for finding in findings))
         self.assertEqual(rules.count("docstring-raises"), 1)
 
-    def test_private_class_naming(self):
+    def test_private_class_naming(self) -> None:
         """Allow private PascalCase classes and reject lowercase classes."""
         source = '''"""Module summary."""
 
@@ -131,11 +138,13 @@ class privateClass:
     """Lowercase class."""
 '''
         findings = self.audit_checker(source)
-        class_findings = [finding for finding in findings if finding.rule == "class-naming"]
+        class_findings = [
+            finding for finding in findings if finding.rule == "class-naming"
+        ]
         self.assertEqual(len(class_findings), 1)
         self.assertEqual(class_findings[0].level, "violation")
 
-    def test_checker_callable_raise_requires_nonempty_raises(self):
+    def test_checker_callable_raise_requires_nonempty_raises(self) -> None:
         """Require Raises documentation for callable-generated exceptions."""
         source = '''"""Module summary."""
 
@@ -156,9 +165,13 @@ def generated():
         Exception: A generated error.
     """''',
         )
-        self.assertNotIn("docstring-raises", [finding.rule for finding in self.audit_checker(valid)])
+        self.assertNotIn(
+            "docstring-raises", [finding.rule for finding in self.audit_checker(valid)]
+        )
 
-        wrong = valid.replace("Exception: A generated error.", "ValueError: A generated error.")
+        wrong = valid.replace(
+            "Exception: A generated error.", "ValueError: A generated error."
+        )
         wrong_findings = self.audit_checker(wrong)
         self.assertIn("docstring-raises", [finding.rule for finding in wrong_findings])
         self.assertTrue(any(finding.level == "violation" for finding in wrong_findings))
@@ -177,9 +190,11 @@ def generated():
     """''',
             )
             invalid_findings = self.audit_checker(invalid)
-            self.assertTrue(any(finding.level == "violation" for finding in invalid_findings))
+            self.assertTrue(
+                any(finding.level == "violation" for finding in invalid_findings)
+            )
 
-    def test_leading_comments_are_excluded_and_markers_are_precise(self):
+    def test_leading_comments_are_excluded_and_markers_are_precise(self) -> None:
         """Exclude leading comments while checking later comments and markers."""
         source = '''# Leading comment without punctuation or `allowed` :class: markup
 """Module summary."""
@@ -200,7 +215,7 @@ def generated():
         self.assertEqual(rules.count("comment-punctuation"), 5)
         self.assertFalse(any(finding.line == 1 for finding in findings))
 
-    def test_mutable_function_defaults_are_rejected(self):
+    def test_mutable_function_defaults_are_rejected(self) -> None:
         """Reject known mutable defaults while allowing immutable defaults."""
         source = '''"""Module summary."""
 
@@ -238,16 +253,14 @@ async def valid_defaults(value=None, values=(), *, names=frozenset()):
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 5)
                 self.assertTrue(
                     all(finding.level == "violation" for finding in mutable_defaults)
                 )
 
-    def test_shadowed_mutable_constructor_defaults_require_review(self):
+    def test_shadowed_mutable_constructor_defaults_require_review(self) -> None:
         """Review constructor defaults when built-in resolution is uncertain."""
         source = '''"""Module summary."""
 
@@ -292,16 +305,14 @@ def enclosing(dict):
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 3)
                 self.assertTrue(
                     all(finding.level == "review" for finding in mutable_defaults)
                 )
 
-    def test_comprehension_targets_do_not_shadow_mutable_constructors(self):
+    def test_comprehension_targets_do_not_shadow_mutable_constructors(self) -> None:
         """Keep comprehension-local names out of enclosing scope resolution."""
         source = '''"""Module summary."""
 
@@ -342,9 +353,7 @@ def enclosing_named_expression(values):
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 2)
                 self.assertEqual(
@@ -352,7 +361,7 @@ def enclosing_named_expression(values):
                     ["violation", "review"],
                 )
 
-    def test_definition_time_bindings_shadow_mutable_constructors(self):
+    def test_definition_time_bindings_shadow_mutable_constructors(self) -> None:
         """Resolve defaults in their containing lexical scope."""
         source = '''"""Module summary."""
 
@@ -371,14 +380,12 @@ def binder(first=(list := tuple), second=list()):
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 1)
                 self.assertEqual(mutable_defaults[0].level, "review")
 
-    def test_pattern_captures_shadow_mutable_constructors(self):
+    def test_pattern_captures_shadow_mutable_constructors(self) -> None:
         """Collect each structural pattern capture form as a binding."""
         source = '''"""Module summary."""
 
@@ -440,9 +447,7 @@ def capture_mappings(value):
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 3)
                 self.assertTrue(
@@ -450,7 +455,7 @@ def capture_mappings(value):
                 )
 
     @unittest.skipIf(sys.version_info < (3, 12), "PEP 695 requires Python 3.12")
-    def test_type_parameters_shadow_mutable_constructors(self):
+    def test_type_parameters_shadow_mutable_constructors(self) -> None:
         """Collect generic function and class type parameters as bindings."""
         source = '''"""Module summary."""
 
@@ -481,27 +486,31 @@ class Container[dict]:
             with self.subTest(checker=checker_name):
                 findings = self.audit_checker(source, checker)
                 mutable_defaults = [
-                    finding
-                    for finding in findings
-                    if finding.rule == "mutable-default"
+                    finding for finding in findings if finding.rule == "mutable-default"
                 ]
                 self.assertEqual(len(mutable_defaults), 2)
                 self.assertTrue(
                     all(finding.level == "review" for finding in mutable_defaults)
                 )
 
-    def test_delete_project_controller_fixtures_are_audited(self):
+    def test_delete_project_controller_fixtures_are_audited(self) -> None:
         """Audit both required controller fixture classes."""
         fixture_root = ROOT / ".codev/eval/tasks"
         phase_a_repo = fixture_root / "audit-google-python-style-phase-a" / "repository"
-        phase_a_target = phase_a_repo / "src/pyssa/controllers/delete_project_controller.py"
+        phase_a_target = (
+            phase_a_repo / "src/pyssa/controllers/delete_project_controller.py"
+        )
         phase_b_repo = fixture_root / "audit-google-python-style-phase-b" / "repository"
-        phase_b_target = phase_b_repo / "src/pyssa/controllers/delete_project_controller.py"
+        phase_b_target = (
+            phase_b_repo / "src/pyssa/controllers/delete_project_controller.py"
+        )
         for checker_name, checker in (
             ("local", CHECKER),
             ("bundled", BUNDLED_CHECKER),
         ):
-            with self.subTest(fixture="audit-google-python-style-phase-a", checker=checker_name):
+            with self.subTest(
+                fixture="audit-google-python-style-phase-a", checker=checker_name
+            ):
                 findings = checker.audit(phase_a_target, phase_a_repo)
                 self.assertTrue(
                     any(
@@ -509,13 +518,17 @@ class Container[dict]:
                         for finding in findings
                     )
                 )
-            with self.subTest(fixture="audit-google-python-style-phase-b", checker=checker_name):
+            with self.subTest(
+                fixture="audit-google-python-style-phase-b", checker=checker_name
+            ):
                 findings = checker.audit(phase_b_target, phase_b_repo)
                 violations = [f for f in findings if f.level == "violation"]
                 self.assertFalse(
                     violations,
-                    f"Expected no violations in phase-b fixture but found: {violations}",
+                    "Expected no violations in phase-b fixture but found: "
+                    f"{violations}",
                 )
+
 
 if __name__ == "__main__":
     unittest.main()
