@@ -221,10 +221,11 @@ starts with `-`.)
 ## See also
 
 - The native harness's own worked example for this same skill --
-  `.codev/fixtures/audit-google-python-style-demo/`, exercised via `codev
-  eval run`/`codev eval snapshot run` -- tests whether an *actor* uses this
-  skill correctly on a task, a different question from this engine's "is
-  the skill directory itself well-formed." See
+  `.codev/eval/tasks/audit-google-python-style-phase-a/` and its
+  `-phase-b` sibling, exercised via `codev eval task run`/`codev eval
+  benchmark run` -- tests whether an *actor* uses this skill correctly on a
+  task, a different question from this engine's "is the skill directory
+  itself well-formed." See
   [`../skill-eval/README.md`](../skill-eval/README.md).
 - [brief.md](brief.md) and [design.md](design.md) for the full contract,
   scope, and known gaps.

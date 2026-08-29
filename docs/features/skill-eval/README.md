@@ -159,20 +159,24 @@ in `review-change/SKILL.md` alone. See `docs/adr/0001-work-lifecycle-invariant.m
 for why this exists. CI runs a benchmark on a schedule (not per pull request)
 and on release tags.
 
-`.codev/eval/tasks/audit-google-python-style-demo/` is a second, standalone
-worked example -- a template to copy when writing a task for a skill of your
-own, not part of a larger corpus, and the reference example for
-`checks.json` specifically (its verifier used to be a hand-written script;
-it now uses all four built-in check types). It plants a private helper with
-no docstring at all (this skill's distinctive "no exemption for private
-symbols" documentation policy), a wildcard import, and a semicolon-joined
-statement, and its `checks.json` verifies the actor's plan flags the
-private-helper violation, requests approval rather than editing anything,
-and leaves every source file byte-for-byte unchanged -- the read-only
-"Phase A" contract this particular skill requires. Run it the same way:
+`.codev/eval/tasks/audit-google-python-style-phase-a/` is a second,
+standalone worked example -- a template to copy when writing a task for a
+skill of your own, not part of a larger corpus, and the reference example
+for `checks.json` specifically (all four built-in check types are
+available; this task uses three). Against a real production controller
+file, its `checks.json` verifies the actor's plan flags the planted
+wildcard import, illegal `tmp_` binding, and non-PascalCase class name,
+requests approval rather than editing anything, and leaves every source
+file byte-for-byte unchanged -- the read-only "Phase A" contract this
+particular skill requires. Its sibling,
+`.codev/eval/tasks/audit-google-python-style-phase-b/`, covers the
+corresponding "Phase B" remediation contract (approved edits applied,
+verified with a hand-written `verifier.json` script instead of
+`checks.json`, since that check needs real AST analysis of the edited
+file). Run either the same way:
 
 ```shell
-codev eval task run audit-google-python-style-demo --target . --output ../skill-evidence/audit-google-python-style-demo
+codev eval task run audit-google-python-style-phase-a --target . --output ../skill-evidence/audit-google-python-style-phase-a
 ```
 
 A single task can still be run in isolation with `codev eval task run
