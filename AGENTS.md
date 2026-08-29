@@ -57,14 +57,30 @@ addition in `src/codev_workflow/BUILD.bazel`.
 | `just lock-check` | Fail if `requirements_lock.txt` has drifted from `uv.lock` -- what CI runs |
 | `just validate-catalog` | `bazel run //scripts:validate_development_workflow` against the bundle |
 | `just self-test-evaluator` | `bazel run //scripts:evaluate_development_workflow -- --self-test` |
-| `just wheel` | Build the PyPI wheel via `py_wheel` -- a verification build, not the published artifact |
+| `just wheel` | Build the PyPI wheel via `py_wheel` |
 | `just verify-wheel-parity` | Diff the Bazel wheel's manifest against a fresh `python -m build` wheel and `twine check` it |
-| `just ci` | Aggregate of the above, matching CI's `quality`/`test` jobs |
+| `just dist` | Build the real release artifact set into `dist/`: sdist via `python -m build`, wheel via Bazel (parity-checked, then swapped in) -- what CI's `quality` job runs |
+| `just verify-dist` | Validate `dist/` -- `twine check`, install, and the smoke-test assertion -- what CI's `quality` job runs next |
+| `just publish-testpypi` | **Never run this as an agent.** Uploads the wheel to TestPyPI via `rules_python`'s own sandboxed `twine`, using whatever `TWINE_USERNAME`/`TWINE_PASSWORD` are already in the caller's shell. Human-run only. |
+| `just publish-pypi` | **Never run this as an agent.** Same as above, against the real PyPI -- permanent, irreversible. Human-run only, and only with explicit human authorization for that specific release. |
+| `just ci` | Aggregate of the non-publish recipes above, matching CI's `quality`/`test` jobs |
 
 `pyproject.toml`/`uv.lock` remain the sole source of Python dependency and
-packaging metadata, and `docs/releasing.md`'s `python -m build` + `twine`
-release pipeline is unchanged by this migration -- `//packaging:wheel` is a
-verification build proven equivalent to it, not a replacement for it.
+packaging metadata, but the **published wheel is now Bazel-built**: CI's
+`quality` job runs `just dist` (builds both wheels, parity-checks, swaps
+the Bazel one into `dist/`) then `just verify-dist`, and that `dist/` is
+what the automated, trusted-publisher `publish` job uploads to PyPI on a
+tag push. `python -m build` still supplies the sdist only (`py_wheel` has
+no sdist equivalent) -- see `docs/releasing.md` and design.md's "PyPI
+Packaging" for the small, accepted metadata gaps this carries (older
+`Metadata-Version`, no `Keywords`) against a pure setuptools wheel; none
+of them fail `twine check` or the smoke test. The `publish-testpypi`/
+`publish-pypi` recipes are a separate, human-run publish path via
+`rules_python`'s own `twine` integration -- CI never calls them, and
+publishing is exactly the kind of action this project's own policy
+requires "human authorization for releases" for (see the invariants at
+the top of this file), so an agent must never invoke them, even if asked
+indirectly (e.g. "run the full ci suite including publishing").
 `packaging/BUILD.bazel` carries a third, hand-kept copy of the package
 version alongside `pyproject.toml`/`src/codev_workflow/__init__.py`;
 `scripts/version.py`'s bump command and `scripts/verify_release.py`'s

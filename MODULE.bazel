@@ -6,6 +6,25 @@ bazel_dep(name = "rules_python", version = "2.3.2")
 bazel_dep(name = "bazel_skylib", version = "1.9.2")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 
+# Needed directly (not just transitively) because //packaging:wheel.publish
+# selects on @platforms//os:windows -- bzlmod repo visibility requires the
+# consuming module to declare it, even though something in the graph
+# already pulls it in transitively.
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# Disables implicit __init__.py synthesis (deprecated upstream, see
+# https://github.com/bazel-contrib/rules_python/issues/2945) for our own
+# targets -- confirmed clean via `bazel build //src/... //tests/...
+# //scripts/...` producing zero warnings. `scripts/` and `packaging/` have
+# no __init__.py on disk and don't need one: PEP 420 namespace packages
+# make `from scripts import ...` work without it. Two warnings remain from
+# rules_python's own internal targets (py_console_script_gen_py, used by
+# //:mypy; wheelmaker, used by //packaging:wheel) -- built inside the
+# rules_python repo itself, this config doesn't reach them. Cosmetic,
+# upstream, not ours to fix short of patching rules_python.
+rules_python_config = use_extension("@rules_python//python/extensions:config.bzl", "config")
+rules_python_config.explicit_init_py(default = True)
+
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     python_version = "3.13",

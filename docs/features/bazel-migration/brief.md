@@ -1,8 +1,8 @@
 # Bazel Build Migration
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** CoDev maintainers
-**Last reviewed:** 2026-08-22
+**Last reviewed:** 2026-08-29
 
 ## Problem and users
 
@@ -94,11 +94,30 @@ it, never hand-edited.
   Multi-Python Strategy".
 - `py_binary` targets for the two release-process scripts
   (`validate-development-workflow.py`, `evaluate-development-workflow.py`).
-- A `py_wheel` verification build (`//packaging:wheel`) proven, by direct
-  comparison, to match `python -m build`'s real wheel file-for-file and
-  metadata-field-for-field, and wired into CI as an additional check --
-  not as the actual publish path (see "Not planned" and design.md's "PyPI
-  Packaging" for the structural gaps that keep it a verification build).
+- A `py_wheel` build (`//packaging:wheel`) proven, by direct comparison, to
+  match `python -m build`'s real wheel file-for-file and
+  metadata-field-for-field.
+- **CI's `quality` job now publishes the Bazel-built wheel**, not
+  `python -m build`'s: `just dist` builds both (parity-checking the Bazel
+  one against `python -m build`'s before swapping it in), `just
+  verify-dist` validates the result, and that `dist/` is what the
+  automated trusted-publisher `publish` job uploads to PyPI on a tag push.
+  `python -m build` still supplies the sdist only -- `py_wheel` has no
+  sdist equivalent. See design.md's "PyPI Packaging" for the small,
+  accepted metadata gaps this carries (older `Metadata-Version`, no
+  `Keywords`) against a pure setuptools wheel; none of them fail `twine
+  check` or the smoke test.
+- `//packaging:wheel.publish`, `rules_python`'s own native `twine`
+  integration -- a separate, real, human-run publish path for the Bazel
+  wheel (`just publish-testpypi` / `just publish-pypi`), verified end to
+  end without ever touching real credentials. CI never calls this; its
+  trusted-publisher `publish` job uses OIDC, an unrelated auth mechanism
+  (see design.md's "PyPI Packaging" for why those two don't substitute for
+  each other).
+- `just dist`/`just verify-dist` as the locally-runnable equivalent of
+  CI's release-artifact build and validation -- the same commands, not a
+  lookalike, so "does the release pipeline still work" is testable without
+  pushing a tag.
 
 ### Next
 
@@ -110,12 +129,18 @@ it, never hand-edited.
 
 - Replacing `pyproject.toml`/`uv` as the source of Python packaging metadata
   and dependency declarations.
-- Replacing the PyPI release pipeline (`python -m build` + `twine` +
-  trusted-publisher CI) described in `docs/releasing.md`. `//packaging:wheel`
-  is a verification build proven equivalent, not the actual publish path --
-  see design.md's "PyPI Packaging" for the structural gaps (older
-  `Metadata-Version`, no sdist) that make replacing the real pipeline the
-  wrong call for now.
+- Replacing CI's trusted-publisher OIDC auth mechanism itself
+  (`pypa/gh-action-pypi-publish`, described in `docs/releasing.md`) with
+  `twine`/`//packaging:wheel.publish`. The *artifact* CI publishes is now
+  Bazel-built (see "Now" above); *how* CI authenticates to PyPI is
+  unchanged and deliberately so -- OIDC-derived short-lived tokens are
+  negotiated by that GitHub Action itself, not something a plain `twine`
+  invocation can do, so this was never a straight swap. `twine` stays the
+  human-run path (`publish-testpypi`/`publish-pypi`) for testing and
+  manual publishing, not CI's mechanism.
+- Replacing `python -m build`'s sdist output. `rules_python` has no
+  `py_wheel`-equivalent sdist rule; the sdist keeps coming from
+  `python -m build`, only the wheel is now Bazel-built.
 - Any `aspect_rules_py`, `aspect_rules_lint`, `aspect_bazel_lib`, or other
   Aspect Build convenience ruleset.
 - Any third-party community Bazel ruleset for ruff or mypy specifically
@@ -161,3 +186,10 @@ for the two corrections it produced.
   Bazel targets, `py_wheel` verification build) accepted and implemented.
   (Martin Urban, 2026-08-22) -- see design.md's Acceptance section for the
   verification evidence behind each.
+- [x] Further extended scope accepted and implemented: `MODULE.bazel.lock`
+  cleanup, `explicit_init_py`, a real `//packaging:wheel.publish`
+  human-run publish path, and cutting CI's automated `publish` job over
+  to the Bazel-built wheel (`python -m build` keeps supplying the sdist;
+  CI's OIDC auth mechanism is unchanged). (Martin Urban, 2026-08-29) --
+  see design.md's "PyPI Packaging" for the full history and verification
+  evidence.

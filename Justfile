@@ -63,12 +63,12 @@ validate-catalog:
 self-test-evaluator:
     bazel run //scripts:evaluate_development_workflow -- --repo . --self-test
 
-# Build the wheel via py_wheel. This is a verification build, matched
-# file-for-file and metadata-field-for-field against `python -m build`'s
-# output -- it is not the actual release artifact. `python -m build` +
-# twine stay the real PyPI publish path (docs/releasing.md); see
-# docs/features/bazel-migration/design.md's "PyPI Packaging" section for
-# the known gaps (older Metadata-Version, no sdist).
+# Build the wheel via py_wheel, matched file-for-file and
+# metadata-field-for-field against `python -m build`'s output (some
+# metadata fields excepted -- see design.md's "PyPI Packaging"). CI's
+# automated trusted-publisher job still uploads the `python -m build`
+# artifact, not this one, but publish-testpypi/publish-pypi below make
+# this a real, human-run publish path for the Bazel wheel.
 wheel:
     bazel build //packaging:wheel
 
@@ -90,5 +90,49 @@ verify-wheel-parity: wheel
     fi
     uv run twine check "$bazel_whl"
 
+# Build the actual release artifact set into dist/: sdist via `python -m
+# build` (py_wheel has no sdist equivalent), wheel via Bazel. This is what
+# CI's `quality` job runs, so `just dist && just verify-dist` reproduces
+# its release-artifact validation locally, identically -- see
+# docs/features/bazel-migration/design.md's "PyPI Packaging" for why the
+# swap happens instead of publishing python -m build's wheel.
+dist: verify-wheel-parity
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf dist
+    uv run python -m build
+    rm dist/*.whl
+    cp "$(bazel cquery --output=files //packaging:wheel 2>/dev/null)" dist/
+
+# Validate dist/ (twine check + real install + the same smoke-test
+# assertion CI runs). Requires `just dist` first.
+verify-dist:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    uv run twine check dist/*
+    rm -rf .release-venv
+    python3 -m venv .release-venv
+    .release-venv/bin/python -m pip install --no-deps dist/*.whl
+    .release-venv/bin/codev --version
+    .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['architecture-maintainability-specialist.toml', 'builder.toml', 'code-audit-gate.toml.template', 'code-audit.toml.template', 'concurrency-specialist.toml', 'correctness-tests-specialist.toml', 'lightweight-reviewer.toml', 'orchestrator.toml', 'outer-loop-runner.toml', 'planner.toml', 'reviewer.toml', 'rollout-specialist.toml', 'security-data-specialist.toml']"
+    echo "dist/ validated: sdist + Bazel wheel, twine-clean, installs and runs correctly."
+
+# Publish the wheel to TestPyPI. Needs TWINE_USERNAME/TWINE_PASSWORD (or an
+# API token as TWINE_PASSWORD) already set in your own shell -- this recipe
+# never reads, prints, or stores credentials; it only forwards your existing
+# environment to rules_python's own sandboxed twine binary. Not part of
+# `ci` and never run automatically. See docs/features/bazel-migration/
+# design.md's "PyPI Packaging" for why this is a human-run, manual path
+# separate from CI's trusted-publisher `publish` job in ci.yml.
+publish-testpypi: wheel
+    bazel run //packaging:wheel.publish -- --repository testpypi
+
+# Publish the wheel to the REAL PyPI, permanently. Same credential
+# requirement as publish-testpypi. There is no confirmation prompt here --
+# read docs/features/bazel-migration/design.md's "PyPI Packaging" section
+# before ever running this against a version that matters.
+publish-pypi: wheel
+    bazel run //packaging:wheel.publish -- --repository pypi
+
 # Everything CI's quality gate checks, in one command.
-ci: lint fmt-check typecheck lock-check test-all validate-catalog self-test-evaluator verify-wheel-parity
+ci: lint fmt-check typecheck lock-check test-all validate-catalog self-test-evaluator dist verify-dist
