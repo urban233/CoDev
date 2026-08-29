@@ -610,6 +610,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_issue_create.add_argument("--target", type=_target, default=Path.cwd())
 
+    g_issue_view = git_commands.add_parser(
+        "issue-view",
+        help=(
+            "print a GitHub issue's body and all its comments as JSON; "
+            "has no task precondition, read-only"
+        ),
+    )
+    g_issue_view.add_argument("--number", type=int, required=True)
+    g_issue_view.add_argument("--target", type=_target, default=Path.cwd())
+
     g_branch = git_commands.add_parser(
         "branch", help="create the task's own branch from a base snapshot"
     )
@@ -1156,6 +1166,11 @@ def _run_git_command(args: argparse.Namespace) -> int:
             args.title, body, target=target, assignees=args.assignees
         )
         print(url)
+        return 0
+
+    if args.git_command == "issue-view":
+        payload = git_ops_module.view_issue(args.number, target=target)
+        print(json.dumps(payload))
         return 0
 
     if args.git_command == "branch":

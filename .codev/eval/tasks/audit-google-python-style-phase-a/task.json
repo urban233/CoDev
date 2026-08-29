@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "name": "audit-google-python-style-phase-a",
+  "description": "Read-only Google Python Style audit of a real controller file; the actor must write a structured audit-plan.json (decision + findings) for explicit human approval without modifying any source.",
+  "skill": "audit-google-python-style",
+  "category": "phase-a-planning",
+  "actor_timeout_seconds": 600,
+  "judge_timeout_seconds": 300
+}

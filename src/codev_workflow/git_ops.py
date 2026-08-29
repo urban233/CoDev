@@ -227,6 +227,26 @@ def fetch_issue(number: int, *, target: Path) -> dict[str, str]:
     return {"title": title, "url": url}
 
 
+_ISSUE_VIEW_FIELDS = "number,title,url,state,author,createdAt,body,comments"
+
+
+def view_issue(number: int, *, target: Path) -> dict[str, Any]:
+    """Read-only lookup of a GitHub issue, its body, and all its comments.
+
+    Unlike fetch_issue, this is exposed directly as `codev git issue-view`
+    for agents to consume issue discussion (requirements, feedback in
+    comments) as JSON, not just the title/url summary task start needs.
+    """
+    raw = _run_gh(
+        ["issue", "view", str(number), "--json", _ISSUE_VIEW_FIELDS], cwd=target
+    )
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise GitOpsError(f"unexpected response from gh issue view: {error}") from error
+    return cast(dict[str, Any], payload)
+
+
 def create_issue(
     title: str,
     body: str,

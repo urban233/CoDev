@@ -702,6 +702,28 @@ class TaskContractTests(unittest.TestCase):
         self.assertIn('"step_start"', events)
         self.assertEqual("final answer", output)
 
+    def test_actor_final_output_joins_multiple_text_events_with_a_separator(
+        self,
+    ) -> None:
+        # A multi-step actor run emits several "text" events (initial intent,
+        # progress commentary, the eventual completion report). Concatenating
+        # them with no separator at all produces an illegible run-on blob --
+        # e.g. "...requested Git checks.The target contains broad style..." --
+        # that a judge model can misread as missing completion evidence even
+        # when the real report is present later in the same string.
+        raw = "\n".join(
+            [
+                json.dumps({"type": "text", "part": {"text": "Understand: I'll begin."}}),
+                json.dumps({"type": "text", "part": {"text": "The target has issues."}}),
+                json.dumps({"type": "text", "part": {"text": "COMPLETED."}}),
+            ]
+        )
+        _, output = _actor_artifacts(raw)
+        self.assertNotIn("begin.The", output)
+        self.assertIn("Understand: I'll begin.", output)
+        self.assertIn("The target has issues.", output)
+        self.assertIn("COMPLETED.", output)
+
     def test_structured_artifacts_sanitize_nested_urls_and_escaped_values(self) -> None:
         raw = json.dumps(
             {

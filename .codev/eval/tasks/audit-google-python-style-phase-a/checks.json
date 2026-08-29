@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "checks": [
+    {
+      "type": "files_unchanged_except",
+      "except": ["audit-plan.json"]
+    },
+    {
+      "type": "json_field_equals",
+      "file": "audit-plan.json",
+      "field": "decision",
+      "equals": "APPROVAL_REQUIRED"
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "delete_project_controller.py",
+      "any_keyword": ["wildcard", "star import", "import *"]
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "tmp_dialog",
+      "any_keyword": ["tmp_", "tmp binding", "illegal binding"]
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "helper_panel",
+      "any_keyword": ["helperpanel", "pascalcase", "pascal case", "class name", "class naming", "rename"]
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "FormatData",
+      "any_keyword": ["format_data", "snake_case", "snake case", "method name", "function naming", "rename"]
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "get_view",
+      "any_keyword": ["docstring", "documentation", "undocumented", "missing doc"]
+    },
+    {
+      "type": "finding_matches",
+      "file": "audit-plan.json",
+      "field": "findings",
+      "location_contains": "a_parent",
+      "any_keyword": ["args", "argument", "parameter"]
+    }
+  ]
+}

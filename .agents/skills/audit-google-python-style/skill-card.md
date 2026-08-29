@@ -14,7 +14,7 @@
 
 **Known Risks and Mitigations:** Could be reached for as a general-purpose code reviewer, which it is not -- mitigated by the frontmatter's explicit "do not use for ordinary code reviews" scope and by requiring explicit invocation rather than automatic triggering. Its planning phase is read-only by design (no source file is modified) until the human explicitly approves the proposed plan, limiting the blast radius of a wrong or incomplete audit.
 
-**References:** This skill's own `SKILL.md`; `docs/features/skill-eval/how-to-write-a-task.md` (the `audit-google-python-style-demo` eval task built against this skill); `docs/adr/0028-skill-packages-carry-their-own-eval-trace.md`.
+**References:** This skill's own `SKILL.md`; `docs/features/skill-eval/how-to-write-a-task.md` (the `audit-google-python-style-phase-a`/`-phase-b` eval tasks built against this skill); `docs/adr/0028-skill-packages-carry-their-own-eval-trace.md`.
 
 **Skill Output:** A short, grouped remediation plan for human approval; once approved, edits to the specific approved source files.
 

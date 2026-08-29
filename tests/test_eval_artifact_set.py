@@ -1,7 +1,7 @@
 """End-to-end coverage for the packaged eval trace ("Recommended Artifact
 Set", see docs/adr/0028-skill-packages-carry-their-own-eval-trace.md)
 against a real, already-committed skill and task -- audit-google-python-style
-and its audit-google-python-style-demo task -- rather than a synthetic
+and its audit-google-python-style-phase-a task -- rather than a synthetic
 stand-in built just for the test.
 
 Both are copied into an isolated temporary repository first: nothing here
@@ -25,14 +25,16 @@ from codev_workflow.cli import main
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SKILL_NAME = "audit-google-python-style"
-_TASK_NAME = "audit-google-python-style-demo"
+_TASK_NAME = "audit-google-python-style-phase-a"
 _REAL_SKILL_DIR = _REPO_ROOT / ".agents" / "skills" / _SKILL_NAME
 _REAL_TASK_DIR = _REPO_ROOT / ".codev" / "eval" / "tasks" / _TASK_NAME
 
 # Mirrors the real task's own prompt.md/checks.json contract:
 # - actor writes audit-plan.json with "decision" and "findings"
-# - checks.json requires decision == APPROVAL_REQUIRED and a finding
-#   mentioning _compute_average with a docstring-shaped keyword
+# - checks.json requires decision == APPROVAL_REQUIRED and findings that
+#   flag the wildcard import, the illegal tmp_ binding, the non-PascalCase
+#   class name, the non-snake_case method name, the missing get_view
+#   docstring, and the missing a_parent Args entry
 # - judge only runs once the checks above already passed
 _FAKE_AGENT = f"""#!/usr/bin/env python3
 import json
@@ -46,7 +48,7 @@ if "Review rubric" in prompt:
     verdict = {{
         "schema_version": 1,
         "verdict": "pass",
-        "summary": "Plan flags the private-helper docstring gap and requests approval.",
+        "summary": "Plan flags the planted violations and requests approval.",
         "findings": [
             {{"criterion": "R1", "verdict": "pass", "evidence": "audit-plan.json"}}
         ],
@@ -63,15 +65,45 @@ if skill_present:
         "findings": [
             {{
                 "id": "f1",
-                "location": "pkg/reporter.py:_compute_average",
+                "location": "src/pyssa/controllers/delete_project_controller.py",
+                "category": "imports",
+                "summary": "Replace the wildcard `from math import *` with explicit named imports.",
+            }},
+            {{
+                "id": "f2",
+                "location": "src/pyssa/controllers/delete_project_controller.py tmp_dialog",
+                "category": "naming",
+                "summary": "Rename the illegal tmp_ binding tmp_dialog to a descriptive name.",
+            }},
+            {{
+                "id": "f3",
+                "location": "src/pyssa/controllers/delete_project_controller.py helper_panel",
+                "category": "naming",
+                "summary": "Rename class helper_panel to PascalCase HelperPanel.",
+            }},
+            {{
+                "id": "f4",
+                "location": "src/pyssa/controllers/delete_project_controller.py FormatData",
+                "category": "naming",
+                "summary": "Rename method FormatData to snake_case format_data.",
+            }},
+            {{
+                "id": "f5",
+                "location": "src/pyssa/controllers/delete_project_controller.py get_view",
                 "category": "documentation",
-                "summary": "Private helper _compute_average has no docstring.",
-            }}
+                "summary": "Add a missing docstring to method get_view.",
+            }},
+            {{
+                "id": "f6",
+                "location": "src/pyssa/controllers/delete_project_controller.py __init__ a_parent",
+                "category": "documentation",
+                "summary": "Document the missing Args entry for parameter a_parent.",
+            }},
         ],
     }}
 else:
     # A generic reviewer with no Google-style-specific skill doesn't
-    # necessarily flag a private helper's missing docstring.
+    # necessarily flag these skill-specific violations.
     plan = {{"decision": "NO_CHANGES_NEEDED", "findings": []}}
 
 (worktree / "audit-plan.json").write_text(json.dumps(plan), encoding="utf-8")
@@ -168,21 +200,21 @@ class ArtifactSetRealSkillTests(unittest.TestCase):
             ]
         )
         self.assertEqual(0, code, printed)
-        self.assertIn("plan-phase-audit", printed)
+        self.assertIn("phase-a-planning", printed)
 
         trace_path = self.evals_dir / "benchmark.json"
         self.assertTrue(trace_path.is_file())
         trace = json.loads(trace_path.read_text(encoding="utf-8"))
         self.assertEqual(_SKILL_NAME, trace["skill"])
         self.assertIn("generated_at", trace)
-        category = trace["categories"]["plan-phase-audit"]
+        category = trace["categories"]["phase-a-planning"]
         self.assertEqual(100.0, category["with_skill_percentage"])
         self.assertEqual(0.0, category["baseline_percentage"])
         self.assertEqual(100.0, category["delta"])
 
         markdown = (self.evals_dir / "BENCHMARK.md").read_text(encoding="utf-8")
         self.assertIn(_SKILL_NAME, markdown)
-        self.assertIn("plan-phase-audit", markdown)
+        self.assertIn("phase-a-planning", markdown)
         self.assertIn("+100.0pp", markdown)
 
         # A different engine's own artifact must survive packaging untouched.
@@ -197,7 +229,7 @@ class ArtifactSetRealSkillTests(unittest.TestCase):
         )
         self.assertEqual(0, show_code)
         self.assertIn(f"Skill: {_SKILL_NAME}", show_printed)
-        self.assertIn("plan-phase-audit", show_printed)
+        self.assertIn("phase-a-planning", show_printed)
         self.assertIn("+100.0pp", show_printed)
         # `codev eval show` resolves --target before building this path
         # (cli.py's _run_eval_show_command), which on Windows can expand an
@@ -226,7 +258,7 @@ class ArtifactSetRealSkillTests(unittest.TestCase):
                 "--repetitions",
                 "1",
                 "--category",
-                "plan-phase-audit",
+                "phase-a-planning",
                 "--agent",
                 str(self.agent),
             ]

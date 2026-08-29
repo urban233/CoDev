@@ -492,7 +492,7 @@ class Container[dict]:
 
     def test_delete_project_controller_fixtures_are_audited(self):
         """Audit both required controller fixture classes."""
-        fixture_root = ROOT / ".codev/fixtures"
+        fixture_root = ROOT / ".codev/eval/tasks"
         phase_a_repo = fixture_root / "audit-google-python-style-phase-a" / "repository"
         phase_a_target = phase_a_repo / "src/pyssa/controllers/delete_project_controller.py"
         phase_b_repo = fixture_root / "audit-google-python-style-phase-b" / "repository"

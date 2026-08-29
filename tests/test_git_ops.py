@@ -1075,5 +1075,48 @@ class FetchIssueTests(unittest.TestCase):
                 git_ops.fetch_issue(7, target=target)
 
 
+class ViewIssueTests(unittest.TestCase):
+    def test_returns_full_payload_including_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            payload = (
+                '{"number": 7, "title": "Fix the thing", '
+                '"url": "https://github.com/o/r/issues/7", "state": "OPEN", '
+                '"body": "details", "comments": ['
+                '{"author": {"login": "alice"}, "body": "looks good", '
+                '"createdAt": "2026-01-01T00:00:00Z"}]}'
+            )
+            with patch.object(git_ops, "_run_gh", return_value=payload) as run_gh:
+                issue = git_ops.view_issue(7, target=target)
+            command = run_gh.call_args.args[0]
+        self.assertEqual(7, issue["number"])
+        self.assertEqual(1, len(issue["comments"]))
+        self.assertEqual("looks good", issue["comments"][0]["body"])
+        self.assertIn("issue", command)
+        self.assertIn("view", command)
+        self.assertIn("7", command)
+        self.assertIn("comments", command[-1])
+
+    def test_raises_when_gh_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch.object(
+                    git_ops, "_run_gh", side_effect=git_ops.GitOpsError("not found")
+                ),
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.view_issue(999, target=target)
+
+    def test_raises_on_malformed_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch.object(git_ops, "_run_gh", return_value="not json"),
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.view_issue(7, target=target)
+
+
 if __name__ == "__main__":
     unittest.main()

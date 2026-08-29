@@ -5,6 +5,11 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- `codev git issue-view --number N`, a read-only, no-task-precondition
+  command that prints a GitHub issue's body and all its comments as JSON,
+  for an agent to consume issue discussion directly.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

@@ -1563,7 +1563,7 @@ def _actor_artifacts(raw: str) -> tuple[str, str]:
     event_stream = "".join(
         json.dumps(event, ensure_ascii=False) + "\n" for event in sanitized_events
     )
-    return event_stream, "".join(output)
+    return event_stream, "\n\n".join(output)
 
 
 def _build_trajectory(event_stream: str, final_output: str | None = None) -> str:

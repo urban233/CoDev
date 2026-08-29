@@ -42,6 +42,7 @@ from codev_workflow.cli import (
     _skill_name,
     main,
 )
+from codev_workflow.git_ops import GitOpsError
 from codev_workflow.task import CheckResult
 
 
@@ -1144,6 +1145,47 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(2, code)
             self.assertIn("--body", errors.getvalue())
+
+    def test_git_issue_view_prints_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            payload = {
+                "number": 7,
+                "title": "Fix the thing",
+                "url": "https://github.com/o/r/issues/7",
+                "body": "details",
+                "comments": [{"author": {"login": "alice"}, "body": "looks good"}],
+            }
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.view_issue",
+                    return_value=payload,
+                ) as view_issue,
+                redirect_stdout(StringIO()) as output,
+            ):
+                code = main(
+                    ["git", "issue-view", "--number", "7", "--target", str(target)]
+                )
+            self.assertEqual(0, code)
+            view_issue.assert_called_once_with(7, target=target.resolve())
+            self.assertEqual(payload, json.loads(output.getvalue()))
+
+    def test_git_issue_view_propagates_gh_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            errors = StringIO()
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.view_issue",
+                    side_effect=GitOpsError("not found"),
+                ),
+                redirect_stderr(errors),
+            ):
+                code = main(
+                    ["git", "issue-view", "--number", "999", "--target", str(target)]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("not found", errors.getvalue())
 
     def test_codeowners_init_writes_and_reports_the_destination(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

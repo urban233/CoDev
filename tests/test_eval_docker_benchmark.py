@@ -1,7 +1,7 @@
 """Real, live Docker end-to-end coverage for `codev eval benchmark run
 --sandbox docker` (see docs/adr/0027-opt-in-docker-sandbox-for-the-native-
 eval-harness.md), against the real bundled audit-google-python-style skill
-and its real audit-google-python-style-demo task.
+and its real audit-google-python-style-phase-a task.
 
 This builds and runs an actual local Docker image and actual containers --
 not a fake `docker` executable stub (see tests/test_eval_environment.py for
@@ -33,7 +33,7 @@ from codev_workflow.cli import main
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SKILL_NAME = "audit-google-python-style"
-_TASK_NAME = "audit-google-python-style-demo"
+_TASK_NAME = "audit-google-python-style-phase-a"
 _REAL_SKILL_DIR = _REPO_ROOT / ".agents" / "skills" / _SKILL_NAME
 _REAL_TASK_DIR = _REPO_ROOT / ".codev" / "eval" / "tasks" / _TASK_NAME
 _BASE_IMAGE = "python:3.13-slim"
@@ -57,7 +57,7 @@ if "Review rubric" in prompt:
     verdict = {{
         "schema_version": 1,
         "verdict": "pass",
-        "summary": "Plan flags the private-helper docstring gap and requests approval.",
+        "summary": "Plan flags the planted violations and requests approval.",
         "findings": [
             {{"criterion": "R1", "verdict": "pass", "evidence": "audit-plan.json"}}
         ],
@@ -74,10 +74,40 @@ if skill_present:
         "findings": [
             {{
                 "id": "f1",
-                "location": "pkg/reporter.py:_compute_average",
+                "location": "src/pyssa/controllers/delete_project_controller.py",
+                "category": "imports",
+                "summary": "Replace the wildcard `from math import *` with explicit named imports.",
+            }},
+            {{
+                "id": "f2",
+                "location": "src/pyssa/controllers/delete_project_controller.py tmp_dialog",
+                "category": "naming",
+                "summary": "Rename the illegal tmp_ binding tmp_dialog to a descriptive name.",
+            }},
+            {{
+                "id": "f3",
+                "location": "src/pyssa/controllers/delete_project_controller.py helper_panel",
+                "category": "naming",
+                "summary": "Rename class helper_panel to PascalCase HelperPanel.",
+            }},
+            {{
+                "id": "f4",
+                "location": "src/pyssa/controllers/delete_project_controller.py FormatData",
+                "category": "naming",
+                "summary": "Rename method FormatData to snake_case format_data.",
+            }},
+            {{
+                "id": "f5",
+                "location": "src/pyssa/controllers/delete_project_controller.py get_view",
                 "category": "documentation",
-                "summary": "Private helper _compute_average has no docstring.",
-            }}
+                "summary": "Add a missing docstring to method get_view.",
+            }},
+            {{
+                "id": "f6",
+                "location": "src/pyssa/controllers/delete_project_controller.py __init__ a_parent",
+                "category": "documentation",
+                "summary": "Document the missing Args entry for parameter a_parent.",
+            }},
         ],
     }}
 else:
@@ -248,7 +278,7 @@ class DockerBenchmarkRealSkillTests(unittest.TestCase):
         )
         self.assertEqual(0, code, printed)
 
-        category = "plan-phase-audit"
+        category = "phase-a-planning"
         with_skill_result = json.loads(
             (
                 output_dir
@@ -320,7 +350,7 @@ class DockerBenchmarkRealSkillTests(unittest.TestCase):
             (
                 output_dir
                 / _SKILL_NAME
-                / "plan-phase-audit"
+                / "phase-a-planning"
                 / _TASK_NAME
                 / "with_skill"
                 / "1"
