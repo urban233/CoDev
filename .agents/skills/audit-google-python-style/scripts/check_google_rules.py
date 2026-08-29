@@ -54,11 +54,27 @@ class Finding:
     message: str
 
 
-EXCLUDED = frozenset({
-    ".git", ".agents", ".mypy_cache", ".pytest_cache", ".pyrefly",
-    ".ruff_cache", ".venv", "__pycache__", "cache", ".cache", "build", "dist", "generated",
-    "gen", "node_modules", "site-packages", "vendor",
-})
+EXCLUDED = frozenset(
+    {
+        ".git",
+        ".agents",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".pyrefly",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "cache",
+        ".cache",
+        "build",
+        "dist",
+        "generated",
+        "gen",
+        "node_modules",
+        "site-packages",
+        "vendor",
+    }
+)
 DUNDER = re.compile(r"^__[^_].*__$")
 TYPE_COMMENT = re.compile(r"#\s*type:\s*(?!ignore\b)")
 TODO = re.compile(r"#\s*TODO(?!\s*:\s*\S+\s+-\s+\S+)", re.IGNORECASE)
@@ -76,7 +92,9 @@ def leading_comment_lines(source):
     """
     lines = set()
     try:
-        tokens = tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__)
+        tokens = tokenize.generate_tokens(
+            iter(source.splitlines(keepends=True)).__next__
+        )
         for token in tokens:
             if token.type == tokenize.COMMENT:
                 lines.add(token.start[0])
@@ -122,7 +140,16 @@ def add(results, root, path, node, rule, level, message, line=None):
         message: Finding message.
         line: Optional source line.
     """
-    results.append(Finding(level, rule, path.relative_to(root).as_posix(), line or getattr(node, "lineno", 1), getattr(node, "col_offset", 0) + 1, message))
+    results.append(
+        Finding(
+            level,
+            rule,
+            path.relative_to(root).as_posix(),
+            line or getattr(node, "lineno", 1),
+            getattr(node, "col_offset", 0) + 1,
+            message,
+        )
+    )
 
 
 def valid_snake(name):
@@ -133,7 +160,9 @@ def valid_snake(name):
     Returns:
         Whether the name is valid.
     """
-    return name == "_" or bool(re.fullmatch(r"_+[a-z][a-z0-9_]*|[a-z][a-z0-9_]*|__[^_].*__", name))
+    return name == "_" or bool(
+        re.fullmatch(r"_+[a-z][a-z0-9_]*|[a-z][a-z0-9_]*|__[^_].*__", name)
+    )
 
 
 def valid_class(name):
@@ -204,7 +233,11 @@ def meaningful_args(node):
     Returns:
         Parameter names.
     """
-    args = [*getattr(node.args, "posonlyargs", []), *node.args.args, *node.args.kwonlyargs]
+    args = [
+        *getattr(node.args, "posonlyargs", []),
+        *node.args.args,
+        *node.args.kwonlyargs,
+    ]
     names = [arg.arg for arg in args if arg.arg not in {"self", "cls"}]
     if node.args.vararg:
         names.append(node.args.vararg.arg)
@@ -267,7 +300,9 @@ def _contains_current_scope(node, node_types, predicate):
         Whether a matching node exists in the current scope.
     """
     for child in ast.iter_child_nodes(node):
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+        if isinstance(
+            child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+        ):
             continue
         if isinstance(child, node_types) and predicate(child):
             return True
@@ -293,13 +328,20 @@ def current_scope_raises(node):
             current: Current AST node.
         """
         for child in ast.iter_child_nodes(current):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+            ):
                 continue
             if isinstance(child, ast.Raise) and child.exc is not None:
-                expression = child.exc.func if isinstance(child.exc, ast.Call) else child.exc
+                expression = (
+                    child.exc.func if isinstance(child.exc, ast.Call) else child.exc
+                )
                 if isinstance(expression, ast.Name) and expression.id[:1].isupper():
                     names.append(expression.id)
-                elif isinstance(expression, ast.Attribute) and expression.attr[:1].isupper():
+                elif (
+                    isinstance(expression, ast.Attribute)
+                    and expression.attr[:1].isupper()
+                ):
                     names.extend((ast.unparse(expression), expression.attr))
                 else:
                     names.append("__callable_raise__")
@@ -328,9 +370,15 @@ def _is_mutable_value(node):
     Returns:
         Whether the expression is likely mutable.
     """
-    if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
+    if isinstance(
+        node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)
+    ):
         return True
-    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"dict", "list", "set"}
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in {"dict", "list", "set"}
+    )
 
 
 def _mutable_defaults(node):
@@ -342,7 +390,11 @@ def _mutable_defaults(node):
         Mutable positional and keyword-only defaults.
     """
     defaults = [*node.args.defaults, *node.args.kw_defaults]
-    return [default for default in defaults if default is not None and _is_mutable_value(default)]
+    return [
+        default
+        for default in defaults
+        if default is not None and _is_mutable_value(default)
+    ]
 
 
 def _scope_bindings(node):
@@ -355,9 +407,7 @@ def _scope_bindings(node):
     """
     names = set()
     wildcard_import = False
-    comprehension_types = (
-        ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp
-    )
+    comprehension_types = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
     def walk_comprehension(current):
         """Collect containing-scope bindings from a comprehension.
@@ -429,18 +479,28 @@ def _scope_bindings(node):
         if isinstance(current, comprehension_types):
             walk_comprehension(current)
             return
-        if isinstance(current, ast.Name) and isinstance(current.ctx, (ast.Store, ast.Del)):
+        if isinstance(current, ast.Name) and isinstance(
+            current.ctx, (ast.Store, ast.Del)
+        ):
             names.add(current.id)
         elif isinstance(current, ast.arg):
             names.add(current.arg)
         elif isinstance(current, ast.Import):
-            names.update(alias.asname or alias.name.split(".", 1)[0] for alias in current.names)
+            names.update(
+                alias.asname or alias.name.split(".", 1)[0] for alias in current.names
+            )
         elif isinstance(current, ast.ImportFrom):
-            wildcard_import = wildcard_import or any(alias.name == "*" for alias in current.names)
-            names.update(alias.asname or alias.name for alias in current.names if alias.name != "*")
-        elif isinstance(current, ast.ExceptHandler) and current.name:
-            names.add(current.name)
-        elif isinstance(current, (ast.MatchAs, ast.MatchStar)) and current.name:
+            wildcard_import = wildcard_import or any(
+                alias.name == "*" for alias in current.names
+            )
+            names.update(
+                alias.asname or alias.name
+                for alias in current.names
+                if alias.name != "*"
+            )
+        elif (isinstance(current, ast.ExceptHandler) and current.name) or (
+            isinstance(current, (ast.MatchAs, ast.MatchStar)) and current.name
+        ):
             names.add(current.name)
         elif isinstance(current, ast.MatchMapping) and current.rest:
             names.add(current.rest)
@@ -498,39 +558,101 @@ def doc_findings(results, root, path, node, kind):
     """
     doc = ast.get_docstring(node, clean=False)
     if doc is None:
-        add(results, root, path, node, f"{kind}-docstring", "violation", f"Add a docstring for this {kind}.")
+        add(
+            results,
+            root,
+            path,
+            node,
+            f"{kind}-docstring",
+            "violation",
+            f"Add a docstring for this {kind}.",
+        )
         doc = ""
     doc = textwrap.dedent(doc)
     lines = doc.splitlines()
     if not lines or not lines[0].strip().endswith("."):
-        add(results, root, path, node, "docstring-summary", "violation", "Docstring summary must end with a period.")
+        add(
+            results,
+            root,
+            path,
+            node,
+            "docstring-summary",
+            "violation",
+            "Docstring summary must end with a period.",
+        )
     if "`" in doc or ":class:" in doc:
-        add(results, root, path, node, "docstring-markup", "violation", "Docstrings must not contain backticks or Sphinx class markup.")
+        add(
+            results,
+            root,
+            path,
+            node,
+            "docstring-markup",
+            "violation",
+            "Docstrings must not contain backticks or Sphinx class markup.",
+        )
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        required = "Yields" if has_yield(node) else "Returns" if has_value_return(node) else None
+        required = (
+            "Yields"
+            if has_yield(node)
+            else "Returns"
+            if has_value_return(node)
+            else None
+        )
         sections = _doc_sections(lines)
         if meaningful_args(node):
-            _check_section_entries(results, root, path, node, sections, "Args", meaningful_args(node))
+            _check_section_entries(
+                results, root, path, node, sections, "Args", meaningful_args(node)
+            )
         if required:
             _check_section_entries(results, root, path, node, sections, required, None)
         raised = current_scope_raises(node)
         if raised and "Raises" not in sections:
-            add(results, root, path, node, "docstring-raises", "violation", "Document current-scope raises in a Raises section.")
+            add(
+                results,
+                root,
+                path,
+                node,
+                "docstring-raises",
+                "violation",
+                "Document current-scope raises in a Raises section.",
+            )
         if raised and "Raises" in sections:
             found = {name for name, _description in sections["Raises"]}
-            if "__callable_raise__" in raised and (len(sections["Raises"]) != 1 or found != {"Exception"}):
-                add(results, root, path, node, "docstring-raises", "violation", "Dynamic raises require exactly one Exception entry.")
+            if "__callable_raise__" in raised and (
+                len(sections["Raises"]) != 1 or found != {"Exception"}
+            ):
+                add(
+                    results,
+                    root,
+                    path,
+                    node,
+                    "docstring-raises",
+                    "violation",
+                    "Dynamic raises require exactly one Exception entry.",
+                )
             missing = [
-                name for name in raised
+                name
+                for name in raised
                 if name != "__callable_raise__"
                 and not (
                     name in found
                     or name.rsplit(".", 1)[-1] in found
-                    or any(entry.rsplit(".", 1)[-1] == name.rsplit(".", 1)[-1] for entry in found)
+                    or any(
+                        entry.rsplit(".", 1)[-1] == name.rsplit(".", 1)[-1]
+                        for entry in found
+                    )
                 )
             ]
             if missing:
-                add(results, root, path, node, "docstring-raises", "violation", f"Raises entries do not match: {', '.join(missing)}.")
+                add(
+                    results,
+                    root,
+                    path,
+                    node,
+                    "docstring-raises",
+                    "violation",
+                    f"Raises entries do not match: {', '.join(missing)}.",
+                )
         if "Raises" in sections:
             _check_section_entries(results, root, path, node, sections, "Raises", None)
 
@@ -580,15 +702,41 @@ def _check_section_entries(results, root, path, node, sections, section, require
     entries = sections.get(section)
     if not entries:
         rule = "docstring-args" if section == "Args" else f"docstring-{section.lower()}"
-        add(results, root, path, node, rule, "violation", f"Document non-empty entries in {section}.")
+        add(
+            results,
+            root,
+            path,
+            node,
+            rule,
+            "violation",
+            f"Document non-empty entries in {section}.",
+        )
         return
     if required:
         found = {entry[0].lstrip("*").split()[0] for entry in entries}
         missing = [name for name in required if name not in found]
         if missing:
-            add(results, root, path, node, "docstring-args", "violation", f"Document every parameter in Args; missing {', '.join(missing)}.")
-    if any(not description or not description.endswith(".") for _, description in entries):
-        add(results, root, path, node, "docstring-section-punctuation", "violation", f"Descriptions in {section} must be non-empty and end with a period.")
+            add(
+                results,
+                root,
+                path,
+                node,
+                "docstring-args",
+                "violation",
+                f"Document every parameter in Args; missing {', '.join(missing)}.",
+            )
+    if any(
+        not description or not description.endswith(".") for _, description in entries
+    ):
+        add(
+            results,
+            root,
+            path,
+            node,
+            "docstring-section-punctuation",
+            "violation",
+            f"Descriptions in {section} must be non-empty and end with a period.",
+        )
 
 
 class Visitor(ast.NodeVisitor):
@@ -623,7 +771,15 @@ class Visitor(ast.NodeVisitor):
             node: Import syntax node.
         """
         if len(node.names) > 1:
-            add(self.results, self.root, self.path, node, "multiple-imports", "violation", "Each import statement must contain one module.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "multiple-imports",
+                "violation",
+                "Each import statement must contain one module.",
+            )
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
@@ -633,20 +789,82 @@ class Visitor(ast.NodeVisitor):
             node: Import syntax node.
         """
         if len(node.names) > 1:
-            add(self.results, self.root, self.path, node, "multiple-from-imports", "violation", "Each from-import statement must contain one symbol.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "multiple-from-imports",
+                "violation",
+                "Each from-import statement must contain one symbol.",
+            )
         if any(alias.name == "*" for alias in node.names):
-            add(self.results, self.root, self.path, node, "no-wildcard-imports", "violation", "Wildcard imports are forbidden.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "no-wildcard-imports",
+                "violation",
+                "Wildcard imports are forbidden.",
+            )
         if node.level:
-            add(self.results, self.root, self.path, node, "absolute-imports", "violation", "Use an absolute import path.")
-        if not node.level and node.module and node.module != "__future__" and not module_only_exempt(node.module):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "absolute-imports",
+                "violation",
+                "Use an absolute import path.",
+            )
+        if (
+            not node.level
+            and node.module
+            and node.module != "__future__"
+            and not module_only_exempt(node.module)
+        ):
             for alias in node.names:
-                if alias.name != "*" and valid_class(alias.name) and (alias.asname or alias.name) in self.class_usages:
+                if (
+                    alias.name != "*"
+                    and valid_class(alias.name)
+                    and (alias.asname or alias.name) in self.class_usages
+                ):
                     new_import, module_ref = module_only_import(node.module)
-                    add(self.results, self.root, self.path, node, "import-class-not-module", "violation", f"Import the module: use `{new_import}` and reference `{module_ref}.{alias.name}`.")
-        if node.module == "typing" and any(alias.name == "Text" for alias in node.names):
-            add(self.results, self.root, self.path, node, "no-typing-text", "violation", "Use str instead of typing.Text.")
-        if node.module in {"typing", "typing_extensions"} and any(alias.name in {"List", "Dict", "Set", "Tuple"} for alias in node.names):
-            add(self.results, self.root, self.path, node, "legacy-typing-alias", "review", "Prefer built-in collection types when supported.")
+                    add(
+                        self.results,
+                        self.root,
+                        self.path,
+                        node,
+                        "import-class-not-module",
+                        "violation",
+                        f"Import the module: use `{new_import}` and reference "
+                        f"`{module_ref}.{alias.name}`.",
+                    )
+        if node.module == "typing" and any(
+            alias.name == "Text" for alias in node.names
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "no-typing-text",
+                "violation",
+                "Use str instead of typing.Text.",
+            )
+        if node.module in {"typing", "typing_extensions"} and any(
+            alias.name in {"List", "Dict", "Set", "Tuple"} for alias in node.names
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "legacy-typing-alias",
+                "review",
+                "Prefer built-in collection types when supported.",
+            )
         self.generic_visit(node)
 
     def visit_Attribute(self, node):
@@ -655,8 +873,20 @@ class Visitor(ast.NodeVisitor):
         Args:
             node: Attribute syntax node.
         """
-        if isinstance(node.value, ast.Name) and node.value.id == "typing" and node.attr == "Text":
-            add(self.results, self.root, self.path, node, "no-typing-text", "violation", "Use str instead of typing.Text.")
+        if (
+            isinstance(node.value, ast.Name)
+            and node.value.id == "typing"
+            and node.attr == "Text"
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "no-typing-text",
+                "violation",
+                "Use str instead of typing.Text.",
+            )
         self.generic_visit(node)
 
     def visit_ExceptHandler(self, node):
@@ -665,8 +895,19 @@ class Visitor(ast.NodeVisitor):
         Args:
             node: Exception handler node.
         """
-        if node.type is None or (isinstance(node.type, ast.Name) and node.type.id in {"Exception", "BaseException"}):
-            add(self.results, self.root, self.path, node, "broad-exception", "review", "Confirm that catching a broad exception is justified.")
+        if node.type is None or (
+            isinstance(node.type, ast.Name)
+            and node.type.id in {"Exception", "BaseException"}
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "broad-exception",
+                "review",
+                "Confirm that catching a broad exception is justified.",
+            )
         self.generic_visit(node)
 
     def visit_Assert(self, node):
@@ -676,7 +917,15 @@ class Visitor(ast.NodeVisitor):
             node: Assertion node.
         """
         if not _is_test_file(self.path):
-            add(self.results, self.root, self.path, node, "assertion-control-flow", "review", "Confirm that assert is not application control flow.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "assertion-control-flow",
+                "review",
+                "Confirm that assert is not application control flow.",
+            )
         self.generic_visit(node)
 
     def visit_Lambda(self, node):
@@ -685,7 +934,15 @@ class Visitor(ast.NodeVisitor):
         Args:
             node: Lambda node.
         """
-        add(self.results, self.root, self.path, node, "lambda-expression", "review", "Confirm that a lambda is clearer than a named function.")
+        add(
+            self.results,
+            self.root,
+            self.path,
+            node,
+            "lambda-expression",
+            "review",
+            "Confirm that a lambda is clearer than a named function.",
+        )
         self.generic_visit(node)
 
     def visit_Name(self, node):
@@ -695,9 +952,27 @@ class Visitor(ast.NodeVisitor):
             node: Name syntax node.
         """
         if isinstance(node.ctx, (ast.Store, ast.Del)) and node.id.startswith("tmp_"):
-            add(self.results, self.root, self.path, node, "tmp-prefix", "violation", "Bindings must not use the tmp_ prefix.")
-        if isinstance(node.ctx, (ast.Store, ast.Del)) and not (node.id.isupper() or valid_snake(node.id)):
-            add(self.results, self.root, self.path, node, "binding-naming", "violation", "Bindings must use snake_case or an uppercase constant name.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "tmp-prefix",
+                "violation",
+                "Bindings must not use the tmp_ prefix.",
+            )
+        if isinstance(node.ctx, (ast.Store, ast.Del)) and not (
+            node.id.isupper() or valid_snake(node.id)
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "binding-naming",
+                "violation",
+                "Bindings must use snake_case or an uppercase constant name.",
+            )
 
     def visit_arg(self, node):
         """Check parameter names.
@@ -706,9 +981,25 @@ class Visitor(ast.NodeVisitor):
             node: Parameter syntax node.
         """
         if node.arg.startswith("tmp_"):
-            add(self.results, self.root, self.path, node, "tmp-prefix", "violation", "Parameters must not use the tmp_ prefix.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "tmp-prefix",
+                "violation",
+                "Parameters must not use the tmp_ prefix.",
+            )
         if not valid_snake(node.arg):
-            add(self.results, self.root, self.path, node, "parameter-naming", "violation", "Parameters must use snake_case.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "parameter-naming",
+                "violation",
+                "Parameters must use snake_case.",
+            )
 
     def visit_FunctionDef(self, node):
         """Check synchronous function documentation and names.
@@ -733,9 +1024,29 @@ class Visitor(ast.NodeVisitor):
             node: Function syntax node.
         """
         if node.name.startswith("tmp_"):
-            add(self.results, self.root, self.path, node, "tmp-prefix", "violation", "Functions must not use the tmp_ prefix.")
-        if not (_is_ast_visitor_hook(node.name) or DUNDER.fullmatch(node.name) or valid_snake(node.name)):
-            add(self.results, self.root, self.path, node, "function-naming", "violation", "Functions and methods must use snake_case.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "tmp-prefix",
+                "violation",
+                "Functions must not use the tmp_ prefix.",
+            )
+        if not (
+            _is_ast_visitor_hook(node.name)
+            or DUNDER.fullmatch(node.name)
+            or valid_snake(node.name)
+        ):
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "function-naming",
+                "violation",
+                "Functions and methods must use snake_case.",
+            )
         for default in _mutable_defaults(node):
             constructor = default.func.id if isinstance(default, ast.Call) else None
             confirmed_builtin = constructor and all(
@@ -743,14 +1054,47 @@ class Visitor(ast.NodeVisitor):
                 for names, wildcard in self.bindings
             )
             if confirmed_builtin or constructor is None:
-                add(self.results, self.root, self.path, default, "mutable-default", "violation", "Function defaults must not create mutable objects.")
+                add(
+                    self.results,
+                    self.root,
+                    self.path,
+                    default,
+                    "mutable-default",
+                    "violation",
+                    "Function defaults must not create mutable objects.",
+                )
             else:
-                add(self.results, self.root, self.path, default, "mutable-default", "review", "Confirm that this constructor resolves to an immutable default value.")
+                add(
+                    self.results,
+                    self.root,
+                    self.path,
+                    default,
+                    "mutable-default",
+                    "review",
+                    "Confirm that this constructor resolves to an immutable default "
+                    "value.",
+                )
         doc_findings(self.results, self.root, self.path, node, "function")
         if self.scopes[-1] == "function":
-            add(self.results, self.root, self.path, node, "nested-function", "review", "Review whether this nested function is necessary.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "nested-function",
+                "review",
+                "Review whether this nested function is necessary.",
+            )
         if node.end_lineno is not None and node.end_lineno - node.lineno + 1 > 40:
-            add(self.results, self.root, self.path, node, "function-length", "review", "Review whether this function can remain focused below about 40 lines.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "function-length",
+                "review",
+                "Review whether this function can remain focused below about 40 lines.",
+            )
         self.scopes.append("function")
         self.bindings.append(_scope_bindings(node))
         self.generic_visit(node)
@@ -764,9 +1108,20 @@ class Visitor(ast.NodeVisitor):
             node: Assignment node.
         """
         if self.scopes[-1] in {"module", "class"} and _is_mutable_value(node.value):
-            names = [target.id for target in node.targets if isinstance(target, ast.Name)]
+            names = [
+                target.id for target in node.targets if isinstance(target, ast.Name)
+            ]
             if not names or any(not name.isupper() for name in names):
-                add(self.results, self.root, self.path, node, "mutable-global-state", "review", "Review mutable module or class state and document its justification.")
+                add(
+                    self.results,
+                    self.root,
+                    self.path,
+                    node,
+                    "mutable-global-state",
+                    "review",
+                    "Review mutable module or class state and document its "
+                    "justification.",
+                )
         self.generic_visit(node)
 
     def visit_ClassDef(self, node):
@@ -776,9 +1131,25 @@ class Visitor(ast.NodeVisitor):
             node: Class syntax node.
         """
         if not valid_class(node.name):
-            add(self.results, self.root, self.path, node, "class-naming", "violation", "Classes must use PascalCase.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "class-naming",
+                "violation",
+                "Classes must use PascalCase.",
+            )
         if self.scopes[-1] != "module":
-            add(self.results, self.root, self.path, node, "nested-class", "review", "Review whether this nested class is necessary.")
+            add(
+                self.results,
+                self.root,
+                self.path,
+                node,
+                "nested-class",
+                "review",
+                "Review whether this nested class is necessary.",
+            )
         doc_findings(self.results, self.root, self.path, node, "class")
         self.scopes.append("class")
         self.bindings.append(_scope_bindings(node))
@@ -1026,7 +1397,13 @@ def fix_class_imports(source, path, root):
             [f"from {node.module} import {name}" for name in kept] + [new_import]
         )
         edits.append(
-            (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, replacement)
+            (
+                node.lineno,
+                node.col_offset,
+                node.end_lineno,
+                node.end_col_offset,
+                replacement,
+            )
         )
         for alias in fixable:
             bound_name = alias.asname or alias.name
@@ -1047,8 +1424,9 @@ def fix_class_imports(source, path, root):
                     path.relative_to(root).as_posix(),
                     node.lineno,
                     node.col_offset + 1,
-                    f"Rewrote `{node.module}` import of `{alias.name}` to `{new_import}` "
-                    f"and qualified usages as `{module_ref}.{alias.name}`.",
+                    f"Rewrote `{node.module}` import of `{alias.name}` "
+                    f"to `{new_import}` and qualified usages as "
+                    f"`{module_ref}.{alias.name}`.",
                 )
             )
     if not edits:
@@ -1093,20 +1471,77 @@ def token_findings(source, root, path):
         if line_number in excluded_comment_lines:
             continue
         if len(line) > 80:
-            add(results, root, path, ast.Constant(value=None), "line-length", "review", "Review this line over the Google 80-character limit.", line_number)
+            add(
+                results,
+                root,
+                path,
+                ast.Constant(value=None),
+                "line-length",
+                "review",
+                "Review this line over the Google 80-character limit.",
+                line_number,
+            )
         if TYPE_COMMENT.search(line):
-            add(results, root, path, ast.Constant(value=None), "type-comments", "violation", "Use annotations instead of type comments.", line_number)
+            add(
+                results,
+                root,
+                path,
+                ast.Constant(value=None),
+                "type-comments",
+                "violation",
+                "Use annotations instead of type comments.",
+                line_number,
+            )
         if TODO.search(line):
-            add(results, root, path, ast.Constant(value=None), "todo-format", "review", "Use TODO: context - explanation with a traceable context link.", line_number)
+            add(
+                results,
+                root,
+                path,
+                ast.Constant(value=None),
+                "todo-format",
+                "review",
+                "Use TODO: context - explanation with a traceable context link.",
+                line_number,
+            )
         if PYLINT.search(line):
-            add(results, root, path, ast.Constant(value=None), "ruff-suppression", "review", "Review whether this Pylint suppression should be replaced with scoped Ruff syntax.", line_number)
+            add(
+                results,
+                root,
+                path,
+                ast.Constant(value=None),
+                "ruff-suppression",
+                "review",
+                "Review whether this Pylint suppression should be replaced with "
+                "scoped Ruff syntax.",
+                line_number,
+            )
         if re.search(r"\\\s*$", line) and not line.lstrip().startswith("#"):
-            add(results, root, path, ast.Constant(value=None), "explicit-line-continuation", "review", "Prefer implicit line joining.", line_number)
+            add(
+                results,
+                root,
+                path,
+                ast.Constant(value=None),
+                "explicit-line-continuation",
+                "review",
+                "Prefer implicit line joining.",
+                line_number,
+            )
     try:
-        tokens = tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__)
+        tokens = tokenize.generate_tokens(
+            iter(source.splitlines(keepends=True)).__next__
+        )
         for token in tokens:
             if token.type == tokenize.OP and token.string == ";":
-                add(results, root, path, token, "semicolons", "violation", "Do not use statement semicolons.", token.start[0])
+                add(
+                    results,
+                    root,
+                    path,
+                    token,
+                    "semicolons",
+                    "violation",
+                    "Do not use statement semicolons.",
+                    token.start[0],
+                )
             if token.type != tokenize.COMMENT:
                 continue
             text = token.string.lstrip("#").strip()
@@ -1115,13 +1550,39 @@ def token_findings(source, root, path):
             if token.start[0] in excluded_comment_lines:
                 continue
             if "`" in text or ":class:" in text:
-                add(results, root, path, token, "comment-markup", "violation", "Comments must not contain backticks or Sphinx class markup.", token.start[0])
+                add(
+                    results,
+                    root,
+                    path,
+                    token,
+                    "comment-markup",
+                    "violation",
+                    "Comments must not contain backticks or Sphinx class markup.",
+                    token.start[0],
+                )
             if section_or_fold_comment(text):
                 continue
             if not text.endswith("."):
-                add(results, root, path, token, "comment-punctuation", "violation", "Code comments must end with a period.", token.start[0])
+                add(
+                    results,
+                    root,
+                    path,
+                    token,
+                    "comment-punctuation",
+                    "violation",
+                    "Code comments must end with a period.",
+                    token.start[0],
+                )
     except (tokenize.TokenError, IndentationError) as error:
-        add(results, root, path, ast.Constant(value=None), "tokenization", "violation", f"Tokenization failed: {error}.")
+        add(
+            results,
+            root,
+            path,
+            ast.Constant(value=None),
+            "tokenization",
+            "violation",
+            f"Tokenization failed: {error}.",
+        )
     return results
 
 
@@ -1138,18 +1599,45 @@ def audit(path, root):
         with tokenize.open(path) as source_file:
             source = source_file.read()
     except (OSError, UnicodeError, SyntaxError) as error:
-        return [Finding("violation", "source-read", path.relative_to(root).as_posix(), 1, 1, f"Could not read source: {error}.")]
+        return [
+            Finding(
+                "violation",
+                "source-read",
+                path.relative_to(root).as_posix(),
+                1,
+                1,
+                f"Could not read source: {error}.",
+            )
+        ]
     results = token_findings(source, root, path)
     try:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError as error:
-        results.append(Finding("violation", "syntax", path.relative_to(root).as_posix(), error.lineno or 1, error.offset or 1, error.msg))
+        results.append(
+            Finding(
+                "violation",
+                "syntax",
+                path.relative_to(root).as_posix(),
+                error.lineno or 1,
+                error.offset or 1,
+                error.msg,
+            )
+        )
     else:
         visitor = Visitor(root, path, confirmed_class_usages(tree))
         visitor.visit(tree)
         results.extend(visitor.results)
         if ast.get_docstring(tree) is None:
-            results.append(Finding("violation", "module-docstring", path.relative_to(root).as_posix(), 1, 1, "Add a module docstring."))
+            results.append(
+                Finding(
+                    "violation",
+                    "module-docstring",
+                    path.relative_to(root).as_posix(),
+                    1,
+                    1,
+                    "Add a module docstring.",
+                )
+            )
         else:
             doc_findings(results, root, path, tree, "module")
     return results
@@ -1174,7 +1662,11 @@ def main():
     )
     args = parser.parse_args()
     root = args.root.resolve()
-    paths = sorted(path for path in root.rglob("*.py") if not any(part.lower() in EXCLUDED for part in path.relative_to(root).parts))
+    paths = sorted(
+        path
+        for path in root.rglob("*.py")
+        if not any(part.lower() in EXCLUDED for part in path.relative_to(root).parts)
+    )
     fixes = [fix for path in paths for fix in fix_file(path, root)] if args.fix else []
     findings = [finding for path in paths for finding in audit(path, root)]
     for fix in fixes:
@@ -1183,7 +1675,10 @@ def main():
         print(json.dumps(dataclasses.asdict(finding), sort_keys=True))
     violations = sum(finding.level == "violation" for finding in findings)
     fix_summary = f" {len(fixes)} import(s) rewritten." if args.fix else ""
-    print(f"Checked {len(paths)} Python files: {violations} violations.{fix_summary}", file=sys.stderr)
+    print(
+        f"Checked {len(paths)} Python files: {violations} violations.{fix_summary}",
+        file=sys.stderr,
+    )
     return 1 if violations else 0
 
 
