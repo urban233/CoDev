@@ -44,6 +44,10 @@ the same value in every row, a table wide enough that its cells are
 carrying prose instead of comparable values, and a paragraph that closely
 matches one in a different file.
 
+The script writes findings to stdout as JSON-lines, one JSON object per
+line. Exit code 0 means no violations; exit code 1 means at least one
+`violation`-level finding exists.
+
 Treat `violation`-level findings as mechanically certain -- fix them.
 Treat `review`-level findings, mainly the cross-file duplicate check, as
 needing judgment before acting: a short, deliberately worded pointer
@@ -63,7 +67,8 @@ its `violation`-level findings can be trusted without a second look.
 2. Preserve every technical fact, requirement, number, warning, decision,
    and open question exactly. Never invent a feature, prerequisite,
    rationale, or measurement, and never soften a stated uncertainty into a
-   settled fact or a settled fact into a hedge.
+   settled fact or a settled fact into a hedge. Restructuring existing
+   content is allowed; adding content not present in the source is not.
 3. Revise structure and prose against `references/writing-style.md`: turn
    enumerable run-on sentences into lists, define jargon a named reader
    might not know, split paragraphs and sections that carry more than one
@@ -83,4 +88,5 @@ its `violation`-level findings can be trusted without a second look.
 This skill does not decide document architecture, ownership, or
 acceptance -- it only makes existing or in-progress content clear. Return
 control to the calling planning skill, or to the developer, once the
-self-check in `references/writing-style.md` passes.
+script reports zero `violation`-level findings and every item in the
+self-check at the end of `references/writing-style.md` is confirmed.

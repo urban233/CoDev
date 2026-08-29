@@ -1,0 +1,7 @@
+[project]
+name = "sample-pkg"
+version = "0.1.0"
+description = "Sample package for style audit evaluation."
+
+[tool.ruff]
+line-length = 88

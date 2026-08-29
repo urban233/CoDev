@@ -1,30 +1,47 @@
 {
   "schema_version": 1,
   "skill": "audit-google-python-style",
-  "repetitions": 1,
+  "repetitions": 5,
   "categories": {
-    "plan-phase-audit": {
+    "phase-a-planning": {
       "tasks": {
-        "audit-google-python-style-demo": {
+        "audit-google-python-style-phase-a": {
           "with_skill": {
-            "passed": 1,
-            "total": 1
+            "passed": 2,
+            "total": 5
           },
           "baseline": {
             "passed": 0,
-            "total": 1
+            "total": 5
           }
         }
       },
-      "with_skill_percentage": 100.0,
+      "with_skill_percentage": 40.0,
       "baseline_percentage": 0.0,
-      "delta": 100.0
+      "delta": 40.0
+    },
+    "phase-b-remediation": {
+      "tasks": {
+        "audit-google-python-style-phase-b": {
+          "with_skill": {
+            "passed": 1,
+            "total": 5
+          },
+          "baseline": {
+            "passed": 1,
+            "total": 5
+          }
+        }
+      },
+      "with_skill_percentage": 20.0,
+      "baseline_percentage": 20.0,
+      "delta": 0.0
     }
   },
   "overall": {
-    "with_skill_percentage": 100.0,
-    "baseline_percentage": 0.0,
-    "delta": 100.0
+    "with_skill_percentage": 30.0,
+    "baseline_percentage": 10.0,
+    "delta": 20.0
   },
-  "generated_at": "2026-08-22T01:58:35.145042+00:00"
+  "generated_at": "2026-08-24T23:09:45.961762+00:00"
 }

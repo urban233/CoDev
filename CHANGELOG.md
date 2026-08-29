@@ -3,7 +3,12 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.3.1] - 2026-08-29
+
+### Added
+- `codev git issue-view --number N`, a read-only, no-task-precondition
+  command that prints a GitHub issue's body and all its comments as JSON,
+  for an agent to consume issue discussion directly.
 
 ## [0.3.0] - 2026-08-22
 

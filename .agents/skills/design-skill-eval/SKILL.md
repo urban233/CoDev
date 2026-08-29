@@ -151,7 +151,7 @@ itself.
 of checks (`json_field_equals`, `finding_matches`, `files_unchanged_except`,
 `command_succeeds`) expressed as data instead of a script. Prefer it unless
 the task needs something none of those four cover --
-`.codev/eval/tasks/audit-google-python-style-demo/checks.json` is a real
+`.codev/eval/tasks/audit-google-python-style-phase-a/checks.json` is a real
 worked example.
 
 Either way, the verifier must fail when the specific planted problem is

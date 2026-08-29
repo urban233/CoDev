@@ -1,3 +1,31 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2026, Martin Urban, Hannah Kullik
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
 import errno
@@ -676,6 +704,32 @@ class TaskContractTests(unittest.TestCase):
         self.assertTrue(events.endswith("\n"))
         self.assertIn('"step_start"', events)
         self.assertEqual("final answer", output)
+
+    def test_actor_final_output_joins_multiple_text_events_with_a_separator(
+        self,
+    ) -> None:
+        # A multi-step actor run emits several "text" events (initial intent,
+        # progress commentary, the eventual completion report). Concatenating
+        # them with no separator at all produces an illegible run-on blob --
+        # e.g. "...requested Git checks.The target contains broad style..." --
+        # that a judge model can misread as missing completion evidence even
+        # when the real report is present later in the same string.
+        raw = "\n".join(
+            [
+                json.dumps(
+                    {"type": "text", "part": {"text": "Understand: I'll begin."}}
+                ),
+                json.dumps(
+                    {"type": "text", "part": {"text": "The target has issues."}}
+                ),
+                json.dumps({"type": "text", "part": {"text": "COMPLETED."}}),
+            ]
+        )
+        _, output = _actor_artifacts(raw)
+        self.assertNotIn("begin.The", output)
+        self.assertIn("Understand: I'll begin.", output)
+        self.assertIn("The target has issues.", output)
+        self.assertIn("COMPLETED.", output)
 
     def test_structured_artifacts_sanitize_nested_urls_and_escaped_values(self) -> None:
         raw = json.dumps(

@@ -1,3 +1,31 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2026, Martin Urban, Hannah Kullik
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
 import json
@@ -1045,6 +1073,49 @@ class FetchIssueTests(unittest.TestCase):
                 self.assertRaises(git_ops.GitOpsError),
             ):
                 git_ops.fetch_issue(7, target=target)
+
+
+class ViewIssueTests(unittest.TestCase):
+    def test_returns_full_payload_including_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            payload = (
+                '{"number": 7, "title": "Fix the thing", '
+                '"url": "https://github.com/o/r/issues/7", "state": "OPEN", '
+                '"body": "details", "comments": ['
+                '{"author": {"login": "alice"}, "body": "looks good", '
+                '"createdAt": "2026-01-01T00:00:00Z"}]}'
+            )
+            with patch.object(git_ops, "_run_gh", return_value=payload) as run_gh:
+                issue = git_ops.view_issue(7, target=target)
+            command = run_gh.call_args.args[0]
+        self.assertEqual(7, issue["number"])
+        self.assertEqual(1, len(issue["comments"]))
+        self.assertEqual("looks good", issue["comments"][0]["body"])
+        self.assertIn("issue", command)
+        self.assertIn("view", command)
+        self.assertIn("7", command)
+        self.assertIn("comments", command[-1])
+
+    def test_raises_when_gh_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch.object(
+                    git_ops, "_run_gh", side_effect=git_ops.GitOpsError("not found")
+                ),
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.view_issue(999, target=target)
+
+    def test_raises_on_malformed_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch.object(git_ops, "_run_gh", return_value="not json"),
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.view_issue(7, target=target)
 
 
 if __name__ == "__main__":
