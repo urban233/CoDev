@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.3.1] - 2026-08-29
 
 ### Added
 - `codev git issue-view --number N`, a read-only, no-task-precondition

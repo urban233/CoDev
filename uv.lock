@@ -669,7 +669,7 @@ wheels = [
 
 [[package]]
 name = "open-codev-workflow"
-version = "0.2.3"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "pre-commit" },
