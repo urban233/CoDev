@@ -78,7 +78,7 @@ verify-wheel-parity: wheel
     set -euo pipefail
     rm -rf /tmp/codev-wheel-parity
     mkdir -p /tmp/codev-wheel-parity
-    uv run python -m build --outdir /tmp/codev-wheel-parity/setuptools-dist > /dev/null
+    uv run --extra dev python -m build --outdir /tmp/codev-wheel-parity/setuptools-dist > /dev/null
     setuptools_whl=$(ls /tmp/codev-wheel-parity/setuptools-dist/*.whl)
     bazel_whl=$(bazel cquery --output=files //packaging:wheel 2>/dev/null)
     unzip -l "$setuptools_whl" | awk '{print $4}' | sed '/^$/d' | sort > /tmp/codev-wheel-parity/setuptools.manifest
@@ -88,7 +88,7 @@ verify-wheel-parity: wheel
         diff /tmp/codev-wheel-parity/setuptools.manifest /tmp/codev-wheel-parity/bazel.manifest >&2 || true
         exit 1
     fi
-    uv run twine check "$bazel_whl"
+    uv run --extra dev twine check "$bazel_whl"
 
 # Build the actual release artifact set into dist/: sdist via `python -m
 # build` (py_wheel has no sdist equivalent), wheel via Bazel. This is what
@@ -100,7 +100,7 @@ dist: verify-wheel-parity
     #!/usr/bin/env bash
     set -euo pipefail
     rm -rf dist
-    uv run python -m build
+    uv run --extra dev python -m build
     rm dist/*.whl
     cp "$(bazel cquery --output=files //packaging:wheel 2>/dev/null)" dist/
 
@@ -109,7 +109,7 @@ dist: verify-wheel-parity
 verify-dist:
     #!/usr/bin/env bash
     set -euo pipefail
-    uv run twine check dist/*
+    uv run --extra dev twine check dist/*
     rm -rf .release-venv
     python3 -m venv .release-venv
     .release-venv/bin/python -m pip install --no-deps dist/*.whl
