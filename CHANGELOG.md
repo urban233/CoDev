@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.4.0] - 2026-08-31
 
 ### Added
 - A four-part bundled tutorial series (`docs/codev/tutorials/`, installed into every

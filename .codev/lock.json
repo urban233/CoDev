@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "bundle_version": "0.3.1",
+  "bundle_version": "0.4.0",
   "platforms": [
     "opencode"
   ],
@@ -86,7 +86,7 @@
     "docs/codev/onboarding/onboarding-guide.md": "aea771ed178262506a623ed39e75793f0ed2c29ed97cd882b97ef217898c4837",
     "docs/codev/onboarding/skill-card.template.md": "585ce177e5eddbd9a387e497759377eb71b383fe38e5448baa7e615bf2130bc6",
     "docs/codev/onboarding/starting-prompts.md": "532d9f0886d86f8a8f255b2f78fe3452fa453aea3ffd5567d917f016a5515a48",
-    "docs/codev/tutorials/01-your-first-fix.md": "5d7532f974ebe5e635ecc087cc226a7254cfcbc1a836b9ec9009cdfedc71ce92",
+    "docs/codev/tutorials/01-your-first-fix.md": "28070f33f0a6aca4c3ca808516f72adb840133aab82400a18e436994aaa69081",
     "docs/codev/tutorials/02-a-design-worthy-change.md": "c2de0defaf753c05e2f23008f4f758ae49aeedd90d0c85216c8af5b01bc9252a",
     "docs/codev/tutorials/03-outer-loop-review.md": "9f4ebc8f682602e790e18d02085d3c8cc7ce59bca7f0268a02ff52a67e2467f0",
     "docs/codev/tutorials/04-multi-developer-coordination.md": "4901e7995f5b170512f9ba195f5a39aad9c152f60836a5807f7d9a88ea19b127"

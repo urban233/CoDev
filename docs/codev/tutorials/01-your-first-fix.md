@@ -41,7 +41,7 @@ ADD       docs/codev/onboarding/onboarding-guide.md
 INTEGRATE AGENTS.md — append managed policy block
 INTEGRATE .gitignore — append escalation-log ignore rule
 INTEGRATE .opencode/opencode.json — integrated OpenCode agents: orchestrator, planner, ...
-Installed CoDev 0.3.1 into /path/to/your/repo
+Installed CoDev 0.4.0 into /path/to/your/repo
 ```
 
 (Real run had ~70 `ADD` lines — every skill and agent file gets listed. Trimmed here; your
@@ -58,8 +58,8 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.3.1 - /path/to/your/repo
-Bundle: healthy (79 managed files, no drift)
+CoDev 0.4.0 - /path/to/your/repo
+Bundle: healthy (83 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```
@@ -276,8 +276,8 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.3.1 - /path/to/your/repo
-Bundle: healthy (79 managed files, no drift)
+CoDev 0.4.0 - /path/to/your/repo
+Bundle: healthy (83 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```

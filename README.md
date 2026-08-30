@@ -48,8 +48,8 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.3.1 - /path/to/your/repo
-Bundle: healthy (79 managed files, no drift)
+CoDev 0.4.0 - /path/to/your/repo
+Bundle: healthy (83 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```
