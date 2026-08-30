@@ -52,6 +52,15 @@ narrow assistant.
 (unrestricted shell access, raw git mutation, the retired P0–P3 scale) — it
 simply requires no task-lifecycle markers, since this role never emits any.
 
+`assistant` bridges into the full workflow by telling the developer how,
+never by acting on it: when a finished change is worth OpenCode's or Claude
+Code's full review-and-PR lifecycle, it names the exact commands (`codev git
+branch`, then `codev task start --entry direct-review` or `--entry
+takeover` — the existing human-authored-work entry points from ADR-0006) for
+the developer to run themselves. `assistant` never runs them itself; it has
+neither the tools nor the task-lifecycle context to do so safely, and giving
+it that trigger would just reintroduce the coupling this ADR removes.
+
 This narrows the platform-parity assumptions made by earlier ADRs without
 editing them (this directory is append-only): ADR-0001 (every platform has
 an `orchestrator`), ADR-0002 (all four platform adapters' `orchestrator`/

@@ -89,6 +89,15 @@ Retaining removed files is conservative: an update cannot unexpectedly delete
 repository instructions. The explicit `codev remove` command preflights and
 removes only unchanged managed files and integrations; it remains opt-in.
 
+A conflict left unresolved (`--on-conflict skip`, the conflict wizard's
+`skip`, or simply no resolution supplied for that path) stays a visible
+conflict: `codev status` keeps reporting it as a managed file with local
+changes until a real resolution (`override` or `keep`) supersedes it, rather
+than the file quietly falling out of management the moment an update chooses
+not to touch it. `delete` is the one exception -- it adopts upstream's
+removal, so nothing is left to compare a future hash against, and the path
+stops being tracked the same way an ordinary upstream removal does.
+
 ## Invariants
 
 - Every multi-file change is atomic at the decision level: conflicts prevent

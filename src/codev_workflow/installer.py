@@ -1150,6 +1150,24 @@ def plan_update(
         opencode_agent_container_managed=agent_container_managed,
         opencode_config_file_managed=config_file_managed,
     )
+    # A conflict left unresolved (`--on-conflict skip`, or no resolution at
+    # all) must not quietly stop being a known problem: `_new_lock` above
+    # only hashes `lockable_files`, so a previously-managed conflicted path
+    # would otherwise vanish from `files` entirely, and `check_project`
+    # would report "no drift" the next time -- indistinguishable from the
+    # conflict having been genuinely resolved. Re-seed this plan's lock with
+    # the *old* recorded hash for any conflicted path that already had one,
+    # so it keeps failing `check_project`'s hash comparison until a real
+    # resolution (override/keep) supersedes it in `apply_plan`. A path with
+    # no prior recorded hash -- a brand-new bundle file colliding with an
+    # unrelated local file -- has no baseline to restore and is left absent,
+    # same as before; there was never a "should look like X" expectation for
+    # it to begin with.
+    for relative in conflicted_relatives:
+        old_hash = old_files.get(relative)
+        if old_hash is not None:
+            plan.lock["files"][relative] = old_hash
+    plan.lock["files"] = dict(sorted(plan.lock["files"].items()))
     return plan
 
 
@@ -1485,6 +1503,14 @@ def apply_plan(
         elif choice == Resolution.DELETE:
             if destination.is_file():
                 deletions.add(destination)
+            # DELETE adopts upstream's removal -- there's nothing left to
+            # compare a future hash against, so it must not stay seeded with
+            # the pre-deletion hash `plan_update` restored for the SKIP/COPY
+            # case above, or `check_project` would report a deleted file as
+            # a *missing* managed file forever after instead of correctly
+            # forgetting it, the same way an ordinary upstream removal does.
+            if lock is not None:
+                lock["files"].pop(op.path, None)
         else:
             raise CoDevError(f"unknown conflict resolution: {choice!r}")
 

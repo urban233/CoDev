@@ -8,7 +8,7 @@
 3. Add project-specific instructions outside the marked CoDev block in
    `AGENTS.md`.
 4. Configure model/provider choices in the normal platform configuration.
-5. Run `codev check --target <repo>` and the project's own validation.
+5. Run `codev status --target <repo>` and the project's own validation.
 6. Review and commit the installation as one infrastructure change.
 
 ## Existing repository
@@ -43,11 +43,3 @@ Pin a released CoDev version in team automation. Use `codev diff` before
 `codev update`; inspect the resulting Git diff and changelog; then run the
 consumer repository's CI. Never update from a floating development branch and
 never auto-merge workflow instruction changes.
-
-## Publishing releases
-
-`open-codev-workflow` is published from reviewed `vX.Y.Z` tags. The release
-workflow validates the tag and package version, verifies the built artifacts,
-creates provenance attestations, and publishes through PyPI trusted publishing.
-See [the release guide](releasing.md) for the one-time PyPI configuration and
-tagging procedure.

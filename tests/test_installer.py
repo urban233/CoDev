@@ -99,6 +99,16 @@ class InstallerTests(unittest.TestCase):
             (self.target / "docs/codev/onboarding/onboarding-guide.md").is_file()
         )
         self.assertTrue((self.target / "docs/codev/onboarding/examples.md").is_file())
+        tutorials = sorted((self.target / "docs/codev/tutorials").glob("*.md"))
+        self.assertEqual(
+            [
+                "01-your-first-fix.md",
+                "02-a-design-worthy-change.md",
+                "03-outer-loop-review.md",
+                "04-multi-developer-coordination.md",
+            ],
+            [path.name for path in tutorials],
+        )
         self.assertTrue(
             (self.target / ".codev/for-ai/ai-agent-guidelines.md").is_file()
         )
@@ -823,6 +833,11 @@ class InstallerTests(unittest.TestCase):
         sidecar = installer.copy_sidecar_path(destination)
         self.assertEqual(upstream, sidecar.read_bytes())
         self.assertTrue(installer.plan_update(self.target).conflicts)
+        result = installer.check_project(self.target)
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any(relative in issue for issue in result.issues), result.issues
+        )
 
     def test_apply_plan_with_delete_resolution_removes_the_local_file(self) -> None:
         relative, _local, _upstream = self._make_single_file_conflict()
@@ -866,6 +881,66 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(second, unresolved[0].path)
         self.assertEqual(changed_bundle[first], first_path.read_bytes())
         self.assertEqual(local_second, second_path.read_bytes())
+
+        # A skipped conflict must stay a visible problem, not silently drop
+        # out of management: `codev status` (`check_project`) has to keep
+        # reporting it until the conflict is genuinely resolved, not report
+        # "no drift" just because this update chose to skip it.
+        result = installer.check_project(self.target)
+        self.assertFalse(result.ok)
+        self.assertTrue(any(second in issue for issue in result.issues), result.issues)
+
+    def test_apply_plan_delete_stops_tracking_the_deleted_path(self) -> None:
+        # DELETE must NOT inherit the old-hash re-seeding that keeps a
+        # SKIPped conflict visible as drift (tested above): the file is gone,
+        # so there's nothing left for a future hash comparison to mean.
+        relative, _local, _upstream = self._make_single_file_conflict()
+        plan = installer.plan_update(self.target)
+
+        unresolved = installer.apply_plan(
+            self.target, plan, {relative: installer.Resolution.DELETE}
+        )
+
+        self.assertEqual([], unresolved)
+        self.assertFalse((self.target / Path(relative)).exists())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(relative, lock["files"])
+        result = installer.check_project(self.target)
+        self.assertTrue(result.ok, result.issues)
+
+    def test_skipped_new_file_collision_has_no_baseline_to_restore(self) -> None:
+        # Distinguishes the fix above from over-reach: a brand-new bundle
+        # file that collides with an unrelated pre-existing local file was
+        # never previously managed, so it has no old hash to re-seed and
+        # correctly stays untracked after a skip -- there was never a
+        # "should look like X" expectation for `check_project` to enforce.
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
+        relative = "docs/codev/onboarding/brand-new-file.md"
+        self.assertNotIn(relative, current_bundle)
+        expanded_bundle = dict(current_bundle)
+        expanded_bundle[relative] = b"new upstream content\n"
+        destination = (self.target / Path(relative)).resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"unrelated pre-existing local content\n")
+
+        with patch.object(installer, "_bundle_files", return_value=expanded_bundle):
+            plan = installer.plan_update(self.target)
+            conflict = next(item for item in plan.conflicts if item.path == relative)
+            self.assertIn("collides locally", conflict.detail)
+            unresolved = installer.apply_plan(
+                self.target, plan, {relative: installer.Resolution.SKIP}
+            )
+
+        self.assertEqual(1, len(unresolved))
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(relative, lock["files"])
+        result = installer.check_project(self.target)
+        self.assertTrue(result.ok, result.issues)
 
     def test_apply_plan_override_without_upstream_content_raises(self) -> None:
         self.install(("opencode",))

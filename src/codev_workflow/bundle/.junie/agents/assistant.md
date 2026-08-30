@@ -38,6 +38,19 @@ complete diff before reporting. Report:
 - **Validation run:** commands and outcomes;
 - **Known limitations:** risks and follow-up.
 
-Do not commit, push, merge, open a pull request, or run any other
-repository-mutating Git command -- the developer reviews and commits your
-diff themselves. Do not invoke another agent or approve your own change.
+If this change is finished and substantial enough to want CoDev's full
+review-and-PR lifecycle (the orchestrator-driven workflow on OpenCode or
+Claude Code), tell the developer how to bring it in themselves -- name the
+exact commands, do not run them: `codev git branch --id <task-id> --base
+<base-sha>` to create the task's own branch, then `codev task start --id
+<task-id> --base <base-sha> --entry direct-review` if the change is finished
+and only needs independent review, or `--entry takeover` if it is unfinished
+and should continue under the orchestrator. From there, `orchestrator`
+(OpenCode or Claude Code) picks it up. This is guidance for the developer to
+act on, not something you have the tools or task-lifecycle context to do
+safely yourself.
+
+Do not commit, push, merge, open a pull request, start a CoDev task, or run
+any other repository-mutating Git command -- the developer reviews and
+commits your diff themselves. Do not invoke another agent or approve your
+own change.

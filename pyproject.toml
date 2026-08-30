@@ -74,7 +74,7 @@ codev_workflow = [
   "bundle/.github/ISSUE_TEMPLATE/*.md",
   "bundle/docs/*.md",
   "bundle/docs/codev/onboarding/*.md",
-  "bundle/docs/handbooks/*.md",
+  "bundle/docs/codev/tutorials/*.md",
 ]
 
 [tool.ruff]

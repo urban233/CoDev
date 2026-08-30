@@ -64,8 +64,6 @@ EXPECTED_SKILLS = {
     ],
 }
 
-EXPECTED_HANDBOOKS: list[str] = []
-
 EXPECTED_GUIDES = [
     "AGENTS.md",
     "docs/codev/onboarding/onboarding-guide.md",
@@ -189,29 +187,6 @@ def validate_guides(repo: Path, errors: list[str]) -> None:
                 errors.append(f"{guide}: does not reference {skill}")
 
 
-def validate_handbooks(repo: Path, errors: list[str]) -> None:
-    """Validate required handbook contents when handbook expectations exist.
-
-    Args:
-        repo: Bundle repository root.
-        errors: Mutable list receiving validation errors.
-    """
-    handbook_root = repo / "docs" / "handbooks"
-    for name in EXPECTED_HANDBOOKS:
-        handbook = handbook_root / name
-        if not handbook.is_file():
-            errors.append(f"{handbook}: missing")
-            continue
-        text = handbook.read_text(encoding="utf-8")
-        if len(text.splitlines()) < 100:
-            errors.append(f"{handbook}: unexpectedly short")
-        if re.search(r"\b(TODO|TBD)\b", text, re.IGNORECASE):
-            errors.append(f"{handbook}: contains an unfinished placeholder")
-        for skill in EXPECTED_SKILLS:
-            if skill not in text:
-                errors.append(f"{handbook}: does not reference {skill}")
-
-
 def validate_evaluations(errors: list[str]) -> int:
     """Validate the behavioral evaluation catalog and scorer.
 
@@ -260,7 +235,7 @@ def validate_evaluations(errors: list[str]) -> int:
 
 
 def main() -> int:
-    """Validate installed skills, guides, handbooks, and evaluations.
+    """Validate installed skills, guides, and evaluations.
 
     Returns:
         Zero when all repository checks pass, otherwise one.
@@ -280,7 +255,6 @@ def main() -> int:
     for skill, assets in EXPECTED_SKILLS.items():
         validate_skill(skill_root, skill, assets, errors)
     validate_guides(repo, errors)
-    validate_handbooks(repo, errors)
     scenario_count = validate_evaluations(errors)
 
     if errors:
@@ -291,8 +265,7 @@ def main() -> int:
 
     print(
         "Workflow validation passed: "
-        f"{len(EXPECTED_SKILLS)} skills, {len(EXPECTED_GUIDES)} guides, and "
-        f"{len(EXPECTED_HANDBOOKS)} handbooks, plus "
+        f"{len(EXPECTED_SKILLS)} skills, {len(EXPECTED_GUIDES)} guides, plus "
         f"{scenario_count} behavioral scenarios"
     )
     return 0
