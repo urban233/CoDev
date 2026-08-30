@@ -243,9 +243,7 @@ class CliTests(unittest.TestCase):
         with redirect_stdout(StringIO()):
             self.assertEqual(
                 0,
-                main(
-                    ["init", "--target", str(target), "--agent-platform", "opencode"]
-                ),
+                main(["init", "--target", str(target), "--agent-platform", "opencode"]),
             )
         from codev_workflow import installer as installer_module
 
