@@ -171,8 +171,30 @@ jobs:
           path: ${{ runner.temp }}/seeded-defect-results
           if-no-files-found: warn
 
+  claude-code-compat:
+    # Automated replacement for docs/features/claude-code/design.md's
+    # one-time manual Phase 0 spike: resolves the real, currently-published
+    # Claude Code CLI via npx and checks its shipped binary still contains
+    # every hook/settings/discovery-path marker the Claude Code adapter
+    # depends on, failing loudly on drift instead of trusting it silently.
+    # Scheduled and release-tag-gated, same as live-eval: it needs network
+    # access to fetch the package, which the rest of this project's
+    # deterministic checks deliberately avoid (docs/architecture.md).
+    if: github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify the Claude Code adapter's compatibility surface
+        run: python scripts/verify_claude_code_compat.py
+
   prepare-release:
-    needs: [release-integrity, test, quality, live-eval]
+    needs: [release-integrity, test, quality, live-eval, claude-code-compat]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:

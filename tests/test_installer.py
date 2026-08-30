@@ -121,6 +121,7 @@ class InstallerTests(unittest.TestCase):
             self.target / ".junie/agents/code-audit-gate.md",
             self.target / ".agents/agents/code-audit-gate.md",
             self.target / ".codex/agents/code-audit-gate.toml",
+            self.target / ".claude/agents/code-audit-gate.md",
         ]
         for path in gate_paths:
             self.assertTrue(path.is_file(), path)
@@ -354,6 +355,94 @@ class InstallerTests(unittest.TestCase):
         )
         self.assertTrue(installer.check_project(self.target).ok)
 
+    def test_claude_adapter_installs_valid_agents_without_other_adapters(self) -> None:
+        self.install(("claude",))
+
+        agents = sorted((self.target / ".claude" / "agents").glob("*.md"))
+        self.assertEqual(
+            [
+                "architecture-maintainability-specialist.md",
+                "builder.md",
+                "code-audit-gate.md",
+                "code-audit.md",
+                "concurrency-specialist.md",
+                "correctness-tests-specialist.md",
+                "lightweight-reviewer.md",
+                "orchestrator.md",
+                "outer-loop-runner.md",
+                "planner.md",
+                "reviewer.md",
+                "rollout-specialist.md",
+                "security-data-specialist.md",
+            ],
+            [path.name for path in agents],
+        )
+        for agent in agents:
+            content = agent.read_text(encoding="utf-8")
+            self.assertTrue(content.startswith("---\n"))
+            self.assertIn(f"name: {agent.stem}", content)
+            self.assertIn("description:", content)
+        self.assertTrue((self.target / ".claude/commands/pr-review.md").is_file())
+        self.assertTrue((self.target / ".claude/settings.json").is_file())
+        self.assertTrue((self.target / ".claude/hooks/require_plan.py").is_file())
+        self.assertTrue((self.target / ".claude/CLAUDE.md").is_file())
+        self.assertFalse((self.target / ".opencode").exists())
+        self.assertFalse((self.target / ".junie").exists())
+        self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_bundle_filters_claude_adapter_files(self) -> None:
+        claude_files = installer._bundle_files(("claude",))
+        opencode_files = installer._bundle_files(("opencode",))
+
+        self.assertEqual(
+            {
+                ".claude/agents/architecture-maintainability-specialist.md",
+                ".claude/agents/builder.md",
+                ".claude/agents/code-audit-gate.md",
+                ".claude/agents/code-audit.md",
+                ".claude/agents/concurrency-specialist.md",
+                ".claude/agents/correctness-tests-specialist.md",
+                ".claude/agents/lightweight-reviewer.md",
+                ".claude/agents/orchestrator.md",
+                ".claude/agents/outer-loop-runner.md",
+                ".claude/agents/planner.md",
+                ".claude/agents/reviewer.md",
+                ".claude/agents/rollout-specialist.md",
+                ".claude/agents/security-data-specialist.md",
+                ".claude/commands/pr-review.md",
+                ".claude/settings.json",
+                ".claude/hooks/require_plan.py",
+                ".claude/CLAUDE.md",
+            },
+            {
+                path
+                for path in claude_files
+                if path.startswith(".claude/")
+                and not path.startswith(".claude/skills/")
+            },
+        )
+        self.assertFalse(any(path.startswith(".claude/") for path in opencode_files))
+
+    def test_claude_skills_are_mirrored_from_shared_skills(self) -> None:
+        self.install(("claude",))
+
+        shared = sorted(
+            path.parent.name
+            for path in (self.target / ".agents/skills").glob("*/SKILL.md")
+        )
+        mirrored = sorted(
+            path.parent.name
+            for path in (self.target / ".claude/skills").glob("*/SKILL.md")
+        )
+        self.assertEqual(shared, mirrored)
+        self.assertGreater(len(mirrored), 0)
+        name = mirrored[0]
+        self.assertEqual(
+            (self.target / ".agents/skills" / name / "SKILL.md").read_bytes(),
+            (self.target / ".claude/skills" / name / "SKILL.md").read_bytes(),
+        )
+        self.assertTrue(installer.check_project(self.target).ok)
+
     def test_all_adapters_render_selected_audit_language(self) -> None:
         self.install(programming_language="python")
 
@@ -362,6 +451,7 @@ class InstallerTests(unittest.TestCase):
             self.target / ".junie/agents/code-audit.md",
             self.target / ".agents/agents/code-audit.md",
             self.target / ".codex/agents/code-audit.toml",
+            self.target / ".claude/agents/code-audit.md",
         )
         for agent in agents:
             content = agent.read_text(encoding="utf-8")
@@ -391,6 +481,15 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
         self.assertFalse((self.target / ".codex").exists())
+
+    def test_remove_deletes_claude_agents(self) -> None:
+        self.install(("claude",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".claude").exists())
 
     def test_init_preserves_existing_repository_instructions(self) -> None:
         original = "# Local policy\n\nRun the project tests.\n"
@@ -1081,6 +1180,23 @@ class AdapterRemoveTests(unittest.TestCase):
         )
         self.assertEqual(["opencode"], lock["platforms"])
         self.assertFalse(any(p.startswith(".codex/") for p in lock["files"]))
+
+    def test_remove_claude_from_multi_platform_install(self) -> None:
+        self.install(("codex", "claude"))
+        self.assertTrue((self.target / ".claude" / "agents" / "builder.md").is_file())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+
+        plan = installer.plan_adapter_remove(self.target, "claude")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        self.assertFalse((self.target / ".claude").exists())
+        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["codex"], lock["platforms"])
+        self.assertFalse(any(p.startswith(".claude/") for p in lock["files"]))
 
     def test_remove_shared_skills_preserved(self) -> None:
         self.install(("codex", "opencode"))

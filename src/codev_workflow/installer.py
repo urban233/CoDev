@@ -49,7 +49,7 @@ AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 GITIGNORE_START = "# codev:start"
 GITIGNORE_END = "# codev:end"
-VALID_PLATFORMS = frozenset({"antigravity", "codex", "junie", "opencode"})
+VALID_PLATFORMS = frozenset({"antigravity", "claude", "codex", "junie", "opencode"})
 VALID_PROGRAMMING_LANGUAGES = frozenset({"none", "python", "typescript", "all"})
 AUDIT_SKILL_PREFIXES = {
     "python": ".agents/skills/audit-google-python-style/",
@@ -60,6 +60,7 @@ AUDIT_AGENT_TEMPLATES = {
         ".agents/agents/code-audit.md.template",
         ".agents/agents/code-audit.md",
     ),
+    "claude": (".claude/agents/code-audit.md.template", ".claude/agents/code-audit.md"),
     "codex": (
         ".codex/agents/code-audit.toml.template",
         ".codex/agents/code-audit.toml",
@@ -79,6 +80,10 @@ PRE_PR_CLEANUP_AGENT_TEMPLATES = {
     "antigravity": (
         ".agents/agents/code-audit-gate.md.template",
         ".agents/agents/code-audit-gate.md",
+    ),
+    "claude": (
+        ".claude/agents/code-audit-gate.md.template",
+        ".claude/agents/code-audit-gate.md",
     ),
     "codex": (
         ".codex/agents/code-audit-gate.toml.template",
@@ -456,6 +461,15 @@ def _bundle_files(
             if language not in selected_audit_languages
         )
     }
+    if "claude" in platforms:
+        # Claude Code has no configurable path for skill discovery -- it
+        # hardcodes .claude/skills/*/SKILL.md, unlike Antigravity, which
+        # shares CoDev's own .agents/skills/ directory directly. Mirror the
+        # already-filtered shared skills there instead of duplicating them
+        # by hand in the bundle source.
+        for path, content in list(files.items()):
+            if path.startswith(".agents/skills/"):
+                files[".claude/skills/" + path[len(".agents/skills/") :]] = content
     for platform in platforms:
         if platform in AUDIT_AGENT_TEMPLATES:
             _, destination = AUDIT_AGENT_TEMPLATES[platform]
@@ -467,6 +481,12 @@ def _bundle_files(
             files[destination] = _render_code_audit_agent(
                 cleanup_templates[platform], programming_language
             )
+    if "claude" not in platforms:
+        files = {
+            path: content
+            for path, content in files.items()
+            if not path.startswith(".claude/")
+        }
     if "opencode" not in platforms:
         files = {
             path: content
