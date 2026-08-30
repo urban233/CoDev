@@ -22,10 +22,13 @@ CoDev source -> versioned Python package -> explicit CLI command -> target repo
 ### Bundle
 
 `src/codev_workflow/bundle` mirrors target-relative paths. It contains the
-skills, Codex and OpenCode agents, documentation, validators, and evaluation
-catalog.
-The installer discovers package data recursively, so adding a bundled file does
-not require maintaining a second file list.
+skills, and the Codex, OpenCode, Junie, Antigravity, and Claude Code agents,
+documentation, validators, and evaluation catalog.
+The installer's runtime file walk (`importlib.resources`) and the Bazel
+`glob(["bundle/**"])` both discover a new bundled file automatically; the
+setuptools sdist build does not -- `pyproject.toml`'s
+`[tool.setuptools.package-data]` is an explicit glob list per bundle
+subdirectory and needs its own new entry for a new bundled path or file type.
 
 Every bundled skill carries a `skill-card.md` alongside its `SKILL.md` --
 owner, license, use case, dependencies, and known risks, filled out with real
@@ -39,7 +42,15 @@ in OpenCode configuration, preserving all project-owned content. Junie
 subagents are ordinary managed Markdown files under `.junie/agents/`, while
 Antigravity subagents use its official `.agents/agents/` location alongside
 CoDev's `.agents/skills/` directory. Codex agents use the official
-`.codex/agents/` directory and TOML format.
+`.codex/agents/` directory and TOML format. Claude Code agents use its
+official `.claude/agents/` location; unlike Antigravity, Claude Code has no
+configurable skills path, so the shared skills are mirrored into
+`.claude/skills/` at install time instead of referenced in place. Claude
+Code additionally ships a `.claude/settings.json` and
+`.claude/hooks/require_plan.py` -- a category no other adapter has -- that
+default new sessions into Plan Mode and pause for confirmation before the
+first source edit when no design or plan document exists yet for the active
+branch (`docs/features/claude-code/design.md`).
 
 ### Installer
 

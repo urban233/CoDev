@@ -73,7 +73,7 @@ from codev_workflow.task import (
     TaskError,
 )
 
-_AGENT_PLATFORMS = ("antigravity", "codex", "junie", "opencode")
+_AGENT_PLATFORMS = ("antigravity", "claude", "codex", "junie", "opencode")
 _AGENT_PLATFORM_CHOICES = ("all", *_AGENT_PLATFORMS)
 
 

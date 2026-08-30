@@ -63,6 +63,13 @@ validate-catalog:
 self-test-evaluator:
     bazel run //scripts:evaluate_development_workflow -- --repo . --self-test
 
+# Needs network access (fetches the real Claude Code CLI via npx) -- not
+# part of `test`/`test-all`, which stay deterministic/offline per
+# docs/architecture.md. Run manually, or see the scheduled/release-gated
+# `claude-code-compat` CI job in .github/workflows/ci.yml.
+verify-claude-code-compat:
+    python3 scripts/verify_claude_code_compat.py
+
 # Build the wheel via py_wheel, matched file-for-file and
 # metadata-field-for-field against `python -m build`'s output (some
 # metadata fields excepted -- see design.md's "PyPI Packaging"). CI's

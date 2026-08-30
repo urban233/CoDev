@@ -200,14 +200,16 @@ This writes PR metadata, the patch, changed files, commits, reviews, comments,
 and check runs. Use repeated `--include metadata`, `--include diff`, or other
 parts to fetch a smaller set.
 
-The installed Junie project command is also available directly inside Junie:
+The installed Junie project command is also available directly inside Junie,
+and the same command is available inside Claude Code:
 
 ```text
 /pr-review repo=OWNER/REPO pr=123
 ```
 
-Project-specific Junie commands live under `.junie/commands`, so this command
-is versioned with the repository and appears in Junie’s `/` command list.
+Project-specific Junie commands live under `.junie/commands`, and Claude
+Code's under `.claude/commands`, so this command is versioned with the
+repository and appears in each tool's own `/` command list.
 
 ## What gets installed
 
@@ -218,6 +220,11 @@ my-project/
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
 │   └── <name>/skill-card.md          # owner, license, use case, risks -- see ADR-0029
 ├── .agents/agents/                   # Antigravity workflow and audit agents
+├── .claude/agents/                   # Claude Code workflow and audit agents
+├── .claude/skills/                   # the same shared skills, natively discoverable
+├── .claude/commands/                 # the pr-review slash command
+├── .claude/settings.json             # plan-mode default and the plan-first guardrail hook
+├── .claude/CLAUDE.md                 # Claude-Code-specific supplement to AGENTS.md
 ├── .codex/agents/                    # Codex workflow and audit agents
 ├── .opencode/agents/                 # OpenCode workflow and audit agents
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
@@ -231,11 +238,11 @@ my-project/
 └── scripts/                          # deterministic validators
 ```
 
-Use `--agent-platform codex` to omit the OpenCode, Junie, and Antigravity adapters.
-The Codex adapter installs TOML agents under `.codex/agents/`.
-Use `--agent-platform opencode`, `--agent-platform junie`, or
-`--agent-platform antigravity` to select one adapter, or use
-`--agent-platform all` for every supported platform. Core
+Use `--agent-platform codex` to omit the OpenCode, Junie, Antigravity, and
+Claude Code adapters. The Codex adapter installs TOML agents under
+`.codex/agents/`. Use `--agent-platform opencode`, `--agent-platform junie`,
+`--agent-platform antigravity`, or `--agent-platform claude` to select one
+adapter, or use `--agent-platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
 
 The onboarding guide is installed at
@@ -254,6 +261,15 @@ The Antigravity adapter follows its official workspace location:
 
 The Codex adapter follows its official workspace location:
 `.codex/agents/<name>.toml`.
+
+The Claude Code adapter follows its official workspace location:
+`.claude/agents/<name>.md`, with skills mirrored to `.claude/skills/` (its
+own hardcoded discovery path -- Claude Code cannot be pointed at
+`.agents/skills/` directly). It also ships a `.claude/settings.json` that
+defaults new sessions into Plan Mode and a `PreToolUse` hook that pauses for
+confirmation before the first source edit when no design or plan document
+exists yet for the active branch -- see
+`docs/features/claude-code/design.md` for why and how to adjust it.
 
 ## Design principles
 

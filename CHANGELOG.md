@@ -3,6 +3,65 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- Claude Code as a fifth adapter platform (`--agent-platform claude`), at
+  full parity with Codex/Junie/OpenCode/Antigravity: 13 role subagents
+  under `.claude/agents/` (11 static roles plus the templated
+  `code-audit`/`code-audit-gate`, ported with unchanged shared body prose
+  and a new Claude Code frontmatter dialect), the shared skills mirrored
+  into `.claude/skills/` at install time (Claude Code hardcodes that
+  discovery path with no configurable alternative, confirmed by inspecting
+  the shipped CLI binary), and the `pr-review` slash command ported to
+  `.claude/commands/`. Supports `init`/`update`/`adapter add|verify|remove`
+  the same as every other platform. Documented in
+  `docs/features/claude-code/{brief,design}.md` and ADR-0030.
+- A plan-first guardrail unique to the Claude Code adapter:
+  `.claude/settings.json` defaults new sessions into Plan Mode, and a
+  `PreToolUse` hook (`.claude/hooks/require_plan.py`) pauses for human
+  confirmation before the first source edit, or the first
+  repository-mutating git command (`git commit`/`push`/`merge`/`reset`/
+  `checkout`/`clean`/`rebase`, `rm -rf` -- the same list ADR-0002 already
+  denies outright for OpenCode's `builder`), when no design or plan
+  document exists yet for the active branch -- deliberately `ask`, never a
+  hard `deny`, so a legitimate spec-free fix costs one extra confirmation
+  rather than a block. The spec-exists check itself is precise when
+  possible: an exact match against the active task's own recorded plan
+  (`docs/codev/task/<task-id>/implementation-plan.md`, derived from a
+  `codev git branch`-created branch's own naming), falling back to a
+  coarser branch-name match for planning work that predates a task.
+- `scripts/verify_claude_code_compat.py` and a scheduled + release-gated
+  `claude-code-compat` CI job: resolves the real, currently-published
+  Claude Code CLI via `npx` and checks its shipped binary still contains
+  every hook/settings/discovery-path marker this adapter depends on,
+  failing loudly on drift -- the automated replacement for
+  `docs/features/claude-code/design.md`'s one-time manual Phase 0 spike.
+  Needs network access, so it runs on the same cadence as `live-eval`, not
+  on every PR.
+- `tests/test_claude_hook.py`: the guardrail hook exercised as a real
+  subprocess against fixture stdin, independent of a live Claude Code
+  session -- the same "pin the external contract against a fake, not the
+  real tool" pattern already used for the OpenCode driver. Covers the
+  file-edit path, the precise task-plan path, the coarse fallback path, and
+  the `Bash` destructive-prefix path.
+
+### Fixed
+- The guardrail hook originally checked
+  `docs/codev/work/*/implementation-plan.md` -- ADR-0004's pre-rename path.
+  `build-change`'s current convention is `docs/codev/task/<task-id>/
+  implementation-plan.md` (ADR-0023 renamed "work item" to "task"). Caught
+  and fixed before this was ever exercised against a real branch, not a
+  shipped regression.
+
+### Known limitations
+- Compatibility is verified against a real, installed Claude Code CLI
+  (2.1.251, commit `37534ac596d8`) via its own `--help`/`doctor` output and
+  direct binary inspection for hook/settings field names -- not yet against
+  a live authenticated Claude Code session. See
+  `docs/features/claude-code/design.md`'s Phase 0 and Acceptance checklist
+  for what remains before this adapter is considered Accepted.
+
 ## [0.3.1] - 2026-08-29
 
 ### Added

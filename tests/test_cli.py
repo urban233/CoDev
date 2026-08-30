@@ -1649,6 +1649,28 @@ class CliTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(11, len(payload["findings"]))
 
+    def test_adapter_verify_passes_for_claude_on_a_fresh_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "claude"])
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        [
+                            "adapter",
+                            "verify",
+                            "claude",
+                            "--target",
+                            str(target),
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(0, code)
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["ok"])
+            self.assertEqual(11, len(payload["findings"]))
+
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

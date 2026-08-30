@@ -77,6 +77,7 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
     "codex": _role_paths(".codex/agents", "toml"),
     "junie": _role_paths(".junie/agents", "md"),
     "antigravity": _role_paths(".agents/agents", "md"),
+    "claude": _role_paths(".claude/agents", "md"),
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
