@@ -121,7 +121,7 @@ verify-dist:
     python3 -m venv .release-venv
     .release-venv/bin/python -m pip install --no-deps dist/*.whl
     .release-venv/bin/codev --version
-    .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.codex/agents'); assert sorted(item.name for item in root.iterdir()) == ['architecture-maintainability-specialist.toml', 'builder.toml', 'code-audit-gate.toml.template', 'code-audit.toml.template', 'concurrency-specialist.toml', 'correctness-tests-specialist.toml', 'lightweight-reviewer.toml', 'orchestrator.toml', 'outer-loop-runner.toml', 'planner.toml', 'reviewer.toml', 'rollout-specialist.toml', 'security-data-specialist.toml']"
+    .release-venv/bin/python -c "from importlib import resources; root = resources.files('codev_workflow').joinpath('bundle/.opencode/agents'); assert sorted(item.name for item in root.iterdir()) == ['architecture-maintainability-specialist.md', 'builder.md', 'code-audit-gate.md.template', 'code-audit.md.template', 'concurrency-specialist.md', 'correctness-tests-specialist.md', 'lightweight-reviewer.md', 'orchestrator.md', 'outer-loop-runner.md', 'planner.md', 'reviewer.md', 'rollout-specialist.md', 'security-data-specialist.md']"
     echo "dist/ validated: sdist + Bazel wheel, twine-clean, installs and runs correctly."
 
 # Publish the wheel to TestPyPI. Needs TWINE_USERNAME/TWINE_PASSWORD (or an
