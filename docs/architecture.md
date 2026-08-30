@@ -22,8 +22,10 @@ CoDev source -> versioned Python package -> explicit CLI command -> target repo
 ### Bundle
 
 `src/codev_workflow/bundle` mirrors target-relative paths. It contains the
-skills, and the Codex, OpenCode, Junie, Antigravity, and Claude Code agents,
-documentation, validators, and evaluation catalog.
+skills, and the OpenCode, Junie, Antigravity, and Claude Code agents,
+documentation, validators, and evaluation catalog. Junie and Antigravity
+carry a single narrow-tier `assistant` agent rather than the full workflow
+(ADR-0031); OpenCode and Claude Code carry the complete role set.
 The installer's runtime file walk (`importlib.resources`) and the Bazel
 `glob(["bundle/**"])` both discover a new bundled file automatically; the
 setuptools sdist build does not -- `pyproject.toml`'s
@@ -38,13 +40,12 @@ frontmatter field on `SKILL.md` itself. See
 
 `AGENTS.md` and `.opencode/opencode.json` are integrations rather than copied
 files. CoDev owns one marked block in `AGENTS.md` and selected missing values
-in OpenCode configuration, preserving all project-owned content. Junie
-subagents are ordinary managed Markdown files under `.junie/agents/`, while
-Antigravity subagents use its official `.agents/agents/` location alongside
-CoDev's `.agents/skills/` directory. Codex agents use the official
-`.codex/agents/` directory and TOML format. Claude Code agents use its
-official `.claude/agents/` location; unlike Antigravity, Claude Code has no
-configurable skills path, so the shared skills are mirrored into
+in OpenCode configuration, preserving all project-owned content. Junie's
+`assistant` agent is an ordinary managed Markdown file under
+`.junie/agents/`, while Antigravity's uses its official `.agents/agents/`
+location alongside CoDev's `.agents/skills/` directory. Claude Code agents
+use its official `.claude/agents/` location; unlike Antigravity, Claude Code
+has no configurable skills path, so the shared skills are mirrored into
 `.claude/skills/` at install time instead of referenced in place. Claude
 Code additionally ships a `.claude/settings.json` and
 `.claude/hooks/require_plan.py` -- a category no other adapter has -- that
@@ -87,6 +88,15 @@ For each managed file, CoDev compares:
 Retaining removed files is conservative: an update cannot unexpectedly delete
 repository instructions. The explicit `codev remove` command preflights and
 removes only unchanged managed files and integrations; it remains opt-in.
+
+A conflict left unresolved (`--on-conflict skip`, the conflict wizard's
+`skip`, or simply no resolution supplied for that path) stays a visible
+conflict: `codev status` keeps reporting it as a managed file with local
+changes until a real resolution (`override` or `keep`) supersedes it, rather
+than the file quietly falling out of management the moment an update chooses
+not to touch it. `delete` is the one exception -- it adopts upstream's
+removal, so nothing is left to compare a future hash against, and the path
+stops being tracked the same way an ordinary upstream removal does.
 
 ## Invariants
 

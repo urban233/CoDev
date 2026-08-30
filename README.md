@@ -16,276 +16,72 @@
 ![GitHub stars](https://img.shields.io/github/stars/urban233/CoDev?style=flat-square)
 ![GitHub issues](https://img.shields.io/github/issues/urban233/CoDev?style=flat-square)
 
-CoDev installs a small, production-minded collaboration system into any Git
-repository. A developer and AI move through four steps — **Understand,
-Build, Review, Ship** — plus two that only show up when the work actually
-needs them: **Specify** for a genuinely new product, **Launch** for a real
-rollout decision. Review is layered, not a single pass: a fast correctness
-check after each build, an automatic style and maintainability gate
-immediately before a pull request opens, and five parallel specialist
-reviewers once it's open. It supports bounded three-agent execution without
-turning product development into an unattended coding loop.
+CoDev installs a small, production-minded collaboration system into any Git repository. A
+developer and AI move through four steps — **Understand, Build, Review, Ship** — plus two
+that only show up when the work actually needs them: **Specify** for a genuinely new
+product, **Launch** for a real rollout decision. Review is layered, not a single pass: a
+fast correctness check after each build, an automatic style and maintainability gate
+immediately before a pull request opens, and five parallel specialist reviewers once it's
+open. It supports bounded three-agent execution without turning product development into
+an unattended coding loop.
 
 ## Why CoDev
 
 - One workflow for solo developers and multi-developer teams.
 - Repository-grounded plans instead of invented APIs or architecture.
-- A bounded builder, an automatic pre-PR audit gate, and five parallel
-  specialist reviewers — not just one read-only pass.
+- A bounded builder, an automatic pre-PR audit gate, and five parallel specialist
+  reviewers — not just one read-only pass.
 - Human authority over material decisions, merge, deployment, and rollout.
-- A general-purpose skill-evaluation harness — measure whether a skill
-  (CoDev's own, or one you wrote) actually helps, empirically, rather than
-  just trusting that it does — plus an optional second engine wrapping
-  NVIDIA's SkillEvaluator for schema/security/quality checks on the skill
-  directory itself.
+- A general-purpose skill-evaluation harness — measure whether a skill (CoDev's own, or
+  one you wrote) actually helps, empirically, rather than just trusting that it does.
 - Versioned, conflict-aware installation across existing repositories.
 - No runtime dependency in the software being built.
 
-## Quick start
-
-CoDev is a Python 3.11+ command-line tool. Target repositories may use any
-language or build system. Install it with an isolated tool manager; `pipx` and
-`uv tool` are the two supported, primary installation methods. Neither adds
-CoDev or its dependencies to a target repository.
-
-### Install from PyPI
+## Try it in 60 seconds
 
 ```shell
 pipx install open-codev-workflow
-# or
-uv tool install open-codev-workflow
+# or: uv tool install open-codev-workflow
+
+codev init --target . --agent-platform all
+codev status --target .
 ```
 
-### Install from a wheel
-
-For private, air-gapped, or pre-release distribution, install the supplied
-wheel directly instead of publishing it to a package index:
-
-```shell
-pipx install ./dist/open_codev_workflow-0.1.1-py3-none-any.whl
-# or
-uv tool install ./dist/open_codev_workflow-0.1.1-py3-none-any.whl
+```text
+CoDev 0.4.0 - /path/to/your/repo
+Bundle: healthy (83 managed files, no drift)
+Adapters: opencode
+Tasks in progress: 0
 ```
 
-Store the wheel with its SHA-256 checksum in a controlled artifact location.
-The development workflow for building a wheel is documented below.
+Commit the installed files as one infrastructure change, then start an AI session in the
+repository and describe a small bug or task in plain language — you don't need to name a
+skill. **[Tutorial 1](src/codev_workflow/bundle/docs/codev/tutorials/01-your-first-fix.md)
+walks one small fix from here to a merged pull request, with every command and real
+output shown.**
 
-### Initialize a repository
+## Where to go next
 
-```shell
-codev init --target ../my-project --agent-platform all
-codev status --target ../my-project
-```
-
-Language-specific audit skills are not installed unless selected explicitly.
-Use `--programming-language python` or `--programming-language typescript` for
-one language, `--programming-language all` for both, or
-`--programming-language none` for the language-agnostic audit agent. The default
-for `init` is `none`. An `update` without this flag preserves the selection in
-`.codev/lock.json`.
-
-To preview or apply a later bundle update:
-
-```shell
-codev diff --target ../my-project
-codev update --target ../my-project
-codev remove --target ../my-project --dry-run
-```
-
-`init`, `diff`, and `update` preflight the entire operation. A locally modified
-managed file becomes a visible conflict; CoDev never silently replaces it.
-
-### Command reference
-
-| Command | Purpose |
+| I want to... | Go to |
 |---|---|
-| `codev init` / `diff` / `update` / `remove` | Install, preview, apply, or remove the bundle |
-| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap |
-| `codev adapter list` / `codev adapter add <platform>` | Show or add one platform adapter to an existing install |
-| `codev adapter verify <platform>` | Check one installed adapter's structural conformance (lifecycle wiring present, no unrestricted shell access, no retired patterns) |
-| `codev config get\|set\|list [--global]` | Read or write layered configuration (flags > env > project > global > default) |
-| `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
-| `codev task start\|record\|check\|close\|status\|log\|triage\|escalate\|escalations\|waive\|reopen\|relink` | Track one task's round state — read `docs/adr/0001-work-lifecycle-invariant.md` before scripting against it |
-| `codev git issue-create\|issue-view\|branch\|commit\|push\|open-pr\|mark-ready` | The only path for an agent to mutate the repository or GitHub; `issue-create` and `issue-view` have no task precondition, and `issue-view` is read-only, printing an issue's body and all its comments as JSON |
-| `codev eval task create\|run` / `codev eval benchmark run` | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode. `--sandbox docker` opts a task with its own declared `environment` block into container isolation (see `docs/adr/0027-opt-in-docker-sandbox-for-the-native-eval-harness.md`); worktree isolation on the host stays the default. New to this? [`docs/features/skill-eval/how-to-write-a-task.md`](docs/features/skill-eval/how-to-write-a-task.md) walks through writing and testing a task for your own skill, start to finish |
-| `codev eval doctor` / `codev eval report <output-dir>` | Zero-cost readiness check before a real trial run, and a plain-text renderer for a trial's or benchmark's output directory |
-| `codev eval show <skill>` | Render a skill's packaged eval trace (`.agents/skills/<skill>/evals/benchmark.json`, written by an unrestricted `eval benchmark run`) — see `docs/adr/0028-skill-packages-carry-their-own-eval-trace.md` |
-| `codev eval nvidia <verb>` | Second, independent engine wrapping the externally installed NVIDIA SkillEvaluator CLI against a skill directory itself — see [`docs/features/nvidia-skill-evaluator/README.md`](docs/features/nvidia-skill-evaluator/README.md) |
-| `codev self version` / `codev self update` | Show the installed CoDev version, or how to upgrade it |
-
-`codev check` and `codev doctor` still work as deprecated aliases for
-`status` and `status --verbose` — each prints a warning and will be removed
-in a future major version. CoDev is Alpha, so the eval harness's own older
-command forms (`fixture`/`run`/`snapshot`) were removed outright rather than
-kept as aliases; see
-[`docs/features/skill-eval-ergonomics/design.md`](docs/features/skill-eval-ergonomics/design.md).
-
-## GitHub Pull Request reviews
-
-The installed `pr-review` skill reviews an existing GitHub Pull Request and can
-prepare validated inline comments for the exact PR head. It uses the GitHub CLI
-credential store by default, so agents do not need to read or print a token.
-
-### Install and authenticate GitHub CLI on Windows
-
-Install the official package from PowerShell with WinGet:
-
-```powershell
-winget install --id GitHub.cli --source winget
-```
-
-Open a new Windows Terminal window after installation, then verify and sign in:
-
-```powershell
-gh --version
-gh auth login --web
-gh auth status --active
-```
-
-Choose `GitHub.com`, the HTTPS protocol, and the browser login flow. `gh` stores
-the credential using the Windows credential store when available. See the
-[official Windows installation guide](https://github.com/cli/cli/blob/trunk/docs/install_windows.md)
-and [`gh auth login` documentation](https://cli.github.com/manual/gh_auth_login).
-
-Run the PR publisher in dry-run mode first:
-
-```powershell
-python .agents\skills\pr-review\scripts\publish_review.py `
-  --repo OWNER/REPO `
-  --pr 123 `
-  --review review.json
-```
-
-The publisher automatically uses authenticated `gh api` when no
-`GITHUB_TOKEN` or `GH_TOKEN` is set. Use `--auth gh` to require that backend or
-`--auth token` for headless environments that provide a token variable. Add
-`--publish` only after explicitly authorizing a GitHub review, and use
-`--submit comment` only when it should be submitted immediately.
-
-If a desktop agent does not inherit the Windows machine PATH, the publisher
-also checks the standard `C:\\Program Files\\GitHub CLI\\gh.exe` location. For a
-custom installation, set `CODEV_GH_PATH` to the full path of `gh.exe`.
-
-To copy the already-authenticated `gh` credential into `GH_TOKEN` for the
-current PowerShell process and the CLI started from it, dot-source the bundled
-helper:
-
-```powershell
-. .agents\\skills\\pr-review\\scripts\\set-github-token.ps1
-```
-
-The helper calls `gh auth token` without printing the result and does not
-persist it. The `gh` credential must be valid in the same process context. This
-is useful for a CLI that needs `GH_TOKEN`; launch that CLI from the shell where
-the helper has been dot-sourced. Do not put the token in a repository file or
-command-line argument.
-
-One-line equivalent:
-
-```powershell
-$g=Get-Command gh -ErrorAction SilentlyContinue;if($g){$p=$g.Source}else{$p='C:\\Program Files\\GitHub CLI\\gh.exe'};$env:GH_TOKEN=(& $p auth token --hostname github.com 2>$null).Trim()
-```
-
-Fetch the complete GitHub PR context before asking an agent to review it:
-
-```powershell
-python .agents\\skills\\pr-review\\scripts\\publish_review.py `
-  --repo OWNER/REPO `
-  --pr 123 `
-  --fetch `
-  --output-dir .codev\\pr-review\\123
-```
-
-This writes PR metadata, the patch, changed files, commits, reviews, comments,
-and check runs. Use repeated `--include metadata`, `--include diff`, or other
-parts to fetch a smaller set.
-
-The installed Junie project command is also available directly inside Junie,
-and the same command is available inside Claude Code:
-
-```text
-/pr-review repo=OWNER/REPO pr=123
-```
-
-Project-specific Junie commands live under `.junie/commands`, and Claude
-Code's under `.claude/commands`, so this command is versioned with the
-repository and appears in each tool's own `/` command list.
-
-## What gets installed
-
-```text
-my-project/
-├── AGENTS.md                         # a managed policy block; local text survives
-├── .gitignore                        # a managed block ignoring the local escalation log
-├── .agents/skills/                   # lifecycle, PR, and specialist review skills
-│   └── <name>/skill-card.md          # owner, license, use case, risks -- see ADR-0029
-├── .agents/agents/                   # Antigravity workflow and audit agents
-├── .claude/agents/                   # Claude Code workflow and audit agents
-├── .claude/skills/                   # the same shared skills, natively discoverable
-├── .claude/commands/                 # the pr-review slash command
-├── .claude/settings.json             # plan-mode default and the plan-first guardrail hook
-├── .claude/CLAUDE.md                 # Claude-Code-specific supplement to AGENTS.md
-├── .codex/agents/                    # Codex workflow and audit agents
-├── .opencode/agents/                 # OpenCode workflow and audit agents
-├── .opencode/opencode.json           # safely merged; existing agent settings survive
-├── .junie/agents/                    # Junie subagents
-├── .codev/for-ai/                    # the AI's operating contract -- not for casual browsing
-├── .codev/lock.json                  # installed version and source hashes
-├── .github/pull_request_template.md  # evidence-based PR template
-├── .github/ISSUE_TEMPLATE/task.md    # one-task issue template with runnable acceptance criteria
-├── docs/codev/onboarding/            # the human onboarding guide and worked examples
-├── evals/development-workflow/       # behavioral scenarios
-└── scripts/                          # deterministic validators
-```
-
-Use `--agent-platform codex` to omit the OpenCode, Junie, Antigravity, and
-Claude Code adapters. The Codex adapter installs TOML agents under
-`.codex/agents/`. Use `--agent-platform opencode`, `--agent-platform junie`,
-`--agent-platform antigravity`, or `--agent-platform claude` to select one
-adapter, or use `--agent-platform all` for every supported platform. Core
-skills and human/AI workflow references are installed for every platform.
-
-The onboarding guide is installed at
-`docs/codev/onboarding/onboarding-guide.md`, with worked examples alongside
-it at `docs/codev/onboarding/examples.md`. The AI's own operating contract
-lives at `.codev/for-ai/ai-agent-guidelines.md` — read by agents every
-session, not meant for a human to browse day to day. The cookbook, prompt
-templates, and detailed handbooks are maintained as dedicated Wiki pages.
-
-To add an adapter to an existing installation, pass it to `update`, for example
-`codev update --agent-platform junie`. Use `diff --agent-platform junie` to preview the
-platform expansion first.
-
-The Antigravity adapter follows its official workspace location:
-`.agents/agents/<name>.md`.
-
-The Codex adapter follows its official workspace location:
-`.codex/agents/<name>.toml`.
-
-The Claude Code adapter follows its official workspace location:
-`.claude/agents/<name>.md`, with skills mirrored to `.claude/skills/` (its
-own hardcoded discovery path -- Claude Code cannot be pointed at
-`.agents/skills/` directly). It also ships a `.claude/settings.json` that
-defaults new sessions into Plan Mode and a `PreToolUse` hook that pauses for
-confirmation before the first source edit when no design or plan document
-exists yet for the active branch -- see
-`docs/features/claude-code/design.md` for why and how to adjust it.
+| Understand the mental model before doing anything | [Onboarding guide](src/codev_workflow/bundle/docs/codev/onboarding/onboarding-guide.md) |
+| Just try it, right now | [Tutorial 1: your first fix](src/codev_workflow/bundle/docs/codev/tutorials/01-your-first-fix.md) |
+| See every command | [CLI reference](docs/cli-reference.md) |
+| See exactly what gets installed and why | [Architecture](docs/architecture.md) |
+| Adopt CoDev for a team, not just myself | [Adoption guide](docs/adoption.md) |
+| Understand why a specific mechanism exists | [Architecture Decision Records](docs/adr/) |
+| Set up GitHub CLI for PR review on Windows | [PR review setup](docs/pr-review-github-cli-setup.md) |
+| Contribute to CoDev itself | [Contributing](CONTRIBUTING.md) |
+| See everything `docs/` contains, organized by audience | [docs/README.md](docs/README.md) |
 
 ## Design principles
 
 1. **Local at use time.** Agents read ordinary files in the target repository.
 2. **Central at maintenance time.** This repository is the canonical source.
 3. **Human at authority boundaries.** Automation supplies evidence, not approval.
-4. **Small by default.** Deeper design and delivery planning appear only when
-   risk or coordination requires them.
+4. **Small by default.** Deeper design and delivery planning appear only when risk or
+   coordination requires them.
 5. **Safe to adopt.** Existing instructions and OpenCode settings are preserved.
-
-Read [Architecture](docs/architecture.md) for the distribution model,
-[Product Map](docs/product-map.md) for what CoDev actually is once
-installed — phases, skills, agents, and how they're invoked, the
-[Architecture Decision Records](docs/adr/) for why specific mechanisms
-exist, [Adoption](docs/adoption.md) for rollout guidance, and
-[Brand](docs/brand.md) for the visual and writing system.
 
 ## Development
 
@@ -302,6 +98,10 @@ python -m ruff check .
 python -m ruff format --check .
 python -m mypy
 python -m build
+python scripts/check_bundled_doc_links.py
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for what's expected of a change, and
+[docs/releasing.md](docs/releasing.md) for the release process.
 
 CoDev is licensed under BSD-3-Clause.

@@ -73,7 +73,7 @@ from codev_workflow.task import (
     TaskError,
 )
 
-_AGENT_PLATFORMS = ("antigravity", "claude", "codex", "junie", "opencode")
+_AGENT_PLATFORMS = ("antigravity", "claude", "junie", "opencode")
 _AGENT_PLATFORM_CHOICES = ("all", *_AGENT_PLATFORMS)
 
 
@@ -357,7 +357,12 @@ def _parser() -> argparse.ArgumentParser:
     a_remove = adapter_commands.add_parser(
         "remove", help="remove one adapter from an existing installation"
     )
-    a_remove.add_argument("platform", choices=_AGENT_PLATFORMS)
+    # No `choices=` here, unlike `add`/`verify`: a platform an earlier CoDev
+    # version installed but the current one no longer supports (e.g. Codex,
+    # ADR-0031) must still be removable. `installer.plan_adapter_remove`
+    # does the real validation -- installed-or-currently-valid -- and raises
+    # a `CoDevError` for anything else, which main() already reports cleanly.
+    a_remove.add_argument("platform")
     a_remove.add_argument("--target", type=_target, default=Path.cwd())
     a_remove.add_argument("--dry-run", action="store_true", help="show the plan only")
 

@@ -3,9 +3,25 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.4.0] - 2026-08-31
 
 ### Added
+- A four-part bundled tutorial series (`docs/codev/tutorials/`, installed into every
+  adopter's own repository): your first fix end to end with real commands and real
+  output, a design-worthy change, outer-loop review, and multi-developer coordination.
+  Each reuses the same running example instead of a new one per document. Replaces the
+  role a GitHub Wiki was meant to play but couldn't -- see "Removed" below.
+- `docs/README.md`, an index of everything under `docs/`, grouped by audience (using
+  CoDev / adopting it for a team / contributing to it) instead of a flat, unexplained
+  file list.
+- `docs/cli-reference.md` and `docs/pr-review-github-cli-setup.md`, split out of
+  README.md so the README can stay a landing page instead of a command reference and a
+  Windows-specific GitHub CLI walkthrough.
+- `scripts/check_bundled_doc_links.py`: fails on a relative Markdown link with no
+  matching file, and specifically on a bundled doc's link that resolves outside the
+  bundle it would ship with -- the exact class of bug described below. Wired into
+  `tests/test_documentation_links.py` so it runs with the normal suite, not just on
+  demand.
 - Claude Code as a fifth adapter platform (`--agent-platform claude`), at
   full parity with Codex/Junie/OpenCode/Antigravity: 13 role subagents
   under `.claude/agents/` (11 static roles plus the templated
@@ -46,7 +62,68 @@ Semantic Versioning.
   file-edit path, the precise task-plan path, the coarse fallback path, and
   the `Bash` destructive-prefix path.
 
+### Changed
+- README.md trimmed to a landing page (pitch, 60-second quick start, a "where to go
+  next" table) -- the CLI table, the Windows GitHub-CLI walkthrough, and the full "what
+  gets installed" detail moved to their own docs (see "Added"). `docs/adoption.md`
+  trimmed to adoption guidance only; its "Publishing releases" section duplicated
+  `docs/releasing.md` at less detail and didn't belong in a guide for people adopting
+  CoDev, not releasing it.
+- `docs/codev/onboarding/onboarding-guide.md` and the now-deleted
+  `docs/for-human/development-guide.md` were two drifting copies of the same "start
+  here" mental model, with different examples. Merged into the one that's actually
+  bundled into every install, standardized on one running example reused across it and
+  every tutorial instead of a different domain per document.
+  `docs/codev/onboarding/normal-development-workflow.md` trimmed to a command
+  checklist now that Tutorial 1 owns the narrated walkthrough.
+- Junie and Antigravity narrowed from the full 13-role orchestrator-driven
+  workflow down to a single `assistant` role each (`.junie/agents/
+  assistant.md`, `.agents/agents/assistant.md`): a bounded, surgical-edit
+  helper invoked directly by the developer, with or without a written plan,
+  and no task-lifecycle integration (`codev task`/`codev git` are never
+  called). `code-audit`/`code-audit-gate` and the `pr-review` slash command
+  are no longer installed for either platform. Based on first-hand use, both
+  harnesses' actual capability (no fine-grained per-command permission
+  enforcement, unlike OpenCode/Claude Code) didn't match what the full
+  multi-agent workflow assumes. `assistant` still bridges into the full
+  OpenCode/Claude Code workflow when a change warrants it -- by naming the
+  exact `codev git branch`/`codev task start --entry direct-review|takeover`
+  commands for the developer to run themselves, never by running them
+  itself. See ADR-0031.
+
+### Removed
+- The GitHub Wiki's "Workflow Cookbook", "Prompt Templates", and three "Handbooks"
+  (2,742 lines total) are deprecated. README.md and the former
+  `docs/for-human/development-guide.md` linked to them with relative paths that
+  actually point into the repository, not the wiki -- every one 404'd on GitHub, the
+  wiki's own `Home.md` was one line with no navigation, and the content itself
+  referenced at least one retired concept (`clean-code-review`). Replaced with the
+  bundled tutorial series instead of migrated, since the content predates the current
+  tool. `scripts/validate-development-workflow.py`'s `validate_handbooks` check and its
+  already-empty `EXPECTED_HANDBOOKS` list, and the dead `bundle/docs/handbooks/*.md`
+  package-data glob, removed along with it -- vestigial infrastructure for content that
+  was never actually in the bundle.
+- `docs/for-human/development-guide.md`, superseded by the merged onboarding guide
+  (see "Changed").
+- The Codex adapter (`--agent-platform codex`, `.codex/agents/`) is dropped
+  entirely: not used often enough, and not validated against enough real
+  usage, to keep maintaining alongside the other four platforms. See
+  ADR-0031. If your project has Codex installed, `codev adapter remove
+  codex` still works on upgrade -- removing an adapter no longer accepts a
+  platform argparse `choices=` list, only the lock file's own recorded
+  platforms, so a platform recorded before it was dropped stays removable
+  even though it can no longer be added.
+
 ### Fixed
+- `codev update --on-conflict skip` (and the conflict wizard's `skip`, and simply
+  leaving a path unresolved) used to drop the conflicted path from
+  `.codev/lock.json` entirely rather than leaving it flagged -- so a later `codev
+  status` reported "no drift" even though a real, previously-surfaced conflict was
+  still sitting there unaddressed. `plan_update` now re-seeds a skipped conflict with
+  its old recorded hash so `check_project` keeps reporting it until a real resolution
+  (`override`/`keep`) supersedes it; `delete` is unaffected -- it still stops
+  tracking the path, correctly, since there's nothing left to compare. See
+  `docs/architecture.md`'s update-algorithm section.
 - The guardrail hook originally checked
   `docs/codev/work/*/implementation-plan.md` -- ADR-0004's pre-rename path.
   `build-change`'s current convention is `docs/codev/task/<task-id>/

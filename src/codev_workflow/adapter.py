@@ -28,12 +28,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Conformance checks for installed platform adapters.
 
-Verifies structural parity across the four platform adapters without
-requiring them to be rendered from one source yet: every role file must
-reference the `codev task` lifecycle wiring, must not resurrect the retired
-P0-P3 finding scale, and must not grant unrestricted shell execution. This is
-a second line of defense against cross-adapter drift, not a substitute for
-eventually rendering adapters from one config source.
+Verifies structural parity across the full-workflow platform adapters
+(OpenCode, Claude Code) without requiring them to be rendered from one source
+yet: every role file must reference the `codev task` lifecycle wiring, must
+not resurrect the retired P0-P3 finding scale, and must not grant
+unrestricted shell execution. This is a second line of defense against
+cross-adapter drift, not a substitute for eventually rendering adapters from
+one config source.
+
+Junie and Antigravity are a narrower tier (ADR-0031): a single bounded-edit
+`assistant` role with no task-lifecycle integration. They still go through
+the same forbidden-pattern checks below (no unrestricted shell, no raw git
+mutation), just with no required markers to enforce.
 """
 
 from __future__ import annotations
@@ -74,10 +80,13 @@ def _role_paths(directory: str, extension: str) -> dict[str, str]:
 
 ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
     "opencode": _role_paths(".opencode/agents", "md"),
-    "codex": _role_paths(".codex/agents", "toml"),
-    "junie": _role_paths(".junie/agents", "md"),
-    "antigravity": _role_paths(".agents/agents", "md"),
     "claude": _role_paths(".claude/agents", "md"),
+    # Junie and Antigravity are the narrow tier: a single bounded-edit
+    # `assistant` role, not the full orchestrator-driven workflow (see
+    # ADR-0031) -- no outer-loop roles, no code-audit, no task-lifecycle
+    # markers to require.
+    "junie": {"assistant": ".junie/agents/assistant.md"},
+    "antigravity": {"assistant": ".agents/agents/assistant.md"},
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
@@ -106,6 +115,10 @@ _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
     "concurrency-specialist": ("expansion_reason",),
     "architecture-maintainability-specialist": ("expansion_reason",),
     "rollout-specialist": ("expansion_reason",),
+    # The narrow Junie/Antigravity `assistant` role is deliberately decoupled
+    # from the task lifecycle -- it never calls `codev task`/`codev git`, so
+    # there is no required marker to check for.
+    "assistant": (),
 }
 
 _FORBIDDEN_MARKERS: tuple[str, ...] = ("P0 through P3",)
