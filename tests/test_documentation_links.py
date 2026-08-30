@@ -78,6 +78,25 @@ class BundledDocLinksTests(unittest.TestCase):
             problems = find_broken_links_in_file(doc, containment_root=root)
         self.assertEqual([], problems)
 
+    def test_fragment_is_stripped_before_resolving_the_file(self) -> None:
+        # Real production usage: onboarding-guide.md links to
+        # normal-development-workflow.md#a-specific-heading. The fragment
+        # must not become part of the path being resolved.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "page.md").write_text("# Page\n\n## A Heading\n")
+            doc = root / "guide.md"
+            doc.write_text("See [this](page.md#a-heading).\n")
+            problems = find_broken_links_in_file(doc)
+        self.assertEqual([], problems)
+
+    def test_bare_fragment_with_no_path_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            doc = Path(directory) / "guide.md"
+            doc.write_text("See [this section](#a-heading).\n")
+            problems = find_broken_links_in_file(doc)
+        self.assertEqual([], problems)
+
     def test_external_url_is_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             doc = Path(directory) / "guide.md"

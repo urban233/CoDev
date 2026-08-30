@@ -41,6 +41,11 @@ target repository -- a relative link that resolves outside the bundle is exactly
 broken there as one that resolves nowhere at all, so both are checked for bundled docs.
 A non-bundled document (README.md, docs/*.md) may freely link anywhere else in this
 repository; only a genuinely missing file is an error there.
+
+Only inline links (`[text](target)`) are checked -- reference-style links
+(`[text][ref]` with a separate `[ref]: target` definition) are not matched by the
+regex below. No document in this repository currently uses that form; if one starts
+to, this checker would silently miss it.
 """
 
 from __future__ import annotations
