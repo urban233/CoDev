@@ -222,20 +222,30 @@ class VerifyAdapterTests(unittest.TestCase):
             )
         )
 
-    def test_invalid_toml_is_flagged(self) -> None:
+    def test_assistant_role_has_no_required_markers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            for role, relative in ADAPTER_ROLE_PATHS["codex"].items():
+            for role, relative in ADAPTER_ROLE_PATHS["junie"].items():
                 path = target / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
-                content = "codev task start codev task check codev task record"
-                if role == "orchestrator":
-                    content = "not [ valid toml"
+                content = f"# {role}, no task-lifecycle wiring\n"
                 path.write_text(content, encoding="utf-8")
-            result = verify_adapter("codex", target=target)
-        orchestrator = {f.role: f for f in result.findings}["orchestrator"]
-        self.assertFalse(orchestrator.ok)
-        self.assertTrue(any("invalid TOML" in p for p in orchestrator.problems))
+            result = verify_adapter("junie", target=target)
+        self.assertTrue(result.ok, result.findings)
+
+    def test_assistant_role_still_flags_unrestricted_bash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            for _role, relative in ADAPTER_ROLE_PATHS["antigravity"].items():
+                path = target / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('bash:\n  "*": allow\n', encoding="utf-8")
+            result = verify_adapter("antigravity", target=target)
+        assistant = {f.role: f for f in result.findings}["assistant"]
+        self.assertFalse(assistant.ok)
+        self.assertTrue(
+            any("unrestricted shell execution" in p for p in assistant.problems)
+        )
 
 
 if __name__ == "__main__":

@@ -49,23 +49,14 @@ AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 GITIGNORE_START = "# codev:start"
 GITIGNORE_END = "# codev:end"
-VALID_PLATFORMS = frozenset({"antigravity", "claude", "codex", "junie", "opencode"})
+VALID_PLATFORMS = frozenset({"antigravity", "claude", "junie", "opencode"})
 VALID_PROGRAMMING_LANGUAGES = frozenset({"none", "python", "typescript", "all"})
 AUDIT_SKILL_PREFIXES = {
     "python": ".agents/skills/audit-google-python-style/",
     "typescript": ".agents/skills/audit-google-typescript-style/",
 }
 AUDIT_AGENT_TEMPLATES = {
-    "antigravity": (
-        ".agents/agents/code-audit.md.template",
-        ".agents/agents/code-audit.md",
-    ),
     "claude": (".claude/agents/code-audit.md.template", ".claude/agents/code-audit.md"),
-    "codex": (
-        ".codex/agents/code-audit.toml.template",
-        ".codex/agents/code-audit.toml",
-    ),
-    "junie": (".junie/agents/code-audit.md.template", ".junie/agents/code-audit.md"),
     "opencode": (
         ".opencode/agents/code-audit.md.template",
         ".opencode/agents/code-audit.md",
@@ -77,21 +68,9 @@ AUDIT_AGENT_TEMPLATES = {
 # {{SKILL_PERMISSIONS}}/{{DESCRIPTION_SCOPE}} templating, rendered the same
 # way via _render_code_audit_agent.
 PRE_PR_CLEANUP_AGENT_TEMPLATES = {
-    "antigravity": (
-        ".agents/agents/code-audit-gate.md.template",
-        ".agents/agents/code-audit-gate.md",
-    ),
     "claude": (
         ".claude/agents/code-audit-gate.md.template",
         ".claude/agents/code-audit-gate.md",
-    ),
-    "codex": (
-        ".codex/agents/code-audit-gate.toml.template",
-        ".codex/agents/code-audit-gate.toml",
-    ),
-    "junie": (
-        ".junie/agents/code-audit-gate.md.template",
-        ".junie/agents/code-audit-gate.md",
     ),
     "opencode": (
         ".opencode/agents/code-audit-gate.md.template",
@@ -333,6 +312,19 @@ def normalize_platforms(platforms: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(selected))
 
 
+def _installed_platforms(lock_platforms: Iterable[str]) -> tuple[str, ...]:
+    """Platforms an existing lock file records, taken as historical fact.
+
+    Unlike `normalize_platforms`, this never rejects a name the current
+    version no longer recognizes -- a platform dropped after the lock was
+    written (e.g. Codex, ADR-0031) was valid when installed, and the only
+    supported next step for it is `codev adapter remove`, not a hard failure
+    on every other command that happens to read the lock file.
+    """
+
+    return tuple(sorted(set(lock_platforms)))
+
+
 def normalize_programming_language(value: str | None) -> str:
     selected = value or "none"
     if selected not in VALID_PROGRAMMING_LANGUAGES:
@@ -504,12 +496,6 @@ def _bundle_files(
             path: content
             for path, content in files.items()
             if not path.startswith(".agents/agents/")
-        }
-    if "codex" not in platforms:
-        files = {
-            path: content
-            for path, content in files.items()
-            if not path.startswith(".codex/")
         }
     return files
 
@@ -967,9 +953,10 @@ def plan_update(
 ) -> Plan:
     target = target.resolve()
     lock = _read_lock(target)
-    selected = normalize_platforms(lock.get("platforms", []))
+    selected = _installed_platforms(lock.get("platforms", []))
     if platforms is not None:
-        selected = normalize_platforms((*selected, *platforms))
+        additional = normalize_platforms(platforms)
+        selected = tuple(sorted(set(selected) | set(additional)))
     selected_language = normalize_programming_language(
         programming_language or lock.get("programming_language")
     )
@@ -1318,7 +1305,7 @@ def plan_remove(target: Path) -> Plan:
                         )
                     )
 
-    selected = normalize_platforms(lock.get("platforms", []))
+    selected = _installed_platforms(lock.get("platforms", []))
     if "opencode" in selected:
         try:
             opencode_content, remove_opencode_config, detail = (
@@ -1341,15 +1328,20 @@ def plan_remove(target: Path) -> Plan:
 
 
 def plan_adapter_remove(target: Path, platform: str) -> Plan:
-    """Preflight removal of a single adapter from an existing installation."""
+    """Preflight removal of a single adapter from an existing installation.
 
-    if platform not in VALID_PLATFORMS:
-        raise CoDevError(f"unknown platform: {platform!r}")
+    A platform recorded in the lock file is always removable, even one the
+    current version no longer recognizes (e.g. Codex, ADR-0031) -- that's
+    the one supported path off of a platform after it's dropped. Only a name
+    that's neither installed nor currently valid is rejected outright.
+    """
 
     target = target.resolve()
     lock = _read_lock(target)
     installed = lock.get("platforms", [])
     if platform not in installed:
+        if platform not in VALID_PLATFORMS:
+            raise CoDevError(f"unknown platform: {platform!r}")
         raise CoDevError(
             f"adapter {platform!r} is not installed; "
             f"installed adapters: {', '.join(installed)}"

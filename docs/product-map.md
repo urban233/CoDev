@@ -117,7 +117,11 @@ automatically immediately before every PR opens, now via the dedicated
 `architecture-maintainability-specialist` below, not kept as a seventh
 rail.
 
-### Agents (four platform copies each: OpenCode, Codex, Junie, Antigravity)
+### Agents (full role set on OpenCode and Claude Code)
+
+Junie and Antigravity no longer carry this table's role set (ADR-0031): each
+ships a single `assistant` role for bounded, surgical edits, decoupled from
+the task lifecycle. Codex is dropped entirely (ADR-0031).
 
 | Agent | Phase | Invocation today |
 |---|---|---|
@@ -196,8 +200,9 @@ the reviewer round is recorded, so it never opens the outer phase at all.
   rename (`work item` -> `task`, `.codev/work/` -> `.codev/task/`,
   `work_item_id` -> `task_id`) — ADR-0001's underlying decision to track
   state as local JSON files still stands.
-- Does not propose dropping or merging any of the four platform adapters
-  (OpenCode, Codex, Junie, Antigravity).
+- **Resolved and implemented (ADR-0031):** the Codex adapter is dropped
+  entirely; Junie and Antigravity are narrowed to a single `assistant` role,
+  decoupled from the task lifecycle.
 - Does not relax `code-audit`'s no-delegation guardrail — the guardrail is
   about it calling other agents, not about being called by `orchestrator`,
   and ADR-0005 left it textually unchanged.

@@ -46,6 +46,28 @@ Semantic Versioning.
   file-edit path, the precise task-plan path, the coarse fallback path, and
   the `Bash` destructive-prefix path.
 
+### Changed
+- Junie and Antigravity narrowed from the full 13-role orchestrator-driven
+  workflow down to a single `assistant` role each (`.junie/agents/
+  assistant.md`, `.agents/agents/assistant.md`): a bounded, surgical-edit
+  helper invoked directly by the developer, with or without a written plan,
+  and no task-lifecycle integration (`codev task`/`codev git` are never
+  called). `code-audit`/`code-audit-gate` and the `pr-review` slash command
+  are no longer installed for either platform. Based on first-hand use, both
+  harnesses' actual capability (no fine-grained per-command permission
+  enforcement, unlike OpenCode/Claude Code) didn't match what the full
+  multi-agent workflow assumes. See ADR-0031.
+
+### Removed
+- The Codex adapter (`--agent-platform codex`, `.codex/agents/`) is dropped
+  entirely: not used often enough, and not validated against enough real
+  usage, to keep maintaining alongside the other four platforms. See
+  ADR-0031. If your project has Codex installed, `codev adapter remove
+  codex` still works on upgrade -- removing an adapter no longer accepts a
+  platform argparse `choices=` list, only the lock file's own recorded
+  platforms, so a platform recorded before it was dropped stays removable
+  even though it can no longer be added.
+
 ### Fixed
 - The guardrail hook originally checked
   `docs/codev/work/*/implementation-plan.md` -- ADR-0004's pre-rename path.

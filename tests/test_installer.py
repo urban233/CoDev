@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import json
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -59,7 +58,7 @@ class InstallerTests(unittest.TestCase):
     def test_init_installs_complete_bundle_and_passes_check(self) -> None:
         self.install(programming_language="all")
 
-        bundled = installer._bundle_files(("antigravity", "codex", "junie", "opencode"))
+        bundled = installer._bundle_files(("antigravity", "junie", "opencode"))
         self.assertFalse(any("__pycache__" in path for path in bundled))
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         self.assertFalse(any(path.endswith(".template") for path in bundled))
@@ -94,12 +93,8 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("audit-google-python-style: allow", audit_agent)
         self.assertIn("audit-google-typescript-style: allow", audit_agent)
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / ".junie/commands/pr-review.md").is_file())
-        self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / ".codex/agents/builder.toml").is_file())
-        self.assertTrue((self.target / ".codex/agents/orchestrator.toml").is_file())
-        self.assertTrue((self.target / ".codex/agents/reviewer.toml").is_file())
+        self.assertTrue((self.target / ".junie/agents/assistant.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/assistant.md").is_file())
         self.assertTrue(
             (self.target / "docs/codev/onboarding/onboarding-guide.md").is_file()
         )
@@ -118,9 +113,6 @@ class InstallerTests(unittest.TestCase):
 
         gate_paths = [
             self.target / ".opencode/agents/code-audit-gate.md",
-            self.target / ".junie/agents/code-audit-gate.md",
-            self.target / ".agents/agents/code-audit-gate.md",
-            self.target / ".codex/agents/code-audit-gate.toml",
             self.target / ".claude/agents/code-audit-gate.md",
         ]
         for path in gate_paths:
@@ -258,81 +250,18 @@ class InstallerTests(unittest.TestCase):
             installer.apply_plan(self.target, plan)
         self.assertTrue(skill.exists())
 
-    def test_codex_adapter_installs_valid_agents_without_other_adapters(self) -> None:
-        self.install(("codex",))
-
-        agents = sorted((self.target / ".codex" / "agents").glob("*.toml"))
-        self.assertEqual(
-            [
-                "architecture-maintainability-specialist.toml",
-                "builder.toml",
-                "code-audit-gate.toml",
-                "code-audit.toml",
-                "concurrency-specialist.toml",
-                "correctness-tests-specialist.toml",
-                "lightweight-reviewer.toml",
-                "orchestrator.toml",
-                "outer-loop-runner.toml",
-                "planner.toml",
-                "reviewer.toml",
-                "rollout-specialist.toml",
-                "security-data-specialist.toml",
-            ],
-            [path.name for path in agents],
-        )
-        for agent in agents:
-            config = tomllib.loads(agent.read_text(encoding="utf-8"))
-            self.assertEqual(agent.stem, config["name"])
-            self.assertTrue(config["description"])
-            self.assertTrue(config["developer_instructions"])
-        self.assertFalse((self.target / ".opencode").exists())
-        self.assertFalse((self.target / ".junie").exists())
-        self.assertTrue(installer.check_project(self.target).ok)
-
-    def test_bundle_filters_codex_adapter_files(self) -> None:
-        codex_files = installer._bundle_files(("codex",))
-        opencode_files = installer._bundle_files(("opencode",))
-
-        self.assertEqual(
-            {
-                ".codex/agents/architecture-maintainability-specialist.toml",
-                ".codex/agents/builder.toml",
-                ".codex/agents/code-audit-gate.toml",
-                ".codex/agents/code-audit.toml",
-                ".codex/agents/concurrency-specialist.toml",
-                ".codex/agents/correctness-tests-specialist.toml",
-                ".codex/agents/lightweight-reviewer.toml",
-                ".codex/agents/orchestrator.toml",
-                ".codex/agents/outer-loop-runner.toml",
-                ".codex/agents/planner.toml",
-                ".codex/agents/reviewer.toml",
-                ".codex/agents/rollout-specialist.toml",
-                ".codex/agents/security-data-specialist.toml",
-            },
-            {path for path in codex_files if path.startswith(".codex/")},
-        )
-        self.assertFalse(any(path.startswith(".codex/") for path in opencode_files))
-
     def test_antigravity_adapter_uses_official_agents_location(self) -> None:
         self.install(("antigravity",))
 
-        self.assertTrue((self.target / ".agents/agents/builder.md").is_file())
-        self.assertTrue((self.target / ".agents/agents/code-audit.md").is_file())
-        self.assertTrue((self.target / ".agents/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / ".agents/agents/reviewer.md").is_file())
+        self.assertTrue((self.target / ".agents/agents/assistant.md").is_file())
         self.assertFalse((self.target / ".junie").exists())
         self.assertFalse((self.target / ".opencode").exists())
-        content = (self.target / ".agents/agents/reviewer.md").read_text(
+        content = (self.target / ".agents/agents/assistant.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("name: reviewer", content)
-        self.assertIn("mainAgent: false", content)
+        self.assertIn("name: assistant", content)
+        self.assertIn("mainAgent: true", content)
         self.assertIn("subagent: true", content)
-        audit = (self.target / ".agents/agents/code-audit.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("mainAgent: true", audit)
-        self.assertIn("language-agnostic", audit)
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_junie_adapter_installs_valid_subagents_without_other_adapters(
@@ -340,18 +269,11 @@ class InstallerTests(unittest.TestCase):
     ) -> None:
         self.install(("junie",))
 
-        self.assertTrue((self.target / ".junie/agents/builder.md").is_file())
-        self.assertTrue((self.target / ".junie/agents/code-audit.md").is_file())
-        self.assertTrue((self.target / ".junie/agents/orchestrator.md").is_file())
-        self.assertTrue((self.target / ".junie/agents/reviewer.md").is_file())
+        self.assertTrue((self.target / ".junie/agents/assistant.md").is_file())
         self.assertFalse((self.target / ".opencode").exists())
         self.assertIn(
-            'description: "Bounded implementation subagent',
-            (self.target / ".junie/agents/builder.md").read_text(encoding="utf-8"),
-        )
-        self.assertIn(
-            "language-agnostic",
-            (self.target / ".junie/agents/code-audit.md").read_text(encoding="utf-8"),
+            'description: "Bounded pair-programming helper',
+            (self.target / ".junie/agents/assistant.md").read_text(encoding="utf-8"),
         )
         self.assertTrue(installer.check_project(self.target).ok)
 
@@ -448,9 +370,6 @@ class InstallerTests(unittest.TestCase):
 
         agents = (
             self.target / ".opencode/agents/code-audit.md",
-            self.target / ".junie/agents/code-audit.md",
-            self.target / ".agents/agents/code-audit.md",
-            self.target / ".codex/agents/code-audit.toml",
             self.target / ".claude/agents/code-audit.md",
         )
         for agent in agents:
@@ -461,7 +380,7 @@ class InstallerTests(unittest.TestCase):
 
     def test_junie_managed_files_update_and_remove_safely(self) -> None:
         self.install(("junie",))
-        agent = self.target / ".junie/agents/reviewer.md"
+        agent = self.target / ".junie/agents/assistant.md"
         original = agent.read_bytes()
 
         plan = installer.plan_update(self.target)
@@ -472,15 +391,6 @@ class InstallerTests(unittest.TestCase):
         remove_plan = installer.plan_remove(self.target)
         self.assertTrue(remove_plan.conflicts)
         self.assertTrue(agent.exists())
-
-    def test_remove_deletes_codex_agents(self) -> None:
-        self.install(("codex",))
-
-        plan = installer.plan_remove(self.target)
-
-        self.assertFalse(plan.conflicts)
-        installer.apply_plan(self.target, plan)
-        self.assertFalse((self.target / ".codex").exists())
 
     def test_remove_deletes_claude_agents(self) -> None:
         self.install(("claude",))
@@ -495,7 +405,7 @@ class InstallerTests(unittest.TestCase):
         original = "# Local policy\n\nRun the project tests.\n"
         (self.target / "AGENTS.md").write_text(original, encoding="utf-8")
 
-        self.install(("codex",))
+        self.install(("claude",))
 
         merged = (self.target / "AGENTS.md").read_text(encoding="utf-8")
         self.assertTrue(merged.startswith(original.rstrip()))
@@ -504,7 +414,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.target / ".opencode").exists())
 
     def test_init_creates_gitignore_with_managed_block(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
 
         gitignore = (self.target / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(installer.GITIGNORE_START, gitignore)
@@ -517,7 +427,7 @@ class InstallerTests(unittest.TestCase):
         original = "node_modules/\n*.log\n"
         (self.target / ".gitignore").write_text(original, encoding="utf-8")
 
-        self.install(("codex",))
+        self.install(("opencode",))
 
         merged = (self.target / ".gitignore").read_text(encoding="utf-8")
         self.assertTrue(merged.startswith(original.rstrip()))
@@ -530,12 +440,12 @@ class InstallerTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        plan = installer.plan_init(self.target, ("codex",), "none")
+        plan = installer.plan_init(self.target, ("opencode",), "none")
 
         self.assertTrue(any(item.path == ".gitignore" for item in plan.conflicts))
 
     def test_update_integrates_gitignore_for_a_prior_install(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         # Simulate an install that predates the gitignore integration: no
         # block in the file, and no record of it in the lock file.
         (self.target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
@@ -555,7 +465,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("gitignore_block_hash", updated_lock["integrations"])
 
     def test_update_rejects_modified_gitignore_block(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         gitignore_path = self.target / ".gitignore"
         text = gitignore_path.read_text(encoding="utf-8")
         gitignore_path.write_text(
@@ -570,7 +480,7 @@ class InstallerTests(unittest.TestCase):
         self,
     ) -> None:
         (self.target / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
-        self.install(("codex",))
+        self.install(("opencode",))
 
         plan = installer.plan_remove(self.target)
 
@@ -582,7 +492,7 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn("escalations.jsonl", gitignore)
 
     def test_check_project_flags_tampered_gitignore_block(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         gitignore_path = self.target / ".gitignore"
         text = gitignore_path.read_text(encoding="utf-8")
         gitignore_path.write_text(text.replace("escalations.jsonl", "tampered"))
@@ -716,7 +626,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.target / ".opencode" / "opencode.json").exists())
 
     def test_remove_conflict_prevents_all_deletions(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"
         skill.write_text(
             skill.read_text(encoding="utf-8") + "local edit\n", encoding="utf-8"
@@ -735,7 +645,7 @@ class InstallerTests(unittest.TestCase):
         collision.parent.mkdir(parents=True)
         collision.write_text("project-owned\n", encoding="utf-8")
 
-        plan = installer.plan_init(self.target, ("codex",))
+        plan = installer.plan_init(self.target, ("opencode",))
 
         self.assertTrue(plan.conflicts)
         with self.assertRaises(installer.CoDevError):
@@ -744,7 +654,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.target / ".codev/lock.json").exists())
 
     def test_update_is_idempotent(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
 
         plan = installer.plan_update(self.target)
 
@@ -754,8 +664,8 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(installer.check_project(self.target).ok)
 
     def test_update_removes_stale_file_when_upstream_renames_it(self) -> None:
-        self.install(("codex",))
-        current_bundle = installer._bundle_files(("codex",))
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
         old_path = ".codev/for-ai/ai-agent-guidelines.md"
         new_path = "docs/renamed/ai-agent-guidelines.md"
         renamed_bundle = dict(current_bundle)
@@ -779,8 +689,8 @@ class InstallerTests(unittest.TestCase):
     def test_update_retires_renamed_file_with_local_changes_instead_of_deleting(
         self,
     ) -> None:
-        self.install(("codex",))
-        current_bundle = installer._bundle_files(("codex",))
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
         old_path = ".codev/for-ai/ai-agent-guidelines.md"
         new_path = "docs/renamed/ai-agent-guidelines.md"
         renamed_bundle = dict(current_bundle)
@@ -799,7 +709,7 @@ class InstallerTests(unittest.TestCase):
         self.assertNotIn(local_file, plan.deletions)
 
     def test_check_reports_managed_file_drift(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         skill = self.target / ".agents" / "skills" / "review-change" / "SKILL.md"
         skill.write_text(
             skill.read_text(encoding="utf-8") + "\nlocal edit\n",
@@ -814,8 +724,8 @@ class InstallerTests(unittest.TestCase):
         )
 
     def test_update_conflict_prevents_all_planned_writes(self) -> None:
-        self.install(("codex",))
-        current_bundle = installer._bundle_files(("codex",))
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
         first, second = sorted(current_bundle)[:2]
         changed_bundle = dict(current_bundle)
         changed_bundle[first] += b"\nupstream one\n"
@@ -835,7 +745,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(original_first, first_path.read_bytes())
 
     def test_modified_agents_block_is_a_conflict(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         agents = self.target / "AGENTS.md"
         agents.write_text(
             agents.read_text(encoding="utf-8").replace(
@@ -849,12 +759,12 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(any(item.path == "AGENTS.md" for item in plan.conflicts))
 
     def _make_single_file_conflict(self) -> tuple[str, bytes, bytes]:
-        """Install, then create one conflicted managed file: `codex`'s code-
+        """Install, then create one conflicted managed file: OpenCode's code-
         audit agent both changes upstream and gets a local edit. Returns
         (relative path, local bytes, upstream bytes)."""
-        self.install(("codex",))
-        current_bundle = installer._bundle_files(("codex",))
-        relative = ".codex/agents/code-audit.toml"
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
+        relative = ".opencode/agents/code-audit.md"
         upstream = current_bundle[relative] + b"\n# upstream change\n"
         changed_bundle = dict(current_bundle)
         changed_bundle[relative] = upstream
@@ -934,8 +844,8 @@ class InstallerTests(unittest.TestCase):
     def test_apply_plan_leaves_a_skipped_conflict_untouched_but_writes_the_rest(
         self,
     ) -> None:
-        self.install(("codex",))
-        current_bundle = installer._bundle_files(("codex",))
+        self.install(("opencode",))
+        current_bundle = installer._bundle_files(("opencode",))
         first, second = sorted(current_bundle)[:2]
         changed_bundle = dict(current_bundle)
         changed_bundle[first] += b"\nupstream one\n"
@@ -958,7 +868,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(local_second, second_path.read_bytes())
 
     def test_apply_plan_override_without_upstream_content_raises(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         plan = installer.plan_update(self.target)
         plan.operations.append(
             installer.Operation("conflict", "no/such/file.md", "manufactured")
@@ -1151,55 +1061,41 @@ class AdapterRemoveTests(unittest.TestCase):
         return plan
 
     def test_remove_opencode_from_multi_platform_install(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
-        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        self.assertTrue((self.target / ".claude" / "agents" / "builder.md").is_file())
 
         plan = installer.plan_adapter_remove(self.target, "opencode")
 
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
         self.assertFalse((self.target / ".opencode").exists())
-        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        self.assertTrue((self.target / ".claude" / "agents" / "builder.md").is_file())
         lock = json.loads(
             (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(["codex"], lock["platforms"])
+        self.assertEqual(["claude"], lock["platforms"])
         self.assertFalse(any(p.startswith(".opencode/") for p in lock["files"]))
 
-    def test_remove_codex_from_multi_platform_install(self) -> None:
-        self.install(("codex", "opencode"))
-        plan = installer.plan_adapter_remove(self.target, "codex")
-
-        self.assertFalse(plan.conflicts)
-        installer.apply_plan(self.target, plan)
-        self.assertFalse((self.target / ".codex").exists())
-        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
-        lock = json.loads(
-            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(["opencode"], lock["platforms"])
-        self.assertFalse(any(p.startswith(".codex/") for p in lock["files"]))
-
     def test_remove_claude_from_multi_platform_install(self) -> None:
-        self.install(("codex", "claude"))
+        self.install(("opencode", "claude"))
         self.assertTrue((self.target / ".claude" / "agents" / "builder.md").is_file())
-        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
 
         plan = installer.plan_adapter_remove(self.target, "claude")
 
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
         self.assertFalse((self.target / ".claude").exists())
-        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
         lock = json.loads(
             (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(["codex"], lock["platforms"])
+        self.assertEqual(["opencode"], lock["platforms"])
         self.assertFalse(any(p.startswith(".claude/") for p in lock["files"]))
 
     def test_remove_shared_skills_preserved(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         skills_before = sorted(
             str(p.relative_to(self.target))
             for p in (self.target / ".agents" / "skills").glob("*")
@@ -1220,26 +1116,60 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertTrue(any(p.startswith(".agents/skills/") for p in lock["files"]))
 
     def test_remove_last_platform_rejected(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
 
         with self.assertRaises(installer.CoDevError) as ctx:
-            installer.plan_adapter_remove(self.target, "codex")
+            installer.plan_adapter_remove(self.target, "opencode")
         self.assertIn("codev remove", str(ctx.exception))
 
     def test_remove_not_installed_platform_raises(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
 
         with self.assertRaises(installer.CoDevError) as ctx:
             installer.plan_adapter_remove(self.target, "junie")
         self.assertIn("not installed", str(ctx.exception))
 
     def test_remove_unknown_platform_raises(self) -> None:
-        self.install(("codex",))
+        self.install(("opencode",))
         with self.assertRaises(installer.CoDevError):
             installer.plan_adapter_remove(self.target, "bogus")
 
+    def _mark_platform_stale(self, name: str) -> None:
+        """Simulate a lock file predating a platform's removal from the tool.
+
+        Injects `name` into the recorded platforms without any matching
+        bundle files -- the same shape as a real pre-existing install of a
+        platform later dropped (e.g. Codex, ADR-0031): recorded, but no
+        longer something the current version can produce or validate.
+        """
+        lock_path = self.target / ".codev" / "lock.json"
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock["platforms"].append(name)
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+    def test_remove_platform_no_longer_valid_but_still_recorded(self) -> None:
+        self.install(("opencode",))
+        self._mark_platform_stale("dropped-platform")
+
+        plan = installer.plan_adapter_remove(self.target, "dropped-platform")
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        lock = json.loads(
+            (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(["opencode"], lock["platforms"])
+
+    def test_update_tolerates_a_stale_recorded_platform(self) -> None:
+        self.install(("opencode",))
+        self._mark_platform_stale("dropped-platform")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+
     def test_remove_conflict_on_local_edit(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         agent = self.target / ".opencode" / "agents" / "builder.md"
         original = agent.read_text(encoding="utf-8")
         agent.write_text(original + "\nlocal edit\n", encoding="utf-8")
@@ -1254,7 +1184,7 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertIn("opencode", lock["platforms"])
 
     def test_remove_opencode_cleans_config_managed_entries(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         config_path = self.target / ".opencode" / "opencode.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertIn("agent", config)
@@ -1266,7 +1196,7 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertFalse(config_path.exists())
 
     def test_remove_opencode_preserves_user_owned_config(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         config_path = self.target / ".opencode" / "opencode.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["theme"] = "custom"
@@ -1281,7 +1211,7 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertNotIn("$schema", remaining)
 
     def test_remove_produces_valid_lock(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         plan = installer.plan_adapter_remove(self.target, "opencode")
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
@@ -1290,7 +1220,7 @@ class AdapterRemoveTests(unittest.TestCase):
             (self.target / ".codev" / "lock.json").read_text(encoding="utf-8")
         )
         self.assertEqual(2, lock["schema_version"])
-        self.assertEqual(["codex"], lock["platforms"])
+        self.assertEqual(["claude"], lock["platforms"])
         remaining_files = set(lock["files"])
         for rel in remaining_files:
             self.assertTrue(
@@ -1299,7 +1229,7 @@ class AdapterRemoveTests(unittest.TestCase):
             )
 
     def test_remove_then_add_back_round_trip(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         remove_plan = installer.plan_adapter_remove(self.target, "opencode")
         self.assertFalse(remove_plan.conflicts)
         installer.apply_plan(self.target, remove_plan)
@@ -1315,7 +1245,7 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertIn("opencode", lock["platforms"])
 
     def test_dry_run_does_not_modify_files(self) -> None:
-        self.install(("codex", "opencode"))
+        self.install(("claude", "opencode"))
         plan = installer.plan_adapter_remove(self.target, "opencode")
         self.assertFalse(plan.conflicts)
         self.assertTrue(plan.changed)
@@ -1327,14 +1257,14 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertIn("opencode", lock["platforms"])
 
     def test_remove_junie_from_multi_platform(self) -> None:
-        self.install(("codex", "junie"))
-        self.assertTrue((self.target / ".junie" / "agents" / "builder.md").is_file())
+        self.install(("opencode", "junie"))
+        self.assertTrue((self.target / ".junie" / "agents" / "assistant.md").is_file())
 
         plan = installer.plan_adapter_remove(self.target, "junie")
         self.assertFalse(plan.conflicts)
         installer.apply_plan(self.target, plan)
         self.assertFalse((self.target / ".junie").exists())
-        self.assertTrue((self.target / ".codex" / "agents" / "builder.toml").is_file())
+        self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
 
 
 if __name__ == "__main__":

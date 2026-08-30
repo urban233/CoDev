@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "BSD-3-Clause"
 authors = [{ name = "Martin Urban" }]
-keywords = ["ai", "developer-tools", "software-delivery", "antigravity", "claude-code", "codex", "junie", "opencode"]
+keywords = ["ai", "developer-tools", "software-delivery", "antigravity", "claude-code", "junie", "opencode"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -67,13 +67,9 @@ codev_workflow = [
   "bundle/.claude/hooks/*.py",
   "bundle/.claude/settings.json",
   "bundle/.claude/CLAUDE.md",
-  "bundle/.codex/agents/*.toml",
-  "bundle/.codex/agents/*.toml.template",
   "bundle/.opencode/agents/*.md",
   "bundle/.opencode/agents/*.md.template",
   "bundle/.junie/agents/*.md",
-  "bundle/.junie/agents/*.md.template",
-  "bundle/.junie/commands/*.md",
   "bundle/.github/*.md",
   "bundle/.github/ISSUE_TEMPLATE/*.md",
   "bundle/docs/*.md",

@@ -200,16 +200,16 @@ This writes PR metadata, the patch, changed files, commits, reviews, comments,
 and check runs. Use repeated `--include metadata`, `--include diff`, or other
 parts to fetch a smaller set.
 
-The installed Junie project command is also available directly inside Junie,
-and the same command is available inside Claude Code:
+The same command is also available directly inside Claude Code:
 
 ```text
 /pr-review repo=OWNER/REPO pr=123
 ```
 
-Project-specific Junie commands live under `.junie/commands`, and Claude
-Code's under `.claude/commands`, so this command is versioned with the
-repository and appears in each tool's own `/` command list.
+Claude Code's project-specific commands live under `.claude/commands`, so
+this command is versioned with the repository and appears in Claude Code's
+own `/` command list. Junie and Antigravity don't get a `pr-review` command
+-- see "What gets installed" below for why.
 
 ## What gets installed
 
@@ -219,16 +219,15 @@ my-project/
 ├── .gitignore                        # a managed block ignoring the local escalation log
 ├── .agents/skills/                   # lifecycle, PR, and specialist review skills
 │   └── <name>/skill-card.md          # owner, license, use case, risks -- see ADR-0029
-├── .agents/agents/                   # Antigravity workflow and audit agents
+├── .agents/agents/                   # Antigravity's assistant agent (surgical edits only)
 ├── .claude/agents/                   # Claude Code workflow and audit agents
 ├── .claude/skills/                   # the same shared skills, natively discoverable
 ├── .claude/commands/                 # the pr-review slash command
 ├── .claude/settings.json             # plan-mode default and the plan-first guardrail hook
 ├── .claude/CLAUDE.md                 # Claude-Code-specific supplement to AGENTS.md
-├── .codex/agents/                    # Codex workflow and audit agents
 ├── .opencode/agents/                 # OpenCode workflow and audit agents
 ├── .opencode/opencode.json           # safely merged; existing agent settings survive
-├── .junie/agents/                    # Junie subagents
+├── .junie/agents/                    # Junie's assistant agent (surgical edits only)
 ├── .codev/for-ai/                    # the AI's operating contract -- not for casual browsing
 ├── .codev/lock.json                  # installed version and source hashes
 ├── .github/pull_request_template.md  # evidence-based PR template
@@ -238,12 +237,18 @@ my-project/
 └── scripts/                          # deterministic validators
 ```
 
-Use `--agent-platform codex` to omit the OpenCode, Junie, Antigravity, and
-Claude Code adapters. The Codex adapter installs TOML agents under
-`.codex/agents/`. Use `--agent-platform opencode`, `--agent-platform junie`,
+Use `--agent-platform claude` to omit the OpenCode, Junie, and Antigravity
+adapters. Use `--agent-platform opencode`, `--agent-platform junie`,
 `--agent-platform antigravity`, or `--agent-platform claude` to select one
 adapter, or use `--agent-platform all` for every supported platform. Core
 skills and human/AI workflow references are installed for every platform.
+
+OpenCode and Claude Code get the full orchestrator-driven workflow described
+above. Junie and Antigravity are a narrower tier: a single `assistant` agent
+for bounded, surgical edits with or without a written plan, no task-lifecycle
+integration, and no other roles -- a deliberate scope cut based on those two
+harnesses' current maturity, not a smaller version of the same thing. See
+`docs/adr/0031-drop-codex-narrow-junie-and-antigravity-to-an-edit-assistant.md`.
 
 The onboarding guide is installed at
 `docs/codev/onboarding/onboarding-guide.md`, with worked examples alongside
@@ -258,9 +263,6 @@ platform expansion first.
 
 The Antigravity adapter follows its official workspace location:
 `.agents/agents/<name>.md`.
-
-The Codex adapter follows its official workspace location:
-`.codex/agents/<name>.toml`.
 
 The Claude Code adapter follows its official workspace location:
 `.claude/agents/<name>.md`, with skills mirrored to `.claude/skills/` (its

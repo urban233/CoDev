@@ -104,7 +104,7 @@ class CliTests(unittest.TestCase):
                             "--target",
                             str(target),
                             "--agent-platform",
-                            "codex",
+                            "opencode",
                         ]
                     ),
                 )
@@ -131,7 +131,7 @@ class CliTests(unittest.TestCase):
                             "--target",
                             str(target),
                             "--agent-platform",
-                            "codex",
+                            "opencode",
                         ]
                     ),
                 )
@@ -154,7 +154,7 @@ class CliTests(unittest.TestCase):
                             "--target",
                             str(target),
                             "--agent-platform",
-                            "codex",
+                            "opencode",
                         ]
                     ),
                 )
@@ -170,7 +170,7 @@ class CliTests(unittest.TestCase):
                         ]
                     ),
                 )
-            self.assertTrue((target / ".agents/agents/reviewer.md").is_file())
+            self.assertTrue((target / ".agents/agents/assistant.md").is_file())
             self.assertTrue(
                 (target / ".agents/skills/review-change/SKILL.md").is_file()
             )
@@ -189,7 +189,7 @@ class CliTests(unittest.TestCase):
                             "--target",
                             str(target),
                             "--agent-platform",
-                            "codex",
+                            "opencode",
                             "--programming-language",
                             "typescript",
                         ]
@@ -235,51 +235,22 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("audit-google-python-style", audit_agent)
             self.assertNotIn("audit-google-typescript-style", audit_agent)
 
-    def test_update_can_add_codex_to_an_existing_install(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory)
-            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
-                self.assertEqual(
-                    0,
-                    main(
-                        [
-                            "init",
-                            "--target",
-                            str(target),
-                            "--agent-platform",
-                            "opencode",
-                        ]
-                    ),
-                )
-                self.assertEqual(
-                    0,
-                    main(
-                        [
-                            "update",
-                            "--target",
-                            str(target),
-                            "--agent-platform",
-                            "codex",
-                        ]
-                    ),
-                )
-                self.assertEqual(0, main(["check", "--target", str(target)]))
-            self.assertTrue((target / ".codex/agents/reviewer.toml").is_file())
-
     def _make_update_conflict(self, target: Path) -> tuple[str, bytes]:
         """init, then arrange exactly one conflict for the next `update`:
-        `.codex/agents/code-audit.toml` both changes upstream (via a patched
+        `.opencode/agents/code-audit.md` both changes upstream (via a patched
         `installer._bundle_files`, left active on the test) and picks up a
         local edit."""
         with redirect_stdout(StringIO()):
             self.assertEqual(
                 0,
-                main(["init", "--target", str(target), "--agent-platform", "codex"]),
+                main(
+                    ["init", "--target", str(target), "--agent-platform", "opencode"]
+                ),
             )
         from codev_workflow import installer as installer_module
 
-        relative = ".codex/agents/code-audit.toml"
-        current_bundle = installer_module._bundle_files(("codex",))
+        relative = ".opencode/agents/code-audit.md"
+        current_bundle = installer_module._bundle_files(("opencode",))
         changed_bundle = dict(current_bundle)
         upstream = current_bundle[relative] + b"\n# upstream change\n"
         changed_bundle[relative] = upstream
@@ -1454,7 +1425,7 @@ class CliTests(unittest.TestCase):
                         "--target",
                         str(target),
                         "--agent-platform",
-                        "codex",
+                        "opencode",
                     ]
                 )
                 main(
@@ -1477,7 +1448,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["healthy"])
-            self.assertEqual(["codex"], payload["adapters"])
+            self.assertEqual(["opencode"], payload["adapters"])
             self.assertEqual(1, payload["tasks_in_progress"])
             self.assertNotIn("python_version", payload)
 
@@ -1485,7 +1456,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 output = StringIO()
                 with redirect_stdout(output):
                     code = main(
@@ -1500,7 +1471,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 main(
                     [
                         "task",
@@ -1549,7 +1520,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 main(
                     [
                         "task",
@@ -1578,7 +1549,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 output = StringIO()
                 with redirect_stdout(output):
                     main(["status", "--target", str(target), "--json"])
@@ -1590,7 +1561,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 output = StringIO()
                 with redirect_stdout(output), redirect_stderr(StringIO()):
                     code = main(["doctor", "--target", str(target)])
@@ -1601,11 +1572,11 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 listing = StringIO()
                 with redirect_stdout(listing):
                     main(["adapter", "list", "--target", str(target), "--json"])
-                self.assertEqual(["codex"], json.loads(listing.getvalue()))
+                self.assertEqual(["opencode"], json.loads(listing.getvalue()))
 
                 self.assertEqual(
                     0,
@@ -1623,22 +1594,23 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(listing_after):
                     main(["adapter", "list", "--target", str(target), "--json"])
             self.assertEqual(
-                ["antigravity", "codex"], sorted(json.loads(listing_after.getvalue()))
+                ["antigravity", "opencode"],
+                sorted(json.loads(listing_after.getvalue())),
             )
-            self.assertTrue((target / ".agents/agents/reviewer.md").is_file())
+            self.assertTrue((target / ".agents/agents/assistant.md").is_file())
 
     def test_adapter_verify_passes_on_a_fresh_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
                 output = StringIO()
                 with redirect_stdout(output):
                     code = main(
                         [
                             "adapter",
                             "verify",
-                            "codex",
+                            "opencode",
                             "--target",
                             str(target),
                             "--json",
@@ -1675,13 +1647,13 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
-            (target / ".codex/agents/orchestrator.toml").write_text(
-                'name = "orchestrator"\n', encoding="utf-8"
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+            (target / ".opencode/agents/orchestrator.md").write_text(
+                "# orchestrator\n", encoding="utf-8"
             )
             output = StringIO()
             with redirect_stdout(output):
-                code = main(["adapter", "verify", "codex", "--target", str(target)])
+                code = main(["adapter", "verify", "opencode", "--target", str(target)])
             self.assertEqual(1, code)
             self.assertIn("FAILED", output.getvalue())
 
@@ -1689,7 +1661,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "claude"])
                 main(
                     [
                         "adapter",
@@ -1700,7 +1672,7 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertTrue((target / ".opencode" / "agents" / "builder.md").is_file())
-            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+            self.assertTrue((target / ".claude" / "agents" / "builder.md").is_file())
 
             self.assertEqual(
                 0,
@@ -1715,17 +1687,17 @@ class CliTests(unittest.TestCase):
                 ),
             )
             self.assertFalse((target / ".opencode").exists())
-            self.assertTrue((target / ".codex" / "agents" / "builder.toml").is_file())
+            self.assertTrue((target / ".claude" / "agents" / "builder.md").is_file())
             listing = StringIO()
             with redirect_stdout(listing):
                 main(["adapter", "list", "--target", str(target), "--json"])
-            self.assertEqual(["codex"], json.loads(listing.getvalue()))
+            self.assertEqual(["claude"], json.loads(listing.getvalue()))
 
     def test_adapter_remove_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "claude"])
                 main(
                     [
                         "adapter",
@@ -1755,13 +1727,13 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
             with redirect_stderr(StringIO()):
                 code = main(
                     [
                         "adapter",
                         "remove",
-                        "codex",
+                        "opencode",
                         "--target",
                         str(target),
                     ]
@@ -1772,7 +1744,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "codex"])
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
             with redirect_stderr(StringIO()):
                 code = main(
                     [
@@ -1784,6 +1756,35 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(2, code)
+
+    def test_adapter_remove_accepts_a_platform_no_longer_valid(self) -> None:
+        # `adapter remove`'s `platform` argument deliberately has no
+        # argparse `choices=` restriction (unlike `add`/`verify`): a lock
+        # file can record a platform an earlier CoDev version installed
+        # that the current one no longer recognizes (e.g. Codex,
+        # ADR-0031), and this is the one supported way off of it.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+            lock_path = target / ".codev" / "lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["platforms"].append("dropped-platform")
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            with redirect_stdout(StringIO()):
+                code = main(
+                    [
+                        "adapter",
+                        "remove",
+                        "dropped-platform",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(0, code)
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.assertEqual(["opencode"], lock["platforms"])
 
     def test_config_set_get_list_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
