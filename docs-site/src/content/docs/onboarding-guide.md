@@ -4,10 +4,12 @@ description: The mental model behind CoDev, read once — what it does, why, and
 ---
 
 *Start here.* This is the short version — what CoDev does, the mental model behind it, and
-what a day of work actually looks like. Want to just try it right now instead of reading
-first? [Tutorial 1](/CoDev/tutorials/your-first-fix/) walks one small bug fix start to
-finish. For a command-led daily workflow once you know the shape, see
-[Workflow Checklist](/CoDev/workflow-checklist/). For the full technical map (every
+what a day of work actually looks like. This page is the *why*; for the tactical *how* —
+what to actually say to your agent — see
+[Talking to Your Agent](/CoDev/working-with-your-agent/). Want to just try it right now
+instead of reading first? [Tutorial 1](/CoDev/tutorials/your-first-fix/) walks one small bug
+fix start to finish. For the exact command sequence once you know the shape, see
+[Manual CLI Walkthrough](/CoDev/workflow-checklist/). For the full technical map (every
 command, skill, and agent), see
 [docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md).
 
@@ -41,8 +43,9 @@ If you remember nothing else: **the AI supplies evidence, you supply authority.*
 
 ## A running example
 
-Say your checkout total is wrong: a discount applied to a tax-exempt item is still being
-taxed. That one bug threads through every section below, and it's the exact example
+Say a salt-form compound's computed molecular weight is wrong: the pipeline's descriptor
+calculator is supposed to strip the counter-ion before summing atomic mass, but doesn't.
+That one bug threads through every section below, and it's the exact example
 [Tutorial 1](/CoDev/tutorials/your-first-fix/) builds end to end with real commands.
 
 ## The four steps you'll actually see
@@ -50,12 +53,12 @@ taxed. That one bug threads through every section below, and it's the exact exam
 You never have to name a skill. Describe what you want, and CoDev resolves it to one of
 four steps:
 
-| Step | Question it answers | The checkout example |
+| Step | Question it answers | The descriptor example |
 |---|---|---|
-| **Understand** (`define-product`) | What are we building, and what has to be decided first? | Nothing to decide here — the expected behavior is unambiguous: tax-exempt items don't get taxed, discounts still apply. Straight to Build. |
-| **Build** (`build-change`) | What's the smallest change that delivers this, with evidence it works? | Fix the total calculation so tax-exempt status is checked before tax is applied, not after. Add a regression test with a tax-exempt, discounted item. |
-| **Review** (`review-change`, plus an automatic pass) | Is this exact change correct, safe, and consistent with what we agreed? | Confirm the fix doesn't break the case where a *taxable* item has a discount — a real, narrow correctness check, not a style nit. |
-| **Ship** | Are we ready to expose this, and how will we know it's working? | A pricing bug fix like this usually ships straight through — no staged rollout needed unless checkout volume or revenue risk says otherwise. |
+| **Understand** (`define-product`) | What are we building, and what has to be decided first? | Nothing to decide here — the expected behavior is unambiguous: `exclude_salts=True` must strip the counter-ion before summing mass. Straight to Build. |
+| **Build** (`build-change`) | What's the smallest change that delivers this, with evidence it works? | Fix the calculation so salt fragments are stripped before the sum runs, not after. Add a regression test with a salt-form compound. |
+| **Review** (`review-change`, plus an automatic pass) | Is this exact change correct, safe, and consistent with what we agreed? | Confirm the fix doesn't change the weight of a *single-fragment* compound — a real, narrow correctness check, not a style nit. |
+| **Ship** | Are we ready to expose this, and how will we know it's working? | A descriptor calculation fix like this usually ships straight through — no staged rollout needed unless it feeds a regulated potency calculation. |
 
 A small, local, reversible fix like this one goes **Understand → Build → Review → Ship**
 in minutes, with Understand collapsing to "here's the bug, here's the expected behavior."
@@ -82,8 +85,9 @@ audit an existing suite's health, or triage a flaky test.
 **Design** (`design-solution`) and **Plan** (`plan-wave`) are not extra stages
 everything passes through — they're conditional depth inside Understand, triggered by real
 properties of the change: a shared API or data contract, an authentication or privacy
-boundary, or more than one developer working the same area concurrently. The checkout fix
-above skips both — it's a one-line, single-developer, non-contract change.
+boundary, or more than one developer working the same area concurrently. The
+salt-stripping fix above skips both — it's a one-line, single-developer, non-contract
+change.
 [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/) walks a change that *does* need
 `design-solution`, and [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/) walks
 one that needs `plan-wave`.
@@ -104,8 +108,8 @@ scale needs. Most changes never touch either.
 | **Ship** | Authorizes exposure and expansion | Assembles readiness evidence, proposes rollout stages |
 
 Two artifacts carry the handoff between AI activity and human control, and neither needs
-to be a separate document for ordinary work like the checkout fix — a few lines in the
-conversation is enough:
+to be a separate document for ordinary work like the salt-stripping fix — a few lines in
+the conversation is enough:
 
 - **The focus card**, presented before any editing begins: what's changing, what success
   looks like, what's explicitly out of scope, which files are fair game, how it'll be
@@ -146,13 +150,15 @@ reviewed on demand.
 
 One rule carries most of it: every component or contract has one responsible owner, and
 the owner and reviewer are never the same person. Two developers can work in parallel once
-they agree on a shared contract — say, the exact shape of a `DiscountResult` the pricing
-and checkout modules both depend on — and a fixture to test against it, rather than
-discovering the mismatch after both branches are done. See
+they agree on a shared contract — say, the exact shape of a `Descriptor` the calculation
+engine and the screening request surface both depend on — and a fixture to test against
+it, rather than discovering the mismatch after both branches are done. See
 [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/) for a worked example.
 
 ## Where to go next
 
+- **Want the tactical version — what to actually say?**
+  [Talking to Your Agent](/CoDev/working-with-your-agent/)
 - **Just want to try it?** [Tutorial 1: your first fix](/CoDev/tutorials/your-first-fix/)
   — install to merged PR, one small bug, every command shown.
 - A change that touches a shared contract:
@@ -162,7 +168,7 @@ discovering the mismatch after both branches are done. See
 - Two developers, one shared contract:
   [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)
 - Commands for a normal task, once you know the shape:
-  [Workflow Checklist](/CoDev/workflow-checklist/)
+  [Manual CLI Walkthrough](/CoDev/workflow-checklist/)
 - Copy-paste prompts for starting a task or outer-loop review:
   [Starting Prompts](/CoDev/starting-prompts/)
 - More worked walkthroughs: [Examples](/CoDev/examples/)

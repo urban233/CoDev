@@ -3,6 +3,13 @@ title: CLI reference
 description: Every codev command, grouped by what it's for.
 ---
 
+:::note[You typically never run these yourself]
+`orchestrator` and `planner` run this CLI on your behalf during a normal session — see
+[Talking to Your Agent](/CoDev/working-with-your-agent/). This page is the exact reference
+for what they run: useful for scripting, CI, debugging, or understanding the mechanism —
+not a list of commands you're expected to type.
+:::
+
 Every `codev` command, grouped by what it's for. If you're looking for a narrated
 walkthrough instead of a reference table, start with
 [the tutorials](https://github.com/urban233/CoDev/blob/main/src/codev_workflow/bundle/docs/codev/tutorials/01-your-first-fix.md)

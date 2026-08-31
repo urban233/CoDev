@@ -1,0 +1,131 @@
+---
+title: Talking to Your Agent
+description: You describe what you want in plain language. CoDev's AI agents run the CLI for you.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import Exchange from '../../components/Exchange.astro';
+
+## The core idea
+
+In normal use, you never type a `codev` command. You describe what you want, in plain
+language, to an AI agent — `orchestrator` for build work, `planner` for anything upstream
+of a ready task. The agent inspects the actual repository, proposes a plan, and — once you
+approve it — runs `codev` on your behalf: opening the task, committing, recording review
+rounds, opening the pull request. The CLI is the agent's hands. It doesn't have to be
+yours.
+
+Everything else on this site that shows a `codev ...` command is showing you the
+*mechanism*, not a script to type. [CLI Reference](/CoDev/cli-reference/) and the
+[Manual CLI Walkthrough](/CoDev/workflow-checklist/) exist for the moments that genuinely
+call for it — CI, scripting, recovering a task by hand — not for everyday work.
+
+## The two agents you talk to
+
+<table>
+  <thead>
+    <tr><th>Agent</th><th>For</th><th>Covers</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>orchestrator</code></td>
+      <td>Getting a change built, reviewed, and shipped</td>
+      <td>Understand (small changes) → Build → Review → Ship</td>
+    </tr>
+    <tr>
+      <td><code>planner</code></td>
+      <td>Anything upstream of a ready task</td>
+      <td>Specify → Understand (larger changes) → Design → Plan</td>
+    </tr>
+  </tbody>
+</table>
+
+They're separate, human-started entry points by design — `planner` never invokes
+`orchestrator`/`builder`/`reviewer` itself, and `orchestrator` doesn't do design work.
+You pick which one to talk to based on what you're trying to do right now, the same way
+you'd pick which colleague to walk over to. How you switch between them is
+platform-specific — see [Agent Platforms](/CoDev/agent-platforms/) for the exact mechanism
+on OpenCode, Claude Code, Junie, and Antigravity.
+
+## What you actually say
+
+Four moments where your own words are what actually moves things forward. Each is
+deliberately short — a longer prompt doesn't make the agent safer, it mostly just repeats
+what it already does by default.
+
+### Starting a task
+
+<Exchange>
+  <Fragment slot="you">
+    "A salt-form compound's computed molecular weight is too high — <code>exclude_salts</code>{' '}
+    isn't stripping the counter-ion before summing mass. Fix it and add a regression test."
+  </Fragment>
+  <Fragment slot="agent">
+    Inspects the actual code, opens the task, drafts a focus card, and — once you approve
+    it — runs <code>codev task start</code> and <code>codev git branch</code> before
+    touching any code.
+  </Fragment>
+</Exchange>
+
+### Approving a plan or focus card
+
+<Exchange>
+  <Fragment slot="you">
+    "Looks right, go ahead." — or a correction: "No, don't touch the fragment-splitting
+    logic itself, only how the result gets summed."
+  </Fragment>
+  <Fragment slot="agent">
+    Proceeds to Build against exactly what was approved; a correction narrows or redirects
+    the plan before any file changes, not after.
+  </Fragment>
+</Exchange>
+
+### Choosing outer-loop specialists
+
+<Exchange>
+  <Fragment slot="you">
+    Reply with the numbers you want ("1, 3, 4") or "all" when `outer-loop-runner` presents
+    the five-specialist menu.
+  </Fragment>
+  <Fragment slot="agent">
+    Dispatches exactly the specialists you selected, and records which ones actually ran —
+    distinct from what was merely offered — in <code>codev task log</code>.
+  </Fragment>
+</Exchange>
+
+### Triaging findings and deciding to merge
+
+<Exchange>
+  <Fragment slot="you">
+    "Fix the concurrency one, defer the naming nit with a reason, waive rollout — this is
+    internal descriptor logic with no staged exposure."
+  </Fragment>
+  <Fragment slot="agent">
+    Records your triage decisions with <code>codev task triage</code>/<code>codev task
+    waive</code>, sends anything that needs a fix back through Build, and stops for your
+    actual merge decision once every dimension passes or is waived.
+  </Fragment>
+</Exchange>
+
+<Aside type="tip">
+  Every one of these has a full copy-paste version on [Starting
+  Prompts](/CoDev/starting-prompts/) — this page shows the shape of the conversation, that
+  page gives you the exact wording.
+</Aside>
+
+## What you'll never have to type
+
+The [CLI Reference](/CoDev/cli-reference/) documents every `codev` command CoDev ships, and
+the [Manual CLI Walkthrough](/CoDev/workflow-checklist/) walks the exact sequence a task
+goes through end to end. Both are genuinely useful — for understanding what your agent is
+actually doing under the hood, for wiring CoDev into CI, or for recovering a task by hand
+when no agent session is available — but neither is required reading before you start
+using CoDev. Talk to `orchestrator` or `planner` first; read those pages when you're
+curious or when you actually need to run something yourself.
+
+## Where to go next
+
+- The exact copy-paste prompts: [Starting Prompts](/CoDev/starting-prompts/)
+- See this play out start to finish: [Tutorial 1: your first fix](/CoDev/tutorials/your-first-fix/)
+- The mental model behind all of this: [Onboarding Guide](/CoDev/onboarding-guide/)
+- The workflow steps and commands behind each one: [Concepts](/CoDev/concepts/)

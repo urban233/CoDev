@@ -5,7 +5,7 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 
 // CoDev's installed-package version, kept as one constant so the sidebar
 // badge below never drifts from pyproject.toml/CHANGELOG.md by hand.
-const CODEV_VERSION = '0.4.0';
+const CODEV_VERSION = '0.5.0';
 
 // Deployed as a GitHub Pages *project* site (github.com/urban233/CoDev ->
 // urban233.github.io/CoDev/), so `base` must carry the repo name. If a
@@ -54,16 +54,15 @@ export default defineConfig({
       sidebar: [
         { label: 'Home', link: '/' },
         { label: 'Getting Started', link: '/getting-started/' },
-        { label: 'Concepts', link: '/concepts/' },
         {
-          label: 'Onboarding',
+          label: 'Working With Your Agent',
           items: [
-            { label: 'Onboarding Guide', link: '/onboarding-guide/' },
-            { label: 'Workflow Checklist', link: '/workflow-checklist/' },
+            { label: 'Talking to Your Agent', link: '/working-with-your-agent/' },
             { label: 'Starting Prompts', link: '/starting-prompts/' },
             { label: 'Examples', link: '/examples/' },
           ],
         },
+        { label: 'Concepts', link: '/concepts/' },
         {
           label: 'Tutorials',
           items: [
@@ -78,7 +77,8 @@ export default defineConfig({
           label: 'Reference',
           badge: { text: `v${CODEV_VERSION}`, variant: 'default' },
           items: [
-            { label: 'CLI reference', link: '/cli-reference/' },
+            { label: 'CLI Reference', link: '/cli-reference/' },
+            { label: 'Manual CLI Walkthrough', link: '/workflow-checklist/' },
             { label: 'Architecture', link: '/architecture/' },
           ],
         },

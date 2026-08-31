@@ -1,9 +1,16 @@
 ---
-title: Workflow Checklist
-description: The command checklist for a normal task, once you already know the shape.
+title: Manual CLI Walkthrough
+description: The exact command sequence a normal task goes through — what your agent runs, not what you type.
 ---
 
-The command checklist for a normal bug fix, small feature, or planned task, once you
+:::note[This is what your agent runs, not what you type]
+In a normal session, `orchestrator` runs this exact sequence on your behalf — see
+[Talking to Your Agent](/CoDev/working-with-your-agent/). Read this page to understand the
+mechanism, to run CoDev outside an agent session (CI, scripting), or to recover a task by
+hand.
+:::
+
+The exact command sequence for a normal bug fix, small feature, or planned task, once you
 already know the shape from [Tutorial 1](/CoDev/tutorials/your-first-fix/) or the
 [Onboarding Guide](/CoDev/onboarding-guide/). This page assumes you know *why* each command
 exists; it's the terse reference, not the walkthrough.
@@ -68,6 +75,8 @@ Never run `init`, `update`, or `remove` while product code is mid-build.
 
 ## Full reference
 
+- [Talking to Your Agent](/CoDev/working-with-your-agent/) — how this sequence actually
+  gets triggered in normal use: you talk, your agent runs it.
 - [Tutorial 1: your first fix](/CoDev/tutorials/your-first-fix/) — the narrated version
   of the checklist above, with real output at every step.
 - [CLI reference](/CoDev/cli-reference/) — every command, not just the ones in a normal

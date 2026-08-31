@@ -10,6 +10,14 @@ output looks like at each step — not a hypothetical reconstruction. The CLI co
 output below were run against the real `codev` CLI while writing this tutorial, including
 the one mistake in "A mistake you will probably also make" further down.
 
+:::tip[Who actually types these commands]
+Every `codev ...` command below is shown so you can see exactly what happens under the
+hood. In a real session, `orchestrator` runs almost all of them for you — you only supply
+the plain-language parts, in Step 2 and wherever the tutorial shows you approving
+something. See [Talking to Your Agent](/CoDev/working-with-your-agent/) for the shape of
+that conversation.
+:::
+
 For the concepts behind these steps, see the
 [Onboarding Guide](/CoDev/onboarding-guide/); this tutorial is the narrated "do
 this" companion to it.
@@ -23,9 +31,12 @@ this.
 
 ## The bug
 
-A checkout total is wrong: a discount applied to a tax-exempt item still gets taxed. The
-fix is genuinely small — this tutorial is deliberately about the smallest realistic case,
-because that's the case most people hit first, and the full lifecycle still applies to it.
+A compound-screening pipeline's molecular-weight calculator is wrong for salt forms: it's
+supposed to strip the counter-ion fragment before summing atomic mass when
+`exclude_salts=True`, but sums every fragment regardless — so a salt-form compound's
+computed weight comes out too high. The fix is genuinely small — this tutorial is
+deliberately about the smallest realistic case, because that's the case most people hit
+first, and the full lifecycle still applies to it.
 
 ## Step 1: install CoDev into the repository
 
@@ -73,23 +84,23 @@ Start a session in the repository (on OpenCode, switch to the `orchestrator` age
 state the outcome in plain language:
 
 ```text
-Fix the checkout total when a discount is applied to a tax-exempt item. The
-total must include the discount but not tax. Add a regression test.
+Fix compute_molecular_weight so exclude_salts=True actually strips the counter-ion
+fragment before summing mass. Add a regression test with a salt-form compound.
 ```
 
 You don't need to name a skill. The assistant begins with **Understand**: it inspects the
-actual pricing code, and for a change this small and unambiguous, presents a short focus
-card instead of a full brief — something like:
+actual descriptor code, and for a change this small and unambiguous, presents a short
+focus card instead of a full brief — something like:
 
 ```text
-Change:      Tax-exempt items should never have tax applied, discount or not.
-Success:     A tax-exempt, discounted order's total excludes tax; a taxable,
-             discounted order's total is unchanged.
-Non-goals:   No change to discount calculation itself.
-Scope:       checkout/pricing.py, tests/test_pricing.py
+Change:      exclude_salts=True should drop counter-ion fragments before summing mass.
+Success:     A salt-form compound's computed weight matches its free-base weight; a
+             single-fragment compound's weight is unchanged.
+Non-goals:   No change to fragment-splitting itself.
+Scope:       screening/descriptors.py, tests/test_descriptors.py
 Validation:  python -m unittest discover -s tests
-Stop if:     the tax-exempt flag isn't reaching this function at all (that
-             would be a different, bigger bug upstream).
+Stop if:     split_into_fragments doesn't reliably separate the salt from the parent
+             (that would be a different, bigger bug upstream).
 ```
 
 Nothing here needs a design document or a wave plan — no shared contract changes, no
@@ -108,13 +119,13 @@ git rev-parse HEAD
 ```
 
 ```shell
-codev task start --id checkout-tax-exempt-total \
+codev task start --id descriptor-salt-stripping-fix \
   --base 4f3aaf0537be7fd58ef431d146c750df6a2a2461 \
-  --summary "Correct tax-exempt checkout totals" --no-github-issue
+  --summary "Strip counter-ion salts before summing molecular weight" --no-github-issue
 ```
 
 ```text
-Started task checkout-tax-exempt-total at /path/to/your/repo/.codev/task/checkout-tax-exempt-total/round-state.json
+Started task descriptor-salt-stripping-fix at /path/to/your/repo/.codev/task/descriptor-salt-stripping-fix/round-state.json
 ```
 
 (`--no-github-issue` is only correct for a scratch repo with no GitHub remote, like the one
@@ -124,12 +135,12 @@ let the orchestrator create one for you — see
 front.)
 
 ```shell
-codev git branch --id checkout-tax-exempt-total \
+codev git branch --id descriptor-salt-stripping-fix \
   --base 4f3aaf0537be7fd58ef431d146c750df6a2a2461
 ```
 
 ```text
-Created branch codev/checkout-tax-exempt-total for checkout-tax-exempt-total
+Created branch codev/descriptor-salt-stripping-fix for descriptor-salt-stripping-fix
 ```
 
 An AI-driven `orchestrator` normally performs this recording and branching itself as part
@@ -142,27 +153,29 @@ Ask the assistant to implement the approved focus card. It inspects the actual c
 editing:
 
 ```python
-# checkout/pricing.py, before
-def compute_total(subtotal, discount, is_tax_exempt, tax_rate=0.08):
-    discounted = subtotal - discount
-    tax = discounted * tax_rate  # <- tax applied unconditionally
-    return discounted + tax
+# screening/descriptors.py, before
+def compute_molecular_weight(mol, exclude_salts=True):
+    fragments = split_into_fragments(mol)
+    total = sum(fragment_mass(f) for f in fragments)  # <- salts included unconditionally
+    return total
 ```
 
 ```python
-# checkout/pricing.py, after
-def compute_total(subtotal, discount, is_tax_exempt, tax_rate=0.08):
-    discounted = subtotal - discount
-    tax = 0 if is_tax_exempt else discounted * tax_rate
-    return discounted + tax
+# screening/descriptors.py, after
+def compute_molecular_weight(mol, exclude_salts=True):
+    fragments = split_into_fragments(mol)
+    if exclude_salts:
+        fragments = [largest_fragment(fragments)]
+    return sum(fragment_mass(f) for f in fragments)
 ```
 
 ...and adds the regression test alongside the existing one, runs the suite, and reports
 back:
 
 ```text
-Delivered:    Tax-exempt items no longer taxed; discounts still apply.
-Changed:      checkout/pricing.py, tests/test_pricing.py
+Delivered:    Salt-form compounds no longer include counter-ion mass in the computed
+              weight; single-fragment compounds are unchanged.
+Changed:      screening/descriptors.py, tests/test_descriptors.py
 Validation:   python -m unittest discover -s tests -v -- both tests pass
 Known limitations: none
 Review state: AWAITING INDEPENDENT REVIEW
@@ -172,21 +185,21 @@ The builder does not commit or call `codev task record` itself — the orchestra
 the diff, then records the evidence against that exact resulting head:
 
 ```shell
-codev git commit --id checkout-tax-exempt-total \
-  --message "Fix tax-exempt checkout total"
+codev git commit --id descriptor-salt-stripping-fix \
+  --message "Strip counter-ion salts before summing molecular weight"
 ```
 
 ```text
-Committed cc62907e9ef4942d401826e2d0021f7ed6ab62d4 on checkout-tax-exempt-total's branch
+Committed cc62907e9ef4942d401826e2d0021f7ed6ab62d4 on descriptor-salt-stripping-fix's branch
 ```
 
 ```shell
-codev task record --id checkout-tax-exempt-total --round 1 --role builder \
+codev task record --id descriptor-salt-stripping-fix --round 1 --role builder \
   --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4 --evidence evidence.json
 ```
 
 ```text
-Recorded round 1 (builder) for checkout-tax-exempt-total
+Recorded round 1 (builder) for descriptor-salt-stripping-fix
 ```
 
 ## A mistake you will probably also make
@@ -195,7 +208,7 @@ Calling `codev task check` right after `codev git commit`, before recording the 
 round, looks like this:
 
 ```shell
-codev task check --id checkout-tax-exempt-total --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4
+codev task check --id descriptor-salt-stripping-fix --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4
 ```
 
 ```text
@@ -215,20 +228,20 @@ also AI — looks at the exact diff, not the builder's private reasoning. It rec
 verdict:
 
 ```shell
-codev task record --id checkout-tax-exempt-total --round 1 --role reviewer \
+codev task record --id descriptor-salt-stripping-fix --round 1 --role reviewer \
   --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4 \
   --findings findings.json --coverage coverage.json \
   --decision READY_FOR_OUTER_LOOP
 ```
 
 ```text
-Recorded round 1 (reviewer) for checkout-tax-exempt-total
+Recorded round 1 (reviewer) for descriptor-salt-stripping-fix
 ```
 
 Now check whether the loop may proceed:
 
 ```shell
-codev task check --id checkout-tax-exempt-total --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4
+codev task check --id descriptor-salt-stripping-fix --head cc62907e9ef4942d401826e2d0021f7ed6ab62d4
 ```
 
 ```text
@@ -246,9 +259,9 @@ Once `task check` reports `ok_ready_for_pr`, push and open the PR using the guar
 commands — they act on this task's branch, never the default branch:
 
 ```shell
-codev git push --id checkout-tax-exempt-total
-codev git open-pr --id checkout-tax-exempt-total \
-  --title "Fix tax-exempt checkout total"
+codev git push --id descriptor-salt-stripping-fix
+codev git open-pr --id descriptor-salt-stripping-fix \
+  --title "Strip counter-ion salts before summing molecular weight"
 ```
 
 These need an actual GitHub remote to do anything (this tutorial's demo repo didn't have
@@ -258,7 +271,7 @@ optional but still available — see [Tutorial 3](/CoDev/tutorials/outer-loop-re
 you want to see that in action on a slightly larger change. When ready:
 
 ```shell
-codev git mark-ready --id checkout-tax-exempt-total
+codev git mark-ready --id descriptor-salt-stripping-fix
 ```
 
 ## Step 7: the human decision, and closing the task
@@ -267,11 +280,11 @@ You inspect the actual pull request and CI, and decide whether to merge. After t
 decision:
 
 ```shell
-codev task close --id checkout-tax-exempt-total --outcome approved
+codev task close --id descriptor-salt-stripping-fix --outcome approved
 ```
 
 ```text
-Closed task checkout-tax-exempt-total as approved
+Closed task descriptor-salt-stripping-fix as approved
 ```
 
 ```shell
@@ -296,4 +309,4 @@ ceremony by default.
 - Reviewing an already-open pull request: [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
 - Two developers, one shared contract: [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)
 - The command checklist for when you already know the shape:
-  [Workflow Checklist](/CoDev/workflow-checklist/)
+  [Manual CLI Walkthrough](/CoDev/workflow-checklist/)

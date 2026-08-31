@@ -20,10 +20,13 @@ Adapters: opencode
 Tasks in progress: 0
 ```
 
-Commit the installed files as one infrastructure change, then start an AI session in the
-repository and describe a small bug or task in plain language — you don't need to name a
-skill. [Tutorial 1](/CoDev/tutorials/your-first-fix/) walks one small fix from here to a
-merged pull request, with every command and real output shown.
+Commit the installed files as one infrastructure change. That's the last `codev` command
+you type today — from here, start an AI session in the repository and describe a small bug
+or task in plain language. You don't need to name a skill, and you won't need to type
+another `codev` command yourself: your agent runs the CLI on your behalf from here on. See
+[Talking to Your Agent](/CoDev/working-with-your-agent/) for what that actually looks like,
+or jump straight to [Tutorial 1](/CoDev/tutorials/your-first-fix/), which walks one small
+fix from here to a merged pull request with every command and real output shown.
 
 ## New repository
 
@@ -70,6 +73,7 @@ changes.
 
 | I want to... | Go to |
 |---|---|
+| Know how to actually talk to my agent | [Talking to Your Agent](/CoDev/working-with-your-agent/) |
 | Understand the mental model before doing anything | [Onboarding Guide](/CoDev/onboarding-guide/) |
 | Try it hands-on, one small fix at a time | [Tutorial 1](/CoDev/tutorials/your-first-fix/) |
 | See every command | [CLI reference](/CoDev/cli-reference/) |

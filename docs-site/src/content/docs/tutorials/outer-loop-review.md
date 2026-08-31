@@ -3,6 +3,12 @@ title: "Tutorial 3: outer-loop review on an open pull request"
 description: Starting the outer loop, choosing specialists, triaging findings, and reaching a mergeable state.
 ---
 
+:::tip[Who actually types these commands]
+As in the earlier tutorials, the `codev ...` commands below are what `outer-loop-runner`
+runs on your behalf. Your part is entirely in plain language: which specialists to run, and
+what to do about each finding.
+:::
+
 Once a pull request is open, five specialist reviewers — correctness, security,
 concurrency, architecture, rollout — can examine it in parallel, on top of the fast
 correctness pass and style gate that already ran during Build. This tutorial walks that
@@ -49,11 +55,11 @@ Ready to dispatch. Which specialists?
   all. all five
 ```
 
-For a checkout pricing change, security/data and concurrency are plausible skips if
-nothing here touches auth, PII, or shared mutable state — but say so explicitly rather than
-letting the assistant decide. Reply with the numbers you want, or `all`. Whatever you pick,
-CoDev records exactly which specialists ran, distinct from what was merely asked, in
-`codev task log --id <id>`.
+For a descriptor calculation change, security/data and concurrency are plausible skips if
+nothing here touches external data ingestion or shared mutable state — but say so
+explicitly rather than letting the assistant decide. Reply with the numbers you want, or
+`all`. Whatever you pick, CoDev records exactly which specialists ran, distinct from what
+was merely asked, in `codev task log --id <id>`.
 
 ## Reading findings
 
@@ -68,7 +74,7 @@ a fix before merge and which can be tracked separately.
 Record your triage decision per finding:
 
 ```shell
-codev task triage --id checkout-percentage-discounts --round 2 --triage triage.json
+codev task triage --id descriptor-request-surface --round 2 --triage triage.json
 ```
 
 Where `triage.json` maps each finding id to a disposition — fix now, defer with a reason,
@@ -77,8 +83,8 @@ with no staged exposure to plan), waive it explicitly rather than leaving it sil
 incomplete:
 
 ```shell
-codev task waive --id checkout-percentage-discounts \
-  --dimension rollout --reason "internal pricing logic; no staged exposure"
+codev task waive --id descriptor-request-surface \
+  --dimension rollout --reason "internal descriptor calculation; no staged exposure"
 ```
 
 A waiver is an authorized, recorded decision — not the same thing as a reviewer simply not
@@ -98,7 +104,7 @@ review comment as authorization to skip re-review of the fix itself.
 Once every review dimension passes or is explicitly waived:
 
 ```shell
-codev git mark-ready --id checkout-percentage-discounts
+codev git mark-ready --id descriptor-request-surface
 ```
 
 This is the last mechanical step. From here it's the same human decision as Tutorial 1:

@@ -1,0 +1,76 @@
+---
+// A two-part "you say / your agent runs" block, used on the
+// Working With Your Agent page to make the human/agent split a visual
+// pattern instead of a sentence buried in prose. Styled entirely from the
+// existing --sl-color-accent*/--sl-color-gray-* tokens in custom.css so it
+// tracks both themes automatically, and follows this project's existing
+// "flatten Starlight chrome" convention: flat borders, 6px radius, no
+// shadow.
+---
+
+<div class="exchange">
+  <div class="exchange-panel exchange-you">
+    <span class="exchange-label">🗣️ You say</span>
+    <div class="exchange-body"><slot name="you" /></div>
+  </div>
+  <div class="exchange-connector" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 16 16">
+      <path d="M8 2v10M3 8l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </div>
+  <div class="exchange-panel exchange-agent">
+    <span class="exchange-label">⚙️ Your agent runs</span>
+    <div class="exchange-body"><slot name="agent" /></div>
+  </div>
+</div>
+
+<style>
+  .exchange {
+    display: flex;
+    flex-direction: column;
+    margin: 1.5rem 0;
+  }
+  .exchange-panel {
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    background: var(--sl-color-gray-7);
+  }
+  .exchange-you {
+    border-left: 3px solid var(--sl-color-gray-3);
+  }
+  .exchange-agent {
+    border-left: 3px solid var(--sl-color-accent);
+    background: var(--sl-color-accent-low);
+  }
+  .exchange-label {
+    display: block;
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-2);
+    margin-bottom: 0.35rem;
+  }
+  .exchange-agent .exchange-label {
+    color: var(--sl-color-accent-high);
+  }
+  .exchange-body {
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+  }
+  .exchange-body :global(p) {
+    margin: 0;
+  }
+  .exchange-body :global(code) {
+    font-size: 0.85em;
+  }
+  .exchange-connector {
+    align-self: center;
+    color: var(--sl-color-gray-3);
+    line-height: 0;
+    margin: -2px 0;
+    z-index: 1;
+  }
+</style>

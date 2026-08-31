@@ -3,6 +3,12 @@ title: "Tutorial 2: a change that needs a design"
 description: What changes when a fix touches a shared contract instead of being small and unambiguous.
 ---
 
+:::tip[Who actually types these commands]
+As in [Tutorial 1](/CoDev/tutorials/your-first-fix/), the `codev ...` commands below are
+what your agent runs on your behalf. What's yours to do is stated in plain language at each
+step — describing the change, and deciding the shared representation the design settles on.
+:::
+
 [Tutorial 1](/CoDev/tutorials/your-first-fix/) skipped Understand almost entirely — the bug
 was small and unambiguous. This tutorial covers the other case: a change that touches
 something other code depends on, where getting it wrong is expensive to unwind later. By
@@ -17,10 +23,11 @@ changes when a fix isn't small.
 
 ## The change
 
-Continuing the checkout example: product wants a second discount type — a percentage
-discount, alongside the existing flat-amount one — and other code already calls
-`compute_total(subtotal, discount, is_tax_exempt)` in three places. This isn't a bug fix;
-it's a new shape for an existing function every caller depends on. That's the signal.
+Continuing the descriptor example: product wants a second descriptor computed through the
+same pipeline — TPSA (topological polar surface area) alongside the existing molecular
+weight — and other code already calls `compute_molecular_weight(mol, exclude_salts)` in
+three places. This isn't a bug fix; it's a new shape for an existing function every caller
+depends on. That's the signal.
 
 ## Why this triggers Design
 
@@ -28,13 +35,14 @@ From the [Onboarding Guide](/CoDev/onboarding-guide/#two-steps-that-only-show-up
 Design is conditional depth inside Understand, triggered by real properties of the
 change — not by size. This change qualifies because:
 
-- It changes a **shared contract** — `compute_total`'s signature, called from three other
-  places.
-- Getting the discount-type representation wrong (a bare string? a bare number? which one
-  wins if both are somehow set?) is exactly the kind of decision that's cheap to get right
-  once and expensive to unwind after three call sites depend on the wrong shape.
+- It changes a **shared contract** — `compute_molecular_weight`'s signature, called from
+  three other places.
+- Getting the descriptor representation wrong (a bare float? which units for which kind?
+  what happens to a caller that doesn't know about TPSA yet?) is exactly the kind of
+  decision that's cheap to get right once and expensive to unwind after three call sites
+  depend on the wrong shape.
 
-A one-line tax-exempt fix didn't have either property. This one has both.
+A one-line salt-stripping fix didn't have either property. This one has both.
 
 ## Step 1: describe the change
 
@@ -44,30 +52,31 @@ distinct, human-started entry point from `orchestrator`, decoupled from executio
 ([ADR-0024](https://github.com/urban233/CoDev/blob/main/docs/adr/0024-planner-primary-agent.md)):
 
 ```text
-We need to support percentage-based discounts alongside the existing flat-amount
-discount in checkout. Three call sites use compute_total today.
+We need to compute TPSA alongside the existing molecular weight in the screening
+pipeline. Three call sites use compute_molecular_weight today.
 ```
 
 The assistant investigates the actual call sites first — not just the function
 definition — and, because this is a shared-contract change, proposes a brief before
 touching design: outcome, who's affected, what's explicitly out of scope (e.g. "no change
-to how tax-exempt status is determined" if that's true), and success criteria. For a
-feature this size, that's `docs/codev/features/percentage-discounts/brief.md`. Review it,
-correct anything wrong about the framing, and accept it.
+to how salts are excluded" if that's true), and success criteria. For a feature this size,
+that's `docs/codev/features/descriptor-support/brief.md`. Review it, correct anything wrong
+about the framing, and accept it.
 
 ## Step 2: the design
 
 With the brief accepted, `design-solution` drafts
-`docs/codev/features/percentage-discounts/design.md`, grounded in the actual current code
+`docs/codev/features/descriptor-support/design.md`, grounded in the actual current code
 (not an idealized rewrite). For a change this size, expect it to settle:
 
-- **The new signature or a `Discount` type** — e.g. `Discount(kind: "flat" | "percent",
-  value: float)` instead of overloading the existing `discount` parameter's meaning.
+- **A unified entry point** — `compute_descriptor(mol, kind, exclude_salts=True)` returning
+  a `Descriptor(kind, value, units)` result, instead of one hardcoded function per
+  property.
 - **Every call site**, named explicitly, with what changes at each one — not "update
   callers as needed."
-- **What happens at the boundary values** — a 100% discount, a negative value, both
-  discount kinds present at once. These are exactly the questions worth settling on paper
-  before three call sites each guess differently.
+- **What happens at the boundary values** — an unknown `kind`, whether `exclude_salts`
+  even applies the same way to TPSA as it does to molecular weight. These are exactly the
+  questions worth settling on paper before three call sites each guess differently.
 - **Test strategy** — one test per call site's actual usage, not just the new function in
   isolation.
 

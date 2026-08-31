@@ -6,10 +6,12 @@ tableOfContents: false
 
 import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 
-CoDev installs a small, production-minded collaboration system into any Git repository. A
-developer and AI move through four steps — **Understand, Build, Review, Ship** — plus two
-that only show up when the work actually needs them: **Specify** for a genuinely new
-product, **Launch** for a real rollout decision.
+You describe what you want, in plain language, to an AI agent. CoDev's agents inspect the
+actual repository, propose a plan, and — once you approve it — do the work: they run the
+`codev` CLI on your behalf so you don't have to. A developer and AI move through four
+steps this way — **Understand, Build, Review, Ship** — plus two that only show up when the
+work actually needs them: **Specify** for a genuinely new product, **Launch** for a real
+rollout decision.
 
 <LinkButton href="/CoDev/getting-started/" variant="primary">Get started</LinkButton>
 <LinkButton href="/CoDev/cli-reference/" variant="secondary">CLI reference</LinkButton>
@@ -18,25 +20,29 @@ product, **Launch** for a real rollout decision.
 
 <CardGrid>
 	<Card title="Getting Started" icon="rocket">
-		Install the bundle into a repository and run your first `codev status` in under
-		a minute. [Read the guide →](/CoDev/getting-started/)
+		Install the bundle into a repository in under a minute — the one part of this
+		that really is a CLI command. [Read the guide →](/CoDev/getting-started/)
 	</Card>
-	<Card title="Concepts" icon="open-book">
-		Understand, Build, Review, Ship — the workflow steps and the `codev` commands
-		behind each one. [Read the workflow →](/CoDev/concepts/)
+	<Card title="Talking to Your Agent" icon="comment">
+		The core idea: you talk, your agent runs the CLI. What to say, and when it
+		actually matters. [Read it first →](/CoDev/working-with-your-agent/)
 	</Card>
 	<Card title="Tutorials" icon="seti:notebook">
 		Four start-to-finish walkthroughs — a first fix, a design-worthy change,
 		outer-loop review, two developers on one contract.
 		[Start with Tutorial 1 →](/CoDev/tutorials/your-first-fix/)
 	</Card>
+	<Card title="Concepts" icon="open-book">
+		Understand, Build, Review, Ship — the workflow steps and the `codev` commands
+		behind each one. [Read the workflow →](/CoDev/concepts/)
+	</Card>
 	<Card title="Agent Platforms" icon="puzzle">
 		What differs across OpenCode, Claude Code, Junie, and Antigravity.
 		[Compare platforms →](/CoDev/agent-platforms/)
 	</Card>
 	<Card title="CLI reference" icon="seti:powershell">
-		Every `codev` command, grouped by what it's for — install, task lifecycle, git,
-		skill evaluation. [See every command →](/CoDev/cli-reference/)
+		What your agent runs on your behalf, documented in full — for scripting, CI,
+		and debugging. [See every command →](/CoDev/cli-reference/)
 	</Card>
 	<Card title="Architecture" icon="setting">
 		How the bundle is built, installed, and updated — the install/update algorithm

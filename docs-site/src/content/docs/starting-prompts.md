@@ -3,6 +3,8 @@ title: Starting Prompts
 description: Two prompts you'll type often — starting a task, and starting outer-loop review.
 ---
 
+This is the exact wording behind [Talking to Your Agent](/CoDev/working-with-your-agent/)'s
+"What you actually say" section — copy-paste it rather than reconstructing it from memory.
 Two prompts you'll type often: kicking off the next task, and starting
 outer-loop review on an open pull request. Both assume CoDev is installed
 and you're about to switch your assistant's primary agent to `orchestrator`
