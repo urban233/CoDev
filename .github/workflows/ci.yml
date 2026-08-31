@@ -52,6 +52,14 @@ jobs:
           python scripts/evaluate-development-workflow.py
           --repo .
           --self-test
+      # This repository dogfoods its own bundle at its own root -- checking
+      # that install for drift needs no network access (unlike
+      # claude-code-compat below) and doesn't vary by OS or Python version,
+      # so one representative matrix leg is enough, run right alongside the
+      # other bundle-content validation above.
+      - name: Verify this repository's own root install has not drifted
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        run: python scripts/verify_self_install.py
       # This one matrix leg (Ubuntu, 3.13) also drives the whole Bazel/just
       # surface for every Bazel-supported Python version (3.11/3.12/3.13 --
       # see docs/features/bazel-migration/design.md's "Toolchain and

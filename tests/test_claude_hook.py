@@ -262,6 +262,72 @@ class RequirePlanHookTests(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout)
 
+    def test_asking_writes_a_decision_log_entry(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "src/foo.py"},
+                "cwd": str(self.repo),
+            },
+        )
+        log_path = self.repo / ".codev/hooks/decisions.jsonl"
+        self.assertTrue(log_path.exists())
+        record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual("require_plan.py", record["hook"])
+        self.assertEqual("ask", record["decision"])
+
+    def test_allowing_on_main_writes_a_decision_log_entry(self) -> None:
+        # main is exempted from gating, but that is still a real decision
+        # the hook made, not an irrelevant-tool early exit -- log it.
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "src/foo.py"},
+                "cwd": str(self.repo),
+            },
+        )
+        log_path = self.repo / ".codev/hooks/decisions.jsonl"
+        record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual("allow", record["decision"])
+        self.assertEqual("ungated-branch", record["reason"])
+
+    def test_ignoring_a_read_tool_writes_no_decision(self) -> None:
+        # Read is not in _GATED_EDIT_TOOLS at all -- gate_reason is None,
+        # the earliest exit, before any real decision is reached.
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Read",
+                "tool_input": {"file_path": "src/foo.py"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertFalse((self.repo / ".codev/hooks/decisions.jsonl").exists())
+
+    def test_allowing_with_a_matching_spec_writes_a_decision_log_entry(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        spec_dir = self.repo / "docs/features/some-feature"
+        spec_dir.mkdir(parents=True)
+        (spec_dir / "design.md").write_text("# design\n", encoding="utf-8")
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "src/foo.py"},
+                "cwd": str(self.repo),
+            },
+        )
+        log_path = self.repo / ".codev/hooks/decisions.jsonl"
+        record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual("allow", record["decision"])
+
     def test_allows_bash_on_main_branch(self) -> None:
         result = _run_hook_json(
             self.repo,

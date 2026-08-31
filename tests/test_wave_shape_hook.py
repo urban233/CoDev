@@ -135,6 +135,53 @@ class RequireWaveShapeHookTests(unittest.TestCase):
         self.assertEqual("PreToolUse", payload["hookSpecificOutput"]["hookEventName"])
         self.assertTrue(payload["hookSpecificOutput"]["permissionDecisionReason"])
 
+    def test_asking_on_write_writes_a_decision_log_entry(self) -> None:
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "content": _MALFORMED_WAVE_PLAN,
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        log_path = self.repo / ".codev/hooks/decisions.jsonl"
+        record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual("require_wave_shape.py", record["hook"])
+        self.assertEqual("ask", record["decision"])
+
+    def test_allowing_a_well_formed_write_writes_a_decision_log_entry(self) -> None:
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "content": _WELL_FORMED_WAVE_PLAN,
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        log_path = self.repo / ".codev/hooks/decisions.jsonl"
+        record = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+        self.assertEqual("allow", record["decision"])
+
+    def test_ignoring_a_non_wave_plan_write_logs_nothing(self) -> None:
+        _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Write",
+                "tool_input": {
+                    "file_path": "docs/features/x/design.md",
+                    "content": _MALFORMED_WAVE_PLAN,
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertFalse((self.repo / ".codev/hooks/decisions.jsonl").exists())
+
     def test_fails_open_on_malformed_stdin(self) -> None:
         result = _run_hook(self.repo, "not json")
         self.assertEqual(0, result.returncode)

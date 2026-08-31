@@ -25,13 +25,39 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_HOOK_NAME = "require_wave_shape.py"
+_DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
 
 _GATED_EDIT_TOOLS = {"Write"}
 _ISSUE_CREATE_PREFIX = "codev git issue-create"
 _WAVE_PLAN_GLOB = "docs/codev/wave/*.md"
 _LATER_WAVES_HEADING = "## Later waves"
+
+
+def _log_decision(
+    repo_root: Path, decision: str, *, tool_name: str = "", reason: str = ""
+) -> None:
+    """Appends one local, gitignored record to `.codev/hooks/decisions.jsonl`
+    -- see docs/features/production-readiness/brief.md. Never raises: a
+    broken log must never change this guardrail's own allow/ask behavior."""
+    try:
+        record = {
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "hook": _HOOK_NAME,
+            "decision": decision,
+            "tool_name": tool_name,
+            "reason": reason,
+        }
+        path = repo_root / _DECISIONS_LOG_RELATIVE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    except Exception:  # noqa: BLE001 - logging must never affect the gate
+        pass
 
 
 def _allow() -> None:
@@ -146,28 +172,36 @@ def main() -> None:
         if write_target is not None:
             _, content = write_target
             if _has_populated_task_table(_later_waves_section_lines(content)):
-                _ask(
+                reason = (
                     "This save leaves a populated task table in a 'Later "
                     "waves' section -- plan-wave's rolling-wave discipline "
                     "keeps only the current wave detailed. If this is "
                     "intentional, approve and continue."
                 )
+                _log_decision(repo_root, "ask", tool_name="Write", reason=reason)
+                _ask(reason)
                 return
+            _log_decision(repo_root, "allow", tool_name="Write", reason="well-formed")
             _allow()
             return
 
         if _is_issue_create(payload):
             violation = _wave_plan_violation(repo_root)
             if violation is None:
+                _log_decision(
+                    repo_root, "allow", tool_name="Bash", reason="no-violation"
+                )
                 _allow()
                 return
-            _ask(
+            reason = (
                 f"{_relative(violation, repo_root)} has a populated task "
                 "table in its 'Later waves' section -- detail only the "
                 "current wave before creating issues. If this issue "
                 "genuinely is for the current wave and the other section "
                 "just needs cleanup, approve and continue."
             )
+            _log_decision(repo_root, "ask", tool_name="Bash", reason=reason)
+            _ask(reason)
             return
 
         _allow()

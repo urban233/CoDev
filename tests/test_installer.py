@@ -421,6 +421,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(installer.GITIGNORE_START, gitignore)
         self.assertIn(installer.GITIGNORE_END, gitignore)
         self.assertIn(".codev/task/escalations.jsonl", gitignore)
+        self.assertIn(".codev/hooks/decisions.jsonl", gitignore)
         lock = json.loads((self.target / ".codev" / "lock.json").read_text())
         self.assertIn("gitignore_block_hash", lock["integrations"])
 

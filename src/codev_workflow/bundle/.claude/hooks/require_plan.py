@@ -27,8 +27,12 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+_HOOK_NAME = "require_plan.py"
+_DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
 
 _GATED_EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -58,6 +62,28 @@ _SPEC_GLOBS = (
     "docs/codev/wave/*.md",
 )
 _UNGATED_BRANCHES = {"main", "master", "HEAD"}
+
+
+def _log_decision(
+    repo_root: Path, decision: str, *, tool_name: str = "", reason: str = ""
+) -> None:
+    """Appends one local, gitignored record to `.codev/hooks/decisions.jsonl`
+    -- see docs/features/production-readiness/brief.md. Never raises: a
+    broken log must never change this guardrail's own allow/ask behavior."""
+    try:
+        record = {
+            "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "hook": _HOOK_NAME,
+            "decision": decision,
+            "tool_name": tool_name,
+            "reason": reason,
+        }
+        path = repo_root / _DECISIONS_LOG_RELATIVE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+    except Exception:  # noqa: BLE001 - logging must never affect the gate
+        pass
 
 
 def _allow() -> None:
@@ -155,6 +181,7 @@ def main() -> None:
         return
 
     tool_input = payload.get("tool_input")
+    tool_name = str(payload.get("tool_name") or "")
     file_path = ""
     if gate_reason == "edit" and isinstance(tool_input, dict):
         file_path = str(tool_input.get("file_path") or tool_input.get("path") or "")
@@ -169,20 +196,30 @@ def main() -> None:
                 else candidate
             )
             if relative.parts and relative.parts[0] == "docs":
+                _log_decision(repo_root, "allow", tool_name=tool_name, reason="docs")
                 _allow()
                 return
 
         branch = _current_branch(repo_root)
         if not branch or branch in _UNGATED_BRANCHES:
+            _log_decision(
+                repo_root, "allow", tool_name=tool_name, reason="ungated-branch"
+            )
             _allow()
             return
 
         if _has_precise_task_plan(repo_root, branch):
+            _log_decision(
+                repo_root, "allow", tool_name=tool_name, reason="precise-task-plan"
+            )
             _allow()
             return
 
         slug = _branch_slug(branch)
         if _has_matching_spec(repo_root, slug):
+            _log_decision(
+                repo_root, "allow", tool_name=tool_name, reason="coarse-spec-match"
+            )
             _allow()
             return
 
@@ -201,6 +238,7 @@ def main() -> None:
                 "change, approve and continue -- otherwise consider "
                 "design-solution or build-change first."
             )
+        _log_decision(repo_root, "ask", tool_name=tool_name, reason=reason)
         _ask(reason)
     except Exception as error:  # noqa: BLE001 - guardrail must fail open
         print(f"require_plan.py: internal error, allowing: {error}", file=sys.stderr)

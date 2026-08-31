@@ -85,8 +85,8 @@
     ".claude/agents/rollout-specialist.md": "6aa412592cfff7168c5bac2ee5492113bc1394ecafacd2b3a803d034c76762ce",
     ".claude/agents/security-data-specialist.md": "604b988270a4cb2c151dabbacfb5c965e8cc6464b8a4ccfe87758c02a8188d94",
     ".claude/commands/pr-review.md": "23f122c87579c7086457eac2704a76f4ff05caa96d5b5d9d3fc1752298a624f6",
-    ".claude/hooks/require_plan.py": "db9bda80b16c53521b582548191f9eeb759304fd38659d680a68464169774beb",
-    ".claude/hooks/require_wave_shape.py": "8c0e0f4e861eb4d36249dc18f7ed742964b7c763fd49cccbf548db1b2e3685fd",
+    ".claude/hooks/require_plan.py": "dd5fa990d2f94371069f2c687f71336edabe9c5997a8b3255fcf58cfbd8b2d3b",
+    ".claude/hooks/require_wave_shape.py": "f89a5a209ced04ba3d93d505fc6b1facd2b3e43db9162ef83aa5a7ce7fe769ba",
     ".claude/settings.json": "b90753d49c25b8e0dfc4f40fefb541f63cb417f2049f9451d29f8ed9f30fe1c0",
     ".claude/skills/audit-google-python-style/SKILL.md": "5ed972bb00c10519eddf805603a56f91b5992e74ffe2408025030743ff7c8b09",
     ".claude/skills/audit-google-python-style/agents/openai.yaml": "7e7e5d4fb0133c30d9e870c816505d31dd83f9971f97366c706a2265dcf05065",
@@ -172,7 +172,7 @@
   },
   "integrations": {
     "agents_block_hash": "09391f78931c68b8e0ad778a659f4dfd9a96012e331c7bde2625a80e66389c49",
-    "gitignore_block_hash": "5232e20b2b972d74951e6e1720cb85c20c45915adf0e479a124472ee6e64dce0",
+    "gitignore_block_hash": "c3e8d797b7a11d6f3b8bd33fab881d0751b12e82a41bd34e544761b13bdd7c63",
     "opencode_default_agent_managed": true,
     "opencode_agent_hashes": {
       "architecture-maintainability-specialist": "b697e7eb7e8639c5e583550dff772bd05af9313ff53302e5827568f67ba57dfe",

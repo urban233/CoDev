@@ -1554,6 +1554,62 @@ class CliTests(unittest.TestCase):
             payload = json.loads(output.getvalue())
             self.assertNotIn("tasks_in_progress_by_owner", payload)
             self.assertNotIn("changed_file_overlaps", payload)
+            self.assertNotIn("gate_decisions", payload)
+
+    def test_status_verbose_summarizes_gate_decisions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+            log_path = target / ".codev" / "hooks" / "decisions.jsonl"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(
+                '{"timestamp": "2026-08-31T10:00:00Z", "hook": "require_plan.py", '
+                '"decision": "ask"}\n'
+                '{"timestamp": "2026-08-31T11:00:00Z", "hook": "require_plan.py", '
+                '"decision": "allow"}\n',
+                encoding="utf-8",
+            )
+            output = StringIO()
+            with redirect_stdout(output):
+                main(["status", "--target", str(target), "--verbose", "--json"])
+            payload = json.loads(output.getvalue())
+            self.assertEqual(
+                {"require_plan.py": {"ask": 1, "allow": 1}},
+                payload["gate_decisions"],
+            )
+
+    def test_status_verbose_since_filters_gate_decisions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+            log_path = target / ".codev" / "hooks" / "decisions.jsonl"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(
+                '{"timestamp": "2026-08-30T10:00:00Z", "hook": "require_plan.py", '
+                '"decision": "ask"}\n'
+                '{"timestamp": "2026-08-31T11:00:00Z", "hook": "require_plan.py", '
+                '"decision": "allow"}\n',
+                encoding="utf-8",
+            )
+            output = StringIO()
+            with redirect_stdout(output):
+                main(
+                    [
+                        "status",
+                        "--target",
+                        str(target),
+                        "--verbose",
+                        "--json",
+                        "--since",
+                        "2026-08-31T00:00:00Z",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            self.assertEqual(
+                {"require_plan.py": {"allow": 1}}, payload["gate_decisions"]
+            )
 
     def test_doctor_alias_forwards_to_verbose_status(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

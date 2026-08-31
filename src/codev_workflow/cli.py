@@ -42,6 +42,7 @@ from typing import Any
 from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import git_ops as git_ops_module
+from codev_workflow import hook_log as hook_log_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -127,6 +128,9 @@ def _parser() -> argparse.ArgumentParser:
     status.add_argument("--target", type=_target, default=Path.cwd())
     status.add_argument("--verbose", action="store_true")
     status.add_argument("--json", action="store_true")
+    status.add_argument(
+        "--since", help="ISO 8601 timestamp lower bound for gate-decision counts"
+    )
 
     diff = commands.add_parser("diff", help="preview update changes")
     diff.add_argument("--target", type=_target, default=Path.cwd())
@@ -789,6 +793,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
     }
     owner_counts: dict[str, int] = {}
     overlaps: list[dict[str, list[str]]] = []
+    gate_decisions: dict[str, dict[str, int]] = {}
     if args.verbose:
         payload["python_version"] = platform.python_version()
         payload["system"] = platform.system()
@@ -796,6 +801,9 @@ def _run_status_command(args: argparse.Namespace) -> int:
         overlaps = _changed_file_overlaps(tasks, target=target)
         payload["tasks_in_progress_by_owner"] = owner_counts
         payload["changed_file_overlaps"] = overlaps
+        decisions = hook_log_module.read_decisions(target=target, since=args.since)
+        gate_decisions = hook_log_module.summarize_decisions(decisions)
+        payload["gate_decisions"] = gate_decisions
 
     if args.json:
         print(json.dumps(payload))
@@ -821,6 +829,18 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 items = " & ".join(overlap["tasks"])
                 paths = ", ".join(overlap["paths"])
                 print(f"  {items}: {paths}")
+        if args.verbose:
+            if gate_decisions:
+                print("Gate decisions:")
+                for hook in sorted(gate_decisions):
+                    by_decision = gate_decisions[hook]
+                    counts = ", ".join(
+                        f"{decision}={count}"
+                        for decision, count in sorted(by_decision.items())
+                    )
+                    print(f"  {hook}: {counts}")
+            else:
+                print("Gate decisions: none recorded yet")
     return 0 if result.ok else 1
 
 

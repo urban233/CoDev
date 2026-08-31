@@ -179,6 +179,8 @@ acceptance, merge, deployment, migration, publication, and rollout expansion.
 GITIGNORE_BLOCK = """# codev:start
 # CoDev local escalation log (ADR-0003) -- not shared or committed.
 .codev/task/escalations.jsonl
+# CoDev local gate-decision log -- not shared or committed.
+.codev/hooks/decisions.jsonl
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
