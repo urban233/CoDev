@@ -66,7 +66,6 @@ EXPECTED_SKILLS = {
 
 EXPECTED_GUIDES = [
     "AGENTS.md",
-    "docs/codev/onboarding/onboarding-guide.md",
     ".codev/for-ai/ai-agent-guidelines.md",
 ]
 

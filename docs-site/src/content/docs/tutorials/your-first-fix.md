@@ -1,4 +1,7 @@
-# Tutorial 1: your first fix
+---
+title: "Tutorial 1: your first fix"
+description: A start-to-finish walkthrough of one small, real bug fix through CoDev.
+---
 
 A start-to-finish walkthrough of one small, real bug fix through CoDev: install, describe
 the bug, build, review, and (where a GitHub remote exists) open the pull request. By the
@@ -8,7 +11,7 @@ output below were run against the real `codev` CLI while writing this tutorial, 
 the one mistake in "A mistake you will probably also make" further down.
 
 For the concepts behind these steps, see the
-[onboarding guide](../onboarding/onboarding-guide.md); this tutorial is the narrated "do
+[Onboarding Guide](/CoDev/onboarding-guide/); this tutorial is the narrated "do
 this" companion to it.
 
 ## Who this is for
@@ -36,7 +39,7 @@ ADD       .agents/skills/build-change/agents/openai.yaml
 ...
 ADD       .opencode/agents/orchestrator.md
 ...
-ADD       docs/codev/onboarding/onboarding-guide.md
+ADD       docs/codev/README.md
 ...
 INTEGRATE AGENTS.md — append managed policy block
 INTEGRATE .gitignore — append escalation-log ignore rule
@@ -59,7 +62,7 @@ codev status --target .
 
 ```text
 CoDev 0.4.0 - /path/to/your/repo
-Bundle: healthy (83 managed files, no drift)
+Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```
@@ -117,7 +120,7 @@ Started task checkout-tax-exempt-total at /path/to/your/repo/.codev/task/checkou
 (`--no-github-issue` is only correct for a scratch repo with no GitHub remote, like the one
 this was run against. In a real GitHub-backed repository, use `--github-issue <number>` or
 let the orchestrator create one for you — see
-[starting-prompts.md](../onboarding/starting-prompts.md) for why that's worth naming up
+[Starting Prompts](/CoDev/starting-prompts/) for why that's worth naming up
 front.)
 
 ```shell
@@ -200,10 +203,10 @@ stop_drift: round 1: expected head 4f3aaf053...; got cc62907e9...; code changed
 outside the tracked builder/reviewer flow
 ```
 
-That's not a bug — it's the drift guard working exactly as designed (ADR-0001 in the CoDev
-project's own `docs/adr/`): the tool has no evidence yet that
-the new head came from a recorded round, so it refuses to assume it did. Record the round
-first, *then* check.
+That's not a bug — it's the drift guard working exactly as designed
+([ADR-0001](https://github.com/urban233/CoDev/blob/main/docs/adr/0001-work-lifecycle-invariant.md)):
+the tool has no evidence yet that the new head came from a recorded round, so it refuses
+to assume it did. Record the round first, *then* check.
 
 ## Step 5: independent review
 
@@ -251,8 +254,8 @@ codev git open-pr --id checkout-tax-exempt-total \
 These need an actual GitHub remote to do anything (this tutorial's demo repo didn't have
 one, so there's no output to show here — in a real repository you'll see the PR URL). The
 PR opens as a draft. For a change this small, the outer loop's five specialists are
-optional but still available — see [Tutorial 3](03-outer-loop-review.md) if you want to
-see that in action on a slightly larger change. When ready:
+optional but still available — see [Tutorial 3](/CoDev/tutorials/outer-loop-review/) if
+you want to see that in action on a slightly larger change. When ready:
 
 ```shell
 codev git mark-ready --id checkout-tax-exempt-total
@@ -277,7 +280,7 @@ codev status --target .
 
 ```text
 CoDev 0.4.0 - /path/to/your/repo
-Bundle: healthy (83 managed files, no drift)
+Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```
@@ -289,8 +292,8 @@ ceremony by default.
 
 ## Where to go next
 
-- A change that touches a shared contract: [Tutorial 2](02-a-design-worthy-change.md)
-- Reviewing an already-open pull request: [Tutorial 3](03-outer-loop-review.md)
-- Two developers, one shared contract: [Tutorial 4](04-multi-developer-coordination.md)
+- A change that touches a shared contract: [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/)
+- Reviewing an already-open pull request: [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
+- Two developers, one shared contract: [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)
 - The command checklist for when you already know the shape:
-  [normal-development-workflow.md](../onboarding/normal-development-workflow.md)
+  [Workflow Checklist](/CoDev/workflow-checklist/)

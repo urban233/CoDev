@@ -73,8 +73,8 @@ codev_workflow = [
   "bundle/.github/*.md",
   "bundle/.github/ISSUE_TEMPLATE/*.md",
   "bundle/docs/*.md",
+  "bundle/docs/codev/*.md",
   "bundle/docs/codev/onboarding/*.md",
-  "bundle/docs/codev/tutorials/*.md",
 ]
 
 [tool.ruff]

@@ -1,4 +1,7 @@
-# Tutorial 3: outer-loop review on an open pull request
+---
+title: "Tutorial 3: outer-loop review on an open pull request"
+description: Starting the outer loop, choosing specialists, triaging findings, and reaching a mergeable state.
+---
 
 Once a pull request is open, five specialist reviewers — correctness, security,
 concurrency, architecture, rollout — can examine it in parallel, on top of the fast
@@ -15,7 +18,7 @@ review beyond the automatic per-build checks.
 ## Starting the outer loop
 
 Switch to the `outer-loop-runner` agent (on OpenCode: `/agent outer-loop-runner`) and give
-it the PR number. [starting-prompts.md](../onboarding/starting-prompts.md) has the exact
+it the PR number. [Starting Prompts](/CoDev/starting-prompts/) has the exact
 phrasing worth using every time:
 
 ```text
@@ -25,11 +28,14 @@ run a fresh five-specialist pass on your own judgment.
 ```
 
 That second sentence matters. `outer-loop-runner` is instructed to present the menu before
-dispatching anything (ADR-0016 in the CoDev project's own `docs/adr/`), but nothing
-mechanically forces a model to render it first — restating the expectation closes that gap.
-On OpenCode, each specialist dispatch also requires its own explicit permission
-confirmation regardless of what gets narrated, as a mechanical backstop independent of the
-prompt (ADR-0021) — you'll see one confirmation prompt per specialist either way.
+dispatching anything
+([ADR-0016](https://github.com/urban233/CoDev/blob/main/docs/adr/0016-human-selectable-specialist-dispatch-with-authorized-coverage-waivers.md)),
+but nothing mechanically forces a model to render it first — restating the expectation
+closes that gap. On OpenCode, each specialist dispatch also requires its own explicit
+permission confirmation regardless of what gets narrated, as a mechanical backstop
+independent of the prompt
+([ADR-0021](https://github.com/urban233/CoDev/blob/main/docs/adr/0021-opencode-specialist-dispatch-permission-gate.md))
+— you'll see one confirmation prompt per specialist either way.
 
 It fetches the PR and CI state, then presents something like:
 
@@ -101,6 +107,7 @@ AI supply evidence, never the approval itself.
 
 ## Where to go next
 
-- The full round-state and waiver mechanics: `docs/product-map.md`
+- The full round-state and waiver mechanics:
+  [docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md)
 - Coordinating this kind of review load across two developers:
-  [Tutorial 4](04-multi-developer-coordination.md)
+  [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)

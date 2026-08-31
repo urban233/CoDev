@@ -2,8 +2,8 @@
 
 Every `codev` command, grouped by what it's for. If you're looking for a narrated
 walkthrough instead of a reference table, start with
-[the tutorials](codev/tutorials/01-your-first-fix.md) or the
-[onboarding guide](codev/onboarding/onboarding-guide.md).
+[the tutorials](https://urban233.github.io/CoDev/tutorials/your-first-fix/) or the
+[onboarding guide](https://urban233.github.io/CoDev/onboarding-guide/).
 
 ## Install, update, remove the bundle
 
@@ -69,8 +69,8 @@ task.
 | `codev task triage \| escalate \| escalations \| waive \| reopen \| relink` | Outer-loop and recovery operations — read [ADR-0001](adr/0001-work-lifecycle-invariant.md) before scripting against any of these |
 
 This tracks one task's round state as local JSON under `.codev/task/`; it never writes
-product source itself. See [Tutorial 1](codev/tutorials/01-your-first-fix.md) for what
-using this actually looks like end to end.
+product source itself. See [Tutorial 1](https://urban233.github.io/CoDev/tutorials/your-first-fix/)
+for what using this actually looks like end to end.
 
 ## Git and GitHub
 

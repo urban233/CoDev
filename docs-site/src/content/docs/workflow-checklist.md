@@ -1,8 +1,11 @@
-# Normal Development Workflow
+---
+title: Workflow Checklist
+description: The command checklist for a normal task, once you already know the shape.
+---
 
 The command checklist for a normal bug fix, small feature, or planned task, once you
-already know the shape from [Tutorial 1](../tutorials/01-your-first-fix.md) or the
-[onboarding guide](onboarding-guide.md). This page assumes you know *why* each command
+already know the shape from [Tutorial 1](/CoDev/tutorials/your-first-fix/) or the
+[Onboarding Guide](/CoDev/onboarding-guide/). This page assumes you know *why* each command
 exists; it's the terse reference, not the walkthrough.
 
 ## Daily command checklist
@@ -65,9 +68,9 @@ Never run `init`, `update`, or `remove` while product code is mid-build.
 
 ## Full reference
 
-- [Tutorial 1: your first fix](../tutorials/01-your-first-fix.md) — the narrated version
+- [Tutorial 1: your first fix](/CoDev/tutorials/your-first-fix/) — the narrated version
   of the checklist above, with real output at every step.
-- `docs/cli-reference.md` in the CoDev project's own repository — every command, not just
-  the ones in a normal task.
-- [starting-prompts.md](starting-prompts.md) — copy-paste prompts for the two moments
+- [CLI reference](/CoDev/cli-reference/) — every command, not just the ones in a normal
+  task.
+- [Starting Prompts](/CoDev/starting-prompts/) — copy-paste prompts for the two moments
   above that are easy to under-specify.

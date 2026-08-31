@@ -5,23 +5,25 @@ the root [README.md](../README.md).
 
 ## If you're using CoDev in your own repository
 
-Once installed, these live inside your own project too, so you can read them without
-leaving your editor — they're listed here by their path *in the CoDev repository*; after
-`codev init`, find them at `docs/codev/...` in your own repository instead.
+This human-facing narrative documentation lives on the docs site, not bundled into your
+own repository — after `codev init`, `docs/codev/README.md` in your own repository has a
+short pointer back here instead of the full text. (`docs/codev/onboarding/skill-card.md`
+templates are the one exception that still installs locally, since you fill one in inside
+your own repo.)
 
-1. [Onboarding guide](../src/codev_workflow/bundle/docs/codev/onboarding/onboarding-guide.md)
-   — the mental model, read once.
-2. [Tutorial 1: your first fix](../src/codev_workflow/bundle/docs/codev/tutorials/01-your-first-fix.md)
+1. [Onboarding Guide](https://urban233.github.io/CoDev/onboarding-guide/) — the mental
+   model, read once.
+2. [Tutorial 1: your first fix](https://urban233.github.io/CoDev/tutorials/your-first-fix/)
    — install to merged PR, narrated, real commands.
-3. [Tutorial 2: a design-worthy change](../src/codev_workflow/bundle/docs/codev/tutorials/02-a-design-worthy-change.md),
-   [Tutorial 3: outer-loop review](../src/codev_workflow/bundle/docs/codev/tutorials/03-outer-loop-review.md),
-   [Tutorial 4: multi-developer coordination](../src/codev_workflow/bundle/docs/codev/tutorials/04-multi-developer-coordination.md)
+3. [Tutorial 2: a design-worthy change](https://urban233.github.io/CoDev/tutorials/a-design-worthy-change/),
+   [Tutorial 3: outer-loop review](https://urban233.github.io/CoDev/tutorials/outer-loop-review/),
+   [Tutorial 4: multi-developer coordination](https://urban233.github.io/CoDev/tutorials/multi-developer-coordination/)
    — the same shape, for the situations that need more of it.
-4. [Normal Development Workflow](../src/codev_workflow/bundle/docs/codev/onboarding/normal-development-workflow.md)
+4. [Workflow Checklist](https://urban233.github.io/CoDev/workflow-checklist/)
    — the command checklist, once you know the shape.
-5. [starting-prompts.md](../src/codev_workflow/bundle/docs/codev/onboarding/starting-prompts.md)
+5. [Starting Prompts](https://urban233.github.io/CoDev/starting-prompts/)
    — copy-paste prompts for the two moments worth getting exactly right.
-6. [examples.md](../src/codev_workflow/bundle/docs/codev/onboarding/examples.md) — more
+6. [Examples](https://urban233.github.io/CoDev/examples/) — more
    worked walkthroughs.
 
 Reference, kept here in the CoDev repository (not installed into your project, since it

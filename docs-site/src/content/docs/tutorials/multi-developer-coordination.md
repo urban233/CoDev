@@ -1,15 +1,18 @@
-# Tutorial 4: two developers, one shared contract
+---
+title: "Tutorial 4: two developers, one shared contract"
+description: Coordinating two developers on the same feature through a shared contract and delivery plan.
+---
 
-The percentage-discounts feature from [Tutorial 2](02-a-design-worthy-change.md) is bigger
-than it looked: the core calculation change is one piece of work, and exposing the new
-discount type through the checkout API is another, and they can happen in parallel — if
-both developers agree on the shape between them first. This tutorial walks that
-coordination.
+The percentage-discounts feature from [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/)
+is bigger than it looked: the core calculation change is one piece of work, and exposing
+the new discount type through the checkout API is another, and they can happen in
+parallel — if both developers agree on the shape between them first. This tutorial walks
+that coordination.
 
 ## Who this is for
 
-You've read [Tutorial 2](02-a-design-worthy-change.md) or the
-[onboarding guide](../onboarding/onboarding-guide.md#multi-developer-briefly) and now have
+You've read [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/) or the
+[Onboarding Guide](/CoDev/onboarding-guide/#multi-developer-briefly) and now have
 an actual case: more than one developer, same feature, work that can genuinely run
 concurrently rather than being artificially split to look parallel.
 
@@ -23,9 +26,9 @@ mismatch after both branches are done.
 
 ## Step 1: the design settles the contract, not just the intent
 
-[Tutorial 2](02-a-design-worthy-change.md)'s accepted design already named the `Discount`
-representation. That's not incidental — it's the precondition for step 2. Don't start
-parallel work from "we'll figure out the exact shape as we go"; that's exactly the
+[Tutorial 2](/CoDev/tutorials/a-design-worthy-change/)'s accepted design already named the
+`Discount` representation. That's not incidental — it's the precondition for step 2. Don't
+start parallel work from "we'll figure out the exact shape as we go"; that's exactly the
 handshake that goes wrong under parallel implementation. If the design didn't settle it
 firmly enough to write a fixture against right now, that's a sign to go back and settle it
 before splitting the work, not while splitting it.
@@ -64,10 +67,10 @@ it to coordinate — not a chat-only summary that only exists in one person's co
 ## Step 3: both lanes build against the shared fixture, independently
 
 Priya and Marcus each run their own task through the normal inner loop from
-[Tutorial 1](01-your-first-fix.md) — own branch, own `codev task start`, own build/review
-rounds — with one difference: Lane B's tests import the shared fixture instead of waiting
-on Lane A's real implementation. This is the entire point of agreeing on the contract
-first: neither lane blocks on the other actually landing.
+[Tutorial 1](/CoDev/tutorials/your-first-fix/) — own branch, own `codev task start`, own
+build/review rounds — with one difference: Lane B's tests import the shared fixture
+instead of waiting on Lane A's real implementation. This is the entire point of agreeing
+on the contract first: neither lane blocks on the other actually landing.
 
 ```shell
 # Priya, Lane A
@@ -102,7 +105,9 @@ it waits for the plan's owner to sequence it in, rather than starting unplanned.
 ## Where to go next
 
 - If review load across two open PRs needs the outer loop:
-  [Tutorial 3](03-outer-loop-review.md)
+  [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
 - The full delivery-plan mechanics — rolling-wave planning, dependency vocabulary in
-  detail: read `.agents/skills/plan-delivery/SKILL.md` directly, or
-  `docs/product-map.md` for where it fits alongside every other skill.
+  detail: read `.agents/skills/plan-delivery/SKILL.md` directly in your installed
+  repository, or
+  [docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md)
+  for where it fits alongside every other skill.

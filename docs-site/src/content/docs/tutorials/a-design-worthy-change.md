@@ -1,15 +1,18 @@
-# Tutorial 2: a change that needs a design
+---
+title: "Tutorial 2: a change that needs a design"
+description: What changes when a fix touches a shared contract instead of being small and unambiguous.
+---
 
-[Tutorial 1](01-your-first-fix.md) skipped Understand almost entirely — the bug was small
-and unambiguous. This tutorial covers the other case: a change that touches something
-other code depends on, where getting it wrong is expensive to unwind later. By the end
-you'll know exactly which properties of a change trigger `design-solution`, what it
-produces, and how that feeds into Build.
+[Tutorial 1](/CoDev/tutorials/your-first-fix/) skipped Understand almost entirely — the bug
+was small and unambiguous. This tutorial covers the other case: a change that touches
+something other code depends on, where getting it wrong is expensive to unwind later. By
+the end you'll know exactly which properties of a change trigger `design-solution`, what
+it produces, and how that feeds into Build.
 
 ## Who this is for
 
-You've already done [Tutorial 1](01-your-first-fix.md) or know the four-step shape from
-the [onboarding guide](../onboarding/onboarding-guide.md), and you want to see what
+You've already done [Tutorial 1](/CoDev/tutorials/your-first-fix/) or know the four-step
+shape from the [Onboarding Guide](/CoDev/onboarding-guide/), and you want to see what
 changes when a fix isn't small.
 
 ## The change
@@ -21,7 +24,7 @@ it's a new shape for an existing function every caller depends on. That's the si
 
 ## Why this triggers Design
 
-From the [onboarding guide](../onboarding/onboarding-guide.md#two-steps-that-only-show-up-sometimes):
+From the [Onboarding Guide](/CoDev/onboarding-guide/#two-steps-that-only-show-up-sometimes):
 Design is conditional depth inside Understand, triggered by real properties of the
 change — not by size. This change qualifies because:
 
@@ -38,7 +41,7 @@ A one-line tax-exempt fix didn't have either property. This one has both.
 State the outcome to your assistant. Where the platform supports a separate `planner`
 entry point (OpenCode, Claude Code), switch to it for Understand/Design work — it's a
 distinct, human-started entry point from `orchestrator`, decoupled from execution
-(ADR-0024 in the CoDev project's own `docs/adr/`):
+([ADR-0024](https://github.com/urban233/CoDev/blob/main/docs/adr/0024-planner-primary-agent.md)):
 
 ```text
 We need to support percentage-based discounts alongside the existing flat-amount
@@ -71,8 +74,8 @@ With the brief accepted, `design-solution` drafts
 This is where a real decision belongs to you, not the AI: which representation to use, and
 whether existing callers get migrated in this change or a follow-up. The assistant
 proposes an option with trade-offs; you decide. Once you accept the design, it becomes the
-authority the builder works against — matching [Tutorial 1](01-your-first-fix.md)'s rule
-that later documents link to earlier ones rather than repeating them.
+authority the builder works against — matching [Tutorial 1](/CoDev/tutorials/your-first-fix/)'s
+rule that later documents link to earlier ones rather than repeating them.
 
 ## Step 3: build against the accepted design
 
@@ -95,6 +98,6 @@ not the size.
 
 ## Where to go next
 
-- Taking the resulting PR through outer-loop review: [Tutorial 3](03-outer-loop-review.md)
+- Taking the resulting PR through outer-loop review: [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
 - Coordinating this kind of change across two developers:
-  [Tutorial 4](04-multi-developer-coordination.md)
+  [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)

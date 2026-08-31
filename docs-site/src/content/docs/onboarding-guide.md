@@ -1,11 +1,15 @@
-# CoDev Onboarding Guide
+---
+title: Onboarding Guide
+description: The mental model behind CoDev, read once — what it does, why, and what a day of work looks like.
+---
 
 *Start here.* This is the short version — what CoDev does, the mental model behind it, and
 what a day of work actually looks like. Want to just try it right now instead of reading
-first? [Tutorial 1](../tutorials/01-your-first-fix.md) walks one small bug fix start to
+first? [Tutorial 1](/CoDev/tutorials/your-first-fix/) walks one small bug fix start to
 finish. For a command-led daily workflow once you know the shape, see
-[normal-development-workflow.md](normal-development-workflow.md). For the full technical
-map (every command, skill, and agent), see the CoDev project's `docs/product-map.md`.
+[Workflow Checklist](/CoDev/workflow-checklist/). For the full technical map (every
+command, skill, and agent), see
+[docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md).
 
 ## The problem
 
@@ -39,7 +43,7 @@ If you remember nothing else: **the AI supplies evidence, you supply authority.*
 
 Say your checkout total is wrong: a discount applied to a tax-exempt item is still being
 taxed. That one bug threads through every section below, and it's the exact example
-[Tutorial 1](../tutorials/01-your-first-fix.md) builds end to end with real commands.
+[Tutorial 1](/CoDev/tutorials/your-first-fix/) builds end to end with real commands.
 
 ## The four steps you'll actually see
 
@@ -80,8 +84,8 @@ everything passes through — they're conditional depth inside Understand, trigg
 properties of the change: a shared API or data contract, an authentication or privacy
 boundary, or more than one developer working the same area concurrently. The checkout fix
 above skips both — it's a one-line, single-developer, non-contract change.
-[Tutorial 2](../tutorials/02-a-design-worthy-change.md) walks a change that *does* need
-`design-solution`, and [Tutorial 4](../tutorials/04-multi-developer-coordination.md) walks
+[Tutorial 2](/CoDev/tutorials/a-design-worthy-change/) walks a change that *does* need
+`design-solution`, and [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/) walks
 one that needs `plan-delivery`.
 
 At the very edges: **Specify** (`specify-project`) is for a genuinely new product or a
@@ -123,7 +127,7 @@ maintainability gate runs automatically right before a pull request opens, and o
 PR exists, five specialist reviewers — correctness, security, concurrency, architecture,
 rollout — examine it in parallel and hand you exactly the findings that need a decision.
 You triage; CoDev does not decide for you which finding matters
-([Tutorial 3](../tutorials/03-outer-loop-review.md) walks this end to end). `review-change`
+([Tutorial 3](/CoDev/tutorials/outer-loop-review/) walks this end to end). `review-change`
 still exists for the case none of that covers: a diff with no task and no open PR yet,
 reviewed on demand.
 
@@ -145,22 +149,23 @@ the owner and reviewer are never the same person. Two developers can work in par
 they agree on a shared contract — say, the exact shape of a `DiscountResult` the pricing
 and checkout modules both depend on — and a fixture to test against it, rather than
 discovering the mismatch after both branches are done. See
-[Tutorial 4](../tutorials/04-multi-developer-coordination.md) for a worked example.
+[Tutorial 4](/CoDev/tutorials/multi-developer-coordination/) for a worked example.
 
 ## Where to go next
 
-- **Just want to try it?** [Tutorial 1: your first fix](../tutorials/01-your-first-fix.md)
+- **Just want to try it?** [Tutorial 1: your first fix](/CoDev/tutorials/your-first-fix/)
   — install to merged PR, one small bug, every command shown.
 - A change that touches a shared contract:
-  [Tutorial 2](../tutorials/02-a-design-worthy-change.md)
+  [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/)
 - Reviewing an already-open pull request:
-  [Tutorial 3](../tutorials/03-outer-loop-review.md)
+  [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
 - Two developers, one shared contract:
-  [Tutorial 4](../tutorials/04-multi-developer-coordination.md)
+  [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/)
 - Commands for a normal task, once you know the shape:
-  [Normal Development Workflow](normal-development-workflow.md)
+  [Workflow Checklist](/CoDev/workflow-checklist/)
 - Copy-paste prompts for starting a task or outer-loop review:
-  [starting-prompts.md](starting-prompts.md)
-- More worked walkthroughs: [examples.md](examples.md)
-- The full command/skill/agent reference: `docs/product-map.md`
-- How the bundle installs and updates: `docs/architecture.md`
+  [Starting Prompts](/CoDev/starting-prompts/)
+- More worked walkthroughs: [Examples](/CoDev/examples/)
+- The full command/skill/agent reference:
+  [docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md)
+- How the bundle installs and updates: [Architecture](/CoDev/architecture/)

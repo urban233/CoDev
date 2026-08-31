@@ -15,16 +15,15 @@ codev status --target .
 
 ```text
 CoDev 0.4.0 - /path/to/your/repo
-Bundle: healthy (83 managed files, no drift)
+Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
 ```
 
 Commit the installed files as one infrastructure change, then start an AI session in the
 repository and describe a small bug or task in plain language — you don't need to name a
-skill. [Tutorial 1](https://github.com/urban233/CoDev/blob/main/src/codev_workflow/bundle/docs/codev/tutorials/01-your-first-fix.md)
-walks one small fix from here to a merged pull request, with every command and real
-output shown.
+skill. [Tutorial 1](/CoDev/tutorials/your-first-fix/) walks one small fix from here to a
+merged pull request, with every command and real output shown.
 
 ## New repository
 
@@ -71,7 +70,8 @@ changes.
 
 | I want to... | Go to |
 |---|---|
-| Understand the mental model before doing anything | [Onboarding guide](https://github.com/urban233/CoDev/blob/main/src/codev_workflow/bundle/docs/codev/onboarding/onboarding-guide.md) |
+| Understand the mental model before doing anything | [Onboarding Guide](/CoDev/onboarding-guide/) |
+| Try it hands-on, one small fix at a time | [Tutorial 1](/CoDev/tutorials/your-first-fix/) |
 | See every command | [CLI reference](/CoDev/cli-reference/) |
 | See exactly what gets installed and why | [Architecture](/CoDev/architecture/) |
 | Understand why a specific mechanism exists | [Architecture Decision Records](https://github.com/urban233/CoDev/tree/main/docs/adr) |

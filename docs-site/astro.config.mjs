@@ -55,6 +55,24 @@ export default defineConfig({
         { label: 'Home', link: '/' },
         { label: 'Getting Started', link: '/getting-started/' },
         { label: 'Concepts', link: '/concepts/' },
+        {
+          label: 'Onboarding',
+          items: [
+            { label: 'Onboarding Guide', link: '/onboarding-guide/' },
+            { label: 'Workflow Checklist', link: '/workflow-checklist/' },
+            { label: 'Starting Prompts', link: '/starting-prompts/' },
+            { label: 'Examples', link: '/examples/' },
+          ],
+        },
+        {
+          label: 'Tutorials',
+          items: [
+            { label: '1. Your First Fix', link: '/tutorials/your-first-fix/' },
+            { label: '2. A Design-Worthy Change', link: '/tutorials/a-design-worthy-change/' },
+            { label: '3. Outer-Loop Review', link: '/tutorials/outer-loop-review/' },
+            { label: '4. Multi-Developer Coordination', link: '/tutorials/multi-developer-coordination/' },
+          ],
+        },
         { label: 'Agent Platforms', link: '/agent-platforms/' },
         {
           label: 'Reference',

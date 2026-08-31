@@ -95,19 +95,9 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
         self.assertTrue((self.target / ".junie/agents/assistant.md").is_file())
         self.assertTrue((self.target / ".agents/agents/assistant.md").is_file())
+        self.assertTrue((self.target / "docs/codev/README.md").is_file())
         self.assertTrue(
-            (self.target / "docs/codev/onboarding/onboarding-guide.md").is_file()
-        )
-        self.assertTrue((self.target / "docs/codev/onboarding/examples.md").is_file())
-        tutorials = sorted((self.target / "docs/codev/tutorials").glob("*.md"))
-        self.assertEqual(
-            [
-                "01-your-first-fix.md",
-                "02-a-design-worthy-change.md",
-                "03-outer-loop-review.md",
-                "04-multi-developer-coordination.md",
-            ],
-            [path.name for path in tutorials],
+            (self.target / "docs/codev/onboarding/skill-card.template.md").is_file()
         )
         self.assertTrue(
             (self.target / ".codev/for-ai/ai-agent-guidelines.md").is_file()

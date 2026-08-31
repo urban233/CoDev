@@ -1,4 +1,7 @@
-# Starting Prompts
+---
+title: Starting Prompts
+description: Two prompts you'll type often — starting a task, and starting outer-loop review.
+---
 
 Two prompts you'll type often: kicking off the next task, and starting
 outer-loop review on an open pull request. Both assume CoDev is installed

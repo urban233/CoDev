@@ -3,6 +3,24 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+- A public documentation site (`docs-site/`, Astro + Starlight) deployed to GitHub
+  Pages at https://urban233.github.io/CoDev/ -- the onboarding guide, the four
+  tutorials, the command checklist, starting prompts, and worked examples now live
+  there instead of only in the bundle.
+- `docs/codev/README.md` (and its bundle source,
+  `src/codev_workflow/bundle/docs/codev/README.md`): a short pointer replacing the
+  full prose files below, naming the workflow steps and linking to the docs site.
+
+### Removed
+- The bundled onboarding guide, command checklist, starting prompts, examples, and
+  four-part tutorial series added in 0.4.0 (see below) are no longer installed into
+  every adopter's repository -- their content moved to the docs site above instead,
+  reducing the installed bundle's file count. `skill-card.template.md` stays bundled;
+  it's a template a developer fills in locally, not narrative documentation.
+
 ## [0.4.0] - 2026-08-31
 
 ### Added

@@ -1,9 +1,12 @@
-# Worked Examples
+---
+title: Examples
+description: Five worked scenarios, start to finish, from a genomics/drug-discovery codebase.
+---
 
 Five scenarios, start to finish. None of them are hypothetical shapes —
 each is the kind of thing that actually happens in a genomics or
-drug-discovery codebase. See [onboarding-guide.md](onboarding-guide.md) for
-the concepts these examples put to use.
+drug-discovery codebase. See the [Onboarding Guide](/CoDev/onboarding-guide/)
+for the concepts these examples put to use.
 
 ## A bounded fix: the coordinate system bug
 
