@@ -1,0 +1,62 @@
+/*
+ * Layout borrows Starlight's own defaults (they already match the
+ * left-nav / content / right-TOC three-pane shape this is aiming for).
+ * What's overridden here is palette and type, pulled straight from
+ * docs/brand.md -- system sans-serif only, no bundled proprietary font,
+ * CoDev's own four-checkpoint palette instead of any other product's.
+ */
+
+:root {
+  --sl-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+
+  /* CoDev brand: Indigo as the primary accent (Understand / navigation). */
+  --sl-color-accent-low: #e4e4fb;
+  --sl-color-accent: #5b5fef;
+  --sl-color-accent-high: #3336a8;
+
+  /* Ink-on-cloud, quiet and flat rather than pure black-on-white. */
+  --sl-color-white: #14213d;
+  --sl-color-gray-1: #1c2a4d;
+  --sl-color-gray-2: #35415e;
+  --sl-color-gray-3: #5b6a85;
+  --sl-color-gray-4: #8890a8;
+  --sl-color-gray-5: #c7cbdb;
+  --sl-color-gray-6: #e6e9f2;
+  --sl-color-gray-7: #f7f9fc;
+  --sl-color-black: #ffffff;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #23265f;
+  --sl-color-accent: #8b8ff8;
+  --sl-color-accent-high: #c6c8fc;
+
+  --sl-color-white: #f7f9fc;
+  --sl-color-gray-1: #e6e9f2;
+  --sl-color-gray-2: #c7cbdb;
+  --sl-color-gray-3: #8890a8;
+  --sl-color-gray-4: #5b6a85;
+  --sl-color-gray-5: #35415e;
+  --sl-color-gray-6: #1c2a4d;
+  --sl-color-gray-7: #141b30;
+  --sl-color-black: #0f1729;
+}
+
+/* Quieter, flatter headings: medium weight, tight tracking -- restrained
+   rather than heavy, matching brand.md's "clear, quiet, precise" voice. */
+h1, h2, h3, h4 {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Flatten Starlight's card/aside chrome toward plain rules instead of
+   shadows, so the page reads as calm whitespace rather than boxed panels. */
+.sl-markdown-content :is(.starlight-aside, table, .expressive-code) {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.site-title img {
+  border-radius: 8px;
+}

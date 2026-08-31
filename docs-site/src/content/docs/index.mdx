@@ -1,0 +1,48 @@
+---
+title: Welcome to CoDev
+description: Human-guided AI software delivery — keep intent, code, evidence, and release on one visible path.
+tableOfContents: false
+---
+
+import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
+
+CoDev installs a small, production-minded collaboration system into any Git repository. A
+developer and AI move through four steps — **Understand, Build, Review, Ship** — plus two
+that only show up when the work actually needs them: **Specify** for a genuinely new
+product, **Launch** for a real rollout decision.
+
+<LinkButton href="/CoDev/getting-started/" variant="primary">Get started</LinkButton>
+<LinkButton href="/CoDev/cli-reference/" variant="secondary">CLI reference</LinkButton>
+
+## Choose where to start
+
+<CardGrid>
+	<Card title="Getting Started" icon="rocket">
+		Install the bundle into a repository and run your first `codev status` in under
+		a minute. [Read the guide →](/CoDev/getting-started/)
+	</Card>
+	<Card title="CLI reference" icon="seti:powershell">
+		Every `codev` command, grouped by what it's for — install, task lifecycle, git,
+		skill evaluation. [See every command →](/CoDev/cli-reference/)
+	</Card>
+	<Card title="Architecture" icon="puzzle">
+		How the bundle is built, installed, and updated — the install/update algorithm
+		and its invariants. [Read the design →](/CoDev/architecture/)
+	</Card>
+	<Card title="Source on GitHub" icon="github">
+		CoDev is BSD-3-Clause licensed and open source.
+		[github.com/urban233/CoDev →](https://github.com/urban233/CoDev)
+	</Card>
+</CardGrid>
+
+## Why CoDev
+
+- One workflow for solo developers and multi-developer teams.
+- Repository-grounded plans instead of invented APIs or architecture.
+- A bounded builder, an automatic pre-PR audit gate, and five parallel specialist
+  reviewers — not just one read-only pass.
+- Human authority over material decisions, merge, deployment, and rollout.
+- A general-purpose skill-evaluation harness — measure whether a skill actually helps,
+  empirically, rather than just trusting that it does.
+- Versioned, conflict-aware installation across existing repositories.
+- No runtime dependency in the software being built.
