@@ -8,11 +8,11 @@
       <stop offset="1" stop-color="#F0A202"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="30" fill="#14213D"/>
+  <rect width="128" height="128" rx="30" fill="#FAF4EC"/>
   <path d="M23 96C37 96 37 72 51 72S65 48 79 48s14-18 26-18" fill="none" stroke="url(#route)" stroke-width="10" stroke-linecap="round"/>
-  <circle cx="23" cy="96" r="8" fill="#8B8FF8" stroke="#F7F9FC" stroke-width="3"/>
-  <circle cx="51" cy="72" r="8" fill="#00A88F" stroke="#F7F9FC" stroke-width="3"/>
-  <circle cx="79" cy="48" r="8" fill="#F0A202" stroke="#F7F9FC" stroke-width="3"/>
-  <circle cx="105" cy="30" r="8" fill="#F45B69" stroke="#F7F9FC" stroke-width="3"/>
+  <circle cx="23" cy="96" r="8" fill="#8B8FF8" stroke="#14213D" stroke-width="3"/>
+  <circle cx="51" cy="72" r="8" fill="#00A88F" stroke="#14213D" stroke-width="3"/>
+  <circle cx="79" cy="48" r="8" fill="#F0A202" stroke="#14213D" stroke-width="3"/>
+  <circle cx="105" cy="30" r="8" fill="#F45B69" stroke="#14213D" stroke-width="3"/>
 </svg>
 

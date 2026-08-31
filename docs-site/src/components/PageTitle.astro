@@ -1,0 +1,9 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import Breadcrumbs from './Breadcrumbs.astro';
+
+const isHome = Astro.locals.starlightRoute.id === '' || Astro.locals.starlightRoute.id === 'index';
+---
+
+{!isHome && <Breadcrumbs />}
+<Default {...Astro.props}><slot /></Default>

@@ -1,6 +1,11 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
+
+// CoDev's installed-package version, kept as one constant so the sidebar
+// badge below never drifts from pyproject.toml/CHANGELOG.md by hand.
+const CODEV_VERSION = '0.4.0';
 
 // Deployed as a GitHub Pages *project* site (github.com/urban233/CoDev ->
 // urban233.github.io/CoDev/), so `base` must carry the repo name. If a
@@ -26,16 +31,40 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/urban233/CoDev/edit/main/docs-site/',
       },
+      // Onest: SIL Open Font License, served from Google Fonts -- see
+      // docs/brand.md ("Do not bundle proprietary fonts").
+      head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+        {
+          tag: 'link',
+          attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true },
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap',
+          },
+        },
+      ],
+      components: {
+        PageTitle: './src/components/PageTitle.astro',
+      },
+      plugins: [starlightLlmsTxt()],
       sidebar: [
         { label: 'Home', link: '/' },
         { label: 'Getting Started', link: '/getting-started/' },
+        { label: 'Concepts', link: '/concepts/' },
+        { label: 'Agent Platforms', link: '/agent-platforms/' },
         {
           label: 'Reference',
+          badge: { text: `v${CODEV_VERSION}`, variant: 'default' },
           items: [
             { label: 'CLI reference', link: '/cli-reference/' },
             { label: 'Architecture', link: '/architecture/' },
           ],
         },
+        { label: 'FAQ', link: '/faq/' },
       ],
     }),
   ],

@@ -20,21 +20,31 @@ model or autonomous engineering service.
 ## Visual system
 
 The mark is a route through four checkpoints: Understand, Build, Review, and
-Ship. Rounded geometry makes it approachable; the dark field keeps it credible
-in terminals and engineering documentation.
+Ship. Rounded geometry makes it approachable; the light Porcelain field keeps
+the route legible as one self-contained badge on both light and dark
+surfaces, without needing a separate dark-mode variant.
+
+Surfaces are near-monochrome per theme rather than a fixed light/dark pair:
+light mode runs white shading into Porcelain and Pastel Orange, warm in feel;
+dark mode runs black shading into cool, blue-leaning gray — not a brown
+inversion of the light palette. Pastel Orange stays the one accent in both.
 
 | Token | Value | Purpose |
 |---|---|---|
-| Ink | `#14213D` | Primary field and text |
-| Indigo | `#5B5FEF` | Understand and navigation |
+| Ink | `#14213D` | Dark ring accents in the mark |
+| Pastel Orange | `#E3996A` | Primary accent — navigation, links, buttons |
+| Indigo | `#5B5FEF` | Understand |
 | Teal | `#008F7A` | Build and positive progress |
 | Amber | `#F0A202` | Review and attention |
 | Coral | `#F45B69` | Ship, stop, and authority boundary |
-| Cloud | `#F7F9FC` | Light surfaces |
+| Porcelain | `#FAF4EC` | Light surfaces, shading toward white |
 
-Use system sans-serif fonts for documentation and interfaces. Use the user's
+Use [Onest](https://fonts.google.com/specimen/Onest) (SIL Open Font License,
+distributed via Google Fonts) for documentation and interfaces, falling back
+to the platform's system sans-serif when it isn't loaded. Use the user's
 configured monospace font for commands and code. Do not bundle proprietary
-fonts.
+fonts — Onest is open-licensed and freely embeddable, unlike a vendor's own
+in-house product typeface.
 
 ## Writing system
 

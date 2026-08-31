@@ -1,0 +1,165 @@
+---
+// Breadcrumb trail + "Copy/View Markdown" toolbar, styled after
+// antigravity.google/docs' page-header row. Built on Starlight's public
+// `Astro.locals.starlightRoute` route-data API rather than a third-party
+// plugin -- see docs-site/README.md.
+import type { SidebarEntry } from '@astrojs/starlight/utils/routing/types';
+
+const { sidebar, entry, id } = Astro.locals.starlightRoute;
+
+function findTrail(entries: SidebarEntry[]): string[] | undefined {
+  for (const item of entries) {
+    if (item.type === 'link' && item.isCurrent) return [item.label];
+    if (item.type === 'group') {
+      const nested = findTrail(item.entries);
+      if (nested) return [item.label, ...nested];
+    }
+  }
+  return undefined;
+}
+
+const trail = findTrail(sidebar) ?? [entry.data.title];
+const pageTitle = entry.data.title;
+const mdHref = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
+---
+
+<div class="page-toolbar">
+  <nav aria-label="Breadcrumbs" class="breadcrumbs">
+    {trail.map((label, i) => (
+      <>
+        {i > 0 && <span class="sep" aria-hidden="true">/</span>}
+        <span class:list={['crumb', { current: i === trail.length - 1 }]}>{label}</span>
+      </>
+    ))}
+    {trail[trail.length - 1] !== pageTitle && (
+      <>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="crumb current">{pageTitle}</span>
+      </>
+    )}
+  </nav>
+  <div class="md-dropdown">
+    <button type="button" class="md-toggle" aria-haspopup="true" aria-expanded="false">
+      Markdown
+      <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="md-menu" role="menu">
+      <button type="button" role="menuitem" data-copy-md data-href={mdHref}>Copy Markdown</button>
+      <a role="menuitem" href={mdHref}>View Markdown</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function initToolbars(root: ParentNode) {
+    root.querySelectorAll<HTMLElement>('.md-dropdown').forEach((dropdown) => {
+      const toggle = dropdown.querySelector<HTMLButtonElement>('.md-toggle');
+      const menu = dropdown.querySelector<HTMLElement>('.md-menu');
+      if (!toggle || !menu || toggle.dataset.bound) return;
+      toggle.dataset.bound = 'true';
+      toggle.addEventListener('click', () => {
+        const open = dropdown.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target as Node)) {
+          dropdown.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+      const copyBtn = dropdown.querySelector<HTMLButtonElement>('[data-copy-md]');
+      copyBtn?.addEventListener('click', async () => {
+        const href = copyBtn.dataset.href;
+        if (!href) return;
+        const res = await fetch(href);
+        const text = await res.text();
+        await navigator.clipboard.writeText(text);
+        const original = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => (copyBtn.textContent = original), 1500);
+        dropdown.classList.remove('open');
+      });
+    });
+  }
+  initToolbars(document);
+  document.addEventListener('astro:page-load', () => initToolbars(document));
+</script>
+
+<style>
+  .page-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    flex-wrap: wrap;
+  }
+  .breadcrumbs .crumb.current {
+    color: var(--sl-color-white);
+    font-weight: 500;
+  }
+  .breadcrumbs .sep {
+    color: var(--sl-color-gray-5);
+  }
+  .md-dropdown {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .md-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-7);
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-xs);
+    font-family: var(--sl-font);
+    cursor: pointer;
+  }
+  .md-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.4rem);
+    min-width: 10rem;
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 8px;
+    box-shadow: var(--sl-shadow-md);
+    overflow: hidden;
+    z-index: 10;
+  }
+  .md-dropdown.open .md-menu {
+    display: block;
+  }
+  .md-menu button,
+  .md-menu a {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--sl-font);
+  }
+  .md-menu button:hover,
+  .md-menu a:hover {
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-white);
+  }
+</style>
