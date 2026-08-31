@@ -14,7 +14,7 @@
         ]
       },
       {
-        "matcher": "Write|Bash",
+        "matcher": "Write|Edit|MultiEdit|Bash",
         "hooks": [
           {
             "type": "command",

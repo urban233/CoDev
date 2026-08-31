@@ -13,12 +13,22 @@ This check is deliberately coarse, the same way require_plan.py's own
 spec-exists check is: it asks whether *a* wave-plan document is
 well-formed, not whether the specific edit or issue-create call in front
 of it targets a later wave -- see design.md's Alternatives and trade-offs
-for why a per-issue-precise check was rejected for this release. It also
-only inspects `Write` calls directly, using the proposed new content
-rather than re-reading a stale on-disk copy -- an `Edit`/`MultiEdit` to an
-already-saved wave-plan document is not separately checked at edit time in
-this release; the `codev git issue-create` trigger is the backstop that
-still catches a violation however it was introduced.
+for why a per-issue-precise check was rejected for this release.
+
+Checks `Write`, `Edit`, and `MultiEdit` calls against a wave-plan path,
+using the content the file would have *after* the call -- for `Write` that
+is the proposed content directly; for `Edit`/`MultiEdit` it is the file's
+current on-disk content with the edit(s) applied, mirroring the real Edit
+tool's own refusal conditions (no-op when old_string == new_string or is
+absent) rather than guessing past them. `MultiEdit`'s exact payload shape
+is `[unverified]` -- confirmed as a real Claude Code tool name by
+docs/features/claude-code/design.md's Phase 0 binary inspection, but never
+confirmed field-by-field against a live payload; an unexpected shape falls
+through to allow (fail open) rather than checking it incorrectly. See
+docs/codev/wave/production-readiness.md's Risks and discovery for the open
+item to confirm this against a real session. The `codev git issue-create`
+trigger is the backstop that still catches a violation however it was
+introduced.
 """
 
 from __future__ import annotations
@@ -32,7 +42,7 @@ from typing import Any
 _HOOK_NAME = "require_wave_shape.py"
 _DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
 
-_GATED_EDIT_TOOLS = {"Write"}
+_GATED_CONTENT_TOOLS = {"Write", "Edit", "MultiEdit"}
 _ISSUE_CREATE_PREFIX = "codev git issue-create"
 _WAVE_PLAN_GLOB = "docs/codev/wave/*.md"
 _LATER_WAVES_HEADING = "## Later waves"
@@ -119,14 +129,30 @@ def _wave_plan_violation(repo_root: Path) -> Path | None:
     return None
 
 
-def _write_target_content(
+def _apply_edit(
+    content: str, old_string: str, new_string: str, replace_all: bool
+) -> str | None:
+    """Applies one Edit-style replacement to content. Returns None (not
+    applicable) when old_string equals new_string or is absent from
+    content, mirroring the real Edit tool's own refusal conditions rather
+    than guessing past them."""
+    if old_string == new_string or old_string not in content:
+        return None
+    if replace_all:
+        return content.replace(old_string, new_string)
+    return content.replace(old_string, new_string, 1)
+
+
+def _target_content_after_edit(
     payload: dict[str, Any], repo_root: Path
 ) -> tuple[Path, str] | None:
-    """For a `Write` call targeting a wave-plan path, returns (path,
-    proposed content). Returns None for any other call -- this only ever
-    inspects a wave-plan document's own proposed content, never an
-    unrelated file's."""
-    if payload.get("tool_name") not in _GATED_EDIT_TOOLS:
+    """For a Write/Edit/MultiEdit call targeting a wave-plan path, returns
+    (path, the content that path would have after this call). Returns None
+    for any other call, or when the resulting content can't be determined
+    -- this only ever inspects a wave-plan document's own content, never an
+    unrelated file's, and never guesses past an unexpected payload shape."""
+    tool_name = payload.get("tool_name")
+    if tool_name not in _GATED_CONTENT_TOOLS:
         return None
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
@@ -138,10 +164,47 @@ def _write_target_content(
     relative = _relative(candidate, repo_root)
     if not relative.match(_WAVE_PLAN_GLOB):
         return None
-    content = tool_input.get("content")
-    if not isinstance(content, str):
+
+    if tool_name == "Write":
+        content = tool_input.get("content")
+        if not isinstance(content, str):
+            return None
+        return candidate, content
+
+    try:
+        current = candidate.read_text(encoding="utf-8")
+    except OSError:
         return None
-    return candidate, content
+
+    if tool_name == "Edit":
+        old_string = tool_input.get("old_string")
+        new_string = tool_input.get("new_string")
+        if not isinstance(old_string, str) or not isinstance(new_string, str):
+            return None
+        result = _apply_edit(
+            current, old_string, new_string, bool(tool_input.get("replace_all"))
+        )
+        return (candidate, result) if result is not None else None
+
+    # MultiEdit -- [unverified] payload shape, see module docstring. An
+    # unexpected shape returns None here, which falls through to allow.
+    edits = tool_input.get("edits")
+    if not isinstance(edits, list) or not edits:
+        return None
+    for edit in edits:
+        if not isinstance(edit, dict):
+            return None
+        old_string = edit.get("old_string")
+        new_string = edit.get("new_string")
+        if not isinstance(old_string, str) or not isinstance(new_string, str):
+            return None
+        result = _apply_edit(
+            current, old_string, new_string, bool(edit.get("replace_all"))
+        )
+        if result is None:
+            return None
+        current = result
+    return candidate, current
 
 
 def _is_issue_create(payload: dict[str, Any]) -> bool:
@@ -168,9 +231,10 @@ def main() -> None:
     repo_root = Path(payload.get("cwd") or Path.cwd())
 
     try:
-        write_target = _write_target_content(payload, repo_root)
-        if write_target is not None:
-            _, content = write_target
+        edit_target = _target_content_after_edit(payload, repo_root)
+        if edit_target is not None:
+            tool_name = str(payload.get("tool_name") or "")
+            _, content = edit_target
             if _has_populated_task_table(_later_waves_section_lines(content)):
                 reason = (
                     "This save leaves a populated task table in a 'Later "
@@ -178,10 +242,10 @@ def main() -> None:
                     "keeps only the current wave detailed. If this is "
                     "intentional, approve and continue."
                 )
-                _log_decision(repo_root, "ask", tool_name="Write", reason=reason)
+                _log_decision(repo_root, "ask", tool_name=tool_name, reason=reason)
                 _ask(reason)
                 return
-            _log_decision(repo_root, "allow", tool_name="Write", reason="well-formed")
+            _log_decision(repo_root, "allow", tool_name=tool_name, reason="well-formed")
             _allow()
             return
 

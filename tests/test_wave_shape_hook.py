@@ -182,6 +182,172 @@ class RequireWaveShapeHookTests(unittest.TestCase):
         )
         self.assertFalse((self.repo / ".codev/hooks/decisions.jsonl").exists())
 
+    def test_allows_edit_that_keeps_a_wave_plan_well_formed(self) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "old_string": "something coarse, refine later",
+                    "new_string": "something coarse, revised note",
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
+    def test_asks_on_edit_that_introduces_a_populated_later_waves_table(
+        self,
+    ) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "old_string": "- **Outcome:** something coarse, refine later\n",
+                    "new_string": "| ID | Task |\n|---|---|\n| W-09 | too detailed |\n",
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertEqual("ask", payload["hookSpecificOutput"]["permissionDecision"])
+
+    def test_edit_with_no_matching_old_string_is_a_no_op_not_a_crash(self) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "old_string": "text that does not appear anywhere in the file",
+                    "new_string": "replacement",
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
+    def test_allows_multi_edit_that_keeps_a_wave_plan_well_formed(self) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "MultiEdit",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "edits": [
+                        {
+                            "old_string": "something coarse, refine later",
+                            "new_string": "something coarse, revised note",
+                        },
+                        {
+                            "old_string": "<!-- coarse only -->",
+                            "new_string": "<!-- coarse only, revisited -->",
+                        },
+                    ],
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
+    def test_asks_on_multi_edit_that_introduces_a_populated_later_waves_table(
+        self,
+    ) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "MultiEdit",
+                "tool_input": {
+                    "file_path": "docs/codev/wave/some-feature.md",
+                    "edits": [
+                        {
+                            "old_string": "<!-- coarse only -->",
+                            "new_string": "<!-- coarse only, revisited -->",
+                        },
+                        {
+                            "old_string": (
+                                "- **Outcome:** something coarse, refine later\n"
+                            ),
+                            "new_string": (
+                                "| ID | Task |\n|---|---|\n| W-09 | too detailed |\n"
+                            ),
+                        },
+                    ],
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertEqual("ask", payload["hookSpecificOutput"]["permissionDecision"])
+
+    def test_multi_edit_with_unrecognized_shape_fails_open_not_a_crash(self) -> None:
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text(
+            _WELL_FORMED_WAVE_PLAN, encoding="utf-8"
+        )
+        # No "edits" key at all -- an unexpected payload shape, not the
+        # [unverified] shape this hook assumes.
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "MultiEdit",
+                "tool_input": {"file_path": "docs/codev/wave/some-feature.md"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
+    def test_edit_to_a_non_wave_plan_path_is_ignored(self) -> None:
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {
+                    "file_path": "docs/features/x/design.md",
+                    "old_string": "a",
+                    "new_string": "b",
+                },
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
     def test_fails_open_on_malformed_stdin(self) -> None:
         result = _run_hook(self.repo, "not json")
         self.assertEqual(0, result.returncode)
