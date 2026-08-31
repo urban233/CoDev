@@ -49,7 +49,7 @@ EXPECTED_SKILLS = {
         "assets/design.template.md",
         "assets/adr.template.md",
     ],
-    "plan-delivery": ["assets/delivery-plan.template.md"],
+    "plan-wave": ["assets/wave-plan.template.md"],
     "build-change": ["assets/implementation-plan.template.md"],
     "review-change": [],
     "pr-review": ["scripts/publish_review.py"],

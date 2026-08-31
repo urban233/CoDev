@@ -75,7 +75,7 @@ record; do not invent a second revision scheme.
 Recommend the next action:
 
 - Quick change -> `build-change`
-- Feature with no material design choice -> `plan-delivery` or `build-change`
+- Feature with no material design choice -> `plan-wave` or `build-change`
 - Feature with architectural/risk decisions -> `design-solution`
 - Product -> `design-solution`
 

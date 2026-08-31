@@ -24,12 +24,12 @@ step in plain language and route internally:
 4. **Ship** — assemble readiness evidence and propose (never execute) exposure
    changes.
 
-Design (`design-solution`) and delivery planning (`plan-delivery`) are
+Design (`design-solution`) and wave planning (`plan-wave`) are
 conditional depth inside Understand, not stages every change must pass
 through. Most changes do not need them.
 
 Every planning skill that produces a reviewer-facing document --
-`specify-project`, `define-product`, `design-solution`, `plan-delivery`,
+`specify-project`, `define-product`, `design-solution`, `plan-wave`,
 `launch-product` -- reads `technical-writing-style` before drafting or
 revising its prose. That is a prerequisite read inside the calling skill's
 own workflow, not a separate stage; invoke `technical-writing-style`
@@ -47,7 +47,7 @@ test.
 
 Where the platform provides a repository-local `planner` subagent, it is the
 dedicated, human-started entry point for `specify-project`, `define-product`,
-`design-solution`, and `plan-delivery` — a session decoupled from `Build`,
+`design-solution`, and `plan-wave` — a session decoupled from `Build`,
 `Review`, and `Ship`, which stay `orchestrator`'s. `planner` never implements
 product code and never invokes `builder`, `reviewer`, or `orchestrator`;
 handing a ready task from a `planner` session to a `Build` session is the
@@ -61,7 +61,7 @@ automatic continuation.
 | Local, low-risk, obvious fix | `build-change`, then `review-change` if risk warrants |
 | Existing GitHub Pull Request review | `pr-review` |
 | A review or presubmit finding needs a concrete patch | `critique-review` — drafts a diff only; requires an explicit developer or `build-change` handoff before anything is modified, then a fresh `review-change` |
-| Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-delivery` if more than one developer is involved |
+| Bounded feature or product addition | `define-product`, then `design-solution` if a shared contract or architecture decision exists, then `plan-wave` if more than one developer is involved |
 | Greenfield product or whole-product redesign | `specify-project` — one continuous, recommendation-led interview producing a single canonical `SPECIFICATION.md`; never duplicate its facts into a separate brief and design |
 | Approaching production exposure | `launch-product` |
 | Adding or designing an evaluation task for an installed skill | `design-skill-eval` — scaffolds and designs one task under `.codev/eval/tasks/`; never for running an existing benchmark or for building the skill itself |
@@ -200,7 +200,7 @@ ready, with no inner-loop round recorded at all.
    It creates the task's own branch with `codev git branch`, then
    resolves issue linkage before opening round state: if the item has no
    linked GitHub issue yet and this repository tracks issues on GitHub, run
-   `codev git issue-create` now — per `plan-delivery`'s Handoff, check
+   `codev git issue-create` now — per `plan-wave`'s Handoff, check
    rather than assume an earlier session already did it; write the body to a
    temp file and pass `--body-file` rather than inline `--body` whenever it
    may contain a backtick, `$`, or double quote, since a shell corrupts

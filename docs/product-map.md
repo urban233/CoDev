@@ -10,7 +10,7 @@ model (how the bundle is built, installed, and updated); this document is
 the product itself — the skills, agents, and CLI surface a developer
 actually uses once CoDev is installed.
 
-Surface inventory current as of 2026-08-20.
+Surface inventory current as of 2026-08-31.
 
 ## Identity
 
@@ -39,6 +39,7 @@ rewritten.
 | Session entry point for Specify/Understand/Design/Plan | **`planner`** | — (new, ADR-0024) |
 | Session entry point for Build/Review/Ship | **`orchestrator`** | — |
 | A durable, cross-cutting decision that outlives one design document | **ADR** (Architecture Decision Record), `design-solution`'s `assets/adr.template.md`, stored at `docs/adr/NNNN-slug.md` | decision, `assets/decision.template.md` (ADR-0025) |
+| The Plan-phase skill, and the planning unit it details one at a time | **`plan-wave`**, **wave** | plan-delivery, milestone (ADR-0032) |
 
 ## The phase spine
 
@@ -50,7 +51,7 @@ Build and Ship are the only universal phases — every path reaches them, down
 to the smallest case (a bounded fix with an obvious implementation, no
 upstream artifact at all). Everything else is an on-ramp or off-ramp that a
 given task may skip, matching the existing design principle "deeper
-design and delivery planning appear only when risk or coordination requires
+design and wave planning appear only when risk or coordination requires
 them" (README, Design principles).
 
 | Phase | Entry condition | Skipped when |
@@ -58,7 +59,7 @@ them" (README, Design principles).
 | Specify | New greenfield product, or an explicit whole-product redesign | Almost always — this is the rare entry point, not the default one |
 | Understand | Default entry for both a brand-new idea and an existing (brownfield) product's feature request | Never for anything beyond a trivial, obvious change |
 | Design | Real architecture, contract, or cross-component trade-off risk | Local, low-risk change with an obvious implementation |
-| Plan | Multi-developer or multi-milestone coordination is needed | One bounded, single-developer change |
+| Plan | Multi-developer or multi-wave coordination is needed | One bounded, single-developer change |
 | Build | Always | Never |
 | Review | Always | Never |
 | Ship | Always | Never |
@@ -92,7 +93,7 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | `specify-project` | Specify | Manual, or the human-started entry point for a `planner` session |
 | `define-product` | Understand | Manual, selected by `orchestrator` when a build surfaces an unresolved product question, or the entry point for a `planner` session |
 | `design-solution` | Design | Manual, selected by `orchestrator` when a build surfaces an architectural question, or the entry point for a `planner` session |
-| `plan-delivery` | Plan | Manual, selected by `orchestrator` when a build surfaces a dependency/assignment problem, or the entry point for a `planner` session |
+| `plan-wave` | Plan | Manual, selected by `orchestrator` when a build surfaces a dependency/assignment problem, or the entry point for a `planner` session |
 | `build-change` | Build | Selected by `orchestrator` to frame every three-agent build, or manual standalone |
 | `review-change` | Review | Manual only — the zero-ceremony path for a diff with no task and no open PR |
 | `critique-review` | Review (downstream) | Manual only — consumes another review's findings, does not itself review |
@@ -101,7 +102,7 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 | `audit-google-typescript-style` | Review / pre-Ship | Manual only, by explicit design |
 | `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-runner` step 1 |
 | `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval task for an existing skill |
-| `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-delivery`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
+| `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-wave`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
 | `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
 | `launch-product` | Launch | Manual — not referenced by `orchestrator` |
 
@@ -126,7 +127,7 @@ the task lifecycle. Codex is dropped entirely (ADR-0031).
 | Agent | Phase | Invocation today |
 |---|---|---|
 | `orchestrator` | Build (session entry point) | Human-started; chains the rest of this table automatically within one session |
-| `planner` | Specify, Understand, Design, Plan (session entry point) | Human-started, separate entry point from `orchestrator`; wraps `specify-project`/`define-product`/`design-solution`/`plan-delivery` in one session and never invokes `builder`/`reviewer`/`orchestrator` (ADR-0024). Can short-circuit straight to `codev git issue-create` once a task is ready, without a delivery plan |
+| `planner` | Specify, Understand, Design, Plan (session entry point) | Human-started, separate entry point from `orchestrator`; wraps `specify-project`/`define-product`/`design-solution`/`plan-wave` in one session and never invokes `builder`/`reviewer`/`orchestrator` (ADR-0024). Can short-circuit straight to `codev git issue-create` once a task is ready, without a wave plan |
 | `builder` | Build | Auto-invoked by `orchestrator` |
 | `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `orchestrator`, fresh context each round |
 | `outer-loop-runner` | Review -> Ship (session entry point) | Human-started, separate entry point from `orchestrator`; does not run on a PR event |
@@ -151,7 +152,7 @@ from `orchestrator`'s Build/Review/Ship scope above — the two are
 independent entry points a human chooses between, neither invoking the
 other. `planner` also gains an issue-only short circuit: given an accepted
 design or decision, draft a task and run `codev git issue-create` directly,
-skipping `plan-delivery`'s milestone/work-list machinery, and stop —
+skipping `plan-wave`'s wave/work-list machinery, and stop —
 `orchestrator`'s existing step-5 fallback (create the issue itself if still
 missing) is unchanged and still correct either way.
 
@@ -185,6 +186,16 @@ routing had: recording its findings as an outer-phase round could spend
 both of that phase's rounds on mechanical style fixes before the five
 specialists ever ran once. `code-audit-gate` now resolves entirely before
 the reviewer round is recorded, so it never opens the outer phase at all.
+
+**Resolved and implemented (ADR-0032, ADR-0033):** `plan-delivery` is
+renamed `plan-wave` and its rolling-wave discipline — detail only the
+current wave, keep later waves coarse — is backed by a deterministic,
+ask-posture Claude Code gate (`require_wave_shape.py`) instead of prose
+alone. `git.workflow` (`trunk` by default, `feature-branch` as a
+first-class override) lets `plan-wave` and `build-change` slice a wave's
+tasks at an engineering-dependency boundary instead of only a usefulness
+boundary, provided the task names its containment. `design-solution` is
+unchanged.
 
 **Still open:**
 

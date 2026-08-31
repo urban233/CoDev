@@ -334,6 +334,7 @@ class InstallerTests(unittest.TestCase):
                 ".claude/commands/pr-review.md",
                 ".claude/settings.json",
                 ".claude/hooks/require_plan.py",
+                ".claude/hooks/require_wave_shape.py",
                 ".claude/CLAUDE.md",
             },
             {

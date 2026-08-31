@@ -30,7 +30,7 @@ path" gives:
 
 - **Bounded feature or product addition** -- `define-product`, then
   `design-solution` if a shared contract or architecture decision exists,
-  then `plan-delivery` if more than one developer is involved.
+  then `plan-wave` if more than one developer is involved.
 - **Greenfield product or whole-product redesign** -- `specify-project`, one
   continuous interview producing a single canonical `SPECIFICATION.md`.
 
@@ -50,8 +50,8 @@ session, skip straight to it: draft the task from the accepted artifact and
 run `codev git issue-create --title <title> --body <text> [--path
 <glob>]... [--assignee <name>]...` (write the body to a temp file and pass
 `--body-file` instead of inline `--body` whenever it may contain a
-backtick, `$`, or double quote). Reuse exactly the fields `plan-delivery`'s
-own Handoff step already uses -- skip its milestone, team-profile, and
+backtick, `$`, or double quote). Reuse exactly the fields `plan-wave`'s
+own Handoff step already uses -- skip its wave, team-profile, and
 work-list machinery entirely for this path. Stop once the issue is created
 and report its URL; do not run `codev task start` or anything in the `codev
 task` or `codev git branch/commit/push/open-pr/mark-ready` surface --

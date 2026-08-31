@@ -4,6 +4,7 @@
 **Owner:** [developer]
 **Reviewer:** [independent reviewer]
 **Risk:** [low/normal/high/critical]
+**Containment:** [flag/config guard this part relies on, or N/A]
 **Base commit:** [Git commit]
 **Issue/work item:** [link or ID]
 **Brief/design/API:** [links or Not needed]

@@ -62,8 +62,18 @@ the plan and proceed interactively.
 
 Prefer one review purpose. As a soft warning, reconsider the slice when it
 exceeds roughly 400 non-generated changed lines or eight files; generated code,
-mechanical migrations, and tightly coupled tests may justify more. Split only
-when each part remains buildable and useful.
+mechanical migrations, and tightly coupled tests may justify more. Split by
+default only when each part remains buildable and useful on its own.
+
+When the project's `git.workflow` configuration resolves to `trunk` (the
+default; check with `codev config get git.workflow`), a part may instead
+split at a real engineering-dependency boundary — a schema change ahead of
+the logic that uses it, an isolated component before it is wired in —
+provided it stays safe to merge alone: tested, non-breaking, and, if it
+changes behavior before the larger change is complete, contained behind a
+flag, config toggle, or other guard named explicitly in the plan's
+containment field. Under `feature-branch`, keep every part independently
+useful; do not assume containment is available.
 
 Reuse repository patterns. Read
 `.agents/skills/testing-craft/references/writing-tests.md` before adding or

@@ -136,6 +136,24 @@ class RequirePlanHookTests(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout)
 
+    def test_allows_when_matching_wave_plan_exists_on_feature_branch(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        wave_dir = self.repo / "docs/codev/wave"
+        wave_dir.mkdir(parents=True)
+        (wave_dir / "some-feature.md").write_text("# wave plan\n", encoding="utf-8")
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "src/foo.py"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
     def test_fails_open_on_malformed_stdin(self) -> None:
         result = _run_hook(self.repo, "not json")
         self.assertEqual(0, result.returncode)

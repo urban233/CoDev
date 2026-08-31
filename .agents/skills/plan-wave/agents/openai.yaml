@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Wave"
+  short_description: "Plan the current wave: owners, dependencies, and risks"
+  default_prompt: "Use $plan-wave to turn this accepted brief and design into a lightweight, rolling-wave delivery plan."

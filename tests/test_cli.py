@@ -1816,7 +1816,10 @@ class CliTests(unittest.TestCase):
                 with redirect_stdout(list_output):
                     main(["config", "list", "--target", str(target), "--json"])
             self.assertEqual(
-                {"model": {"value": "anthropic/claude", "source": "project"}},
+                {
+                    "model": {"value": "anthropic/claude", "source": "project"},
+                    "git.workflow": {"value": "trunk", "source": "default"},
+                },
                 json.loads(list_output.getvalue()),
             )
 

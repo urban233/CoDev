@@ -7,7 +7,7 @@ work. Use the applicable repository skill:
   interview that produces one accepted `SPECIFICATION.md`;
 - `define-product` for ideas, outcomes, scope, and workflow sizing;
 - `design-solution` for material architecture, API, data, or risk decisions;
-- `plan-delivery` for multi-developer milestones and work coordination;
+- `plan-wave` for multi-developer waves and work coordination;
 - `build-change` for interactive implementation of one bounded change;
 - `review-change` for an independent, read-only code review; and
 - `pr-review` for an exact GitHub Pull Request review with validated inline
@@ -18,7 +18,7 @@ work. Use the applicable repository skill:
   for an installed skill's performance corpus; and
 - `technical-writing-style` to audit or revise the writing quality of an
   existing document -- also read automatically by `specify-project`,
-  `define-product`, `design-solution`, `plan-delivery`, and
+  `define-product`, `design-solution`, `plan-wave`, and
   `launch-product` before they draft or revise prose; and
 - `testing-craft` to design a test strategy, write well-crafted tests, or
   audit an existing test suite's health -- also read automatically by
@@ -32,7 +32,7 @@ acceptance, merge, deployment, migration, publication, and rollout expansion.
 
 Do not require developers to choose a skill. Route their request internally and
 describe the current human-facing step as `Understand`, `Build`, `Review`, or
-`Ship`; insert design or delivery planning only when risk or coordination needs
+`Ship`; insert design or wave planning only when risk or coordination needs
 it.
 
 Use `pr-review` only for an existing GitHub Pull Request. It reviews the exact

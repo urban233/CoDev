@@ -30,8 +30,8 @@ Redirect instead when:
 - a bounded brownfield feature needs `define-product` and, if material,
   `design-solution`;
 - a local fix or refactor can start with `build-change`;
-- an accepted specification needs milestones and tasks from
-  `plan-delivery`; or
+- an accepted specification needs waves and tasks from
+  `plan-wave`; or
 - the request is to implement code.
 
 Risk overrides apparent size. Do not use the combined format to avoid required
@@ -119,7 +119,7 @@ product decision remains open.
 ## 5. Design the high-level system
 
 After product-frame acceptance, settle only technical decisions that must be
-shared before delivery planning or parallel implementation. Cover applicable
+shared before wave planning or parallel implementation. Cover applicable
 areas from `references/interview-coverage.md`, including:
 
 - system context, components, responsibilities, ownership, and dependencies;
@@ -149,7 +149,7 @@ for acceptance only when:
 
 - the product outcome, V1 scope, and non-goals are accepted;
 - interfaces, data, ownership, security, failure behavior, and deployment are
-  precise enough for delivery planning;
+  precise enough for wave planning;
 - acceptance scenarios trace to components, contracts, tests, and rollout
   evidence;
 - no open decision blocks safe planning;
@@ -192,8 +192,8 @@ Conclude with:
 - required follow-up evidence and domain reviews; and
 - the recommended next action.
 
-For multi-developer or multi-milestone work, hand the accepted specification to
-`plan-delivery`. For a single bounded first slice, hand it to `build-change`.
+For multi-developer or multi-wave work, hand the accepted specification to
+`plan-wave`. For a single bounded first slice, hand it to `build-change`.
 Do not generate a roadmap, sprint plan, staffing allocation, task checklist, or
 code while using this skill.
 

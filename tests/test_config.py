@@ -98,6 +98,18 @@ class ResolutionPrecedenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.assertIsNone(resolve("missing", target=Path(directory)))
 
+    def test_git_workflow_defaults_to_trunk(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve("git.workflow", target=Path(directory))
+        self.assertEqual(ResolvedValue("trunk", "default"), result)
+
+    def test_git_workflow_project_value_overrides_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            set_value("git.workflow", "feature-branch", target=target)
+            result = resolve("git.workflow", target=target)
+        self.assertEqual(ResolvedValue("feature-branch", "project"), result)
+
 
 class GlobalPathTests(unittest.TestCase):
     # Each branch is exercised on its real OS only: pathlib refuses to
@@ -194,6 +206,7 @@ class ListValuesTests(unittest.TestCase):
             {
                 "model": ResolvedValue("global-model", "global"),
                 "adapter": ResolvedValue("opencode", "project"),
+                "git.workflow": ResolvedValue("trunk", "default"),
             },
             result,
         )

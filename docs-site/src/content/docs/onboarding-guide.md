@@ -29,7 +29,7 @@ behavior:
   until checked against the actual files. Every skill starts with inspection, not
   proposal.
 - **One fact, one owner.** Outcome and scope live in a brief. Architecture lives in a
-  design document. Assignment and status live in a delivery plan. Behavior lives in code
+  design document. Assignment and status live in a wave plan. Behavior lives in code
   and tests. Nothing gets copied between documents — later documents *link* to earlier
   ones. If you find yourself updating the same fact in two places, one of those places is
   wrong.
@@ -79,14 +79,14 @@ audit an existing suite's health, or triage a flaky test.
 
 ## Two steps that only show up sometimes
 
-**Design** (`design-solution`) and **Plan** (`plan-delivery`) are not extra stages
+**Design** (`design-solution`) and **Plan** (`plan-wave`) are not extra stages
 everything passes through — they're conditional depth inside Understand, triggered by real
 properties of the change: a shared API or data contract, an authentication or privacy
 boundary, or more than one developer working the same area concurrently. The checkout fix
 above skips both — it's a one-line, single-developer, non-contract change.
 [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/) walks a change that *does* need
 `design-solution`, and [Tutorial 4](/CoDev/tutorials/multi-developer-coordination/) walks
-one that needs `plan-delivery`.
+one that needs `plan-wave`.
 
 At the very edges: **Specify** (`specify-project`) is for a genuinely new product or a
 whole-product redesign — one guided interview producing a single canonical specification,

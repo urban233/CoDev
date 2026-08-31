@@ -21,6 +21,35 @@ Semantic Versioning.
   reducing the installed bundle's file count. `skill-card.template.md` stays bundled;
   it's a template a developer fills in locally, not narrative documentation.
 
+### Added
+- `git.workflow` config key (ADR-0033), resolved through the existing layered
+  `config.py` mechanism exactly like `git.pr_base` -- `trunk` by default,
+  `feature-branch` as a first-class override. Under `trunk`, `plan-wave` and
+  `build-change` may split a task at an engineering-dependency boundary instead of
+  only a usefulness boundary, provided the task states its containment (a new,
+  optional field on `.github/ISSUE_TEMPLATE/task.md` and
+  `implementation-plan.template.md`). CoDev never ships or manages actual
+  feature-flag infrastructure; the field is advisory.
+- `.claude/hooks/require_wave_shape.py` (ADR-0032): a Claude-Code-only, ask-posture
+  `PreToolUse` hook. Asks, never denies, when a wave-plan document's "Later waves"
+  section holds a populated task table, checked on saving the document and on
+  `codev git issue-create`. Fails open on any internal error, matching
+  `require_plan.py`'s existing posture. `require_plan.py`'s own coarse-fallback spec
+  check now also recognizes `docs/codev/wave/*.md`.
+
+### Changed
+- **Breaking:** `plan-delivery` is renamed `plan-wave` throughout (ADR-0032): the
+  skill directory, its description, `docs/codev/delivery/` is now
+  `docs/codev/wave/`, and `delivery-plan.template.md` is now
+  `wave-plan.template.md`. Rolling-wave planning -- detail only the current wave,
+  keep later waves coarse -- moves from one advisory sentence to a directive,
+  gate-backed default; a revisit checkpoint in `plan-wave`'s own steps requires
+  comparing a closed wave's evidence against later waves' assumptions before
+  detailing anything new. No round-state schema change; no persisted field named
+  after the old skill. Hard break, no dual support, following ADR-0023's precedent
+  -- historical ADRs (0004, 0020, 0022, 0023, 0024) referencing the old name are
+  not edited.
+
 ## [0.4.0] - 2026-08-31
 
 ### Added

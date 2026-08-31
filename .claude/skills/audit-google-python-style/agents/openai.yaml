@@ -1,0 +1,7 @@
+interface:
+  display_name: "Google Python Style Audit"
+  short_description: "Dedicated Google Python conformance audit and automatic remediation"
+  default_prompt: "Use $audit-google-python-style to audit this Python codebase and automatically apply all approved Google Python Style fixes."
+
+policy:
+  allow_implicit_invocation: true
