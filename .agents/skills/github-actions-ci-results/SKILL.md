@@ -20,6 +20,9 @@ Read GitHub Actions results without changing repository or workflow state. Ident
 
 ## Workflow
 
+Work through these four steps in order: resolve the exact run, read its
+summary, inspect any failure selectively, then produce the result.
+
 ### 1. Resolve the run
 
 Accept any of these inputs:
