@@ -1,6 +1,6 @@
 ---
 name: technical-writing-style
-description: Provides the Google-derived technical writing style reference and revision method for any reviewer-facing technical document -- a specification, brief, design, delivery plan, or launch plan. The planning skills (`specify-project`, `define-product`, `design-solution`, `plan-delivery`, `launch-product`) read this skill's reference before drafting or revising prose. Invoke directly to audit or revise the writing quality of an existing document without changing its technical meaning.
+description: Provides the Google-derived technical writing style reference and revision method for any reviewer-facing technical document -- a specification, brief, design, wave plan, or launch plan. The planning skills (`specify-project`, `define-product`, `design-solution`, `plan-wave`, `launch-product`) read this skill's reference before drafting or revising prose. Invoke directly to audit or revise the writing quality of an existing document without changing its technical meaning.
 license: BSD-3-Clause
 ---
 
@@ -16,7 +16,7 @@ in another skill's artifact readable.
 Use this skill in two situations:
 
 - **As a prerequisite.** `specify-project`, `define-product`,
-  `design-solution`, `plan-delivery`, and `launch-product` each instruct,
+  `design-solution`, `plan-wave`, and `launch-product` each instruct,
   in their own `SKILL.md`, reading
   `.agents/skills/technical-writing-style/references/writing-style.md`
   before drafting or revising a document's prose. That is a read, not a

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-codev-workflow"
-version = "0.4.0"
+version = "0.5.0"
 description = "Human-guided AI software delivery for real repositories."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -80,7 +80,19 @@ codev_workflow = [
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-exclude = ["src/codev_workflow/bundle", ".codev/eval/tasks/*/repository"]
+exclude = [
+    "src/codev_workflow/bundle",
+    ".codev/eval/tasks/*/repository",
+    # Root dogfood copies of the bundle's shared skills -- this repository
+    # installs CoDev on itself, and these paths are installed, byte-for-byte
+    # mirrors of the already-excluded bundle source above (see
+    # docs/architecture.md's Bundle section), not independently authored
+    # code. `codev update` resyncing them from bundle source is what should
+    # surface a real quality regression there, not this project's own ruff
+    # run re-discovering the same excluded content at a second path.
+    ".claude/skills",
+    ".agents/skills",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

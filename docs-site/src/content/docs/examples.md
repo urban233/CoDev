@@ -21,7 +21,7 @@ second developer to coordinate with — `build-change` frames the fix, grounds
 it against the helper's existing tests, and adds one that pins the
 boundary case. A fast correctness check runs automatically once the diff
 exists, confirming it matches the reported bug and nothing else moved. No
-design document, no delivery plan — for a change this size, that would be
+design document, no wave plan — for a change this size, that would be
 ceremony the bug doesn't need.
 
 ## A feature that needs a decision first: adding CRAM support
@@ -49,7 +49,7 @@ variant with clinical significance from a reference database. Different
 developers, real interdependency — the annotator needs to know exactly what
 shape a "variant" is before either can write a line of code.
 
-`plan-delivery` exists for precisely this: it produces a delivery plan
+`plan-wave` exists for precisely this: it produces a wave plan
 where the shared contract — chromosome, position, reference allele,
 alternate allele, in one agreed representation — is decided and fixture-
 tested *before* the two developers diverge, not discovered when their

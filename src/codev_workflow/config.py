@@ -42,8 +42,14 @@ PROJECT_CONFIG_RELATIVE = PurePosixPath(".codev/config.toml")
 ENV_PREFIX = "CODEV_"
 
 # Populated as features grow their own config keys (adapter defaults, round
-# limits, and so on). Intentionally empty until a feature needs one.
-DEFAULTS: dict[str, str] = {}
+# limits, and so on).
+DEFAULTS: dict[str, str] = {
+    # "trunk" (default) slices tasks at engineering-dependency boundaries,
+    # contained behind a flag/config guard when incomplete; "feature-branch"
+    # is the explicit override, with no containment expectation. See
+    # ADR-0033.
+    "git.workflow": "trunk",
+}
 
 
 class ConfigError(Exception):

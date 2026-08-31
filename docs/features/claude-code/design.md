@@ -13,6 +13,18 @@ CLI's own `--help`/`doctor` output and from `strings`-inspecting the actual ship
 for literal constants (hook event names, settings keys, hardcoded file paths) — real shipped
 code, not documentation. Items still needing a live session are marked open below.
 
+**Live-session update, 2026-08-31 (unplanned, gathered while implementing
+`docs/features/production-readiness/`) — fully resolved:** Martin reported getting repeated real
+permission-prompt dialogs while an agent session edited files on a branch with no matching
+spec — exactly `require_plan.py`'s "ask" behavior, from a real Claude Code runtime, not a
+simulation. This confirms the hook payload shape assumption and that the permission-prompt UI
+correctly surfaces the hook's `ask` decision to a human. The matching "stays silent when a spec
+exists" half is confirmed three ways: direct script execution against the real installed hook
+after renaming the branch to match; this same session's own real tool calls subsequently
+appearing as `allow` entries in `.codev/hooks/decisions.jsonl`; and Martin's explicit
+confirmation that the dialogs actually stopped once the branch was renamed. Both halves of this
+guardrail's claim are now live-verified, not simulated.
+
 ## Summary
 
 Add Claude Code as a fifth adapter platform, following the existing four-platform pattern
@@ -407,8 +419,9 @@ addition was called out rather than left implicit.
 - [ ] `BundleParityTests` passes for `"claude"` with zero platform-specific test-file changes
       needed beyond the `ADAPTER_ROLE_PATHS` entry
 - [ ] Plan-mode default confirmed active on a real Claude Code session against an installed bundle
-- [ ] Guardrail hook confirmed to `ask` when no spec exists and stay silent when one does, against
-      a real Claude Code session
+- [x] Guardrail hook confirmed to `ask` when no spec exists and stay silent when one does, against
+      a real Claude Code session -- **confirmed 2026-08-31**, see the live-session update in this
+      document's header
 - [x] Full existing test suite passes unmodified
 - [x] New Claude Code test coverage passes (installer, adapter-remove, CLI, hook script)
 - [x] `scripts/verify_claude_code_compat.py` passes against the real, currently-published CLI

@@ -334,6 +334,7 @@ class InstallerTests(unittest.TestCase):
                 ".claude/commands/pr-review.md",
                 ".claude/settings.json",
                 ".claude/hooks/require_plan.py",
+                ".claude/hooks/require_wave_shape.py",
                 ".claude/CLAUDE.md",
             },
             {
@@ -420,6 +421,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(installer.GITIGNORE_START, gitignore)
         self.assertIn(installer.GITIGNORE_END, gitignore)
         self.assertIn(".codev/task/escalations.jsonl", gitignore)
+        self.assertIn(".codev/hooks/decisions.jsonl", gitignore)
         lock = json.loads((self.target / ".codev" / "lock.json").read_text())
         self.assertIn("gitignore_block_hash", lock["integrations"])
 

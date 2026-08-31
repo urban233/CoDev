@@ -66,7 +66,7 @@ applies as written. Two other cases:
    repository instructions, current code and tests, ownership, and Git state.
 2. Confirm the item is ready. Return unresolved product questions to
    `define-product`, architectural or contract questions to `design-solution`,
-   and dependency or assignment problems to `plan-delivery`.
+   and dependency or assignment problems to `plan-wave`.
 3. Use `build-change` to frame and ground the change. Present the focus card.
    For delegated, multi-session, cross-component, normal-risk, or higher-risk
    work, render the complete
@@ -86,7 +86,7 @@ applies as written. Two other cases:
 5. Create the task's own branch — `codev git branch --id <task-id>
    --base <base-sha>`. Resolve issue linkage before opening round state: if
    the task has no linked GitHub issue yet and this repository tracks
-   issues on GitHub, run `codev git issue-create` now — per `plan-delivery`'s
+   issues on GitHub, run `codev git issue-create` now — per `plan-wave`'s
    Handoff, check rather than assume an earlier session already did it; write
    the body to a temp file and pass `--body-file` rather than inline `--body`
    whenever it may contain a backtick, `$`, or double quote, since a shell

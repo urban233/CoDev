@@ -5,12 +5,18 @@ title: ""
 labels: task
 ---
 
-<!-- Design doc / brief / delivery-plan link. Required if one exists for
+<!-- Design doc / brief / wave-plan link. Required if one exists for
      this project. -->
 **Design doc:**
 
 <!-- One or two sentences: what will exist when this is done that does not
      exist now. Not why, and not how -- the design doc or brief owns those. -->
+
+<!-- How this task stays safe to merge before the wave it belongs to is
+     complete: a flag, config toggle, or other guard. Leave as N/A when
+     this task is independently useful on its own, or the project's
+     git.workflow is feature-branch. -->
+**Containment:** N/A
 
 ## Acceptance criteria
 
@@ -38,11 +44,13 @@ labels: task
      if there are none; do not write "none". -->
 
 <!-- ─────────────────────────────────────────────────────────────────────
-     If this project tracks a delivery plan, the title may keep that
-     plan's row ID (e.g. "W-01: ...") so the two stay traceable to each
-     other -- optional, since not every task has one.
+     If this project tracks a wave plan, the title may keep that plan's
+     row ID (e.g. "W-01: ...") so the two stay traceable to each other --
+     optional, since not every task has one. Only push this issue if the
+     task belongs to the plan's *current* wave; a later-wave task stays a
+     plan row until its wave becomes current.
 
      Set as labels: risk:low|normal|high|critical (matches
      implementation-plan.template.md's Focus card scale)
-     Set as fields: milestone, assignee, blocked-by via linked issues
+     Set as fields: wave, assignee, blocked-by via linked issues
      ───────────────────────────────────────────────────────────────────── -->

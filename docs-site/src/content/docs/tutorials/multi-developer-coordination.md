@@ -1,6 +1,6 @@
 ---
 title: "Tutorial 4: two developers, one shared contract"
-description: Coordinating two developers on the same feature through a shared contract and delivery plan.
+description: Coordinating two developers on the same feature through a shared contract and wave plan.
 ---
 
 The percentage-discounts feature from [Tutorial 2](/CoDev/tutorials/a-design-worthy-change/)
@@ -33,13 +33,13 @@ handshake that goes wrong under parallel implementation. If the design didn't se
 firmly enough to write a fixture against right now, that's a sign to go back and settle it
 before splitting the work, not while splitting it.
 
-## Step 2: a delivery plan for two lanes of work
+## Step 2: a wave plan for two lanes of work
 
-With the design accepted, `plan-delivery` turns it into a lightweight plan at
-`docs/codev/delivery/percentage-discounts.md`:
+With the design accepted, `plan-wave` turns it into a lightweight plan at
+`docs/codev/wave/percentage-discounts.md`:
 
 ```text
-Milestone: Percentage discounts available in checkout
+Wave: Percentage discounts available in checkout
 
 Lane A — Core calculation (owner: Priya)
   Ready: update compute_total for the Discount type; migrate the 3 existing
@@ -61,7 +61,7 @@ same `Discount` shape Lane A's compute_total actually expects, not just what
 the fixture assumed.
 ```
 
-A delivery plan is a durable, reviewable repository artifact once you're actually using
+A wave plan is a durable, reviewable repository artifact once you're actually using
 it to coordinate — not a chat-only summary that only exists in one person's conversation.
 
 ## Step 3: both lanes build against the shared fixture, independently
@@ -75,14 +75,14 @@ on the contract first: neither lane blocks on the other actually landing.
 ```shell
 # Priya, Lane A
 codev task start --id percentage-discounts-core --base <sha> \
-  --summary "Core calculation for percentage discounts" --link docs/codev/delivery/percentage-discounts.md
+  --summary "Core calculation for percentage discounts" --link docs/codev/wave/percentage-discounts.md
 
 # Marcus, Lane B — started independently, same day
 codev task start --id percentage-discounts-api --base <sha> \
-  --summary "Checkout API surface for percentage discounts" --link docs/codev/delivery/percentage-discounts.md
+  --summary "Checkout API surface for percentage discounts" --link docs/codev/wave/percentage-discounts.md
 ```
 
-Each `--link` points back to the same delivery plan — one fact (the plan), not copied into
+Each `--link` points back to the same wave plan — one fact (the plan), not copied into
 each task's own description.
 
 ## Step 4: the integration checkpoint
@@ -106,8 +106,8 @@ it waits for the plan's owner to sequence it in, rather than starting unplanned.
 
 - If review load across two open PRs needs the outer loop:
   [Tutorial 3](/CoDev/tutorials/outer-loop-review/)
-- The full delivery-plan mechanics — rolling-wave planning, dependency vocabulary in
-  detail: read `.agents/skills/plan-delivery/SKILL.md` directly in your installed
+- The full wave-plan mechanics — rolling-wave planning, dependency vocabulary in
+  detail: read `.agents/skills/plan-wave/SKILL.md` directly in your installed
   repository, or
   [docs/product-map.md](https://github.com/urban233/CoDev/blob/main/docs/product-map.md)
   for where it fits alongside every other skill.

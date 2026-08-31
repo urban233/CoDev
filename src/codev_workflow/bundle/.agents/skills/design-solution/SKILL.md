@@ -190,5 +190,5 @@ duplicate its content there.
 ## Handoff
 
 Send the accepted brief, design, API/contract references, open risks, and next
-demonstrable outcome to `plan-delivery`. Do not assign people or generate an
+demonstrable outcome to `plan-wave`. Do not assign people or generate an
 exhaustive task list.

@@ -54,7 +54,9 @@ Configuration is layered: command-line flags override environment variables, whi
 override project config, which overrides global config, which overrides the built-in
 default. `codev config set git.pr_base <branch>` is the one most people need early — it
 sets the pull-request base branch once, repository-wide, instead of repeating it on every
-task.
+task. `git.workflow` defaults to `trunk`, letting a task split at an engineering-dependency
+boundary when it stays safely contained; set `codev config set git.workflow feature-branch`
+to opt out and require every task to stand alone instead.
 
 ## The task lifecycle
 

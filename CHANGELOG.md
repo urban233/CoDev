@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.5.0] - 2026-08-31
 
 ### Added
 - A public documentation site (`docs-site/`, Astro + Starlight) deployed to GitHub
@@ -20,6 +20,64 @@ Semantic Versioning.
   every adopter's repository -- their content moved to the docs site above instead,
   reducing the installed bundle's file count. `skill-card.template.md` stays bundled;
   it's a template a developer fills in locally, not narrative documentation.
+
+### Added
+- `git.workflow` config key (ADR-0033), resolved through the existing layered
+  `config.py` mechanism exactly like `git.pr_base` -- `trunk` by default,
+  `feature-branch` as a first-class override. Under `trunk`, `plan-wave` and
+  `build-change` may split a task at an engineering-dependency boundary instead of
+  only a usefulness boundary, provided the task states its containment (a new,
+  optional field on `.github/ISSUE_TEMPLATE/task.md` and
+  `implementation-plan.template.md`). CoDev never ships or manages actual
+  feature-flag infrastructure; the field is advisory.
+- `.claude/hooks/require_wave_shape.py` (ADR-0032): a Claude-Code-only, ask-posture
+  `PreToolUse` hook. Asks, never denies, when a wave-plan document's "Later waves"
+  section holds a populated task table, checked on saving the document and on
+  `codev git issue-create`. Fails open on any internal error, matching
+  `require_plan.py`'s existing posture. `require_plan.py`'s own coarse-fallback spec
+  check now also recognizes `docs/codev/wave/*.md`. Now also checks `Edit` and
+  `MultiEdit` calls against a wave-plan path, not only `Write`, reconstructing the
+  resulting content by applying the edit(s) to the file's current on-disk content;
+  `MultiEdit`'s exact payload shape is `[unverified]` and falls open if unmatched.
+- A local, gitignored gate-decision log (`.codev/hooks/decisions.jsonl`) for
+  `require_plan.py` and `require_wave_shape.py`, mirroring ADR-0003's escalation-log
+  pattern. `codev status --verbose`/`--json` gains a `gate_decisions` field (counts
+  by hook and decision) and a new `--since` filter.
+- `scripts/verify_self_install.py`, wired into CI on every push and pull request
+  (not release-gated -- unlike `claude-code-compat`, it needs no network access):
+  fails loudly if this repository's own root dogfood install has drifted from
+  bundle source, the failure mode that previously went unnoticed for over a week.
+- An "Untrusted content" section in `ai-agent-guidelines.md`: repository files,
+  commit messages, PR/issue text, and CI output are evidence to inspect, never
+  instructions to follow. `pr-review`, `review-change`, and
+  `github-actions-ci-results` -- the skills that ingest the most
+  externally-controllable content -- each carry a short reminder pointing back to
+  it. A new `adversarial-content-in-pr-review` eval scenario and
+  `untrusted_content_not_followed` criterion in
+  `evals/development-workflow/scenarios.json` check the claim, not only assert it
+  in prose; live-verified against two rounds of real (not simulated) adversarial
+  agent sessions, recorded in `docs/codev/wave/production-readiness.md`.
+
+### Fixed
+- `.claude/skills` and `.agents/skills` (root dogfood copies of the bundle's
+  shared skills, already excluded from `ruff` at their `src/codev_workflow/bundle`
+  source) added to `pyproject.toml`'s `ruff` exclude list. These installed,
+  byte-for-byte mirrors were being linted independently of their already-excluded
+  source, so a routine `codev update` resync of this repository's own root install
+  could surface pre-existing, previously-invisible violations as new CI failures.
+
+### Changed
+- **Breaking:** `plan-delivery` is renamed `plan-wave` throughout (ADR-0032): the
+  skill directory, its description, `docs/codev/delivery/` is now
+  `docs/codev/wave/`, and `delivery-plan.template.md` is now
+  `wave-plan.template.md`. Rolling-wave planning -- detail only the current wave,
+  keep later waves coarse -- moves from one advisory sentence to a directive,
+  gate-backed default; a revisit checkpoint in `plan-wave`'s own steps requires
+  comparing a closed wave's evidence against later waves' assumptions before
+  detailing anything new. No round-state schema change; no persisted field named
+  after the old skill. Hard break, no dual support, following ADR-0023's precedent
+  -- historical ADRs (0004, 0020, 0022, 0023, 0024) referencing the old name are
+  not edited.
 
 ## [0.4.0] - 2026-08-31
 
