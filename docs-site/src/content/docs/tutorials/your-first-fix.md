@@ -44,7 +44,7 @@ ADD       docs/codev/README.md
 INTEGRATE AGENTS.md — append managed policy block
 INTEGRATE .gitignore — append escalation-log ignore rule
 INTEGRATE .opencode/opencode.json — integrated OpenCode agents: orchestrator, planner, ...
-Installed CoDev 0.4.0 into /path/to/your/repo
+Installed CoDev 0.5.0 into /path/to/your/repo
 ```
 
 (Real run had ~70 `ADD` lines — every skill and agent file gets listed. Trimmed here; your
@@ -61,7 +61,7 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.4.0 - /path/to/your/repo
+CoDev 0.5.0 - /path/to/your/repo
 Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0
@@ -92,7 +92,7 @@ Stop if:     the tax-exempt flag isn't reaching this function at all (that
              would be a different, bigger bug upstream).
 ```
 
-Nothing here needs a design document or a delivery plan — no shared contract changes, no
+Nothing here needs a design document or a wave plan — no shared contract changes, no
 new API, one file. Approve it and move to Build.
 
 ## Step 3: start and branch the tracked task
@@ -279,7 +279,7 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.4.0 - /path/to/your/repo
+CoDev 0.5.0 - /path/to/your/repo
 Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0

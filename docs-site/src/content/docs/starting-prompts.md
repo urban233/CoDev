@@ -18,7 +18,7 @@ mostly just repeats what they already do by default.
 ## Starting the next task
 
 ```text
-Take task <WORK-ITEM-ID> from the delivery plan at <PATH-OR-LINK>.
+Take task <WORK-ITEM-ID> from the wave plan at <PATH-OR-LINK>.
 GitHub user for ownership/assignment is <YOUR-GITHUB-LOGIN>. If the plan
 still has placeholder owner/reviewer names that haven't been assigned yet,
 disregard them and use the login above instead.
@@ -37,7 +37,7 @@ Why this is enough, and no more:
   if it can't resolve this on its own instead of finding out later that a
   pull request never linked back to anything.
 - **Name the real GitHub user up front.** Ownership/reviewer fields in a
-  delivery plan are often still placeholders (`Developer 1`, a role name,
+  wave plan are often still placeholders (`Developer 1`, a role name,
   whatever the plan template shipped with) — naming the actual login once
   here means it's the only one used, everywhere it matters, without you
   having to repeat the correction later.

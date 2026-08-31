@@ -14,7 +14,7 @@ codev status --target .
 ```
 
 ```text
-CoDev 0.4.0 - /path/to/your/repo
+CoDev 0.5.0 - /path/to/your/repo
 Bundle: healthy (76 managed files, no drift)
 Adapters: opencode
 Tasks in progress: 0

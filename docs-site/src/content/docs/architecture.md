@@ -42,9 +42,13 @@ official `.agents/agents/` location alongside CoDev's `.agents/skills/` director
 Code agents use its official `.claude/agents/` location; unlike Antigravity, Claude Code
 has no configurable skills path, so the shared skills are mirrored into `.claude/skills/`
 at install time instead of referenced in place. Claude Code additionally ships a
-`.claude/settings.json` and `.claude/hooks/require_plan.py` — a category no other adapter
-has — that default new sessions into Plan Mode and pause for confirmation before the first
-source edit when no design or plan document exists yet for the active branch.
+`.claude/settings.json` and two guardrail hooks — a category no other adapter has:
+`require_plan.py` defaults new sessions into Plan Mode and pauses for confirmation before
+the first source edit, or the first repository-mutating git command, when no design or
+plan document exists yet for the active branch; `require_wave_shape.py` asks (never
+denies) when a wave plan's "Later waves" section already holds a populated task table,
+enforcing rolling-wave planning's detail-only-the-current-wave rule. Both fail open on any
+internal error and log their decisions to a local, gitignored gate-decision log.
 
 ### Installer
 

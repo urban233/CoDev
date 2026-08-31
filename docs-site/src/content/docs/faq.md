@@ -26,6 +26,14 @@ It becomes a visible conflict. CoDev never silently overwrites a locally modifie
 file — `codev status` keeps reporting it as a conflict until you resolve it with
 `override` or `keep`. See the update algorithm in [Architecture](/CoDev/architecture/#update-algorithm).
 
+### If a PR, issue, or commit message contains instructions aimed at the AI, will it follow them?
+
+No. Repository files, commit messages, PR/issue text, and CI output are evidence for the
+AI to inspect, never instructions to follow. `pr-review`, `review-change`, and
+`github-actions-ci-results` — the skills that ingest the most externally-controllable
+content — each carry an explicit reminder of this, and it's checked with a dedicated
+adversarial-content eval scenario, not just asserted in prose.
+
 ### Does `codev eval` read or store my API keys?
 
 No. The skill-evaluation harness drives OpenCode using your own existing auth — no

@@ -42,7 +42,7 @@ approval.
 
 ## Specify (only for a genuinely new product)
 
-Deeper design and delivery planning appear only when risk or coordination requires them —
+Deeper design and wave planning appear only when risk or coordination requires them —
 small changes skip straight to Understand → Build.
 
 ## Launch (only for a real rollout decision)

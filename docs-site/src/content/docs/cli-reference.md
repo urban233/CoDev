@@ -36,7 +36,7 @@ selected, recorded in `.codev/lock.json`.
 
 | Command | Purpose |
 |---|---|
-| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap |
+| `codev status [--verbose] [--json] [--since <date>]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap, and (`--verbose`/`--json`) a `gate_decisions` count of Claude Code guardrail-hook asks by hook and decision |
 | `codev adapter list` | Show which platform adapters are installed |
 | `codev adapter add <platform>` | Add one adapter to an existing installation |
 | `codev adapter remove <platform>` | Remove one adapter (still works for a platform an older CoDev version installed, even after the current version drops it — see ADR-0031's migration note) |
@@ -57,7 +57,9 @@ Configuration is layered: command-line flags override environment variables, whi
 override project config, which overrides global config, which overrides the built-in
 default. `codev config set git.pr_base <branch>` is the one most people need early — it
 sets the pull-request base branch once, repository-wide, instead of repeating it on every
-task.
+task. `git.workflow` defaults to `trunk`; set it to `feature-branch` to let `plan-wave` and
+`build-change` split a task at an engineering-dependency boundary instead of only a
+usefulness boundary, provided the task states its own containment.
 
 ## The task lifecycle
 
