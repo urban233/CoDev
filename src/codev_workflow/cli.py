@@ -41,6 +41,7 @@ from typing import Any
 
 from codev_workflow import __version__
 from codev_workflow import config as config_module
+from codev_workflow import gate as gate_module
 from codev_workflow import git_ops as git_ops_module
 from codev_workflow import hook_log as hook_log_module
 from codev_workflow import oracle as oracle_module
@@ -393,6 +394,17 @@ def _parser() -> argparse.ArgumentParser:
     c_list = config_commands.add_parser("list", help="show every resolved config key")
     c_list.add_argument("--target", type=_target, default=Path.cwd())
     c_list.add_argument("--json", action="store_true")
+
+    gate_parser = commands.add_parser(
+        "gate", help="the guardrail decisions CoDev enforces, for any platform"
+    )
+    gate_commands = gate_parser.add_subparsers(dest="gate_command", required=True)
+    gate_check = gate_commands.add_parser(
+        "check", help="decide one gate for a tool-use payload read from stdin"
+    )
+    gate_check.add_argument("--gate", required=True, choices=gate_module.GATES)
+    gate_check.add_argument("--json", action="store_true")
+    gate_check.add_argument("--target", type=_target, default=Path.cwd())
 
     next_parser = commands.add_parser(
         "next",
@@ -1308,6 +1320,20 @@ def _run_codeowners_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _run_gate_command(args: argparse.Namespace) -> int:
+    if args.gate_command != "check":
+        return 2
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, ValueError):
+        payload = None
+    decision = gate_module.check(args.gate, payload, target=args.target.resolve())
+    if args.json:
+        return _emit_json(decision.as_dict())
+    print(f"{decision.decision}: {decision.reason}")
+    return 0
+
+
 def _run_next_command(args: argparse.Namespace) -> int:
     action = oracle_module.next_action(
         target=args.target.resolve(),
@@ -2120,6 +2146,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_self_command(args)
         if args.command == "codeowners":
             return _run_codeowners_command(args)
+        if args.command == "gate":
+            return _run_gate_command(args)
         if args.command == "next":
             return _run_next_command(args)
         if args.command == "task":

@@ -1,27 +1,46 @@
-#!/usr/bin/env python3
-"""CoDev's small-change guardrail: a Claude Code PreToolUse hook.
+# BSD 3-Clause License
+#
+# Copyright (c) 2026, Martin Urban, Hannah Kullik
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Pause before a pull request opens for an over-budget slice.
 
-Pauses for human confirmation before `codev git open-pr` runs for a task
-whose non-generated diff exceeds its `review.max_lines`/`review.max_files`
-budget -- see docs/features/small-prs/design.md's "Proposed design" and
-"Quality and risk" sections. It only ever asks; it never denies, and it
-fails open (allows) on any internal error -- an unresolvable task id, a
-`codev` invocation that fails, or unparseable output -- so a bug here
-degrades to "no extra check", never to "no pull request possible".
+A shim. The decision lives in `codev gate check --gate small-change` so every
+adapter enforces the same rule (see `src/codev_workflow/gate.py`); this file
+only translates that answer into Claude Code's PreToolUse protocol and keeps
+the local decision log.
 
-Reuses `codev task size --id <id> --json` (`git_ops.slice_size`) rather than
-reimplementing the measurement: this hook is a thin trigger over the same
-number `codev git commit`/`codev git open-pr` already print, one CoDev
-already computes correctly against `.gitattributes` and its own task-state
-exclusions. `codev` must be resolvable on PATH in the hook's own execution
-environment; when it is not, this fails open exactly like any other
-internal error.
+Fails open on everything: a missing `codev` on PATH, a nonzero exit, a
+timeout, or unparseable output all allow the tool call. A guardrail that
+errors must never block work.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -29,18 +48,16 @@ from pathlib import Path
 from typing import Any
 
 _HOOK_NAME = "require_small_change.py"
+_GATE = "small-change"
 _DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
-
-_OPEN_PR_PREFIX = "codev git open-pr"
-_TASK_ID_PATTERN = re.compile(r"--id[= ]+(\S+)")
 
 
 def _log_decision(
     repo_root: Path, decision: str, *, tool_name: str = "", reason: str = ""
 ) -> None:
-    """Appends one local, gitignored record to `.codev/hooks/decisions.jsonl`
-    -- see docs/features/production-readiness/brief.md. Never raises: a
-    broken log must never change this guardrail's own allow/ask behavior."""
+    """Appends one local, gitignored record to `.codev/hooks/decisions.jsonl`.
+    Never raises: a broken log must never change this guardrail's own
+    allow/ask behavior."""
     try:
         record = {
             "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -75,31 +92,12 @@ def _ask(reason: str) -> None:
     sys.exit(0)
 
 
-def _open_pr_task_id(payload: dict[str, Any]) -> str | None:
-    """The task id of a `codev git open-pr` Bash call, or None when this
-    call isn't one, or the id can't be found -- prefix matching, not a
-    full shell parse, the same heuristic require_plan.py's gated-command
-    check already accepts (see its own module docstring)."""
-    if payload.get("tool_name") != "Bash":
-        return None
-    tool_input = payload.get("tool_input")
-    command = ""
-    if isinstance(tool_input, dict):
-        command = str(tool_input.get("command") or "").strip()
-    if not command.startswith(_OPEN_PR_PREFIX):
-        return None
-    match = _TASK_ID_PATTERN.search(command)
-    return match.group(1) if match else None
-
-
-def _task_size(task_id: str, *, repo_root: Path) -> dict[str, Any] | None:
-    """Runs `codev task size --id <id> --json` in repo_root and returns its
-    parsed payload, or None on any failure -- a missing `codev` on PATH, a
-    nonzero exit, a timeout, or unparseable output all fail open here."""
+def _decide(raw: str, repo_root: Path) -> dict[str, Any] | None:
     try:
         completed = subprocess.run(
-            ["codev", "task", "size", "--id", task_id, "--json"],
+            ["codev", "gate", "check", "--gate", _GATE, "--json"],
             cwd=repo_root,
+            input=raw,
             capture_output=True,
             text=True,
             timeout=30,
@@ -110,63 +108,40 @@ def _task_size(task_id: str, *, repo_root: Path) -> dict[str, Any] | None:
     if completed.returncode != 0:
         return None
     try:
-        payload = json.loads(completed.stdout)
+        parsed = json.loads(completed.stdout)
     except json.JSONDecodeError:
         return None
-    return payload if isinstance(payload, dict) else None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def main() -> None:
+    raw = sys.stdin.read()
     try:
-        payload = json.load(sys.stdin)
+        payload = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
         _allow()
         return
-
     if not isinstance(payload, dict):
         _allow()
         return
 
     repo_root = Path(payload.get("cwd") or Path.cwd())
-
-    try:
-        task_id = _open_pr_task_id(payload)
-        if task_id is None:
-            _allow()
-            return
-
-        size = _task_size(task_id, repo_root=repo_root)
-        if size is None:
-            _log_decision(
-                repo_root,
-                "allow",
-                tool_name="Bash",
-                reason="size measurement unavailable",
-            )
-            _allow()
-            return
-
-        if not size.get("over_budget"):
-            _log_decision(repo_root, "allow", tool_name="Bash", reason="within-budget")
-            _allow()
-            return
-
-        reason = (
-            f"{task_id!r}'s diff is {size.get('lines_changed')} non-generated "
-            f"line(s) (budget {size.get('max_lines')}) and "
-            f"{size.get('files_changed')} file(s) (budget {size.get('max_files')}) "
-            "-- over budget. If this is intentional, approve and continue; "
-            "otherwise consider splitting further first (see the plan's "
-            "Slices field)."
-        )
-        _log_decision(repo_root, "ask", tool_name="Bash", reason=reason)
-        _ask(reason)
-    except Exception as error:  # noqa: BLE001 - guardrail must fail open
-        print(
-            f"require_small_change.py: internal error, allowing: {error}",
-            file=sys.stderr,
-        )
+    tool_name = str(payload.get("tool_name") or "")
+    decision = _decide(raw, repo_root)
+    if decision is None:
         _allow()
+        return
+    reason = str(decision.get("reason") or "")
+    if decision.get("decision") == "ask":
+        _log_decision(repo_root, "ask", tool_name=tool_name, reason=reason)
+        _ask(reason)
+        return
+    # `recorded` is false when the gate never applied -- an unwatched tool or
+    # an unreadable payload. Logging those would count every unrelated tool
+    # call as a guardrail allow.
+    if decision.get("recorded", True):
+        _log_decision(repo_root, "allow", tool_name=tool_name, reason=reason)
+    _allow()
 
 
 if __name__ == "__main__":
