@@ -1281,6 +1281,14 @@ def advance_slice(task_id: str, head: str, *, target: Path) -> str:
     return next_slice
 
 
+def describe_base_snapshot(task_id: str, *, target: Path) -> str:
+    """The base the task is presently working from. `advance_slice` and
+    `reopen` both move it, so this is the current slice's starting point,
+    not the branch's."""
+    base: str = _load(task_id, target=target)["base_snapshot"]
+    return base
+
+
 def current_slice(task_id: str, *, target: Path) -> str:
     """The slice this task's most recent round belongs to (ADR-0035)."""
     state = _load(task_id, target=target)

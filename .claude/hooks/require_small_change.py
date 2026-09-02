@@ -9,7 +9,7 @@ fails open (allows) on any internal error -- an unresolvable task id, a
 `codev` invocation that fails, or unparseable output -- so a bug here
 degrades to "no extra check", never to "no pull request possible".
 
-Reuses `codev task size --id <id> --json` (`git_ops.task_size`) rather than
+Reuses `codev task size --id <id> --json` (`git_ops.slice_size`) rather than
 reimplementing the measurement: this hook is a thin trigger over the same
 number `codev git commit`/`codev git open-pr` already print, one CoDev
 already computes correctly against `.gitattributes` and its own task-state

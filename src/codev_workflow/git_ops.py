@@ -736,15 +736,50 @@ def _generated_paths(paths: list[str], *, target: Path) -> set[str]:
     return generated
 
 
+def slice_size(task_id: str, *, target: Path) -> TaskSize:
+    """The size of the slice currently being worked: the diff from the base
+    the task is presently on, which `task.advance_slice` moves to each
+    finished slice's head.
+
+    This is the measurement the budget applies to. A reviewer reads one pull
+    request, and ADR-0035 makes one slice one pull request, so the slice --
+    not the task -- is the thing that has to stay small.
+
+    Falls back to the whole task when round state is unreadable, which is
+    also the honest answer for a task that never advanced past its first
+    slice: the two measurements are identical there.
+    """
+    try:
+        base = task.describe_base_snapshot(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return task_size(task_id, target=target)
+    return _measure(task_id, base, target=target)
+
+
 def task_size(task_id: str, *, target: Path) -> TaskSize:
-    """Read-only non-generated changed-line and changed-file count for a
-    task's own branch against its recorded base snapshot, plus the resolved
-    `review.max_lines`/`review.max_files` budget.
+    """The whole task's size: the diff from the commit its branch was cut
+    from, across every slice it has landed so far.
+
+    Reported, never capped -- a task deliberately sliced into four is
+    supposed to total more than one slice's budget. `slice_size` is what the
+    budget applies to.
 
     Returns zero counts rather than raising when the task has no branch
     recorded yet, matching changed_files's established posture -- this
     backs `codev task size` and status --verbose, not a hard requirement.
     """
+    try:
+        git_state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        max_lines = _resolved_budget("review.max_lines", target=target)
+        max_files = _resolved_budget("review.max_files", target=target)
+        return TaskSize(0, 0, max_lines, max_files)
+    return _measure(task_id, git_state["base_snapshot"], target=target)
+
+
+def _measure(task_id: str, base: str, *, target: Path) -> TaskSize:
+    """Non-generated changed lines and files between `base` and the task's
+    own branch, plus the resolved budget."""
     max_lines = _resolved_budget("review.max_lines", target=target)
     max_files = _resolved_budget("review.max_files", target=target)
     try:
@@ -753,7 +788,7 @@ def task_size(task_id: str, *, target: Path) -> TaskSize:
         return TaskSize(0, 0, max_lines, max_files)
     try:
         output = _run_git(
-            ["diff", "--numstat", git_state["base_snapshot"], git_state["branch"]],
+            ["diff", "--numstat", base, git_state["branch"]],
             cwd=target,
         )
     except GitOpsError:

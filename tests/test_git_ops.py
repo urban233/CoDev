@@ -512,6 +512,55 @@ class StackOnTests(unittest.TestCase):
             self.assertFalse(git_ops._has_recorded_child("item-2", target=target))
 
 
+class SliceSizeTests(unittest.TestCase):
+    """ADR-0035, slice D4: the budget bounds one reviewer's reading, and a
+    reviewer reads one pull request -- so it applies per slice."""
+
+    def test_slice_and_task_size_agree_before_any_slice_advances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target, link_ref="x")
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "a.py").write_text("x = 1\n", encoding="utf-8")
+            git_ops.commit("item-1", "first slice", target=target)
+            self.assertEqual(
+                git_ops.task_size("item-1", target=target).lines_changed,
+                git_ops.slice_size("item-1", target=target).lines_changed,
+            )
+
+    def test_advancing_narrows_the_slice_measurement_but_not_the_total(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target, link_ref="x", slices=["a", "b"])
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "a.py").write_text("x = 1\ny = 2\n", encoding="utf-8")
+            first_head = git_ops.commit("item-1", "slice a", target=target)
+            task.advance_slice("item-1", first_head, target=target)
+            (target / "b.py").write_text("z = 3\n", encoding="utf-8")
+            git_ops.commit("item-1", "slice b", target=target)
+
+            sliced = git_ops.slice_size("item-1", target=target)
+            total = git_ops.task_size("item-1", target=target)
+        # The second slice added one file; the task has landed two.
+        self.assertEqual(1, sliced.files_changed)
+        self.assertEqual(2, total.files_changed)
+        self.assertLess(sliced.lines_changed, total.lines_changed)
+
+    def test_slice_size_falls_back_to_the_task_without_round_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "a.py").write_text("x = 1\n", encoding="utf-8")
+            git_ops.commit("item-1", "no round state", target=target)
+            self.assertEqual(
+                git_ops.task_size("item-1", target=target),
+                git_ops.slice_size("item-1", target=target),
+            )
+
+
 class ClosingLineFromSliceListTests(unittest.TestCase):
     """ADR-0035, slice D2: the issue belongs to the task, so only the task's
     final slice closes it. The sibling-stack form (ADR-0034) still counts."""

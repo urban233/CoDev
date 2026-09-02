@@ -843,14 +843,17 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
 
 
 def _size_payload(task_id: str, *, target: Path) -> dict[str, Any] | None:
-    """A task's running size as JSON-ready fields, or None when it cannot be
-    measured. Never raises: a measurement failure must not block the commit
-    or pull-request path it decorates."""
+    """The running size of the slice being worked, plus the task's uncapped
+    total, or None when neither can be measured. Never raises: a measurement
+    failure must not block the commit or pull-request path it decorates."""
     try:
-        size = git_ops_module.task_size(task_id, target=target)
+        size = git_ops_module.slice_size(task_id, target=target)
+        total = git_ops_module.task_size(task_id, target=target)
     except git_ops_module.GitOpsError:
         return None
     return {
+        "task_total_lines_changed": total.lines_changed,
+        "task_total_files_changed": total.files_changed,
         "lines_changed": size.lines_changed,
         "files_changed": size.files_changed,
         "max_lines": size.max_lines,
@@ -867,10 +870,19 @@ def _print_size_report(task_id: str, *, target: Path) -> None:
         return
     status_word = "over budget" if size["over_budget"] else "within budget"
     print(
-        f"Size: {size['lines_changed']} line(s) (budget {size['max_lines']}), "
-        f"{size['files_changed']} file(s) (budget {size['max_files']}) -- "
-        f"{status_word}"
+        f"Slice size: {size['lines_changed']} line(s) "
+        f"(budget {size['max_lines']}), {size['files_changed']} file(s) "
+        f"(budget {size['max_files']}) -- {status_word}"
     )
+    if (
+        size["task_total_lines_changed"] != size["lines_changed"]
+        or size["task_total_files_changed"] != size["files_changed"]
+    ):
+        print(
+            f"Task total: {size['task_total_lines_changed']} line(s), "
+            f"{size['task_total_files_changed']} file(s) across every landed "
+            "slice -- reported, not capped"
+        )
 
 
 def _emit_json(payload: Any) -> int:
@@ -924,7 +936,9 @@ def _task_sizes(
     ]
     sizes: dict[str, dict[str, int | bool]] = {}
     for task_id in in_progress_ids:
-        size = git_ops_module.task_size(task_id, target=target)
+        # The budget bounds one reviewer's reading, and a reviewer reads one
+        # pull request -- so status reports the slice, not the task total.
+        size = git_ops_module.slice_size(task_id, target=target)
         sizes[task_id] = {
             "lines_changed": size.lines_changed,
             "files_changed": size.files_changed,
@@ -1038,7 +1052,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 paths = ", ".join(overlap["paths"])
                 print(f"  {items}: {paths}")
         if args.verbose and sizes:
-            print("Task sizes (non-generated changed lines/files vs. budget):")
+            print("Slice sizes (non-generated changed lines/files vs. budget):")
             for task_id in sorted(sizes):
                 size = sizes[task_id]
                 flag = " (over budget)" if size["over_budget"] else ""
@@ -1462,7 +1476,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.task_command == "size":
-        size = git_ops_module.task_size(args.id, target=target)
+        size = git_ops_module.slice_size(args.id, target=target)
         if args.json:
             print(
                 json.dumps(
