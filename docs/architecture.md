@@ -118,6 +118,35 @@ stops being tracked the same way an ordinary upstream removal does.
   (see [ADR-0001](adr/0001-work-lifecycle-invariant.md) and
   [ADR-0023](adr/0023-work-item-renamed-to-task.md)).
 
+## Navigator coverage
+
+CoDev's claim about its own developer experience is that a developer directs
+work in conversation rather than by typing commands. That claim was asserted
+for as long as it existed, because nothing measured it.
+
+**Navigator coverage** is the measure: the number of steps in a complete task
+lifecycle where `codev next` does not name the single action that advances the
+work. A developer types a command for exactly one reason -- the agent did not
+know what to run -- and the agent knows what to run when, and only when, the
+navigator tells it (ADR-0036 rule three). Every uncovered step is a step where
+the agent must fall back on the procedural prose in its role file.
+
+`tests/test_navigator_coverage.py` walks one single-slice lifecycle against a
+real repository and a real remote, asking the navigator before every
+transition, and asserts the result against
+`tests/navigator-coverage-baseline.json`. A regression fails the build; so does
+an unrecorded improvement, so that every gain arrives as a reviewable baseline
+edit rather than a silent ratchet. The baseline records a reason per uncovered
+step, and a test asserts that the reasons and the uncovered list stay in step
+with each other.
+
+The measure is a proxy and the test says so: coverage at zero does not prove a
+developer typed nothing, since an agent may still hand a command over and a
+human still makes every decision the loop stops for. Zero proves that nothing
+in the lifecycle *forces* a developer to supply a command, which is the part
+CoDev controls. The definition of a step lives in that module's docstring; a
+baseline recorded under a different definition is not comparable.
+
 ## Compatibility
 
 Lock schema changes require a migration before managed files are touched.
