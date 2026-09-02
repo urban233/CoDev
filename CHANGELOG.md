@@ -3,6 +3,36 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **`codev task check` renames two reasons** (ADR-0037): `ok_approve` becomes
+  `ok_machine_review_complete`, and `ok_approve_with_deferrals` becomes
+  `ok_machine_review_complete_with_deferrals`. Neither ever meant a human had
+  approved anything -- both mean the machine gates are satisfied -- and in a
+  tool whose pitch is that generated code is not merged as slop, the old name
+  invited exactly that conflation. A returned reason is part of the machine
+  contract (ADR-0036), so this is an observable change for anything reading
+  `codev task check --json`.
+- `codev git mark-ready` accepts the two new reasons in place of the old ones.
+
+### Deprecated
+- For this release only, `codev task check` also reports a renamed reason's
+  former name: `--json` adds a `deprecated_reason` field, and the
+  human-readable form prints a one-line note. Both are removed in the next
+  release. Update any script matching on `ok_approve` or
+  `ok_approve_with_deferrals` now.
+
+### Added
+- `codev git` and the remaining `codev task` verbs accept `--json`, so an agent
+  reads the values a following command consumes rather than parsing prose
+  (ADR-0036). `codev git commit --json` reports the `head` that `codev task
+  check --head` needs.
+- `codev task check` reads round-schema v4 while still writing v3 (ADR-0035),
+  the first step toward the slice becoming the unit of execution. A task
+  recorded before v4 reads as a task holding exactly one slice named for
+  itself; no file on disk is rewritten.
+
 ## [0.5.0] - 2026-08-31
 
 ### Added

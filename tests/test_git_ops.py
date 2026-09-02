@@ -973,7 +973,8 @@ class OpenPrTests(unittest.TestCase):
                 target=target,
             )
             self.assertEqual(
-                "ok_approve", task.check("item-1", base, target=target).reason
+                "ok_machine_review_complete",
+                task.check("item-1", base, target=target).reason,
             )
 
             with patch.object(
@@ -1591,7 +1592,7 @@ class MarkReadyTests(unittest.TestCase):
                 target=target,
             )
             self.assertEqual(
-                "ok_approve_with_deferrals",
+                "ok_machine_review_complete_with_deferrals",
                 task.check("item-1", base, target=target).reason,
             )
 

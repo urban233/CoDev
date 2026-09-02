@@ -48,6 +48,60 @@ from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
 
 
+class DeprecatedReasonSurfaceTests(unittest.TestCase):
+    """ADR-0037: `codev task check` reports the former name of a renamed
+    reason for one release, in both output modes."""
+
+    def _check(self, target: Path, reason: str, extra: list[str]) -> str:
+        output = StringIO()
+        with (
+            patch(
+                "codev_workflow.cli.task_module.check",
+                return_value=CheckResult(True, reason, "ready"),
+            ),
+            patch("codev_workflow.cli.task_module.triage_note", return_value=None),
+            redirect_stdout(output),
+        ):
+            main(
+                [
+                    "task",
+                    "check",
+                    "--id",
+                    "item-1",
+                    "--head",
+                    "head-sha",
+                    "--target",
+                    str(target),
+                    *extra,
+                ]
+            )
+        return output.getvalue()
+
+    def test_json_carries_the_former_name_for_a_renamed_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            payload = json.loads(
+                self._check(target, "ok_machine_review_complete", ["--json"])
+            )
+        self.assertEqual("ok_machine_review_complete", payload["reason"])
+        self.assertEqual("ok_approve", payload["deprecated_reason"])
+
+    def test_json_omits_the_field_for_a_reason_that_was_never_renamed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            payload = json.loads(self._check(target, "ok_continue", ["--json"]))
+        self.assertNotIn("deprecated_reason", payload)
+
+    def test_human_output_names_the_rename_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            text = self._check(target, "ok_machine_review_complete", [])
+            untouched = self._check(target, "ok_continue", [])
+        self.assertIn("ok_machine_review_complete: ready", text)
+        self.assertIn("was named 'ok_approve' before", text)
+        self.assertNotIn("before", untouched)
+
+
 class TaskJsonSurfaceTests(unittest.TestCase):
     """ADR-0036, slice A2: the task verbs that previously reported only in
     prose now hand back what an agent recorded, and the human-readable

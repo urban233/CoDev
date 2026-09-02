@@ -43,6 +43,7 @@ from codev_workflow.task import (
     TaskError,
     check,
     close,
+    deprecated_reason_for,
     describe,
     describe_all,
     escalations_text,
@@ -102,6 +103,39 @@ def _blocking(location: str, category: str) -> dict[str, Any]:
         "rank": 1,
         "summary": "needs a fix",
     }
+
+
+class DeprecatedReasonAliasTests(unittest.TestCase):
+    """ADR-0037: a returned reason is part of the machine contract, so the
+    rename reports the former name for one release rather than silently
+    ceasing to match a pinned consumer."""
+
+    def test_only_the_two_renamed_reasons_have_a_former_name(self) -> None:
+        self.assertEqual(
+            "ok_approve", deprecated_reason_for("ok_machine_review_complete")
+        )
+        self.assertEqual(
+            "ok_approve_with_deferrals",
+            deprecated_reason_for("ok_machine_review_complete_with_deferrals"),
+        )
+        for untouched in ("ok_continue", "stop_drift", "ok_ready_for_pr"):
+            self.assertIsNone(deprecated_reason_for(untouched))
+
+    def test_the_old_names_are_no_longer_returned_by_check(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, entry="direct-review")
+            record_reviewer(
+                "item-1",
+                1,
+                "head-sha",
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            result = check("item-1", "head-sha", target=target)
+        self.assertEqual("ok_machine_review_complete", result.reason)
 
 
 class SchemaVersionFourTests(unittest.TestCase):
@@ -221,7 +255,7 @@ class SchemaVersionFourReplayTests(unittest.TestCase):
         )
         return "head-sha"
 
-    def _ok_approve_with_deferrals(self, target: Path) -> str:
+    def _ok_machine_review_complete_with_deferrals(self, target: Path) -> str:
         start("item-1", "base-sha", target=target, entry="direct-review")
         finding = _blocking("a.py:1", "correctness")
         record_reviewer(
@@ -255,7 +289,7 @@ class SchemaVersionFourReplayTests(unittest.TestCase):
         )
         return "head-sha"
 
-    def _ok_approve(self, target: Path) -> str:
+    def _ok_machine_review_complete(self, target: Path) -> str:
         start("item-1", "base-sha", target=target, entry="direct-review")
         record_reviewer(
             "item-1",
@@ -340,9 +374,11 @@ class SchemaVersionFourReplayTests(unittest.TestCase):
             "ok_continue": self._ok_continue,
             "stop_round_cap": self._stop_round_cap,
             "ok_waiting_on_triage": self._ok_waiting_on_triage,
-            "ok_approve_with_deferrals": self._ok_approve_with_deferrals,
+            "ok_machine_review_complete_with_deferrals": (
+                self._ok_machine_review_complete_with_deferrals
+            ),
             "stop_incomplete_coverage": self._stop_incomplete_coverage,
-            "ok_approve": self._ok_approve,
+            "ok_machine_review_complete": self._ok_machine_review_complete,
             "ok_blocked_missing_evidence": self._ok_blocked_missing_evidence,
             "stop_repeated_finding": self._stop_repeated_finding,
             "stop_scope_expansion": self._stop_scope_expansion,
@@ -770,7 +806,9 @@ class CheckTests(unittest.TestCase):
                 target=target,
             )
             result = check("item-1", "base-sha", target=target)
-        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+        self.assertEqual(
+            CheckResult(True, "ok_machine_review_complete", result.message), result
+        )
 
     def test_ready_for_approval_with_missing_dimension_stops(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1829,7 +1867,10 @@ class AllBlockingDeferredTests(unittest.TestCase):
             )
             result = check("item-1", "head-3", target=target)
         self.assertEqual(
-            CheckResult(True, "ok_approve_with_deferrals", result.message), result
+            CheckResult(
+                True, "ok_machine_review_complete_with_deferrals", result.message
+            ),
+            result,
         )
 
     def test_deferring_a_repeated_finding_also_clears(self) -> None:
@@ -1853,7 +1894,7 @@ class AllBlockingDeferredTests(unittest.TestCase):
                 target=target,
             )
             result = check("item-1", "head-3", target=target)
-        self.assertEqual("ok_approve_with_deferrals", result.reason)
+        self.assertEqual("ok_machine_review_complete_with_deferrals", result.reason)
 
     def test_incomplete_coverage_still_blocks_after_deferral(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1948,7 +1989,7 @@ class AllBlockingDeferredTests(unittest.TestCase):
             )
             record_triage("item-1", 3, {"dispositions": {}}, target=target)
             result = check("item-1", "head-3", target=target)
-        self.assertEqual("ok_approve_with_deferrals", result.reason)
+        self.assertEqual("ok_machine_review_complete_with_deferrals", result.reason)
 
     def test_deferred_finding_is_visible_in_log_text(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2013,7 +2054,9 @@ class CoverageCarryForwardTests(unittest.TestCase):
     bookkeeping the recording agent has to get right on its own. See
     docs/adr/0011-mechanize-coverage-carry-forward.md."""
 
-    def test_ok_approve_carries_forward_coverage_from_an_earlier_round(self) -> None:
+    def test_ok_machine_review_complete_carries_forward_coverage_from_an_earlier_round(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
@@ -2039,7 +2082,9 @@ class CoverageCarryForwardTests(unittest.TestCase):
                 target=target,
             )
             result = check("item-1", "new-head", target=target)
-        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+        self.assertEqual(
+            CheckResult(True, "ok_machine_review_complete", result.message), result
+        )
 
     def test_a_dimension_never_recorded_in_any_round_still_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2097,7 +2142,9 @@ class CoverageCarryForwardTests(unittest.TestCase):
         self.assertEqual("stop_incomplete_coverage", result.reason)
         self.assertIn("rollout", result.message)
 
-    def test_ok_approve_with_deferrals_also_carries_forward_coverage(self) -> None:
+    def test_ok_machine_review_complete_with_deferrals_also_carries_forward_coverage(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
@@ -2152,7 +2199,10 @@ class CoverageCarryForwardTests(unittest.TestCase):
             )
             result = check("item-1", "head-3", target=target)
         self.assertEqual(
-            CheckResult(True, "ok_approve_with_deferrals", result.message), result
+            CheckResult(
+                True, "ok_machine_review_complete_with_deferrals", result.message
+            ),
+            result,
         )
 
 
@@ -2186,7 +2236,7 @@ class WaiverTests(unittest.TestCase):
             with self.assertRaises(TaskError):
                 waive("item-1", "rollout", "reason", target=target)
 
-    def test_waived_dimension_resolves_ok_approve_with_no_specialist_run(
+    def test_waived_dimension_resolves_machine_review_complete_with_no_specialist_run(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2215,7 +2265,9 @@ class WaiverTests(unittest.TestCase):
                 "item-1", "rollout", "doc-only change, no rollout risk", target=target
             )
             result = check("item-1", "base-sha", target=target)
-        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+        self.assertEqual(
+            CheckResult(True, "ok_machine_review_complete", result.message), result
+        )
 
     def test_later_real_verdict_overrides_an_earlier_waiver(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2288,7 +2340,9 @@ class WaiverTests(unittest.TestCase):
                 target=target,
             )
             result = check("item-1", "new-head", target=target)
-        self.assertEqual(CheckResult(True, "ok_approve", result.message), result)
+        self.assertEqual(
+            CheckResult(True, "ok_machine_review_complete", result.message), result
+        )
 
     def test_log_text_renders_waivers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

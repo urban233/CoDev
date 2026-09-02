@@ -1299,18 +1299,23 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "check":
         result = task_module.check(args.id, args.head, target=target)
+        former = task_module.deprecated_reason_for(result.reason)
         if args.json:
-            print(
-                json.dumps(
-                    {
-                        "ok": result.ok,
-                        "reason": result.reason,
-                        "message": result.message,
-                    }
-                )
-            )
+            payload: dict[str, Any] = {
+                "ok": result.ok,
+                "reason": result.reason,
+                "message": result.message,
+            }
+            if former is not None:
+                payload["deprecated_reason"] = former
+            print(json.dumps(payload))
         else:
             print(f"{result.reason}: {result.message}")
+            if former is not None:
+                print(
+                    f"note: this reason was named {former!r} before; that name "
+                    "is reported for one release and then removed"
+                )
             note = task_module.triage_note(args.id, target=target)
             if note:
                 print(note)
