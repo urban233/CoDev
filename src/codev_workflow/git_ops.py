@@ -79,6 +79,31 @@ def branch_name_for(task_id: str) -> str:
     return f"{_TASK_BRANCH_PREFIX}{task_id}"
 
 
+# A flat separator, not a path segment. Git stores refs as files, so
+# `codev/auth` and `codev/auth/schema` cannot both exist -- confirmed in both
+# creation orders:
+#
+#   fatal: cannot lock ref 'refs/heads/codev/auth/schema':
+#          'refs/heads/codev/auth' exists
+#
+# That rules out nesting precisely for the one-slice-then-many case this
+# feature is for. `--` is legal in a ref and cannot appear in a task or slice
+# id, which `task._validate_id` restricts to [A-Za-z0-9._-] with no leading
+# separator.
+_SLICE_BRANCH_SEPARATOR = "--"
+
+
+def branch_name_for_slice(task_id: str, slice_id: str) -> str:
+    """The branch a slice's work lives on.
+
+    A task holding exactly one slice named for itself keeps the branch name
+    it had before slices existed, so nothing about a single-pull-request
+    task changes."""
+    if slice_id == task_id:
+        return branch_name_for(task_id)
+    return f"{branch_name_for(task_id)}{_SLICE_BRANCH_SEPARATOR}{slice_id}"
+
+
 def _task_dir(target: Path, task_id: str) -> Path:
     task._validate_id(task_id)
     return target / Path(task.TASK_DIR_RELATIVE.as_posix()) / task_id
@@ -132,6 +157,19 @@ def _run_git(args: list[str], *, cwd: Path) -> str:
         )
         raise GitOpsError(f"git {' '.join(args)} failed: {detail}")
     return completed.stdout.strip()
+
+
+def _run_git_raw(args: list[str], *, cwd: Path) -> str:
+    """`_run_git` without the trailing/leading strip, for output whose
+    leading whitespace is significant -- porcelain status, notably."""
+    completed = subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
+    )
+    if completed.returncode != 0:
+        raise GitOpsError(
+            completed.stderr.strip() or completed.stdout.strip() or "unknown git error"
+        )
+    return completed.stdout
 
 
 def _run_gh(args: list[str], *, cwd: Path) -> str:
@@ -643,10 +681,21 @@ def create_branch(
     # branch is created.
     pinned_base = _run_git(["rev-parse", resolved_base], cwd=target)
 
-    branch = branch_name_for(task_id)
+    try:
+        slice_id = task.current_slice(task_id, target=target)
+    except (task.TaskError, KeyError):
+        slice_id = task_id
+    branch = branch_name_for_slice(task_id, slice_id)
     _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = {"branch": branch, "base_snapshot": pinned_base}
+    # The top-level branch/base_snapshot stay the first slice's, so every
+    # reader that predates slices keeps working unchanged; `slice_branches`
+    # is the per-slice record later slices are added to.
+    payload: dict[str, Any] = {
+        "branch": branch,
+        "base_snapshot": pinned_base,
+        "slice_branches": {slice_id: {"branch": branch, "base_snapshot": pinned_base}},
+    }
     if stack_on is not None:
         payload["parent_task"] = stack_on
     state_path.write_text(
@@ -824,8 +873,98 @@ def _measure(task_id: str, base: str, *, target: Path) -> TaskSize:
     return TaskSize(lines_changed, files_changed, max_lines, max_files)
 
 
+def slice_branches(task_id: str, *, target: Path) -> dict[str, dict[str, str]]:
+    """Every slice of this task that has a branch, by slice id. A task
+    recorded before slices reads as one entry named for the task."""
+    state = _load_git_state(task_id, target=target)
+    recorded = state.get("slice_branches")
+    if isinstance(recorded, dict):
+        return {str(k): dict(v) for k, v in recorded.items()}
+    return {
+        task_id: {
+            "branch": state["branch"],
+            "base_snapshot": state["base_snapshot"],
+        }
+    }
+
+
+def branch_for_slice(task_id: str, slice_id: str, *, target: Path) -> str | None:
+    """The recorded branch for one slice, or None when it has none yet."""
+    entry = slice_branches(task_id, target=target).get(slice_id)
+    return entry["branch"] if entry else None
+
+
+def start_slice_branch(task_id: str, slice_id: str, *, target: Path) -> str:
+    """Create and check out the branch for a slice that does not have one,
+    based on the previous slice's head (ADR-0035).
+
+    A slice is one pull request's worth of work, so the next one starts from
+    where the previous one currently sits -- not from the default branch, and
+    not waiting for it to merge. That is what makes a stack a stack.
+    """
+    state = _load_git_state(task_id, target=target)
+    recorded = slice_branches(task_id, target=target)
+    if slice_id in recorded:
+        raise GitOpsError(
+            f"slice {slice_id!r} of task {task_id!r} already has branch "
+            f"{recorded[slice_id]['branch']!r}"
+        )
+    order = task.slice_ids(task_id, target=target)
+    if slice_id not in order:
+        raise GitOpsError(f"task {task_id!r} holds no slice {slice_id!r}")
+    previous = [s for s in order[: order.index(slice_id)] if s in recorded]
+    if not previous:
+        raise GitOpsError(
+            f"cannot start slice {slice_id!r}: no earlier slice of task "
+            f"{task_id!r} has a branch to stack it on"
+        )
+    parent_branch = recorded[previous[-1]]["branch"]
+    dirty = _dirty_product_paths(target)
+    if dirty:
+        raise GitOpsError(
+            "refusing to start the next slice: the worktree has uncommitted "
+            f"changes ({', '.join(sorted(dirty)[:5])})"
+        )
+    pinned_base = _run_git(["rev-parse", parent_branch], cwd=target)
+    branch = branch_name_for_slice(task_id, slice_id)
+    _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
+    state.setdefault("slice_branches", {})[slice_id] = {
+        "branch": branch,
+        "base_snapshot": pinned_base,
+    }
+    _git_state_path(target, task_id).write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return branch
+
+
 def own_branch(task_id: str, *, target: Path) -> str:
-    return cast(str, _load_git_state(task_id, target=target)["branch"])
+    """The branch the task's current slice is on.
+
+    For a task holding one slice this is the branch it always was. For a
+    sliced task it follows `current_slice`, so commit, push, and open-pr act
+    on the slice being worked rather than on whichever branch happened to be
+    recorded first.
+    """
+    state = _load_git_state(task_id, target=target)
+    try:
+        slice_id = task.current_slice(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return cast(str, state["branch"])
+    recorded = slice_branches(task_id, target=target).get(slice_id)
+    if recorded is not None:
+        return recorded["branch"]
+    return cast(str, state["branch"])
+
+
+def slice_base_snapshot(task_id: str, *, target: Path) -> str | None:
+    """The commit the current slice's branch was cut from, or None."""
+    try:
+        slice_id = task.current_slice(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return None
+    recorded = slice_branches(task_id, target=target).get(slice_id)
+    return recorded["base_snapshot"] if recorded else None
 
 
 def parent_task_id(task_id: str, *, target: Path) -> str | None:
@@ -887,10 +1026,15 @@ def _dirty_paths(target: Path) -> list[str]:
     # -uall: list files inside an untracked directory individually rather
     # than collapsing the whole directory into one entry -- required for
     # per-file classification against the managed-paths set below.
-    status = _run_git(["status", "--porcelain", "-uall"], cwd=target)
+    # Not _run_git: it strips the output, and porcelain's status field is
+    # two columns wide with a leading space for a file that is modified but
+    # not staged (" M path"). Stripping ate that space, so line[3:] dropped
+    # the first character of the first path -- ".codev/..." was read as
+    # "codev/...", which then failed every prefix check against it.
+    status = _run_git_raw(["status", "--porcelain", "-uall"], cwd=target)
     paths: list[str] = []
     for line in status.splitlines():
-        if not line:
+        if not line.strip():
             continue
         path = line[3:]
         if " -> " in path:
@@ -1088,6 +1232,28 @@ def pull_request_state(branch: str, *, target: Path) -> str | None:
     return _pr_state(branch, target=target)
 
 
+def _previous_slice_branch(task_id: str, *, target: Path) -> str | None:
+    """The branch of the slice before the one being worked, when that slice
+    has not merged yet -- the base a stacked slice's pull request targets."""
+    try:
+        order = task.slice_ids(task_id, target=target)
+        current = task.current_slice(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return None
+    if current not in order:
+        return None
+    recorded = slice_branches(task_id, target=target)
+    earlier = [s for s in order[: order.index(current)] if s in recorded]
+    if not earlier:
+        return None
+    branch = recorded[earlier[-1]]["branch"]
+    # Once the earlier slice has landed, the child belongs on the trunk --
+    # targeting a merged branch would show an empty or misleading diff.
+    if _pr_state(branch, target=target) == "MERGED":
+        return None
+    return branch
+
+
 def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
     """The recorded parent's branch, when this task was created with
     --stack-on and that parent's own pull request is still open -- None
@@ -1140,7 +1306,12 @@ def open_pr(
             f"refusing to open a pull request: {branch!r} already has one open "
             f"at {existing} -- use `codev git mark-ready` instead"
         )
-    resolved_base = _stacked_pr_base(task_id, target=target)
+    # A slice stacks on the slice before it (ADR-0035) ahead of the older
+    # sibling-task form (ADR-0034), which stays supported for stacks created
+    # that way.
+    resolved_base = _previous_slice_branch(task_id, target=target) or _stacked_pr_base(
+        task_id, target=target
+    )
     if resolved_base is None:
         resolved_base = _resolve_pr_base(base, target=target)
     final_body = (
