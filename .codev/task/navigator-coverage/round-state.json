@@ -1,6 +1,7 @@
 {
   "base_snapshot": "90cf9f4",
   "current_round": 1,
+  "current_slice": "navigator-coverage",
   "description": null,
   "entry": "direct-review",
   "link_ref": "https://github.com/urban233/CoDev/issues/32",
@@ -8,17 +9,22 @@
     "inner": 2,
     "outer": 2
   },
+  "outcome": "approved",
   "owner": "urban233",
-  "round_schema_version": 3,
+  "round_schema_version": 4,
   "rounds": [
     {
       "builder": null,
       "phase": "outer",
       "reviewer": null,
-      "round": 1
+      "round": 1,
+      "slice_id": "navigator-coverage"
     }
   ],
-  "status": "in_progress",
+  "slices": [
+    "navigator-coverage"
+  ],
+  "status": "closed",
   "summary": "Measure navigator coverage before changing the developer experience",
   "task_id": "navigator-coverage"
 }
