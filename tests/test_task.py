@@ -38,9 +38,10 @@ from codev_workflow.task import (
     REQUIRED_COVERAGE_DIMENSIONS,
     ROUND_SCHEMA_VERSION,
     SUPPORTED_ROUND_SCHEMA_VERSIONS,
-    WRITTEN_ROUND_SCHEMA_VERSION,
     CheckResult,
     TaskError,
+    _load,
+    _save,
     check,
     close,
     deprecated_reason_for,
@@ -80,15 +81,16 @@ def _read_state(target: Path, task_id: str) -> dict[str, Any]:
     return document
 
 
-def _rewrite_as_v4(target: Path, task_id: str) -> None:
-    """Convert a written v3 document into the equivalent v4 one, exactly as
-    slice D1's writers eventually will."""
+def _rewrite_as_v3(target: Path, task_id: str) -> None:
+    """Downgrade a written v4 document to the v3 form a task recorded before
+    this schema still has on disk. Slice D1 writes v4, so this is now the
+    direction backward compatibility runs in."""
     path = _state_path(target, task_id)
     document = json.loads(path.read_text(encoding="utf-8"))
-    document["round_schema_version"] = ROUND_SCHEMA_VERSION
-    document["slices"] = [task_id]
+    document["round_schema_version"] = 3
+    document.pop("slices", None)
     for round_entry in document["rounds"]:
-        round_entry["slice_id"] = task_id
+        round_entry.pop("slice_id", None)
     path.write_text(
         json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -142,28 +144,74 @@ class SchemaVersionFourTests(unittest.TestCase):
     """ADR-0035, slice D-prep-1. The reader understands v4; the writers still
     emit v3, so a revert of this slice leaves nothing on disk to migrate."""
 
-    def test_writes_are_still_version_three(self) -> None:
+    def test_writes_are_version_four(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             record_builder("item-1", 1, "head-sha", {"validation": "ok"}, target=target)
             document = _read_state(target, "item-1")
-        self.assertEqual(WRITTEN_ROUND_SCHEMA_VERSION, document["round_schema_version"])
-        self.assertEqual(3, WRITTEN_ROUND_SCHEMA_VERSION)
+        self.assertEqual(ROUND_SCHEMA_VERSION, document["round_schema_version"])
+        self.assertEqual(4, ROUND_SCHEMA_VERSION)
 
-    def test_no_write_leaks_a_version_four_field_onto_disk(self) -> None:
-        """The property that keeps this slice cleanly revertible."""
+    def test_every_written_round_records_the_slice_it_belongs_to(self) -> None:
+        """Rounds opened later must carry the identity too, not only round 1."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1",
+                1,
+                "base-sha",
+                [_blocking("a.py:1", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_builder("item-1", 2, "base-sha", {"validation": "ok"}, target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual(["item-1"], document["slices"])
+        self.assertEqual(2, len(document["rounds"]))
+        for round_entry in document["rounds"]:
+            self.assertEqual("item-1", round_entry["slice_id"])
+
+    def test_a_reopened_round_records_the_slice_too(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_reviewer(
+                "item-1", 1, "base-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            reopen("item-1", "new-head", "continuing", target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual("item-1", document["rounds"][-1]["slice_id"])
+
+    def test_loading_and_saving_a_v4_document_is_byte_identical(self) -> None:
+        """No strip remains between memory and disk, so a load-then-save round
+        trip must not move a single byte -- the gap the review of slice
+        D-prep-1 flagged as untested."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base-sha", target=target)
             record_builder("item-1", 1, "head-sha", {"validation": "ok"}, target=target)
-            record_reviewer(
-                "item-1", 1, "head-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
-            )
+            path = _state_path(target, "item-1")
+            before = path.read_bytes()
+            _save("item-1", _load("item-1", target=target), target=target)
+            after = path.read_bytes()
+        self.assertEqual(before, after)
+
+    def test_a_v3_document_is_upgraded_in_place_when_next_written(self) -> None:
+        """The migration is a defaulted field on read plus an ordinary write:
+        a legacy task becomes v4 the next time anything records against it."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            _rewrite_as_v3(target, "item-1")
+            self.assertEqual(3, _read_state(target, "item-1")["round_schema_version"])
+            record_builder("item-1", 1, "head-sha", {"validation": "ok"}, target=target)
             document = _read_state(target, "item-1")
-        self.assertNotIn("slices", document)
-        for round_entry in document["rounds"]:
-            self.assertNotIn("slice_id", round_entry)
+        self.assertEqual(4, document["round_schema_version"])
+        self.assertEqual(["item-1"], document["slices"])
+        self.assertEqual("item-1", document["rounds"][0]["slice_id"])
 
     def test_a_version_three_task_reads_as_one_slice_named_for_itself(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -201,8 +249,8 @@ class SchemaVersionFourTests(unittest.TestCase):
 
 
 class SchemaVersionFourReplayTests(unittest.TestCase):
-    """Every `check` outcome must read identically from a v3 and a v4
-    document. This is the evidence that the schema change is invisible."""
+    """Every `check` outcome must read identically from a v4 document and the
+    v3 one a task recorded before this schema still has on disk."""
 
     def _ok_waiting_on_reviewer(self, target: Path) -> str:
         start("item-1", "base-sha", target=target)
@@ -390,12 +438,12 @@ class SchemaVersionFourReplayTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
                     target = Path(directory)
                     head = build(target)
-                    from_v3 = check("item-1", head, target=target)
-                    self.assertEqual(expected_reason, from_v3.reason)
-                    _rewrite_as_v4(target, "item-1")
                     from_v4 = check("item-1", head, target=target)
-                self.assertEqual(from_v3, from_v4)
-                observed.add(from_v3.reason)
+                    self.assertEqual(expected_reason, from_v4.reason)
+                    _rewrite_as_v3(target, "item-1")
+                    from_v3 = check("item-1", head, target=target)
+                self.assertEqual(from_v4, from_v3)
+                observed.add(from_v4.reason)
         self.assertEqual(set(builders), observed)
 
 
