@@ -44,10 +44,12 @@ from codev_workflow.task import (
     _save,
     check,
     close,
+    current_slice,
     deprecated_reason_for,
     describe,
     describe_all,
     escalations_text,
+    is_final_slice,
     log_text,
     pr_description,
     read_escalations,
@@ -105,6 +107,46 @@ def _blocking(location: str, category: str) -> dict[str, Any]:
         "rank": 1,
         "summary": "needs a fix",
     }
+
+
+class SliceListTests(unittest.TestCase):
+    """ADR-0035, slice D2: the task owns the ordered slice list, and the
+    list is what says whether anything in the task still has to land."""
+
+    def test_a_single_slice_task_is_its_own_final_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            self.assertEqual("item-1", current_slice("item-1", target=target))
+            self.assertTrue(is_final_slice("item-1", "item-1", target=target))
+
+    def test_only_the_last_slice_of_a_multi_slice_task_is_final(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            path = _state_path(target, "item-1")
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["slices"] = ["item-1-a", "item-1-b", "item-1-c"]
+            path.write_text(json.dumps(document), encoding="utf-8")
+            self.assertFalse(is_final_slice("item-1", "item-1-a", target=target))
+            self.assertFalse(is_final_slice("item-1", "item-1-b", target=target))
+            self.assertTrue(is_final_slice("item-1", "item-1-c", target=target))
+
+    def test_current_slice_follows_the_most_recent_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            path = _state_path(target, "item-1")
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["slices"] = ["item-1-a", "item-1-b"]
+            document["rounds"][0]["slice_id"] = "item-1-b"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual("item-1-b", current_slice("item-1", target=target))
+            self.assertTrue(
+                is_final_slice(
+                    "item-1", current_slice("item-1", target=target), target=target
+                )
+            )
 
 
 class DeprecatedReasonAliasTests(unittest.TestCase):

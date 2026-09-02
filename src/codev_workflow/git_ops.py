@@ -381,10 +381,34 @@ def _has_recorded_child(task_id: str, *, target: Path) -> bool:
     return False
 
 
+def _more_slices_remain(task_id: str, *, target: Path) -> bool:
+    """True when this task holds a later slice than the one currently being
+    worked (ADR-0035). Read from the task's own ordered slice list, which is
+    the collection that owns the issue -- not inferred from sibling state.
+
+    Best-effort for the same reason `_has_recorded_child` is: this backs
+    pull-request body text, so unreadable round state means "cannot tell",
+    not an exception."""
+    try:
+        return not task.is_final_slice(
+            task_id, task.current_slice(task_id, target=target), target=target
+        )
+    except (task.TaskError, KeyError):
+        return False
+
+
 def _closing_line(issue_number: int, *, task_id: str, target: Path) -> str:
-    """`Part of #N` when this task has a recorded child (a later slice in
-    its stack still needs to land), `Closes #N` otherwise (ADR-0034)."""
-    if _has_recorded_child(task_id, target=target):
+    """`Part of #N` while anything in this task still has to land, `Closes
+    #N` on the piece that finishes it.
+
+    Two things can mean "more remains", and both are checked. The task's own
+    slice list is authoritative (ADR-0035): the issue belongs to the task,
+    so only its final slice closes it. A recorded child task is the older
+    sibling-stack form (ADR-0034), still supported for stacks created that
+    way."""
+    if _more_slices_remain(task_id, target=target) or _has_recorded_child(
+        task_id, target=target
+    ):
         return f"Part of #{issue_number}"
     return f"Closes #{issue_number}"
 

@@ -1217,6 +1217,26 @@ def slice_ids(task_id: str, *, target: Path) -> list[str]:
     return slices
 
 
+def current_slice(task_id: str, *, target: Path) -> str:
+    """The slice this task's most recent round belongs to (ADR-0035)."""
+    state = _load(task_id, target=target)
+    latest_slice: str = state["rounds"][-1]["slice_id"]
+    return latest_slice
+
+
+def is_final_slice(task_id: str, slice_id: str, *, target: Path) -> bool:
+    """True when `slice_id` is the last slice its task holds, so nothing
+    further in this task remains to land.
+
+    This is what decides `Closes #N` against `Part of #N` for a task whose
+    work is sliced. An unknown slice id is treated as final rather than
+    raising: this backs pull-request body text, and a wrong-but-conservative
+    `Closes` is a worse failure than an exception only if it is silent, so
+    callers that care check membership themselves."""
+    slices = slice_ids(task_id, target=target)
+    return not slices or slices[-1] == slice_id
+
+
 def log_records(task_id: str, *, target: Path) -> dict[str, Any]:
     """The task's full recorded state -- everything `log_text` renders, as
     data. ADR-0036: `codev task log --json` is the machine-readable form of
