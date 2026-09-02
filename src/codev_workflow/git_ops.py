@@ -1153,7 +1153,7 @@ def required_approvals(task_id: str, *, target: Path) -> int:
 def pull_request_state(branch: str, *, target: Path) -> str | None:
     """Public, read-only pull-request state for a branch: "OPEN", "CLOSED",
     "MERGED", or None when GitHub cannot answer -- no pull request, no
-    remote, or no credentials. The oracle treats None as "cannot tell" and
+    remote, or no credentials. The navigator treats None as "cannot tell" and
     falls back to a local recommendation rather than reporting a guess."""
     return _pr_state(branch, target=target)
 

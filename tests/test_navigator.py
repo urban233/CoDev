@@ -35,7 +35,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codev_workflow import git_ops, task
-from codev_workflow.oracle import _BY_CHECK_REASON, NextAction, next_action
+from codev_workflow.navigator import _BY_CHECK_REASON, NextAction, next_action
 
 
 def _init_repo(target: Path) -> str:

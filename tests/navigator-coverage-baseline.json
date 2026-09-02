@@ -12,7 +12,7 @@
   ],
   "reasons": {
     "begin_slice": "The navigator says 'codev git branch, then codev task start' -- two commands in one field, so it describes a procedure rather than naming the next action. Closed by `codev slice begin`.",
-    "dispatch_builder": "With round state open and no builder round recorded, check returns ok_waiting_on_reviewer and the navigator recommends dispatching the reviewer. The builder has not run yet, so it names the wrong actor. oracle.py's own comment on that entry admits the position cannot distinguish the two cases.",
+    "dispatch_builder": "With round state open and no builder round recorded, check returns ok_waiting_on_reviewer and the navigator recommends dispatching the reviewer. The builder has not run yet, so it names the wrong actor. navigator.py's own comment on that entry admits the position cannot distinguish the two cases.",
     "record_builder_round": "After the builder returns, the work advances by committing and recording the round, but the position is still ok_waiting_on_reviewer and the navigator names no command for it. Closed by `codev round close`.",
     "open_pull_request": "The navigator says 'codev git push, then codev git open-pr' -- two commands in one field. Closed by `codev slice publish`.",
     "dispatch_specialists": "At ok_ready_for_pr with a pull request already open, the navigator still recommends opening one; it names no specialist dispatch, so the entire outer loop's entry is unguided.",

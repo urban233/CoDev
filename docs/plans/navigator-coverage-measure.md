@@ -101,9 +101,9 @@ control, and it is the part that is broken today.
   `test_a_human_approval_is_read_from_the_pull_request`. The coverage test is a
   second walk over the same ground with a different assertion, not a new
   scenario.
-- `oracle.NextAction` already carries the field the measure reads: `command`,
+- `navigator.NextAction` already carries the field the measure reads: `command`,
   which is `str | None`. `None` is an uncovered step by construction.
-- `oracle._BY_CHECK_REASON` shows the gap is real before the test is written.
+- `navigator._BY_CHECK_REASON` shows the gap is real before the test is written.
   Two entries return `None` for `command` outright, and two more return a
   sentence containing *two* commands -- `"codev git push, then codev git
   open-pr"` and `"codev git branch, then codev task start"` -- which the
@@ -156,7 +156,7 @@ single-slice case except `advance-slice`, and adding it before the measure has
 proved useful is speculative.
 
 The walk includes the pre-task positions, which is where the largest gap is.
-`oracle.py:184` returns one recommendation for every state in which no task
+`navigator.py:184` returns one recommendation for every state in which no task
 exists, so the entire Understand/Design/Plan half of the lifecycle scores as
 uncovered today. That is the number the successor plan's package 3 exists to
 move, and it must be in the baseline or package 3 shows no improvement either.

@@ -45,7 +45,7 @@ from codev_workflow import gate as gate_module
 from codev_workflow import git_ops as git_ops_module
 from codev_workflow import health as health_module
 from codev_workflow import hook_log as hook_log_module
-from codev_workflow import oracle as oracle_module
+from codev_workflow import navigator as navigator_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -1340,7 +1340,7 @@ def _run_gate_command(args: argparse.Namespace) -> int:
 
 
 def _run_next_command(args: argparse.Namespace) -> int:
-    action = oracle_module.next_action(
+    action = navigator_module.next_action(
         target=args.target.resolve(),
         task_id=args.id,
         check_github=not args.no_github,

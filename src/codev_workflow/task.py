@@ -1219,7 +1219,7 @@ def waive_review(
     the point, not friction to be optimized away.
 
     Like `waive`, this never claims something happened that did not: the
-    oracle reports a distinct state, and the pull-request body says the
+    navigator reports a distinct state, and the pull-request body says the
     review was waived rather than omitting the line.
     """
     _validate_required_text("reason", reason)

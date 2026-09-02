@@ -73,7 +73,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codev_workflow import git_ops, oracle, task
+from codev_workflow import git_ops, navigator, task
 from tests.integration_support import Sandbox
 
 _BASELINE = Path(__file__).with_name("navigator-coverage-baseline.json")
@@ -120,7 +120,7 @@ class NavigatorCoverageTests(unittest.TestCase):
     # -- the walk ---------------------------------------------------------
 
     def _next_command(self) -> str | None:
-        action = oracle.next_action(target=self.work, check_github=True)
+        action = navigator.next_action(target=self.work, check_github=True)
         return action.command
 
     def _steps(self) -> list[tuple[Step, Callable[[], Any]]]:
@@ -282,14 +282,14 @@ class NavigatorCoverageTests(unittest.TestCase):
     def test_the_navigator_has_no_position_for_the_planning_phases(self) -> None:
         """The gap package 3 of the successor plan exists to close.
 
-        `oracle.next_action` collapses every state in which no task branch
+        `navigator.next_action` collapses every state in which no task branch
         exists into one recommendation, so the whole Understand/Design/Plan
         half of the lifecycle -- where a developer spends the moment they
         have the least guidance for -- scores as uncovered by construction.
         This is asserted rather than walked, because there is no position to
         walk to.
         """
-        action = oracle.next_action(target=self.work, check_github=False)
+        action = navigator.next_action(target=self.work, check_github=False)
         self.assertEqual("no task on this branch", action.position)
 
         baseline = json.loads(_BASELINE.read_text(encoding="utf-8"))

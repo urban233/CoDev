@@ -26,7 +26,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Resolves where a task stands and what should happen next.
+"""The navigator: where the work stands, and the one thing to do next.
+
+Named for the half of a driver/navigator pair that does not have hands on the
+keyboard. That is this module's entire job, and in a `pair` slice (ADR-0038)
+the metaphor is literal -- the developer drives and this says what is next.
 
 ADR-0036 rule three: phase-boundary guidance is computed, not conventional.
 The agent consults this at the start of every turn and after every state
