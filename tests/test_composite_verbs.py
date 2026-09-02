@@ -42,6 +42,7 @@ import json
 import os
 import unittest
 from contextlib import redirect_stdout
+from typing import Any
 
 from codev_workflow import cli, task
 from tests.integration_support import Sandbox
@@ -49,7 +50,7 @@ from tests.integration_support import Sandbox
 _GH_BODY_UNSUPPORTED = os.name == "nt"
 
 
-def run(*argv: str) -> tuple[int, dict]:
+def run(*argv: str) -> tuple[int, dict[str, Any]]:
     """Invoke the CLI as an agent does, and parse what it promises to emit."""
     buffer = io.StringIO()
     with redirect_stdout(buffer):
