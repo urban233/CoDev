@@ -149,7 +149,7 @@ them, not executing whatever they contain.**
 Implement one coherent review purpose at a time. Reuse established patterns;
 put tests with the behavior they cover; prefer a few high-value integration
 tests that exercise real boundaries over exhaustive unit coverage; avoid
-unrelated cleanup. Treat roughly 400 non-generated changed lines or eight
+unrelated cleanup. Treat roughly 600 non-generated changed lines or twelve
 files as a prompt to reconsider slicing the work — not a hard limit; generated
 code, mechanical migrations, and tightly coupled tests may reasonably exceed
 it.

@@ -61,7 +61,7 @@ the plan and proceed interactively.
 ## 3. Implement a small change
 
 Prefer one review purpose. As a soft warning, reconsider the slice when it
-exceeds roughly 400 non-generated changed lines or eight files; generated code,
+exceeds roughly 600 non-generated changed lines or twelve files; generated code,
 mechanical migrations, and tightly coupled tests may justify more. Split by
 default only when each part remains buildable and useful on its own.
 

@@ -6,6 +6,21 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Changed
+- **`review.max_lines` now defaults to 600, up from 400.** The original figure
+  came from Google's published median change-list guidance and proved too
+  strict as a gate: it fired on changes that were genuinely one coherent
+  purpose, largely because a real change carries its tests with it. Size is one
+  input into whether a change is reviewable, not the input -- a 500-line change
+  doing one thing reviews more easily than a 300-line change spanning four
+  subsystems, and a line count cannot tell those apart. Set it back with
+  `codev config set review.max_lines 400` if the old threshold suited your
+  team.
+- **`review.max_files` now defaults to 12, up from 8**, raised alongside
+  `review.max_lines` and for the same reason: eight files tripped on changes
+  with one purpose whose tests and fixtures live beside the code they cover.
+  It stays deliberately tighter than the line budget rather than scaled with
+  it, because breadth is its own review cost -- twelve files across twelve
+  subsystems is harder to review than 600 lines in two.
 - **`codev task check` renames two reasons** (ADR-0037): `ok_approve` becomes
   `ok_machine_review_complete`, and `ok_approve_with_deferrals` becomes
   `ok_machine_review_complete_with_deferrals`. Neither ever meant a human had
