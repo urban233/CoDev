@@ -55,6 +55,21 @@ from codev_workflow import git_ops, task
 
 
 @dataclass(frozen=True)
+class Option:
+    """One thing a human could choose here, and what choosing it means.
+
+    A blocked position used to return a single escalate command, which reads
+    as a dead end even though every stop has at least two honest ways out.
+    Carrying them as data lets an agent render a decision instead of a wall,
+    without moving any authority: choosing is still a human's job.
+    """
+
+    label: str
+    command: str | None
+    consequence: str
+
+
+@dataclass(frozen=True)
 class NextAction:
     """One computed position, with the single next step it implies."""
 
@@ -67,103 +82,330 @@ class NextAction:
     slice_id: str | None = None
     check_reason: str | None = None
     blocked: bool = False
+    options: tuple[Option, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class _Routing:
+    """What one `task.check` outcome implies. A record rather than a tuple
+    because the fifth field arrived and unpacking four-tuples in a dozen
+    places is how a fifth field gets skipped."""
+
+    recommendation: str
+    reason: str
+    command: str | None
+    blocked: bool
+    options: tuple[Option, ...] = ()
 
 
 # Every `task.check` outcome maps to exactly one next step. Keeping this a
 # table rather than a chain of conditionals is the point: the thirteen
 # outcomes already are the routing table, and a missing entry should be a
 # visible KeyError in a test rather than a silent fallthrough in a session.
-_BY_CHECK_REASON: dict[str, tuple[str, str, str | None, bool]] = {
-    # Covers both a freshly opened round and one whose builder has already
-    # reported, so the reason must not claim a builder round exists -- the
-    # discovery step for slice C1 caught it asserting exactly that on a task
-    # that had only just started.
-    "ok_waiting_on_reviewer": (
+_ESCALATE = "record the escalation and stop for a human"
+
+_BY_CHECK_REASON: dict[str, _Routing] = {
+    # Covers a round whose builder has already reported. The freshly-opened
+    # case no longer lands here: `_inner_loop_position` splits it out below,
+    # because telling an agent to review a round that has no work in it is
+    # naming the wrong actor, not merely being vague.
+    "ok_waiting_on_reviewer": _Routing(
         "review the round",
-        "this round has no reviewer verdict recorded yet",
+        "the builder's round is committed and recorded, and no reviewer "
+        "verdict has been recorded against it yet",
         "dispatch lightweight-reviewer against the current head",
         False,
     ),
-    "ok_continue": (
+    "ok_continue": _Routing(
         "correct the findings",
         "the reviewer asked for changes and the round cap allows another pass",
         "route the findings back to builder, then re-review",
         False,
     ),
-    "ok_ready_for_pr": (
-        "open the pull request",
+    "ok_ready_for_pr": _Routing(
+        "publish the slice",
         "the inner loop is satisfied for this slice",
-        "codev git push, then codev git open-pr",
+        "codev slice publish",
         False,
     ),
-    "ok_waiting_on_triage": (
+    "ok_waiting_on_triage": _Routing(
         "triage the blocking findings",
         "specialists recorded findings and a human must choose what is "
         "addressed this round",
         "codev task triage",
         False,
     ),
-    "ok_machine_review_complete": (
+    "ok_machine_review_complete": _Routing(
         "request human review",
         "every machine gate is satisfied -- this is not a human approval",
         "codev git mark-ready",
         False,
     ),
-    "ok_machine_review_complete_with_deferrals": (
+    "ok_machine_review_complete_with_deferrals": _Routing(
         "request human review",
         "every blocking finding was deferred with a reason; the machine gates "
         "are satisfied and the deferrals are on record",
         "codev git mark-ready",
         False,
     ),
-    "ok_blocked_missing_evidence": (
+    "ok_blocked_missing_evidence": _Routing(
         "supply the missing evidence",
         "the reviewer could not judge the change from what it was given",
         None,
         False,
+        (
+            Option(
+                "re-run the builder for evidence only",
+                "codev round close --role builder --evidence <file>",
+                "the same change, re-reported with the validation it omitted",
+            ),
+            Option(
+                "review it yourself instead",
+                None,
+                "you judge the diff directly; nothing further is automated",
+            ),
+        ),
     ),
-    "ok_outer_loop_needs_reopen": (
+    "ok_outer_loop_needs_reopen": _Routing(
         "confirm, then reopen",
         "this item is already in the outer phase with a recorded hand-off; "
         "re-entering must be a deliberate decision, not drift",
         "codev task reopen",
         True,
+        (
+            Option(
+                "reopen deliberately",
+                "codev task reopen",
+                "the outer phase re-enters and the reopen is on record",
+            ),
+            Option(
+                "leave it in the outer phase",
+                None,
+                "the recorded hand-off stands and nothing changes",
+            ),
+        ),
     ),
-    "stop_drift": (
+    "stop_drift": _Routing(
         "escalate: the snapshot moved",
         "code changed outside the tracked builder/reviewer flow",
         "codev task escalate --trigger stop_drift",
         True,
+        (
+            Option(
+                "absorb the change as pair work",
+                "codev task resume --reason <why>",
+                "the edits become part of the record and the round cap is "
+                "raised so the interruption costs no budget",
+            ),
+            Option(
+                "escalate",
+                "codev task escalate --trigger stop_drift",
+                _ESCALATE,
+            ),
+        ),
     ),
-    "stop_round_cap": (
+    "stop_round_cap": _Routing(
         "escalate: the round cap is reached",
         "this phase has spent its rounds without converging",
         "codev task escalate --trigger stop_round_cap",
         True,
+        (
+            Option(
+                "take the keyboard",
+                "codev task resume --reason <why>",
+                "pair work continues the slice and raises the cap by one",
+            ),
+            Option(
+                "escalate",
+                "codev task escalate --trigger stop_round_cap",
+                _ESCALATE,
+            ),
+        ),
     ),
-    "stop_repeated_finding": (
+    "stop_repeated_finding": _Routing(
         "escalate: a finding repeated",
         "the same blocking finding came back, so the correction is not working",
         "codev task escalate --trigger stop_repeated_finding",
         True,
+        (
+            Option(
+                "re-scope the correction",
+                "codev task resume --reason <why>",
+                "the repeated finding is worked by hand rather than by another "
+                "identical builder pass",
+            ),
+            Option(
+                "defer it with a reason",
+                "codev task waive --reason <why>",
+                "the finding is recorded as deliberately not addressed, and "
+                "says so in the pull-request body",
+            ),
+            Option(
+                "escalate",
+                "codev task escalate --trigger stop_repeated_finding",
+                _ESCALATE,
+            ),
+        ),
     ),
-    "stop_scope_expansion": (
+    "stop_scope_expansion": _Routing(
         "escalate: scope expanded",
         "a finding appeared that this phase's first round did not raise",
         "codev task escalate --trigger stop_scope_expansion",
         True,
+        (
+            Option(
+                "split the new finding into its own slice",
+                "codev slice begin --id <new-id> --base <sha>",
+                "this slice lands at its original scope and the new work gets "
+                "its own branch, issue, and review",
+            ),
+            Option(
+                "escalate",
+                "codev task escalate --trigger stop_scope_expansion",
+                _ESCALATE,
+            ),
+        ),
     ),
-    "stop_incomplete_coverage": (
+    "stop_incomplete_coverage": _Routing(
         "cover the missing dimensions",
         "the coverage manifest is incomplete or failing",
-        "dispatch the specialists that own the missing dimensions, or waive "
-        "them with a reason",
+        "dispatch the specialists that own the missing dimensions",
         True,
+        (
+            Option(
+                "run the missing specialists",
+                "dispatch the specialists that own the missing dimensions",
+                "the manifest completes and the outer phase can conclude",
+            ),
+            Option(
+                "waive a dimension with a reason",
+                "codev task waive --reason <why>",
+                "the gap is recorded as deliberate rather than closed",
+            ),
+        ),
     ),
 }
+
+
+# Where each planning artifact lives, most advanced first. The `Status:` line
+# every one of these carries in its opening lines is the acceptance signal --
+# a convention `gate.py` already relies on, so this introduces no new metadata
+# format for a repository to keep in step.
+_PLANNING_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("plan", ("docs/plans/*.md", "docs/codev/task/*/implementation-plan.md")),
+    ("wave plan", ("docs/codev/wave/*.md",)),
+    (
+        "design",
+        (
+            "docs/features/*/design.md",
+            "docs/codev/features/*/design.md",
+            "docs/codev/design/*/design.md",
+        ),
+    ),
+    ("brief", ("docs/codev/brief/*.md", "docs/features/*/brief.md")),
+)
+
+_NEXT_AFTER: dict[str, tuple[str, str]] = {
+    "brief": ("design-solution", "a design decides the contracts before slices exist"),
+    "design": ("plan-wave", "a plan turns an accepted design into ordered slices"),
+    "wave plan": ("plan-wave", "the wave's tasks each need a plan with slices"),
+}
+
+_STATUS_SCAN_BYTES = 600
+
+
+def _is_accepted(path: Path) -> bool | None:
+    """Whether a planning artifact declares itself accepted, or None when it
+    carries no `Status:` line at all and so makes no claim either way."""
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:_STATUS_SCAN_BYTES]
+    except OSError:
+        return None
+    for line in head.splitlines():
+        stripped = line.strip().replace("*", "")
+        if stripped.lower().startswith("status:"):
+            return "accepted" in stripped.lower()
+    return None
+
+
+def _planning_position(branch: str, *, target: Path) -> NextAction:
+    """What to do when no task branch exists.
+
+    Every state before a task used to collapse into one sentence -- "pick up
+    an issue and start a task" -- which left the whole Understand, Design and
+    Plan half of the lifecycle unguided. That is the half where a developer
+    has the least context and the most to decide, so it is the half the
+    guidance obligation was written for.
+    """
+    for stage, patterns in _PLANNING_STAGES:
+        found = [
+            match
+            for pattern in patterns
+            for match in sorted(target.glob(pattern))
+            if match.is_file()
+        ]
+        if not found:
+            continue
+        accepted = [path for path in found if _is_accepted(path) is True]
+        drafted = [path for path in found if _is_accepted(path) is False]
+        if stage == "plan" and accepted:
+            names = ", ".join(sorted(path.name for path in accepted[:3]))
+            return NextAction(
+                position="accepted plan, no branch",
+                recommendation="begin a slice from an accepted plan",
+                reason=(
+                    f"{names} declare themselves accepted, and no task branch "
+                    "is tracking one of their slices"
+                ),
+                command="codev slice begin",
+                branch=branch,
+            )
+        if drafted and not accepted:
+            names = ", ".join(sorted(path.name for path in drafted[:3]))
+            return NextAction(
+                position=f"{stage} drafted, not accepted",
+                recommendation="get a decision on the draft",
+                reason=(
+                    f"{names} exist but declare no accepted status, and "
+                    "nothing downstream of them can start until one does"
+                ),
+                command=None,
+                branch=branch,
+            )
+        if accepted and stage in _NEXT_AFTER:
+            skill, why = _NEXT_AFTER[stage]
+            return NextAction(
+                position=f"{stage} accepted, nothing downstream",
+                recommendation=f"use {skill}",
+                reason=f"an accepted {stage} exists but {why}",
+                command=None,
+                branch=branch,
+            )
+    return NextAction(
+        position="no planning artifact",
+        recommendation="frame the work first",
+        reason=(
+            "this repository holds no brief, design, or plan, so there is "
+            "nothing an implementation could be checked against"
+        ),
+        command=None,
+        branch=branch,
+        options=(
+            Option(
+                "frame one change",
+                "use define-product",
+                "a brief naming the users, outcome, and scope of one addition",
+            ),
+            Option(
+                "frame the whole product",
+                "use specify-project",
+                "one canonical SPECIFICATION.md, for greenfield or a redesign",
+            ),
+        ),
+    )
 
 
 def _task_id_for_branch(branch: str) -> str | None:
@@ -187,16 +429,7 @@ def next_action(
 
     resolved = task_id or _task_id_for_branch(branch)
     if resolved is None:
-        return NextAction(
-            position="no task on this branch",
-            recommendation="pick up an issue and start a task",
-            reason=(
-                f"branch {branch!r} is not one codev git branch created, so no "
-                "task's round state is associated with it"
-            ),
-            command="codev git branch, then codev task start",
-            branch=branch,
-        )
+        return _planning_position(branch, target=target)
 
     try:
         state = task.describe(resolved, target=target)
@@ -205,6 +438,10 @@ def next_action(
             position="branch exists, no round state",
             recommendation="open round state for this task",
             reason=f"branch {branch!r} exists but task {resolved!r} has none",
+            # Not `slice begin`: it creates the branch, and the branch is what
+            # already exists. This position is the recovery path for a branch
+            # made before `slice begin` existed, or one whose `begin` failed
+            # partway, so it names the granular verb that can still run.
             command="codev task start",
             task_id=resolved,
             branch=branch,
@@ -224,30 +461,95 @@ def next_action(
     slice_id = task.current_slice(resolved, target=target)
     final = task.is_final_slice(resolved, slice_id, target=target)
 
-    if check_github and result.reason in (
-        "ok_machine_review_complete",
-        "ok_machine_review_complete_with_deferrals",
-    ):
-        github = _github_position(resolved, branch, slice_id, final, target=target)
+    # Ask GitHub for any position where a pull request could already exist,
+    # not only the two reasons that happen to imply human review. Restricting
+    # it to those meant a merged slice sitting at `ok_ready_for_pr` was told
+    # to open a pull request it had already merged -- observed on `main`
+    # minutes after this module's own measure landed.
+    if check_github and not result.reason.startswith("stop_"):
+        github = _github_position(
+            resolved, branch, slice_id, final, result.reason, target=target
+        )
         if github is not None:
             return github
 
-    recommendation, reason, command, blocked = _BY_CHECK_REASON[result.reason]
+    if result.reason == "ok_waiting_on_reviewer":
+        inner = _inner_loop_position(resolved, branch, slice_id, target=target)
+        if inner is not None:
+            return inner
+
+    routing = _BY_CHECK_REASON[result.reason]
     return NextAction(
         position=f"{state['current_phase']} phase, round {state['current_round']}",
-        recommendation=recommendation,
-        reason=reason,
-        command=command,
+        recommendation=routing.recommendation,
+        reason=routing.reason,
+        command=routing.command,
         task_id=resolved,
         branch=branch,
         slice_id=slice_id,
         check_reason=result.reason,
-        blocked=blocked,
+        blocked=routing.blocked,
+        options=routing.options,
+    )
+
+
+def _inner_loop_position(
+    task_id: str, branch: str, slice_id: str, *, target: Path
+) -> NextAction | None:
+    """Split `ok_waiting_on_reviewer` into the three states it conflates.
+
+    `task.check` cannot tell a freshly opened round from one whose builder
+    has already reported -- both have no reviewer verdict -- so the single
+    routing entry recommended dispatching the reviewer in every case,
+    including before any work existed. Naming the wrong actor is worse than
+    naming none: an agent that follows it reviews an empty diff.
+
+    The two facts that separate them are local and cheap: whether this
+    slice's current round has a builder receipt, and whether the worktree
+    holds uncommitted work. Returns None when the recorded case applies, so
+    the routing table stays the single description of it.
+    """
+    state = task.log_records(task_id, target=target)
+    current = state["rounds"][-1]
+    if current.get("builder") is not None:
+        return None
+
+    position = f"{current['phase']} phase, round {state['current_round']}"
+    if git_ops.dirty_product_paths(target=target):
+        return NextAction(
+            position=position,
+            recommendation="close the builder's round",
+            reason=(
+                "the worktree holds uncommitted work and this round has no "
+                "builder receipt, so the change exists but is not on record"
+            ),
+            command="codev round close --role builder --evidence <file>",
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_waiting_on_reviewer",
+        )
+    return NextAction(
+        position=position,
+        recommendation="build the slice",
+        reason="this round has no builder receipt and the worktree is clean, "
+        "so no work has been done for it yet",
+        command="dispatch builder against this slice's plan",
+        task_id=task_id,
+        branch=branch,
+        slice_id=slice_id,
+        check_reason="ok_waiting_on_reviewer",
     )
 
 
 def _github_position(
-    task_id: str, branch: str, slice_id: str, final: bool, *, target: Path
+    task_id: str,
+    branch: str,
+    slice_id: str,
+    final: bool,
+    check_reason: str,
+    *,
+    target: Path,
 ) -> NextAction | None:
     """The positions only GitHub knows about: whether this slice's pull
     request is open, merged, or absent, and what that implies.
@@ -264,7 +566,7 @@ def _github_position(
                 position="final slice merged",
                 recommendation="close the task",
                 reason="every slice this task holds has landed",
-                command="codev task close --outcome approved",
+                command="codev slice land",
                 task_id=task_id,
                 branch=branch,
                 slice_id=slice_id,
@@ -273,12 +575,34 @@ def _github_position(
             position="slice merged, more remain",
             recommendation="advance to the next slice",
             reason=(f"slice {slice_id!r} has landed and this task holds a later one"),
-            command="codev task advance-slice",
+            command="codev slice land",
             task_id=task_id,
             branch=branch,
             slice_id=slice_id,
         )
     if state == "OPEN":
+        # A pull request is open but the outer loop has not run: the local
+        # reason still reads `ok_ready_for_pr`, whose routing would tell an
+        # agent to publish a slice that is already published. The step that
+        # actually advances the work here is the specialist pass, and nothing
+        # named it before -- it is the `dispatch_specialists` row of the
+        # recorded coverage baseline.
+        if check_reason == "ok_ready_for_pr":
+            return NextAction(
+                position="pull request open, outer loop not started",
+                recommendation="review the pull request with the specialists",
+                reason=(
+                    "this slice's pull request is open and no outer-phase "
+                    "round has been recorded against it"
+                ),
+                command="dispatch the specialists this slice's diff calls for",
+                task_id=task_id,
+                branch=branch,
+                slice_id=slice_id,
+                check_reason=check_reason,
+            )
+        if not check_reason.startswith("ok_machine_review_complete"):
+            return None
         return _open_pull_request_position(task_id, branch, slice_id, target=target)
     return None
 
@@ -335,6 +659,24 @@ def _open_pull_request_position(
             branch=branch,
             slice_id=slice_id,
             check_reason="ok_human_approved",
+        )
+    if git_ops.pull_request_is_draft(branch, target=target):
+        # Nobody can review a draft. Reporting "awaiting human review" here
+        # described a wait that nothing would ever end: `mark-ready` is what
+        # takes the pull request out of draft and requests the review, and
+        # until this, nothing the navigator said ever named it.
+        return NextAction(
+            position="machine gates satisfied, pull request still a draft",
+            recommendation="request human review",
+            reason=(
+                "every machine gate is satisfied and the pull request is "
+                "still a draft, so no review has been asked of anyone"
+            ),
+            command="codev git mark-ready",
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_machine_review_complete",
         )
     return NextAction(
         position="pull request open, awaiting human review",

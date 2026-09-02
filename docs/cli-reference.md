@@ -131,7 +131,7 @@ recovery and for a mid-session agent that needs one step on its own.
 
 | Command | Purpose |
 |---|---|
-| `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it |
+| `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it. It answers for the planning phases as well as the build ones, and a blocked position carries an `options` list -- each with a label, a command, and what choosing it means -- so a stop is a decision rather than a dead end |
 | `codev task advance-slice --id <id> --head <sha>` | Move a task on to its next slice and open a fresh round (ADR-0035) |
 | `codev gate check --gate <name>` | Decide one guardrail for a tool-use payload read from stdin (ADR-0036). Every platform's hook calls this, so the rules are CoDev's, not one adapter's |
 | `codev task style --id <id> [--set pair\|delegate]` | Read or change a slice's work style (ADR-0038) |

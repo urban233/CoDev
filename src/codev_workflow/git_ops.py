@@ -948,6 +948,17 @@ def _managed_paths(target: Path) -> set[str] | None:
     return set(lock["files"])
 
 
+def dirty_product_paths(*, target: Path) -> list[str]:
+    """Changed paths excluding CoDev's own task bookkeeping.
+
+    The navigator uses it to tell a round with work waiting to be committed
+    from one with no work at all, so it must not count `.codev/task/`:
+    opening round state writes there, which would make every freshly started
+    slice look like it already had uncommitted builder work.
+    """
+    return _dirty_product_paths(target)
+
+
 def _dirty_paths(target: Path) -> list[str]:
     # -uall: list files inside an untracked directory individually rather
     # than collapsing the whole directory into one entry -- required for
@@ -1156,6 +1167,27 @@ def pull_request_state(branch: str, *, target: Path) -> str | None:
     remote, or no credentials. The navigator treats None as "cannot tell" and
     falls back to a local recommendation rather than reporting a guess."""
     return _pr_state(branch, target=target)
+
+
+def pull_request_is_draft(branch: str, *, target: Path) -> bool | None:
+    """Whether the branch's pull request is still a draft, or None when
+    GitHub cannot answer.
+
+    The navigator needs this to avoid telling a developer to wait for a
+    review of a pull request nobody can review yet: a draft requests nothing
+    from anyone, and `mark-ready` is the step that turns the machine gates
+    being satisfied into an actual request.
+    """
+    try:
+        value = _run_gh(
+            ["pr", "view", branch, "--json", "isDraft", "-q", ".isDraft"], cwd=target
+        )
+    except GitOpsError:
+        return None
+    stripped = value.strip().lower()
+    if stripped in ("true", "false"):
+        return stripped == "true"
+    return None
 
 
 def _previous_slice_branch(task_id: str, *, target: Path) -> str | None:

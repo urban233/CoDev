@@ -82,19 +82,61 @@ class RoutingTableTests(unittest.TestCase):
             self.assertNotIn(renamed, _BY_CHECK_REASON)
 
     def test_every_stop_outcome_is_marked_blocked(self) -> None:
-        for reason, (_, _, _, blocked) in _BY_CHECK_REASON.items():
+        for reason, routing in _BY_CHECK_REASON.items():
             if reason.startswith("stop_"):
-                self.assertTrue(blocked, f"{reason} must block")
+                self.assertTrue(routing.blocked, f"{reason} must block")
+                self.assertTrue(
+                    routing.options,
+                    f"{reason} blocks, so it must offer a way out",
+                )
 
 
 class LocalPositionTests(unittest.TestCase):
-    def test_a_branch_with_no_task_recommends_starting_one(self) -> None:
+    def test_a_repository_with_no_planning_artifact_says_to_frame_the_work(
+        self,
+    ) -> None:
+        """The Understand half of the lifecycle, which used to collapse into
+        one sentence about starting a task."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             _init_repo(target)
             action = next_action(target=target, check_github=False)
-        self.assertEqual("no task on this branch", action.position)
+        self.assertEqual("no planning artifact", action.position)
+        self.assertEqual(
+            ["use define-product", "use specify-project"],
+            sorted(option.command for option in action.options),
+        )
         self.assertFalse(action.blocked)
+
+    def test_an_accepted_plan_with_no_branch_recommends_beginning_a_slice(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            plans = target / "docs" / "plans"
+            plans.mkdir(parents=True)
+            (plans / "a-plan.md").write_text(
+                "# A plan\n\n**Status:** Accepted 2026-09-03\n", encoding="utf-8"
+            )
+            action = next_action(target=target, check_github=False)
+        self.assertEqual("accepted plan, no branch", action.position)
+        self.assertEqual("codev slice begin", action.command)
+
+    def test_a_drafted_plan_recommends_getting_a_decision_on_it(self) -> None:
+        """A plan nobody accepted blocks everything downstream of it, and
+        saying so is more use than recommending work it cannot authorize."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            plans = target / "docs" / "plans"
+            plans.mkdir(parents=True)
+            (plans / "a-plan.md").write_text(
+                "# A plan\n\n**Status:** Draft, not yet approved\n", encoding="utf-8"
+            )
+            action = next_action(target=target, check_github=False)
+        self.assertEqual("plan drafted, not accepted", action.position)
+        self.assertIsNone(action.command)
 
     def test_a_task_branch_without_round_state_recommends_task_start(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -114,7 +156,9 @@ class LocalPositionTests(unittest.TestCase):
             task.start("item-1", base, target=target, link_ref="x")
             action = next_action(target=target, check_github=False)
         self.assertEqual("ok_waiting_on_reviewer", action.check_reason)
-        self.assertEqual("review the round", action.recommendation)
+        # Not "review the round": no builder has run, so recommending the
+        # reviewer names the wrong actor and reviews an empty diff.
+        self.assertEqual("build the slice", action.recommendation)
         self.assertEqual("item-1", action.slice_id)
         self.assertFalse(action.blocked)
 
@@ -232,7 +276,7 @@ class GitHubPositionTests(unittest.TestCase):
             with patch.object(git_ops, "pull_request_state", return_value="MERGED"):
                 action = next_action(target=target)
         self.assertEqual("final slice merged", action.position)
-        self.assertEqual("codev task close --outcome approved", action.command)
+        self.assertEqual("codev slice land", action.command)
 
     def test_a_merged_slice_with_more_remaining_recommends_advancing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -241,7 +285,7 @@ class GitHubPositionTests(unittest.TestCase):
             with patch.object(git_ops, "pull_request_state", return_value="MERGED"):
                 action = next_action(target=target)
         self.assertEqual("slice merged, more remain", action.position)
-        self.assertEqual("codev task advance-slice", action.command)
+        self.assertEqual("codev slice land", action.command)
 
     def test_github_silence_falls_back_to_the_local_recommendation(self) -> None:
         """None means "cannot tell" -- never report a guess as fact."""

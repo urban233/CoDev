@@ -79,6 +79,8 @@ if args[:2] == ["pr", "view"]:
         print(record["state"])
     elif "reviews" in args:
         print(json.dumps(record.get("reviews", [])))
+    elif "isDraft" in args:
+        print("true" if record.get("draft") else "false")
     else:
         print(json.dumps(record))
 elif args[:2] == ["pr", "create"]:
