@@ -36,12 +36,25 @@ tests at the bottom pin defects that reached `main` exactly that way.
 
 from __future__ import annotations
 
+import os
 import unittest
 
 from codev_workflow import git_ops, task
 from tests.integration_support import Sandbox, run_git
 
+# The `gh` stub reaches Windows through a `.cmd` wrapper, and `cmd.exe`
+# cannot represent a newline in a command line at all -- `%*` truncates a
+# multi-line `--body` at its first line. That is a limitation of the shim,
+# not of the code under test, and it only affects the cases that assert on a
+# rendered pull-request body. The cascade regressions below drive git alone
+# and run everywhere.
+_GH_BODY_UNSUPPORTED = os.name == "nt"
 
+
+@unittest.skipIf(
+    _GH_BODY_UNSUPPORTED,
+    "the gh stub cannot carry a multi-line --body through a cmd.exe wrapper",
+)
 class LifecycleIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.sandbox = Sandbox()
