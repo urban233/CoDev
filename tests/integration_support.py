@@ -146,6 +146,19 @@ class GhStub:
         )
 
     @property
+    def executable(self) -> Path:
+        """The launcher to point `CODEV_GH_PATH` at.
+
+        On Windows `shutil.which("gh")` can resolve the extensionless shell
+        script rather than the `.cmd`, and Windows cannot execute the former
+        -- so every `gh` call fails and the code under test silently takes
+        its fail-open paths, which is the opposite of what this tier is for.
+        `CODEV_GH_PATH` is git_ops's own documented override and removes the
+        ambiguity on every platform.
+        """
+        return self.directory / ("gh.cmd" if os.name == "nt" else "gh")
+
+    @property
     def state_path(self) -> Path:
         return self.directory / "gh-state.json"
 
@@ -204,7 +217,9 @@ class Sandbox:
         bin_dir.mkdir()
         self.gh = GhStub(bin_dir)
         self._previous_path = os.environ.get("PATH", "")
+        self._previous_gh = os.environ.get("CODEV_GH_PATH")
         os.environ["PATH"] = str(bin_dir) + os.pathsep + self._previous_path
+        os.environ["CODEV_GH_PATH"] = str(self.gh.executable)
 
     def head(self) -> str:
         return run_git(["rev-parse", "HEAD"], cwd=self.work)
@@ -223,4 +238,8 @@ class Sandbox:
 
     def close(self) -> None:
         os.environ["PATH"] = self._previous_path
+        if self._previous_gh is None:
+            os.environ.pop("CODEV_GH_PATH", None)
+        else:
+            os.environ["CODEV_GH_PATH"] = self._previous_gh
         self._temporary.cleanup()
