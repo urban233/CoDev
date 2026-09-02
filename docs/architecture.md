@@ -118,6 +118,44 @@ stops being tracked the same way an ordinary upstream removal does.
   (see [ADR-0001](adr/0001-work-lifecycle-invariant.md) and
   [ADR-0023](adr/0023-work-item-renamed-to-task.md)).
 
+## The plan gate is risk-tiered
+
+The plan gate asks for a written plan before the first source edit on a task
+branch. Keyed purely on a file existing, it asked the same question of a
+one-file bug fix and a subsystem rewrite, and ceremony that cannot tell those
+apart teaches agents to route around the gate rather than to plan.
+
+It is now tiered, as a changed default rather than a configuration key --
+CoDev's answer to "more structure" is a better default, not another knob:
+
+- On a task branch whose recorded slice is **within the size budget**, the
+  focus card in the conversation satisfies the gate and no plan file is
+  required.
+- A change that has **grown past the budget** asks again, on the first edit
+  after it crosses.
+- Some paths ask **regardless of size**: dependency and environment manifests,
+  CI workflow definitions, and migrations. A one-line version bump changes what
+  the code computes, which for research software surfaces as an unreproducible
+  result rather than an outage; a workflow file decides whether anything is
+  checked at all; a migration is irreversible against real data.
+- A **repository-mutating git command** is never tiered by size. A push is not
+  made safe by the change being small.
+
+The tier reads as a weakening and is not, because of when the gate fires. It
+runs *before* an edit, so the only diff it can see is the one already on the
+branch. The old gate therefore interrupted before the work started, when a
+developer knows least about what the change will need. The tiered one
+interrupts when the change outgrows what a focus card can carry, which is when
+a written plan is worth its cost. Toll booth to tripwire.
+
+Two things the tier refuses to treat as small: a task whose round state does
+not exist, and one whose state carries no base to diff against. Both measure
+as zero changed lines, and a measurement of nothing is not a measurement of a
+small change -- without that guard any branch merely *named* `codev/...` would
+skip the gate. The size is measured in-process for the same reason: shelling
+out to `codev task size` made both gates depend on an executable being on PATH
+and being the same build.
+
 ## Navigator coverage
 
 CoDev's claim about its own developer experience is that a developer directs

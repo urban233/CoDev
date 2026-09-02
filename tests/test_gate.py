@@ -30,6 +30,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -40,6 +41,91 @@ from codev_workflow.gate import GATES, check
 
 def _repo(target: Path) -> None:
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=target, check=True)
+
+
+class RiskTieredPlanGateTests(unittest.TestCase):
+    """The plan gate stops asking about changes that are small and ordinary,
+    and keeps asking about everything else."""
+
+    def setUp(self) -> None:
+        self._temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temporary.cleanup)
+        self.target = Path(self._temporary.name)
+        _repo(self.target)
+        self._git("commit", "-q", "--allow-empty", "-m", "seed")
+        self._git("checkout", "-q", "-b", "codev/a-task")
+
+    def _git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=self.target, check=True)
+
+    def _open_round_state(self) -> None:
+        """Enough round state for the gate to believe a task exists. The
+        cases here never reach a measurement -- the ones that do live in the
+        integration tier, against a real task."""
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.target,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        state = self.target / ".codev" / "task" / "a-task"
+        state.mkdir(parents=True)
+        (state / "round-state.json").write_text(
+            json.dumps({"base_snapshot": head}), encoding="utf-8"
+        )
+
+    def _edit(self, file_path: str) -> str:
+        return check(
+            "plan",
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": file_path},
+                "cwd": str(self.target),
+            },
+            target=self.target,
+        ).decision
+
+    def test_a_branch_named_like_a_task_but_tracking_none_still_asks(self) -> None:
+        """`codev task size` answers with zeros for a task that does not
+        exist. Treating that as "small" would let any branch called
+        codev/anything skip the gate, which is a hole, not a tier.
+        """
+        self.assertEqual("ask", self._edit("src/foo.py"))
+
+    def test_a_dependency_manifest_asks_however_small_the_change(self) -> None:
+        """Size is the wrong question for a file where one line changes what
+        the code computes."""
+        self._open_round_state()
+        for path in ("pyproject.toml", "uv.lock", "requirements-dev.txt"):
+            with self.subTest(path=path):
+                self.assertEqual("ask", self._edit(path))
+
+    def test_ci_definitions_and_migrations_ask_too(self) -> None:
+        self._open_round_state()
+        self.assertEqual("ask", self._edit(".github/workflows/ci.yml"))
+        self.assertEqual("ask", self._edit("app/migrations/0002_add.py"))
+
+    def test_a_repository_mutating_command_is_never_tiered_by_size(self) -> None:
+        """A git command is not made safe by the change being small."""
+        self._open_round_state()
+        decision = check(
+            "plan",
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "git push"},
+                "cwd": str(self.target),
+            },
+            target=self.target,
+        )
+        self.assertEqual("ask", decision.decision)
+
+    def test_an_accepted_plan_under_docs_plans_satisfies_the_gate(self) -> None:
+        """The glob that did not cover where this repository keeps plans."""
+        plans = self.target / "docs" / "plans"
+        plans.mkdir(parents=True)
+        (plans / "a-task.md").write_text("# a-task\n", encoding="utf-8")
+        self.assertEqual("allow", self._edit("src/foo.py"))
 
 
 class GateDispatchTests(unittest.TestCase):
