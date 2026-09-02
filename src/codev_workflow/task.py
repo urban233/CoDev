@@ -107,6 +107,29 @@ VALID_ESCALATION_TRIGGERS = (
 
 VALID_OUTCOMES = ("approved", "abandoned", "escalated")
 
+# ADR-0037: `ok_approve` never meant a human approved anything -- it meant the
+# machine gates were satisfied. In a tool whose pitch is that generated code
+# is not merged as slop, that name invited exactly the conflation the ADR
+# exists to prevent, so it says what it means now.
+#
+# A returned reason is part of the machine contract ADR-0036 made explicit,
+# so this is an observable change for anything reading `codev task check
+# --json`. For one release each renamed reason also reports its former name,
+# so a pinned consumer can see the rename rather than silently stop matching.
+# Remove this map, and the `deprecated_reason` field it feeds, in the release
+# after the one that introduces it.
+DEPRECATED_REASON_ALIASES = {
+    "ok_machine_review_complete": "ok_approve",
+    "ok_machine_review_complete_with_deferrals": "ok_approve_with_deferrals",
+}
+
+
+def deprecated_reason_for(reason: str) -> str | None:
+    """The former name of a renamed `check` reason, or None for every reason
+    that was never renamed."""
+    return DEPRECATED_REASON_ALIASES.get(reason)
+
+
 VALID_ENTRY_MODES = ("takeover", "direct-review")
 
 # ADR-0018: the outer loop's five specialist reviewers, by name -- reused to
@@ -867,7 +890,7 @@ def check(task_id: str, head: str, *, target: Path) -> CheckResult:
                     )
                 return CheckResult(
                     True,
-                    "ok_approve_with_deferrals",
+                    "ok_machine_review_complete_with_deferrals",
                     f"round {latest['round']}: every blocking finding was triaged "
                     "as defer, nothing left to build -- ready to present to the "
                     "human with the deferred findings on record",
@@ -917,7 +940,9 @@ def check(task_id: str, head: str, *, target: Path) -> CheckResult:
                 "stop_incomplete_coverage",
                 "coverage manifest incomplete or failing: " + ", ".join(missing),
             )
-        return CheckResult(True, "ok_approve", "ready to present to the human")
+        return CheckResult(
+            True, "ok_machine_review_complete", "ready to present to the human"
+        )
 
     return CheckResult(True, "ok_blocked_missing_evidence", decision)
 

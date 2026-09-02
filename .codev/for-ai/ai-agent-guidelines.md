@@ -336,7 +336,7 @@ correct and verify with the inner loop's fast `lightweight-reviewer`
 standard rather than a full specialist pass, recording coverage only for
 the dimension(s) actually re-verified — `codev task check` fills in every
 other dimension automatically from whichever round most recently
-established it, so nothing needs to be reconstructed by hand. `ok_approve`
+established it, so nothing needs to be reconstructed by hand. `ok_machine_review_complete`
 still requires complete eight-dimension coverage; this entry alone does
 not produce that on a PR the five specialists have never reviewed, and
 `codev task check` says so by name when it isn't complete.
@@ -379,14 +379,14 @@ not produce that on a PR the five specialists have never reviewed, and
    first — triaging it (address or defer) resolves the stop, since the
    guard exists to force one human look, not to survive one.
 5. If triage defers every blocking finding, nothing needs building:
-   `codev task check` reports `ok_approve_with_deferrals` directly — record
+   `codev task check` reports `ok_machine_review_complete_with_deferrals` directly — record
    `codev task escalate --trigger human_override_blocking_finding` and go
    straight to landing. Otherwise the one permitted correction round fixes
    only the findings the human selected, then re-verifies only those
    findings with only the specialists that own them — not a fresh full
    pass. Any other nonzero exit records an escalation with `codev task
    escalate` and stops for the human.
-6. On `ok_approve` or `ok_approve_with_deferrals`: if no pull request exists
+6. On `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals`: if no pull request exists
    yet for this item (for example, it was recovered into the outer phase
    with `codev task reopen` and never went through the inner loop's own
     bridge step), run `codev git open-pr` first -- never pass `--body`, it
@@ -459,7 +459,7 @@ reopened from had decided `READY_FOR_OUTER_LOOP`), skipping the inner
 loop's own bridge into a pull request. `codev git open-pr` accounts for
 this: it accepts any non-stop `codev task check` result once the item is in
 the outer phase, not only `ok_ready_for_pr`, provided the branch has no
-pull request yet — so if outer-loop review reaches `ok_approve` with none
+pull request yet — so if outer-loop review reaches `ok_machine_review_complete` with none
 open, run `codev git open-pr` once to create it before `codev git
 mark-ready`, which still requires that pull request to already exist.
 

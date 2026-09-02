@@ -73,7 +73,7 @@ comments instead of running a fresh specialist pass:
   this round itself re-verified — `codev task check` fills in every other
   dimension automatically from whichever earlier round most recently
   established it, so there is nothing to reconstruct by hand.
-- On convergence, report what was fixed and pushed plainly. `ok_approve`
+- On convergence, report what was fixed and pushed plainly. `ok_machine_review_complete`
   only follows once coverage is actually complete across all eight
   dimensions — if the five specialists have never run for this item and no
   earlier round established every dimension, `codev task check` reports
@@ -201,7 +201,7 @@ disposition at all.
 
 After triage, `codev task check` reports one of three outcomes:
 
-- `ok_approve` or `ok_approve_with_deferrals` — every blocking finding was
+- `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals` — every blocking finding was
   triaged as `defer`, nothing needs building. If this resolved a
   scope-expansion or repeated-finding stop, record that escalation now if
   you have not already — `codev task escalate --id <task-id> --trigger
@@ -226,7 +226,7 @@ After triage, `codev task check` reports one of three outcomes:
 
 ## 6. Land it
 
-On `ok_approve` or `ok_approve_with_deferrals`, run `codev git mark-ready
+On `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals`, run `codev git mark-ready
 --id <task-id>` — it re-renders the task's current evidence into the
 repository PR template and converts the draft out of draft. If no pull request exists yet for this item (for
 example, it was recovered into the outer phase with `codev task reopen` and

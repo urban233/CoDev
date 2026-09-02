@@ -1014,7 +1014,10 @@ def open_pr(
     )
 
 
-_MARK_READY_REASONS = ("ok_approve", "ok_approve_with_deferrals")
+_MARK_READY_REASONS = (
+    "ok_machine_review_complete",
+    "ok_machine_review_complete_with_deferrals",
+)
 
 
 def mark_ready(task_id: str, *, target: Path) -> None:
