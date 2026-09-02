@@ -36,7 +36,7 @@ treatment, and the agent's experience is the developer's experience, because
 every mis-sequenced call surfaces as the tool fighting them.
 
 The evidence is in the role files. `orchestrator`'s step 5
-([.claude/agents/orchestrator.md:80](../../.claude/agents/orchestrator.md)) is
+(`.claude/agents/orchestrator.md:80`, as it stood at `90cf9f4`) is
 one paragraph containing six commands, four conditional flags, an
 issue-existence check, three mutually exclusive linkage options, a
 `--body-file` versus `--body` shell-escaping caveat, and a recovery path via

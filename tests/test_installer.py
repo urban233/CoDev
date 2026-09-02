@@ -92,7 +92,7 @@ class InstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("audit-google-python-style: allow", audit_agent)
         self.assertIn("audit-google-typescript-style: allow", audit_agent)
-        self.assertTrue((self.target / ".opencode/agents/orchestrator.md").is_file())
+        self.assertTrue((self.target / ".opencode/agents/lead.md").is_file())
         self.assertTrue((self.target / ".junie/agents/assistant.md").is_file())
         self.assertTrue((self.target / ".agents/agents/assistant.md").is_file())
         self.assertTrue((self.target / "docs/codev/README.md").is_file())
@@ -289,10 +289,9 @@ class InstallerTests(unittest.TestCase):
                 "code-audit.md",
                 "concurrency-specialist.md",
                 "correctness-tests-specialist.md",
+                "lead.md",
                 "lightweight-reviewer.md",
-                "orchestrator.md",
                 "outer-loop-runner.md",
-                "planner.md",
                 "reviewer.md",
                 "rollout-specialist.md",
                 "security-data-specialist.md",
@@ -312,6 +311,86 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.target / ".junie").exists())
         self.assertTrue(installer.check_project(self.target).ok)
 
+    def test_updating_removes_a_role_the_bundle_stopped_shipping(self) -> None:
+        """The migration that protects every existing installation.
+
+        `orchestrator.md` and `planner.md` became `lead.md`. Retaining them
+        the way a retired doc is retained would leave a developer with three
+        human-facing agents instead of one -- the exact confusion the
+        consolidation removed -- because every adapter treats a file in its
+        agents directory as invocable.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("claude",), "none")
+            )
+            retired = target / ".claude/agents/orchestrator.md"
+            retired.write_text("# orchestrator\n", encoding="utf-8")
+            lock = json.loads((target / ".codev/lock.json").read_text("utf-8"))
+            lock["files"][".claude/agents/orchestrator.md"] = installer._sha256(
+                retired.read_bytes()
+            )
+            (target / ".codev/lock.json").write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            self.assertFalse(retired.exists())
+            self.assertTrue((target / ".claude/agents/lead.md").is_file())
+
+    def test_a_locally_edited_retired_role_is_a_conflict_not_a_deletion(self) -> None:
+        """Deleting a developer's own edits is never the default, even for a
+        role the bundle no longer ships."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("claude",), "none")
+            )
+            retired = target / ".claude/agents/orchestrator.md"
+            retired.write_text("# orchestrator\n", encoding="utf-8")
+            lock = json.loads((target / ".codev/lock.json").read_text("utf-8"))
+            lock["files"][".claude/agents/orchestrator.md"] = installer._sha256(
+                b"different"
+            )
+            (target / ".codev/lock.json").write_text(json.dumps(lock), encoding="utf-8")
+
+            plan = installer.plan_update(target)
+            self.assertIn(
+                ".claude/agents/orchestrator.md",
+                [c.path for c in plan.conflicts],
+            )
+            self.assertTrue(retired.exists())
+
+    def test_updating_retires_an_opencode_agent_that_no_longer_ships(self) -> None:
+        """Otherwise the lock keeps a hash for an agent nothing writes, and
+        `codev status` reports drift no update can ever resolve."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            config_path = target / ".opencode/opencode.json"
+            config = json.loads(config_path.read_text("utf-8"))
+            retired = {"model": "m", "description": "a retired agent"}
+            config["agent"]["orchestrator"] = retired
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            lock_path = target / ".codev/lock.json"
+            lock = json.loads(lock_path.read_text("utf-8"))
+            lock["integrations"]["opencode_agent_hashes"]["orchestrator"] = (
+                installer._json_hash(retired)
+            )
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            lock = json.loads(lock_path.read_text("utf-8"))
+            self.assertNotIn("orchestrator", config["agent"])
+            self.assertNotIn(
+                "orchestrator", lock["integrations"]["opencode_agent_hashes"]
+            )
+            self.assertIn("lead", config["agent"])
+
     def test_bundle_filters_claude_adapter_files(self) -> None:
         claude_files = installer._bundle_files(("claude",))
         opencode_files = installer._bundle_files(("opencode",))
@@ -325,9 +404,8 @@ class InstallerTests(unittest.TestCase):
                 ".claude/agents/concurrency-specialist.md",
                 ".claude/agents/correctness-tests-specialist.md",
                 ".claude/agents/lightweight-reviewer.md",
-                ".claude/agents/orchestrator.md",
+                ".claude/agents/lead.md",
                 ".claude/agents/outer-loop-runner.md",
-                ".claude/agents/planner.md",
                 ".claude/agents/reviewer.md",
                 ".claude/agents/rollout-specialist.md",
                 ".claude/agents/security-data-specialist.md",
@@ -525,19 +603,19 @@ class InstallerTests(unittest.TestCase):
     def test_init_preserves_existing_opencode_agent(self) -> None:
         config_path = self.target / ".opencode" / "opencode.json"
         config_path.parent.mkdir(parents=True)
-        local_orchestrator = {
+        local_lead = {
             "model": "anthropic/claude-sonnet-4",
             "description": "Project-owned orchestrator",
         }
         config_path.write_text(
-            json.dumps({"agent": {"orchestrator": local_orchestrator}}),
+            json.dumps({"agent": {"lead": local_lead}}),
             encoding="utf-8",
         )
 
         self.install(("opencode",))
 
         config = json.loads(config_path.read_text(encoding="utf-8"))
-        self.assertEqual(local_orchestrator, config["agent"]["orchestrator"])
+        self.assertEqual(local_lead, config["agent"]["lead"])
         self.assertEqual(
             installer.OPENCODE_AGENT_CONFIGS["builder"], config["agent"]["builder"]
         )
@@ -585,13 +663,13 @@ class InstallerTests(unittest.TestCase):
         agents_path.write_text("# Project policy\n", encoding="utf-8")
         config_path = self.target / ".opencode" / "opencode.json"
         config_path.parent.mkdir(parents=True)
-        local_orchestrator = {"model": "project/model"}
+        local_lead = {"model": "project/model"}
         config_path.write_text(
             json.dumps(
                 {
                     "default_agent": "project-agent",
                     "theme": "system",
-                    "agent": {"orchestrator": local_orchestrator},
+                    "agent": {"lead": local_lead},
                 }
             ),
             encoding="utf-8",
@@ -613,7 +691,7 @@ class InstallerTests(unittest.TestCase):
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertEqual("project-agent", config["default_agent"])
         self.assertEqual("system", config["theme"])
-        self.assertEqual(local_orchestrator, config["agent"]["orchestrator"])
+        self.assertEqual(local_lead, config["agent"]["lead"])
         self.assertNotIn("builder", config["agent"])
         self.assertNotIn("code-audit", config["agent"])
         self.assertNotIn("reviewer", config["agent"])

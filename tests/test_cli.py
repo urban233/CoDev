@@ -2517,7 +2517,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            self.assertEqual(11, len(payload["findings"]))
+            # Ten roles, not eleven: `orchestrator` and `planner` became the
+            # single `lead`.
+            self.assertEqual(10, len(payload["findings"]))
 
     def test_adapter_verify_passes_for_claude_on_a_fresh_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2539,15 +2541,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            self.assertEqual(11, len(payload["findings"]))
+            # Ten roles, not eleven: `orchestrator` and `planner` became the
+            # single `lead`.
+            self.assertEqual(10, len(payload["findings"]))
 
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "opencode"])
-            (target / ".opencode/agents/orchestrator.md").write_text(
-                "# orchestrator\n", encoding="utf-8"
+            (target / ".opencode/agents/lead.md").write_text(
+                "# lead\n", encoding="utf-8"
             )
             output = StringIO()
             with redirect_stdout(output):

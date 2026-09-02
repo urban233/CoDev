@@ -63,7 +63,7 @@ AUDIT_AGENT_TEMPLATES = {
     ),
 }
 # code-audit-gate is the autonomous, subagent-only counterpart dispatched by
-# orchestrator's pre-PR cleanup step -- distinct from code-audit above, which
+# lead's pre-PR cleanup step -- distinct from code-audit above, which
 # stays human-direct only (ADR-0015). Same {{LANGUAGE_INSTRUCTIONS}}/
 # {{SKILL_PERMISSIONS}}/{{DESCRIPTION_SCOPE}} templating, rendered the same
 # way via _render_code_audit_agent.
@@ -78,15 +78,11 @@ PRE_PR_CLEANUP_AGENT_TEMPLATES = {
     ),
 }
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
-    "orchestrator": {
-        "model": "openai/gpt-5.6-luna",
-        "description": "Human-controlled workflow and task orchestrator",
-    },
-    "planner": {
+    "lead": {
         "model": "openai/gpt-5.6-luna",
         "description": (
-            "Human-controlled entry point for Specify, Understand, Design, "
-            "and Plan work -- decoupled from execution"
+            "The single agent a developer talks to -- plans, dispatches the "
+            "build, and drives review to a merged pull request"
         ),
         "mode": "primary",
     },
@@ -99,7 +95,7 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5.6-luna",
         "description": (
             "Autonomous pre-PR cleanup subagent -- fixes style and "
-            "documentation issues only, dispatched by orchestrator"
+            "documentation issues only, dispatched by lead"
         ),
     },
     "builder": {
@@ -724,12 +720,20 @@ def _prepare_opencode(
     default_managed = False
     detail = "existing default agent preserved"
     if "default_agent" not in config:
-        config["default_agent"] = "orchestrator"
+        config["default_agent"] = "lead"
         default_managed = True
         changed = True
-        detail = "set orchestrator as the default agent"
+        detail = "set lead as the default agent"
     elif config.get("default_agent") == "orchestrator":
-        detail = "orchestrator already configured"
+        # An installation made before `lead` existed points at a role this
+        # version no longer ships. Leaving it would name a missing agent, so
+        # the rename migrates rather than being preserved as a local change.
+        config["default_agent"] = "lead"
+        default_managed = True
+        changed = True
+        detail = "migrated the default agent from orchestrator to lead"
+    elif config.get("default_agent") == "lead":
+        detail = "lead already configured"
 
     agents = config.get("agent")
     if agents is None:
@@ -761,8 +765,30 @@ def _prepare_opencode(
             integrated_agents.append(name)
             changed = True
 
+    # An agent CoDev used to manage and no longer ships -- `orchestrator` and
+    # `planner` after ADR-0040 -- must leave both the config and the lock.
+    # Without this the lock keeps a hash for an agent nothing writes, and
+    # `codev status` reports drift that no update can ever resolve.
+    retired_agents: list[str] = []
+    for name in [n for n in managed_agents if n not in OPENCODE_AGENT_CONFIGS]:
+        current = agents.get(name)
+        if current is not None and _json_hash(current) != managed_agents[name]:
+            raise CoDevError(
+                f"retired OpenCode agent {name!r} has local changes; remove it "
+                "by hand to keep them or discard them deliberately"
+            )
+        if name in agents:
+            del agents[name]
+            changed = True
+        del managed_agents[name]
+        retired_agents.append(name)
+        changed = True
+
     if integrated_agents:
         detail = "integrated OpenCode agents: " + ", ".join(integrated_agents)
+    if retired_agents:
+        retired_detail = "retired OpenCode agents: " + ", ".join(sorted(retired_agents))
+        detail = f"{detail}; {retired_detail}" if integrated_agents else retired_detail
 
     if not changed:
         return OpenCodePreparation(
@@ -940,6 +966,19 @@ def _replace_agent_block_for_update(target: Path, old_hash: str, plan: Plan) -> 
         )
 
 
+def _is_agent_role_file(relative: str) -> bool:
+    """Whether this managed path is an adapter's invocable agent role."""
+    return relative.endswith(".md") and any(
+        relative.startswith(prefix)
+        for prefix in (
+            ".claude/agents/",
+            ".opencode/agents/",
+            ".junie/agents/",
+            ".agents/agents/",
+        )
+    )
+
+
 def _audit_skill_language(path: str) -> str | None:
     for language, prefix in AUDIT_SKILL_PREFIXES.items():
         if path.startswith(prefix):
@@ -1022,6 +1061,30 @@ def plan_update(
                     plan.operations.append(
                         Operation(
                             "conflict", relative, "managed skill has local changes"
+                        )
+                    )
+                continue
+            # A retired *role file* is not inert the way a retired doc is:
+            # every adapter treats a file in its agents directory as an
+            # invocable agent, so retaining `orchestrator.md` after it was
+            # replaced by `lead.md` leaves the developer with both, which is
+            # precisely the confusion the consolidation removed. Delete it
+            # when it is untouched; a locally edited one is still the
+            # developer's, and becomes a conflict they resolve.
+            if _is_agent_role_file(relative):
+                if not destination.is_file():
+                    plan.operations.append(
+                        Operation("remove", relative, "retired role already absent")
+                    )
+                elif _sha256(destination.read_bytes()) == old_hash:
+                    plan.deletions.add(destination)
+                    plan.operations.append(
+                        Operation("remove", relative, "retired role removed")
+                    )
+                else:
+                    plan.operations.append(
+                        Operation(
+                            "conflict", relative, "retired role has local changes"
                         )
                     )
                 continue
@@ -1198,7 +1261,9 @@ def _prepare_opencode_removal(
     changed = False
     if integrations.get("opencode_default_agent_managed"):
         current_default = config.get("default_agent")
-        if current_default == "orchestrator":
+        # Accept the pre-rename value too: an installation CoDev managed
+        # before `lead` existed is still CoDev's to remove cleanly.
+        if current_default in ("lead", "orchestrator"):
             del config["default_agent"]
             changed = True
         elif current_default is not None:
@@ -1595,8 +1660,8 @@ def check_project(target: Path) -> CheckResult:
         except (OSError, json.JSONDecodeError) as error:
             issues.append(f"cannot read .opencode/opencode.json: {error}")
         else:
-            if config.get("default_agent") != "orchestrator":
-                issues.append("managed OpenCode default_agent is not orchestrator")
+            if config.get("default_agent") != "lead":
+                issues.append("managed OpenCode default_agent is not lead")
             agents = config.get("agent")
             if not isinstance(agents, dict):
                 issues.append("managed OpenCode agent configuration is missing")

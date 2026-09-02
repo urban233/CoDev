@@ -1,6 +1,6 @@
 # ADR-0031: Drop the Codex adapter; narrow Junie and Antigravity to a single edit assistant
 
-**Status:** Proposed
+**Status:** Accepted 2026-09-03 (implemented; resolved rather than left indefinite while later ADRs built on it)
 **Date:** 2026-08-30
 **Owner:** CoDev maintainers
 **Related design:** Not applicable
