@@ -63,11 +63,13 @@ from codev_workflow.task import (
     relink,
     reopen,
     resume,
+    review_waiver,
     set_work_style,
     slice_ids,
     start,
     triage_note,
     waive,
+    waive_review,
     work_style,
 )
 
@@ -187,12 +189,74 @@ class PauseResumeTests(unittest.TestCase):
         self.assertEqual("partial-head", document["base_snapshot"])
         self.assertNotIn("paused", document)
 
+    def test_resuming_raises_the_cap_so_it_costs_no_budget(self) -> None:
+        """A pause and resume is human attention, which is the opposite of
+        what the round cap guards against."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, max_rounds={"inner": 2, "outer": 2})
+            before = _read_state(target, "item-1")["max_rounds"]["inner"]
+            record_reviewer(
+                "item-1", 1, "base", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            pause("item-1", "partial", "by hand", target=target)
+            resume("item-1", "partial", "continuing", target=target)
+            document = _read_state(target, "item-1")
+        # The resumed round lands in the inner phase and the inner cap grew
+        # with it, so the budget available for real correction is unchanged.
+        self.assertEqual(before + 1, document["max_rounds"]["inner"])
+        self.assertEqual(1, len(document["reopens"]))
+
+    def test_a_resumed_task_can_still_record_the_round_it_reopened(self) -> None:
+        """The regression this fixes: a tight cap used to refuse the round a
+        resume had just opened."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, max_rounds={"inner": 1, "outer": 1})
+            record_reviewer(
+                "item-1", 1, "base", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            pause("item-1", "partial", "by hand", target=target)
+            resume("item-1", "partial", "continuing", target=target)
+            record_builder("item-1", 2, "partial", {"validation": "ok"}, target=target)
+            result = check("item-1", "partial", target=target)
+        self.assertEqual("ok_waiting_on_reviewer", result.reason)
+
     def test_resuming_a_task_that_was_never_paused_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             start("item-1", "base", target=target)
             with self.assertRaises(TaskError):
                 resume("item-1", "head", "why", target=target)
+
+
+class ReviewWaiverTests(unittest.TestCase):
+    """ADR-0037's own Consequences: a solo adopter must be able to record
+    that it deliberately operates without independent review, rather than
+    silently failing every task."""
+
+    def test_no_waiver_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            self.assertIsNone(review_waiver("item-1", target=target))
+
+    def test_a_waiver_records_its_reason_and_author(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            waive_review("item-1", "solo maintainer", target=target, by="@alice")
+            waiver = review_waiver("item-1", target=target)
+        assert waiver is not None
+        self.assertEqual("solo maintainer", waiver["reason"])
+        self.assertEqual("@alice", waiver["by"])
+
+    def test_a_waiver_requires_a_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            with self.assertRaises(TaskError):
+                waive_review("item-1", "   ", target=target)
 
 
 class IndependentReviewerTests(unittest.TestCase):

@@ -1214,6 +1214,17 @@ def mark_ready(task_id: str, *, target: Path) -> None:
         )
     final_body = _render_pr_template(task_id, target=target)
     final_body = f"{final_body}\n\n{_OWNERSHIP_STATEMENT}"
+    waiver = None
+    with contextlib.suppress(task.TaskError):
+        waiver = task.review_waiver(task_id, target=target)
+    if waiver is not None:
+        # Never omit this: a body that simply lacks an approval line reads as
+        # "not reviewed yet", which is a different claim from "deliberately
+        # landed without independent review".
+        final_body = (
+            f"{final_body}\n\n**No independent review.** Waived by "
+            f"{waiver.get('by') or 'the task owner'}: {waiver['reason']}"
+        )
     _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     reviewer = _resolve_reviewer(task_id, target=target)
     if reviewer is not None:

@@ -212,6 +212,19 @@ class GitHubPositionTests(unittest.TestCase):
             action = self._open_pr(target, None)
         self.assertIn("review state unknown", action.position)
 
+    def test_a_waived_review_is_reported_as_waived_not_approved(self) -> None:
+        """Nothing may conflate "nobody reviewed this" with "someone
+        approved it"."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._ready_task(target)
+            task.waive_review("item-1", "solo maintainer", target=target)
+            action = self._open_pr(target, None)
+        self.assertEqual("independent review waived", action.position)
+        self.assertEqual("ok_human_review_waived", action.check_reason)
+        self.assertIn("solo maintainer", action.reason)
+        self.assertNotEqual("ok_human_approved", action.check_reason)
+
     def test_a_merged_final_slice_recommends_closing_the_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

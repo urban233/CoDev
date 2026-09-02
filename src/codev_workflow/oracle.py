@@ -285,6 +285,20 @@ def _open_pull_request_position(
     """ADR-0037's gate, reported rather than enforced: the machine gates
     being satisfied is not a human approval, and the difference is the whole
     point of the rename in ADR-0037."""
+    waiver = task.review_waiver(task_id, target=target)
+    if waiver is not None:
+        return NextAction(
+            position="independent review waived",
+            recommendation="merge is the human's decision, then land the slice",
+            reason=(
+                "no independent review was obtained; a human waived the "
+                f"requirement on the record -- {waiver['reason']}"
+            ),
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_human_review_waived",
+        )
     owner = task.describe(task_id, target=target).get("owner")
     # `required` travels on the record itself, so the count reported and the
     # count compared against can never diverge.

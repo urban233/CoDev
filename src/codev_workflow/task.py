@@ -1201,6 +1201,45 @@ def waive(
     return path
 
 
+def waive_review(
+    task_id: str, reason: str, *, target: Path, by: str | None = None
+) -> Path:
+    """Human-authorized: this task lands without the independent human
+    approval ADR-0037 requires.
+
+    ADR-0037's own Consequences section calls for this: a repository with no
+    second engineer -- a solo adopter -- cannot satisfy that gate by
+    construction, and must be able to record that it is deliberately
+    operating without one rather than silently failing every task.
+
+    Deliberately per-task and reason-bearing rather than a configuration
+    flag. A flag is set once and applies silently to every task afterwards,
+    which reproduces the reflexive-approval failure ADR-0037 exists to
+    prevent, only globally and invisibly. Restating the reason each time is
+    the point, not friction to be optimized away.
+
+    Like `waive`, this never claims something happened that did not: the
+    oracle reports a distinct state, and the pull-request body says the
+    review was waived rather than omitting the line.
+    """
+    _validate_required_text("reason", reason)
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    state["review_waiver"] = {
+        "reason": reason,
+        "by": by,
+        "at": _utc_now_iso(),
+    }
+    _save(task_id, state, target=target)
+    return _task_path(target, task_id)
+
+
+def review_waiver(task_id: str, *, target: Path) -> dict[str, Any] | None:
+    """The recorded waiver of independent review, or None."""
+    waiver: dict[str, Any] | None = _load(task_id, target=target).get("review_waiver")
+    return waiver
+
+
 def relink(
     task_id: str,
     link_ref: str,
@@ -1375,11 +1414,28 @@ def resume(
     task_id: str, head: str, reason: str, *, target: Path, by: str | None = None
 ) -> str:
     """Re-enter a paused slice in `pair` style, absorbing whatever was
-    written by hand while it was paused."""
+    written by hand while it was paused.
+
+    Raises the round cap for the resumed phase by one, because the round
+    this opens is not the failure mode the cap guards against. The cap
+    exists to stop the loop churning on the same problem without human
+    attention; a pause and resume is *definitionally* human attention --
+    the developer took the keyboard, and `pause` recorded a
+    `critical_interrupt` with a stated reason to prove it. Spending cap on
+    that would stop a developer for something unrelated to their code.
+
+    The cap is raised rather than the round exempted from counting. A
+    `counts_toward_cap` flag would make `_phase_round_count` lie about how
+    many rounds have happened; raising the cap keeps every round a round and
+    leaves the change visible in `reopens` history and `codev task log`.
+    """
     state = _load(task_id, target=target)
     if state.get("paused") is None:
         raise TaskError(f"task {task_id!r} is not paused")
-    reopen(task_id, head, reason, target=target, by=by)
+    phase = state["rounds"][-1]["phase"]
+    raised = dict(state["max_rounds"])
+    raised[phase] = raised[phase] + 1
+    reopen(task_id, head, reason, target=target, by=by, max_rounds=raised)
     slice_id = set_work_style(task_id, None, "pair", target=target)
     resumed = _load(task_id, target=target)
     resumed.pop("paused", None)

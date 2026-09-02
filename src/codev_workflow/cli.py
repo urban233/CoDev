@@ -625,6 +625,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     t_advance.add_argument("--target", type=_target, default=Path.cwd())
 
+    t_waive_review = task_commands.add_parser(
+        "waive-review",
+        help="record that this task lands without an independent human "
+        "approval (ADR-0037); human-authorized, never an agent's initiative",
+    )
+    t_waive_review.add_argument("--id", required=True)
+    t_waive_review.add_argument("--reason", required=True)
+    t_waive_review.add_argument("--by", default=None)
+    t_waive_review.add_argument("--json", action="store_true")
+    t_waive_review.add_argument("--target", type=_target, default=Path.cwd())
+
     t_relink = task_commands.add_parser(
         "relink",
         help=(
@@ -1558,6 +1569,23 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 }
             )
         print(f"Advanced {args.id} to slice {next_slice}")
+        return 0
+
+    if args.task_command == "waive-review":
+        by = args.by
+        if by is None:
+            by = git_ops_module.detect_identity(target=target)
+        path = task_module.waive_review(args.id, args.reason, target=target, by=by)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "path": str(path),
+                    "reason": args.reason,
+                    "by": by,
+                }
+            )
+        print(f"Recorded a review waiver for {args.id} at {path}")
         return 0
 
     if args.task_command == "relink":
