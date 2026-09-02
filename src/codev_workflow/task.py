@@ -308,6 +308,7 @@ def start(
     owner: str | None = None,
     entry: str | None = None,
     slices: list[str] | None = None,
+    reviewer: str | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
     resolved_slices = _normalize_slices(task_id, slices)
@@ -315,6 +316,12 @@ def start(
     _validate_optional_text("summary", summary)
     _validate_optional_text("description", description)
     _validate_optional_text("owner", owner)
+    _validate_optional_text("reviewer", reviewer)
+    if reviewer is not None and owner is not None and reviewer == owner:
+        raise TaskError(
+            "the independent reviewer must not be the task owner (ADR-0037): "
+            f"both resolve to {owner!r}"
+        )
     if entry is not None and entry not in VALID_ENTRY_MODES:
         raise TaskError(
             f"entry must be null or one of {VALID_ENTRY_MODES}, got {entry!r}"
@@ -356,6 +363,10 @@ def start(
         "summary": summary,
         "description": description,
         "owner": owner,
+        # ADR-0037: the task owns its independent reviewer, and a slice
+        # inherits it. The owner is the author of the change however little
+        # of it they typed, so the two must differ.
+        "reviewer": reviewer,
         "entry": entry,
     }
     _save(task_id, state, target=target)
@@ -1224,6 +1235,7 @@ def describe(task_id: str, *, target: Path) -> dict[str, Any]:
         "summary": state.get("summary"),
         "description": state.get("description"),
         "owner": state.get("owner"),
+        "reviewer": state.get("reviewer"),
         "entry": state.get("entry"),
     }
 

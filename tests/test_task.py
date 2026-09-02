@@ -110,6 +110,25 @@ def _blocking(location: str, category: str) -> dict[str, Any]:
     }
 
 
+class IndependentReviewerTests(unittest.TestCase):
+    """ADR-0037: the task owns its independent reviewer, and the owner --
+    the author of the change, however little of it they typed -- cannot be
+    it."""
+
+    def test_a_task_records_its_reviewer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, owner="@alice", reviewer="@bob")
+            self.assertEqual("@bob", describe("item-1", target=target)["reviewer"])
+
+    def test_the_owner_cannot_be_their_own_reviewer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with self.assertRaises(TaskError) as caught:
+                start("item-1", "base", target=target, owner="@a", reviewer="@a")
+        self.assertIn("must not be the task owner", str(caught.exception))
+
+
 class SliceListTests(unittest.TestCase):
     """ADR-0035, slice D2: the task owns the ordered slice list, and the
     list is what says whether anything in the task still has to land."""
@@ -549,6 +568,7 @@ class StartTests(unittest.TestCase):
                     "summary": None,
                     "description": None,
                     "owner": None,
+                    "reviewer": None,
                     "entry": None,
                 },
                 summary,

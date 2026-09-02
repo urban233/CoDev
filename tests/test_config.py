@@ -226,6 +226,9 @@ class ListValuesTests(unittest.TestCase):
                 "git.workflow": ResolvedValue("trunk", "default"),
                 "review.max_lines": ResolvedValue("400", "default"),
                 "review.max_files": ResolvedValue("8", "default"),
+                "review.required_approvals": ResolvedValue("1", "default"),
+                "review.sensitive_paths": ResolvedValue("", "default"),
+                "review.pair_paths": ResolvedValue("", "default"),
             },
             result,
         )

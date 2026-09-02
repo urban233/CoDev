@@ -482,6 +482,12 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     t_start.add_argument(
+        "--reviewer",
+        default=None,
+        help="the independent human reviewer for this task (ADR-0037); must "
+        "not be the owner, and is resolved from CODEOWNERS when omitted",
+    )
+    t_start.add_argument(
         "--slice",
         action="append",
         default=None,
@@ -1306,6 +1312,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             owner=owner,
             entry=args.entry,
             slices=args.slices,
+            reviewer=args.reviewer,
         )
         if args.json:
             return _emit_json(

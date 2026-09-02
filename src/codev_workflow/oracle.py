@@ -275,16 +275,60 @@ def _github_position(
             slice_id=slice_id,
         )
     if state == "OPEN":
+        return _open_pull_request_position(task_id, branch, slice_id, target=target)
+    return None
+
+
+def _open_pull_request_position(
+    task_id: str, branch: str, slice_id: str, *, target: Path
+) -> NextAction:
+    """ADR-0037's gate, reported rather than enforced: the machine gates
+    being satisfied is not a human approval, and the difference is the whole
+    point of the rename in ADR-0037."""
+    owner = task.describe(task_id, target=target).get("owner")
+    # `required` travels on the record itself, so the count reported and the
+    # count compared against can never diverge.
+    approval = git_ops.human_approval(
+        branch,
+        owner=owner,
+        required=git_ops.required_approvals(task_id, target=target),
+        target=target,
+    )
+    if approval is None:
         return NextAction(
-            position="pull request open, awaiting human review",
-            recommendation="wait for an independent human approval",
-            reason=(
-                "the machine gates are satisfied and the pull request is open; "
-                "approval is a human decision this tool does not make"
-            ),
+            position="pull request open, review state unknown",
+            recommendation="check the pull request's reviews by hand",
+            reason="GitHub could not be asked whether an approval exists",
             task_id=task_id,
             branch=branch,
             slice_id=slice_id,
             check_reason="ok_machine_review_complete",
         )
-    return None
+    if approval.satisfied:
+        return NextAction(
+            position="approved by a human",
+            recommendation="merge is the human's decision, then land the slice",
+            reason=(
+                f"{len(approval.approvals)} of {approval.required} required "
+                "independent approval(s) recorded: "
+                f"{', '.join(approval.approvals)}"
+            ),
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_human_approved",
+        )
+    return NextAction(
+        position="pull request open, awaiting human review",
+        recommendation="wait for an independent human approval",
+        reason=(
+            f"{len(approval.approvals)} of {approval.required} required "
+            "independent approval(s) recorded; the machine gates being "
+            "satisfied is not "
+            "an approval, and neither the task owner nor a bot can supply one"
+        ),
+        task_id=task_id,
+        branch=branch,
+        slice_id=slice_id,
+        check_reason="ok_machine_review_complete",
+    )

@@ -54,6 +54,16 @@ DEFAULTS: dict[str, str] = {
     # hard limit. See docs/features/small-prs/design.md.
     "review.max_lines": "400",
     "review.max_files": "8",
+    # ADR-0037: one approving review from a human who is neither the task
+    # owner nor a bot. Two only where the risk warrants it -- requiring two
+    # everywhere will not survive contact with a team of eight, and Google
+    # does not require it either.
+    "review.required_approvals": "1",
+    # Comma-separated globs whose changes raise the requirement to two.
+    "review.sensitive_paths": "",
+    # ADR-0038: comma-separated globs the loop must not build unattended.
+    # Reaching one drops the slice to pair mode for the rest of the round.
+    "review.pair_paths": "",
 }
 
 
