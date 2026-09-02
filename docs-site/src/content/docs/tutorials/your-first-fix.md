@@ -156,7 +156,9 @@ editing:
 # screening/descriptors.py, before
 def compute_molecular_weight(mol, exclude_salts=True):
     fragments = split_into_fragments(mol)
-    total = sum(fragment_mass(f) for f in fragments)  # <- salts included unconditionally
+    total = sum(
+        fragment_mass(f) for f in fragments
+    )  # <- salts included unconditionally
     return total
 ```
 
