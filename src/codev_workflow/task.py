@@ -53,13 +53,12 @@ from codev_workflow.installer import _atomic_write
 # reads as a task holding exactly one slice whose id is the task id, so no
 # file on disk is rewritten and no round's recorded evidence changes.
 #
-# This release *reads* v4 and still *writes* v3, an accepted decision
-# (2026-09-02, docs/plans/unified-workflow-implementation.md): the writers
-# land in slice D1. Keeping the writers out of this slice is what makes the
-# highest-risk change in the plan cleanly revertible -- a revert leaves no
-# v4 artifact on disk to migrate back.
+# Slice D-prep-1 read v4 while still writing v3, so that the schema change
+# could land on its own and be reverted without leaving a v4 artifact on
+# disk. Slice D1 enables the writers: v4 is now what is written, v3 is still
+# read and upgraded in memory by `_as_current_schema`, and the strip that
+# kept writes at v3 is gone.
 ROUND_SCHEMA_VERSION = 4
-WRITTEN_ROUND_SCHEMA_VERSION = 3
 SUPPORTED_ROUND_SCHEMA_VERSIONS = (3, 4)
 TASK_DIR_RELATIVE = PurePosixPath(".codev/task")
 ESCALATIONS_FILENAME = "escalations.jsonl"
@@ -202,36 +201,31 @@ def _as_current_schema(state: dict[str, Any]) -> dict[str, Any]:
 
     A v4 document is returned untouched -- its `slices` list and per-round
     `slice_id` are authoritative, and defaulting them would silently
-    reassign rounds that belong to a later slice."""
+    reassign rounds that belong to a later slice.
+
+    The upgraded state is marked v4, so the next ordinary write persists it.
+    Without that, a rewritten legacy document would claim version 3 while
+    carrying v4 fields -- a shape no reader should ever have to interpret."""
     if state["round_schema_version"] == ROUND_SCHEMA_VERSION:
         return state
     task_id = state["task_id"]
     state["slices"] = [task_id]
     for round_entry in state["rounds"]:
         round_entry["slice_id"] = task_id
+    state["round_schema_version"] = ROUND_SCHEMA_VERSION
     return state
 
 
-def _as_written_schema(state: dict[str, Any]) -> dict[str, Any]:
-    """The on-disk form: v3, with the v4 view `_as_current_schema` added
-    stripped back out.
-
-    Writing v4 is deferred to slice D1, so this is what keeps a revert of
-    this slice clean -- nothing on disk ever gains a field only a v4 reader
-    understands."""
-    written = {key: value for key, value in state.items() if key != "slices"}
-    written["round_schema_version"] = WRITTEN_ROUND_SCHEMA_VERSION
-    written["rounds"] = [
-        {key: value for key, value in round_entry.items() if key != "slice_id"}
-        for round_entry in state["rounds"]
-    ]
-    return written
+def current_slice_id(state: dict[str, Any]) -> str:
+    """The slice new rounds belong to: the last one the task holds. Until
+    slice D3 generates a real slice list, every task holds exactly one."""
+    slices: list[str] = state["slices"]
+    return slices[-1]
 
 
 def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
     path = _task_path(target, task_id)
-    written = _as_written_schema(state)
-    content = (json.dumps(written, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    content = (json.dumps(state, indent=2, sort_keys=True) + "\n").encode("utf-8")
     _atomic_write(path, content)
 
 
@@ -310,13 +304,23 @@ def start(
     # normally requires a READY_FOR_OUTER_LOOP decision to create.
     initial_phase = "outer" if entry == "direct-review" else "inner"
     state: dict[str, Any] = {
-        "round_schema_version": WRITTEN_ROUND_SCHEMA_VERSION,
+        "round_schema_version": ROUND_SCHEMA_VERSION,
         "task_id": task_id,
         "base_snapshot": base_snapshot,
         "max_rounds": resolved_max_rounds,
         "current_round": 1,
+        # ADR-0035: a task holds an ordered list of slices. Generating a real
+        # list from an accepted plan's slices is slice D3; until then every
+        # task holds exactly one, named for the task itself.
+        "slices": [task_id],
         "rounds": [
-            {"round": 1, "phase": initial_phase, "builder": None, "reviewer": None}
+            {
+                "round": 1,
+                "phase": initial_phase,
+                "slice_id": task_id,
+                "builder": None,
+                "reviewer": None,
+            }
         ],
         "status": "in_progress",
         "link_ref": link_ref,
@@ -380,6 +384,7 @@ def _round_slot(state: dict[str, Any], round_number: int) -> dict[str, Any]:
     new_round: dict[str, Any] = {
         "round": round_number,
         "phase": phase,
+        "slice_id": current_slice_id(state),
         "builder": None,
         "reviewer": None,
     }
@@ -1020,6 +1025,7 @@ def reopen(
         {
             "round": new_round_number,
             "phase": next_phase,
+            "slice_id": current_slice_id(state),
             "builder": None,
             "reviewer": None,
         }
