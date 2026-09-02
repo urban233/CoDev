@@ -36,6 +36,9 @@ from typing import Any
 
 from codev_workflow.task import (
     REQUIRED_COVERAGE_DIMENSIONS,
+    ROUND_SCHEMA_VERSION,
+    SUPPORTED_ROUND_SCHEMA_VERSIONS,
+    WRITTEN_ROUND_SCHEMA_VERSION,
     CheckResult,
     TaskError,
     check,
@@ -53,6 +56,7 @@ from codev_workflow.task import (
     record_triage,
     relink,
     reopen,
+    slice_ids,
     start,
     triage_note,
     waive,
@@ -62,6 +66,301 @@ FULL_COVERAGE = {
     dimension: {"passed": True, "evidence": f"checked {dimension}"}
     for dimension in REQUIRED_COVERAGE_DIMENSIONS
 }
+
+
+def _state_path(target: Path, task_id: str) -> Path:
+    return target / ".codev" / "task" / task_id / "round-state.json"
+
+
+def _read_state(target: Path, task_id: str) -> dict[str, Any]:
+    document: dict[str, Any] = json.loads(
+        _state_path(target, task_id).read_text(encoding="utf-8")
+    )
+    return document
+
+
+def _rewrite_as_v4(target: Path, task_id: str) -> None:
+    """Convert a written v3 document into the equivalent v4 one, exactly as
+    slice D1's writers eventually will."""
+    path = _state_path(target, task_id)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["round_schema_version"] = ROUND_SCHEMA_VERSION
+    document["slices"] = [task_id]
+    for round_entry in document["rounds"]:
+        round_entry["slice_id"] = task_id
+    path.write_text(
+        json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _blocking(location: str, category: str) -> dict[str, Any]:
+    return {
+        "id": f"f-{location}-{category}",
+        "location": location,
+        "category": category,
+        "blocking": True,
+        "rank": 1,
+        "summary": "needs a fix",
+    }
+
+
+class SchemaVersionFourTests(unittest.TestCase):
+    """ADR-0035, slice D-prep-1. The reader understands v4; the writers still
+    emit v3, so a revert of this slice leaves nothing on disk to migrate."""
+
+    def test_writes_are_still_version_three(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head-sha", {"validation": "ok"}, target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual(WRITTEN_ROUND_SCHEMA_VERSION, document["round_schema_version"])
+        self.assertEqual(3, WRITTEN_ROUND_SCHEMA_VERSION)
+
+    def test_no_write_leaks_a_version_four_field_onto_disk(self) -> None:
+        """The property that keeps this slice cleanly revertible."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            record_builder("item-1", 1, "head-sha", {"validation": "ok"}, target=target)
+            record_reviewer(
+                "item-1", 1, "head-sha", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            document = _read_state(target, "item-1")
+        self.assertNotIn("slices", document)
+        for round_entry in document["rounds"]:
+            self.assertNotIn("slice_id", round_entry)
+
+    def test_a_version_three_task_reads_as_one_slice_named_for_itself(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            self.assertEqual(["item-1"], slice_ids("item-1", target=target))
+
+    def test_a_version_four_document_keeps_its_own_slice_identity(self) -> None:
+        """A real v4 document is authoritative: defaulting its rounds would
+        silently reassign ones belonging to a later slice."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            path = _state_path(target, "item-1")
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["round_schema_version"] = ROUND_SCHEMA_VERSION
+            document["slices"] = ["item-1-a", "item-1-b"]
+            document["rounds"][0]["slice_id"] = "item-1-b"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            self.assertEqual(
+                ["item-1-a", "item-1-b"], slice_ids("item-1", target=target)
+            )
+
+    def test_an_unsupported_version_is_still_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            path = _state_path(target, "item-1")
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["round_schema_version"] = 2
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaises(TaskError):
+                check("item-1", "base-sha", target=target)
+        self.assertEqual((3, 4), SUPPORTED_ROUND_SCHEMA_VERSIONS)
+
+
+class SchemaVersionFourReplayTests(unittest.TestCase):
+    """Every `check` outcome must read identically from a v3 and a v4
+    document. This is the evidence that the schema change is invisible."""
+
+    def _ok_waiting_on_reviewer(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target)
+        return "base-sha"
+
+    def _ok_ready_for_pr(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, entry="direct-review")
+        return "done-sha"
+
+    def _stop_drift(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target)
+        return "some-other-sha"
+
+    def _ok_continue(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target)
+        record_reviewer(
+            "item-1",
+            1,
+            "base-sha",
+            [_blocking("a.py:1", "correctness")],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        return "base-sha"
+
+    def _stop_round_cap(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, max_rounds={"inner": 1, "outer": 2})
+        record_reviewer(
+            "item-1",
+            1,
+            "base-sha",
+            [_blocking("a.py:1", "correctness")],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        return "base-sha"
+
+    def _ok_waiting_on_triage(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, entry="direct-review")
+        record_reviewer(
+            "item-1",
+            1,
+            "head-sha",
+            [_blocking("a.py:1", "correctness")],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        return "head-sha"
+
+    def _ok_approve_with_deferrals(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, entry="direct-review")
+        finding = _blocking("a.py:1", "correctness")
+        record_reviewer(
+            "item-1",
+            1,
+            "head-sha",
+            [finding],
+            FULL_COVERAGE,
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        record_triage(
+            "item-1",
+            1,
+            {
+                "dispositions": {
+                    finding["id"]: {
+                        "disposition": "defer",
+                        "override_reason": "not this release",
+                    }
+                }
+            },
+            target=target,
+        )
+        return "head-sha"
+
+    def _stop_incomplete_coverage(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, entry="direct-review")
+        record_reviewer(
+            "item-1", 1, "head-sha", [], {}, "READY_FOR_HUMAN_APPROVAL", target=target
+        )
+        return "head-sha"
+
+    def _ok_approve(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, entry="direct-review")
+        record_reviewer(
+            "item-1",
+            1,
+            "head-sha",
+            [],
+            FULL_COVERAGE,
+            "READY_FOR_HUMAN_APPROVAL",
+            target=target,
+        )
+        return "head-sha"
+
+    def _ok_blocked_missing_evidence(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target)
+        record_reviewer(
+            "item-1",
+            1,
+            "base-sha",
+            [],
+            {},
+            "BLOCKED_BY_MISSING_EVIDENCE",
+            target=target,
+        )
+        return "base-sha"
+
+    def _stop_repeated_finding(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, max_rounds={"inner": 4, "outer": 4})
+        finding = _blocking("a.py:1", "correctness")
+        record_reviewer(
+            "item-1", 1, "base-sha", [finding], {}, "CHANGES_REQUIRED", target=target
+        )
+        record_builder("item-1", 2, "base-sha", {"validation": "ok"}, target=target)
+        record_reviewer(
+            "item-1", 2, "base-sha", [finding], {}, "CHANGES_REQUIRED", target=target
+        )
+        return "base-sha"
+
+    def _stop_scope_expansion(self, target: Path) -> str:
+        start("item-1", "base-sha", target=target, max_rounds={"inner": 4, "outer": 4})
+        record_reviewer(
+            "item-1",
+            1,
+            "base-sha",
+            [_blocking("a.py:1", "correctness")],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        record_builder("item-1", 2, "base-sha", {"validation": "ok"}, target=target)
+        record_reviewer(
+            "item-1",
+            2,
+            "base-sha",
+            [_blocking("b.py:9", "maintainability")],
+            {},
+            "CHANGES_REQUIRED",
+            target=target,
+        )
+        return "base-sha"
+
+    def _ok_outer_loop_needs_reopen(self, target: Path) -> str:
+        """Hand-built: record_reviewer refuses to create this shape fresh, so
+        the reader's handling of it is defense-in-depth (ADR-0017)."""
+        start("item-1", "base-sha", target=target)
+        path = _state_path(target, "item-1")
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document["rounds"][0]["phase"] = "outer"
+        document["rounds"][0]["reviewer"] = {
+            "head_snapshot": "head-sha",
+            "decision": "READY_FOR_OUTER_LOOP",
+            "findings": [],
+            "coverage": {},
+        }
+        path.write_text(json.dumps(document), encoding="utf-8")
+        return "head-sha"
+
+    def test_every_check_outcome_reads_identically_from_v3_and_v4(self) -> None:
+        builders = {
+            "ok_waiting_on_reviewer": self._ok_waiting_on_reviewer,
+            "ok_ready_for_pr": self._ok_ready_for_pr,
+            "stop_drift": self._stop_drift,
+            "ok_continue": self._ok_continue,
+            "stop_round_cap": self._stop_round_cap,
+            "ok_waiting_on_triage": self._ok_waiting_on_triage,
+            "ok_approve_with_deferrals": self._ok_approve_with_deferrals,
+            "stop_incomplete_coverage": self._stop_incomplete_coverage,
+            "ok_approve": self._ok_approve,
+            "ok_blocked_missing_evidence": self._ok_blocked_missing_evidence,
+            "stop_repeated_finding": self._stop_repeated_finding,
+            "stop_scope_expansion": self._stop_scope_expansion,
+            "ok_outer_loop_needs_reopen": self._ok_outer_loop_needs_reopen,
+        }
+        observed = set()
+        for expected_reason, build in builders.items():
+            with self.subTest(reason=expected_reason):
+                with tempfile.TemporaryDirectory() as directory:
+                    target = Path(directory)
+                    head = build(target)
+                    from_v3 = check("item-1", head, target=target)
+                    self.assertEqual(expected_reason, from_v3.reason)
+                    _rewrite_as_v4(target, "item-1")
+                    from_v4 = check("item-1", head, target=target)
+                self.assertEqual(from_v3, from_v4)
+                observed.add(from_v3.reason)
+        self.assertEqual(set(builders), observed)
 
 
 class StartTests(unittest.TestCase):

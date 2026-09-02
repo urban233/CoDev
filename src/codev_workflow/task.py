@@ -48,7 +48,19 @@ from codev_workflow.installer import _atomic_write
 # key is task_id (was work_item_id) and state lives under .codev/task/ (was
 # .codev/work/). v2 files are rejected by _load's version guard below -- no
 # migration, same precedent ADR-0003 set for v1->v2.
-ROUND_SCHEMA_VERSION = 3
+# v4 (ADR-0035): the slice becomes the unit of execution and a task becomes
+# the ordered collection its slices belong to. A task recorded before this
+# reads as a task holding exactly one slice whose id is the task id, so no
+# file on disk is rewritten and no round's recorded evidence changes.
+#
+# This release *reads* v4 and still *writes* v3, an accepted decision
+# (2026-09-02, docs/plans/unified-workflow-implementation.md): the writers
+# land in slice D1. Keeping the writers out of this slice is what makes the
+# highest-risk change in the plan cleanly revertible -- a revert leaves no
+# v4 artifact on disk to migrate back.
+ROUND_SCHEMA_VERSION = 4
+WRITTEN_ROUND_SCHEMA_VERSION = 3
+SUPPORTED_ROUND_SCHEMA_VERSIONS = (3, 4)
 TASK_DIR_RELATIVE = PurePosixPath(".codev/task")
 ESCALATIONS_FILENAME = "escalations.jsonl"
 DEFAULT_INNER_MAX_ROUNDS = 2
@@ -152,18 +164,51 @@ def _load(task_id: str, *, target: Path) -> dict[str, Any]:
         raise TaskError(f"cannot read {path}: {error}") from error
     if (
         not isinstance(state, dict)
-        or state.get("round_schema_version") != ROUND_SCHEMA_VERSION
+        or state.get("round_schema_version") not in SUPPORTED_ROUND_SCHEMA_VERSIONS
     ):
         raise TaskError(
             f"{path} has an unsupported or invalid round schema; "
             "install a compatible CoDev version"
         )
+    return _as_current_schema(state)
+
+
+def _as_current_schema(state: dict[str, Any]) -> dict[str, Any]:
+    """Present a v3 document in v4 shape (ADR-0035): a task holding exactly
+    one slice, whose id is the task id, that every recorded round belongs to.
+
+    A v4 document is returned untouched -- its `slices` list and per-round
+    `slice_id` are authoritative, and defaulting them would silently
+    reassign rounds that belong to a later slice."""
+    if state["round_schema_version"] == ROUND_SCHEMA_VERSION:
+        return state
+    task_id = state["task_id"]
+    state["slices"] = [task_id]
+    for round_entry in state["rounds"]:
+        round_entry["slice_id"] = task_id
     return state
+
+
+def _as_written_schema(state: dict[str, Any]) -> dict[str, Any]:
+    """The on-disk form: v3, with the v4 view `_as_current_schema` added
+    stripped back out.
+
+    Writing v4 is deferred to slice D1, so this is what keeps a revert of
+    this slice clean -- nothing on disk ever gains a field only a v4 reader
+    understands."""
+    written = {key: value for key, value in state.items() if key != "slices"}
+    written["round_schema_version"] = WRITTEN_ROUND_SCHEMA_VERSION
+    written["rounds"] = [
+        {key: value for key, value in round_entry.items() if key != "slice_id"}
+        for round_entry in state["rounds"]
+    ]
+    return written
 
 
 def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
     path = _task_path(target, task_id)
-    content = (json.dumps(state, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    written = _as_written_schema(state)
+    content = (json.dumps(written, indent=2, sort_keys=True) + "\n").encode("utf-8")
     _atomic_write(path, content)
 
 
@@ -242,7 +287,7 @@ def start(
     # normally requires a READY_FOR_OUTER_LOOP decision to create.
     initial_phase = "outer" if entry == "direct-review" else "inner"
     state: dict[str, Any] = {
-        "round_schema_version": ROUND_SCHEMA_VERSION,
+        "round_schema_version": WRITTEN_ROUND_SCHEMA_VERSION,
         "task_id": task_id,
         "base_snapshot": base_snapshot,
         "max_rounds": resolved_max_rounds,
@@ -1132,6 +1177,13 @@ def describe_all(*, target: Path) -> list[dict[str, Any]]:
         if (entry / "round-state.json").exists():
             results.append(describe(entry.name, target=target))
     return results
+
+
+def slice_ids(task_id: str, *, target: Path) -> list[str]:
+    """The ordered slice ids this task holds (ADR-0035). A task recorded
+    before v4 holds exactly one, named for the task itself."""
+    slices: list[str] = list(_load(task_id, target=target)["slices"])
+    return slices
 
 
 def log_records(task_id: str, *, target: Path) -> dict[str, Any]:
