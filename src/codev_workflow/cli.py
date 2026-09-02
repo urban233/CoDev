@@ -43,6 +43,7 @@ from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import git_ops as git_ops_module
 from codev_workflow import hook_log as hook_log_module
+from codev_workflow import oracle as oracle_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -393,6 +394,22 @@ def _parser() -> argparse.ArgumentParser:
     c_list.add_argument("--target", type=_target, default=Path.cwd())
     c_list.add_argument("--json", action="store_true")
 
+    next_parser = commands.add_parser(
+        "next",
+        help="where the work stands and the one thing to do next (ADR-0036); "
+        "an agent reads this, a developer does not have to",
+    )
+    next_parser.add_argument(
+        "--id", default=None, help="override the task inferred from the branch"
+    )
+    next_parser.add_argument(
+        "--no-github",
+        action="store_true",
+        help="skip the pull-request lookup and answer from local state only",
+    )
+    next_parser.add_argument("--json", action="store_true")
+    next_parser.add_argument("--target", type=_target, default=Path.cwd())
+
     self_parser = commands.add_parser("self", help="manage the installed codev tool")
     self_commands = self_parser.add_subparsers(dest="self_command", required=True)
     self_commands.add_parser("version", help="print the installed codev version")
@@ -463,6 +480,14 @@ def _parser() -> argparse.ArgumentParser:
             "direct-review: finished human work skips straight to the outer "
             "loop; omit for the default cold start"
         ),
+    )
+    t_start.add_argument(
+        "--slice",
+        action="append",
+        default=None,
+        dest="slices",
+        help="repeatable, ordered: the slices this task holds (ADR-0035); "
+        "omit for a task that fits in one pull request",
     )
     t_start.add_argument("--target", type=_target, default=Path.cwd())
 
@@ -546,6 +571,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     t_waive.add_argument("--target", type=_target, default=Path.cwd())
 
+    t_advance = task_commands.add_parser(
+        "advance-slice",
+        help="move a task on to its next slice and open a fresh round",
+    )
+    t_advance.add_argument("--id", required=True)
+    t_advance.add_argument(
+        "--head", required=True, help="the commit the finished slice landed on"
+    )
+    t_advance.add_argument("--target", type=_target, default=Path.cwd())
+
     t_relink = task_commands.add_parser(
         "relink",
         help=(
@@ -628,6 +663,7 @@ def _parser() -> argparse.ArgumentParser:
         t_waive,
         t_relink,
         t_log,
+        t_advance,
         t_triage,
         t_escalate,
         t_escalations,
@@ -824,14 +860,17 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
 
 
 def _size_payload(task_id: str, *, target: Path) -> dict[str, Any] | None:
-    """A task's running size as JSON-ready fields, or None when it cannot be
-    measured. Never raises: a measurement failure must not block the commit
-    or pull-request path it decorates."""
+    """The running size of the slice being worked, plus the task's uncapped
+    total, or None when neither can be measured. Never raises: a measurement
+    failure must not block the commit or pull-request path it decorates."""
     try:
-        size = git_ops_module.task_size(task_id, target=target)
+        size = git_ops_module.slice_size(task_id, target=target)
+        total = git_ops_module.task_size(task_id, target=target)
     except git_ops_module.GitOpsError:
         return None
     return {
+        "task_total_lines_changed": total.lines_changed,
+        "task_total_files_changed": total.files_changed,
         "lines_changed": size.lines_changed,
         "files_changed": size.files_changed,
         "max_lines": size.max_lines,
@@ -848,10 +887,19 @@ def _print_size_report(task_id: str, *, target: Path) -> None:
         return
     status_word = "over budget" if size["over_budget"] else "within budget"
     print(
-        f"Size: {size['lines_changed']} line(s) (budget {size['max_lines']}), "
-        f"{size['files_changed']} file(s) (budget {size['max_files']}) -- "
-        f"{status_word}"
+        f"Slice size: {size['lines_changed']} line(s) "
+        f"(budget {size['max_lines']}), {size['files_changed']} file(s) "
+        f"(budget {size['max_files']}) -- {status_word}"
     )
+    if (
+        size["task_total_lines_changed"] != size["lines_changed"]
+        or size["task_total_files_changed"] != size["files_changed"]
+    ):
+        print(
+            f"Task total: {size['task_total_lines_changed']} line(s), "
+            f"{size['task_total_files_changed']} file(s) across every landed "
+            "slice -- reported, not capped"
+        )
 
 
 def _emit_json(payload: Any) -> int:
@@ -905,7 +953,9 @@ def _task_sizes(
     ]
     sizes: dict[str, dict[str, int | bool]] = {}
     for task_id in in_progress_ids:
-        size = git_ops_module.task_size(task_id, target=target)
+        # The budget bounds one reviewer's reading, and a reviewer reads one
+        # pull request -- so status reports the slice, not the task total.
+        size = git_ops_module.slice_size(task_id, target=target)
         sizes[task_id] = {
             "lines_changed": size.lines_changed,
             "files_changed": size.files_changed,
@@ -1019,7 +1069,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 paths = ", ".join(overlap["paths"])
                 print(f"  {items}: {paths}")
         if args.verbose and sizes:
-            print("Task sizes (non-generated changed lines/files vs. budget):")
+            print("Slice sizes (non-generated changed lines/files vs. budget):")
             for task_id in sorted(sizes):
                 size = sizes[task_id]
                 flag = " (over budget)" if size["over_budget"] else ""
@@ -1203,6 +1253,22 @@ def _run_codeowners_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _run_next_command(args: argparse.Namespace) -> int:
+    action = oracle_module.next_action(
+        target=args.target.resolve(),
+        task_id=args.id,
+        check_github=not args.no_github,
+    )
+    if args.json:
+        return _emit_json(action.as_dict())
+    print(f"Position: {action.position}")
+    print(f"Next: {action.recommendation}")
+    print(f"Why: {action.reason}")
+    if action.command:
+        print(f"Run: {action.command}")
+    return 1 if action.blocked else 0
+
+
 def _run_task_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     if args.task_command == "start":
@@ -1239,6 +1305,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             description=args.description,
             owner=owner,
             entry=args.entry,
+            slices=args.slices,
         )
         if args.json:
             return _emit_json(
@@ -1246,6 +1313,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
                     "task_id": args.id,
                     "path": str(path),
                     "base_snapshot": args.base,
+                    "slices": task_module.slice_ids(args.id, target=target),
+                    "current_slice": task_module.current_slice(args.id, target=target),
                     "link_ref": link_ref,
                     "summary": summary,
                     "owner": owner,
@@ -1377,6 +1446,22 @@ def _run_task_command(args: argparse.Namespace) -> int:
         print(f"Waived {args.dimension!r} for task {args.id} at {path}")
         return 0
 
+    if args.task_command == "advance-slice":
+        next_slice = task_module.advance_slice(args.id, args.head, target=target)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "slice_id": next_slice,
+                    "base_snapshot": args.head,
+                    "final_slice": task_module.is_final_slice(
+                        args.id, next_slice, target=target
+                    ),
+                }
+            )
+        print(f"Advanced {args.id} to slice {next_slice}")
+        return 0
+
     if args.task_command == "relink":
         link_ref = args.link
         if args.github_issue is not None:
@@ -1424,7 +1509,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.task_command == "size":
-        size = git_ops_module.task_size(args.id, target=target)
+        size = git_ops_module.slice_size(args.id, target=target)
         if args.json:
             print(
                 json.dumps(
@@ -1909,6 +1994,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_self_command(args)
         if args.command == "codeowners":
             return _run_codeowners_command(args)
+        if args.command == "next":
+            return _run_next_command(args)
         if args.command == "task":
             return _run_task_command(args)
         if args.command == "git":

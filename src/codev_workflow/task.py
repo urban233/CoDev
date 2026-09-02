@@ -207,20 +207,29 @@ def _as_current_schema(state: dict[str, Any]) -> dict[str, Any]:
     Without that, a rewritten legacy document would claim version 3 while
     carrying v4 fields -- a shape no reader should ever have to interpret."""
     if state["round_schema_version"] == ROUND_SCHEMA_VERSION:
+        # `current_slice` arrived after the first v4 writes, so default it
+        # from the newest round rather than assuming the first slice.
+        if "current_slice" not in state:
+            state["current_slice"] = state["rounds"][-1]["slice_id"]
         return state
     task_id = state["task_id"]
     state["slices"] = [task_id]
     for round_entry in state["rounds"]:
         round_entry["slice_id"] = task_id
+    state["current_slice"] = task_id
     state["round_schema_version"] = ROUND_SCHEMA_VERSION
     return state
 
 
 def current_slice_id(state: dict[str, Any]) -> str:
-    """The slice new rounds belong to: the last one the task holds. Until
-    slice D3 generates a real slice list, every task holds exactly one."""
-    slices: list[str] = state["slices"]
-    return slices[-1]
+    """The slice new rounds belong to.
+
+    Slice D1 returned the *last* slice the task held, which was correct only
+    while every task held exactly one. Once a task holds several, the slice
+    being worked is tracked explicitly: a round opened after a later slice
+    exists must not silently attach to that later slice."""
+    current: str = state["current_slice"]
+    return current
 
 
 def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
@@ -232,6 +241,23 @@ def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
 def _ensure_in_progress(state: dict[str, Any]) -> None:
     if state["status"] != "in_progress":
         raise TaskError(f"task is {state['status']!r}, not in_progress")
+
+
+def _normalize_slices(task_id: str, slices: list[str] | None) -> list[str]:
+    """The ordered slice list a task holds. Omitting it means the task holds
+    exactly one slice, named for the task itself -- the degenerate case
+    ADR-0035 names, not the normal shape."""
+    if slices is None:
+        return [task_id]
+    if not slices:
+        raise TaskError("slices must name at least one slice")
+    seen = set()
+    for slice_id in slices:
+        _validate_id(slice_id)
+        if slice_id in seen:
+            raise TaskError(f"duplicate slice id: {slice_id!r}")
+        seen.add(slice_id)
+    return list(slices)
 
 
 def _normalize_max_rounds(max_rounds: int | dict[str, int] | None) -> dict[str, int]:
@@ -281,8 +307,10 @@ def start(
     description: str | None = None,
     owner: str | None = None,
     entry: str | None = None,
+    slices: list[str] | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
+    resolved_slices = _normalize_slices(task_id, slices)
     _validate_optional_text("link_ref", link_ref)
     _validate_optional_text("summary", summary)
     _validate_optional_text("description", description)
@@ -309,15 +337,16 @@ def start(
         "base_snapshot": base_snapshot,
         "max_rounds": resolved_max_rounds,
         "current_round": 1,
-        # ADR-0035: a task holds an ordered list of slices. Generating a real
-        # list from an accepted plan's slices is slice D3; until then every
-        # task holds exactly one, named for the task itself.
-        "slices": [task_id],
+        # ADR-0035: a task holds an ordered list of slices, declared from the
+        # accepted plan's slice list. A change that genuinely fits in one
+        # pull request is a task holding exactly one slice.
+        "slices": resolved_slices,
+        "current_slice": resolved_slices[0],
         "rounds": [
             {
                 "round": 1,
                 "phase": initial_phase,
-                "slice_id": task_id,
+                "slice_id": resolved_slices[0],
                 "builder": None,
                 "reviewer": None,
             }
@@ -1215,6 +1244,68 @@ def slice_ids(task_id: str, *, target: Path) -> list[str]:
     before v4 holds exactly one, named for the task itself."""
     slices: list[str] = list(_load(task_id, target=target)["slices"])
     return slices
+
+
+def advance_slice(task_id: str, head: str, *, target: Path) -> str:
+    """Move this task on to its next slice and open a fresh round against
+    `head` (ADR-0035).
+
+    A slice is one pull request's worth of work, so the next one starts from
+    where the previous one landed -- the same re-baselining `reopen` does,
+    for the same reason: `check`'s drift guard compares against a recorded
+    snapshot, and the new slice's work has not happened yet."""
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    slices: list[str] = state["slices"]
+    position = slices.index(state["current_slice"])
+    if position + 1 >= len(slices):
+        raise TaskError(
+            f"task {task_id!r} is on its final slice "
+            f"{state['current_slice']!r}; there is no next slice to advance to"
+        )
+    next_slice = slices[position + 1]
+    state["current_slice"] = next_slice
+    new_round_number = state["rounds"][-1]["round"] + 1
+    state["rounds"].append(
+        {
+            "round": new_round_number,
+            "phase": "inner",
+            "slice_id": next_slice,
+            "builder": None,
+            "reviewer": None,
+        }
+    )
+    state["current_round"] = new_round_number
+    state["base_snapshot"] = head
+    _save(task_id, state, target=target)
+    return next_slice
+
+
+def describe_base_snapshot(task_id: str, *, target: Path) -> str:
+    """The base the task is presently working from. `advance_slice` and
+    `reopen` both move it, so this is the current slice's starting point,
+    not the branch's."""
+    base: str = _load(task_id, target=target)["base_snapshot"]
+    return base
+
+
+def current_slice(task_id: str, *, target: Path) -> str:
+    """The slice this task's most recent round belongs to (ADR-0035)."""
+    state = _load(task_id, target=target)
+    return current_slice_id(state)
+
+
+def is_final_slice(task_id: str, slice_id: str, *, target: Path) -> bool:
+    """True when `slice_id` is the last slice its task holds, so nothing
+    further in this task remains to land.
+
+    This is what decides `Closes #N` against `Part of #N` for a task whose
+    work is sliced. An unknown slice id is treated as final rather than
+    raising: this backs pull-request body text, and a wrong-but-conservative
+    `Closes` is a worse failure than an exception only if it is silent, so
+    callers that care check membership themselves."""
+    slices = slice_ids(task_id, target=target)
+    return not slices or slices[-1] == slice_id
 
 
 def log_records(task_id: str, *, target: Path) -> dict[str, Any]:

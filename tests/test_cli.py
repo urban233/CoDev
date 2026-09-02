@@ -140,6 +140,14 @@ class TaskJsonSurfaceTests(unittest.TestCase):
                     "codev_workflow.cli.git_ops_module.detect_identity",
                     return_value="@alice",
                 ),
+                patch(
+                    "codev_workflow.cli.task_module.slice_ids",
+                    return_value=["item-1"],
+                ),
+                patch(
+                    "codev_workflow.cli.task_module.current_slice",
+                    return_value="item-1",
+                ),
             ):
                 payload = self._run(
                     [
@@ -158,6 +166,7 @@ class TaskJsonSurfaceTests(unittest.TestCase):
             self.assertEqual("Fix the thing", payload["summary"])
             self.assertEqual("@alice", payload["owner"])
             self.assertEqual("base-sha", payload["base_snapshot"])
+            self.assertEqual(["item-1"], payload["slices"])
 
     def test_record_json_echoes_the_round_it_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -750,8 +759,40 @@ class CliTests(unittest.TestCase):
                         ]
                     )
             for output in (commit_output.getvalue(), open_pr_output.getvalue()):
-                self.assertIn("Size: 410 line(s)", output)
+                self.assertIn("Slice size: 410 line(s)", output)
                 self.assertIn("over budget", output)
+
+    def test_a_task_that_never_advanced_reports_one_size_not_two(self) -> None:
+        """Slice and task total are identical until a slice advances, so the
+        redundant second line is suppressed."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.commit", return_value="head-sha"
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=TaskSize(10, 1, 400, 8),
+                ),
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    main(
+                        [
+                            "git",
+                            "commit",
+                            "--id",
+                            "item-1",
+                            "--message",
+                            "m",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            text = output.getvalue()
+        self.assertIn("Slice size: 10 line(s)", text)
+        self.assertNotIn("Task total", text)
 
     def test_size_report_failure_never_blocks_commit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2258,7 +2299,7 @@ class CliTests(unittest.TestCase):
                     "codev_workflow.cli.git_ops_module.changed_files", return_value=[]
                 ),
                 patch(
-                    "codev_workflow.cli.git_ops_module.task_size",
+                    "codev_workflow.cli.git_ops_module.slice_size",
                     return_value=TaskSize(450, 3, 400, 8),
                 ),
             ):
@@ -2270,7 +2311,7 @@ class CliTests(unittest.TestCase):
                     main(["status", "--target", str(target), "--verbose", "--json"])
             self.assertEqual(0, code)
             text = output.getvalue()
-            self.assertIn("Task sizes", text)
+            self.assertIn("Slice sizes", text)
             self.assertIn("item-1: 450/400 lines, 3/8 files (over budget)", text)
             payload = json.loads(json_output.getvalue())
             self.assertEqual(

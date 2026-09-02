@@ -42,12 +42,15 @@ from codev_workflow.task import (
     TaskError,
     _load,
     _save,
+    advance_slice,
     check,
     close,
+    current_slice,
     deprecated_reason_for,
     describe,
     describe_all,
     escalations_text,
+    is_final_slice,
     log_text,
     pr_description,
     read_escalations,
@@ -105,6 +108,86 @@ def _blocking(location: str, category: str) -> dict[str, Any]:
         "rank": 1,
         "summary": "needs a fix",
     }
+
+
+class SliceListTests(unittest.TestCase):
+    """ADR-0035, slice D2: the task owns the ordered slice list, and the
+    list is what says whether anything in the task still has to land."""
+
+    def test_a_single_slice_task_is_its_own_final_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target)
+            self.assertEqual("item-1", current_slice("item-1", target=target))
+            self.assertTrue(is_final_slice("item-1", "item-1", target=target))
+
+    def test_only_the_last_slice_of_a_multi_slice_task_is_final(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, slices=["a", "b", "c"])
+            self.assertFalse(is_final_slice("item-1", "a", target=target))
+            self.assertFalse(is_final_slice("item-1", "b", target=target))
+            self.assertTrue(is_final_slice("item-1", "c", target=target))
+
+    def test_a_task_starts_on_its_first_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, slices=["a", "b"])
+            self.assertEqual("a", current_slice("item-1", target=target))
+            self.assertFalse(
+                is_final_slice(
+                    "item-1", current_slice("item-1", target=target), target=target
+                )
+            )
+
+    def test_advancing_moves_to_the_next_slice_and_opens_a_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, slices=["a", "b"])
+            self.assertEqual(
+                "b", advance_slice("item-1", "slice-a-head", target=target)
+            )
+            document = _read_state(target, "item-1")
+        self.assertEqual("b", document["current_slice"])
+        self.assertEqual("b", document["rounds"][-1]["slice_id"])
+        self.assertEqual("inner", document["rounds"][-1]["phase"])
+        self.assertEqual("slice-a-head", document["base_snapshot"])
+
+    def test_a_round_opened_after_a_later_slice_exists_stays_on_the_current_one(
+        self,
+    ) -> None:
+        """The defect the review of slice D1 flagged: returning the *last*
+        slice would silently attach this round to `b`."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, slices=["a", "b"])
+            record_reviewer(
+                "item-1",
+                1,
+                "base",
+                [_blocking("x.py:1", "correctness")],
+                {},
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            record_builder("item-1", 2, "base", {"validation": "ok"}, target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual("a", document["rounds"][1]["slice_id"])
+
+    def test_advancing_past_the_final_slice_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            with self.assertRaises(TaskError):
+                advance_slice("item-1", "head", target=target)
+
+    def test_a_declared_slice_list_rejects_duplicates_and_emptiness(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with self.assertRaises(TaskError):
+                start("dup", "base", target=target, slices=["a", "a"])
+            with self.assertRaises(TaskError):
+                start("empty", "base", target=target, slices=[])
 
 
 class DeprecatedReasonAliasTests(unittest.TestCase):

@@ -381,10 +381,34 @@ def _has_recorded_child(task_id: str, *, target: Path) -> bool:
     return False
 
 
+def _more_slices_remain(task_id: str, *, target: Path) -> bool:
+    """True when this task holds a later slice than the one currently being
+    worked (ADR-0035). Read from the task's own ordered slice list, which is
+    the collection that owns the issue -- not inferred from sibling state.
+
+    Best-effort for the same reason `_has_recorded_child` is: this backs
+    pull-request body text, so unreadable round state means "cannot tell",
+    not an exception."""
+    try:
+        return not task.is_final_slice(
+            task_id, task.current_slice(task_id, target=target), target=target
+        )
+    except (task.TaskError, KeyError):
+        return False
+
+
 def _closing_line(issue_number: int, *, task_id: str, target: Path) -> str:
-    """`Part of #N` when this task has a recorded child (a later slice in
-    its stack still needs to land), `Closes #N` otherwise (ADR-0034)."""
-    if _has_recorded_child(task_id, target=target):
+    """`Part of #N` while anything in this task still has to land, `Closes
+    #N` on the piece that finishes it.
+
+    Two things can mean "more remains", and both are checked. The task's own
+    slice list is authoritative (ADR-0035): the issue belongs to the task,
+    so only its final slice closes it. A recorded child task is the older
+    sibling-stack form (ADR-0034), still supported for stacks created that
+    way."""
+    if _more_slices_remain(task_id, target=target) or _has_recorded_child(
+        task_id, target=target
+    ):
         return f"Part of #{issue_number}"
     return f"Closes #{issue_number}"
 
@@ -712,15 +736,50 @@ def _generated_paths(paths: list[str], *, target: Path) -> set[str]:
     return generated
 
 
+def slice_size(task_id: str, *, target: Path) -> TaskSize:
+    """The size of the slice currently being worked: the diff from the base
+    the task is presently on, which `task.advance_slice` moves to each
+    finished slice's head.
+
+    This is the measurement the budget applies to. A reviewer reads one pull
+    request, and ADR-0035 makes one slice one pull request, so the slice --
+    not the task -- is the thing that has to stay small.
+
+    Falls back to the whole task when round state is unreadable, which is
+    also the honest answer for a task that never advanced past its first
+    slice: the two measurements are identical there.
+    """
+    try:
+        base = task.describe_base_snapshot(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return task_size(task_id, target=target)
+    return _measure(task_id, base, target=target)
+
+
 def task_size(task_id: str, *, target: Path) -> TaskSize:
-    """Read-only non-generated changed-line and changed-file count for a
-    task's own branch against its recorded base snapshot, plus the resolved
-    `review.max_lines`/`review.max_files` budget.
+    """The whole task's size: the diff from the commit its branch was cut
+    from, across every slice it has landed so far.
+
+    Reported, never capped -- a task deliberately sliced into four is
+    supposed to total more than one slice's budget. `slice_size` is what the
+    budget applies to.
 
     Returns zero counts rather than raising when the task has no branch
     recorded yet, matching changed_files's established posture -- this
     backs `codev task size` and status --verbose, not a hard requirement.
     """
+    try:
+        git_state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        max_lines = _resolved_budget("review.max_lines", target=target)
+        max_files = _resolved_budget("review.max_files", target=target)
+        return TaskSize(0, 0, max_lines, max_files)
+    return _measure(task_id, git_state["base_snapshot"], target=target)
+
+
+def _measure(task_id: str, base: str, *, target: Path) -> TaskSize:
+    """Non-generated changed lines and files between `base` and the task's
+    own branch, plus the resolved budget."""
     max_lines = _resolved_budget("review.max_lines", target=target)
     max_files = _resolved_budget("review.max_files", target=target)
     try:
@@ -729,7 +788,7 @@ def task_size(task_id: str, *, target: Path) -> TaskSize:
         return TaskSize(0, 0, max_lines, max_files)
     try:
         output = _run_git(
-            ["diff", "--numstat", git_state["base_snapshot"], git_state["branch"]],
+            ["diff", "--numstat", base, git_state["branch"]],
             cwd=target,
         )
     except GitOpsError:
@@ -932,6 +991,14 @@ def _pr_state(branch: str, *, target: Path) -> str | None:
     except GitOpsError:
         return None
     return state.strip()
+
+
+def pull_request_state(branch: str, *, target: Path) -> str | None:
+    """Public, read-only pull-request state for a branch: "OPEN", "CLOSED",
+    "MERGED", or None when GitHub cannot answer -- no pull request, no
+    remote, or no credentials. The oracle treats None as "cannot tell" and
+    falls back to a local recommendation rather than reporting a guess."""
+    return _pr_state(branch, target=target)
 
 
 def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
