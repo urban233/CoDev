@@ -260,6 +260,25 @@ encodes where these artifacts live. The navigator reads that line. No new
 metadata format, no front matter, no schema: the convention exists and is
 already load-bearing for the gate.
 
+## Part C - A merged pull request stops being reported as unopened
+
+`_github_position` is consulted only when `task.check` returns
+`ok_machine_review_complete` or its deferrals variant. Every other reason
+skips GitHub entirely, so a slice sitting at `ok_ready_for_pr` is told to open
+a pull request no matter what GitHub actually holds -- including when the pull
+request is already open, already merged, or closed.
+
+This was found in use rather than by reading: on `main`, immediately after the
+coverage measure's own pull request merged, `codev next` still recommended
+"open the pull request". It is the mechanism behind the `dispatch_specialists`
+row of the recorded baseline.
+
+The fix is to consult GitHub for any position where a pull request could
+exist, not only the two reasons that happen to imply human review. It stays
+cheap: `pull_request_state` already returns `None` when GitHub cannot answer,
+and the caller already falls back to the local recommendation rather than
+reporting a guess as fact.
+
 ## Part B - Blocked becomes a choice
 
 `NextAction` gains an `options` list. Each option carries `label`, `command`,
@@ -319,8 +338,30 @@ past what a focus card can carry*, which is the moment a written plan is
 genuinely worth its cost. The gate stops being a toll booth and becomes a
 tripwire.
 
+## The plan gate does not recognize this repository's own plans
+
+`gate.py`'s `_SPEC_GLOBS` covers `docs/features/*/design.md`,
+`docs/codev/features/*/design.md`, and `docs/codev/wave/*.md`. It does not
+cover `docs/plans/*.md`, which is where this repository actually keeps every
+accepted plan -- including the two that authorize this work.
+
+The consequence was reproduced live: on the branch that carried an accepted,
+committed plan, `codev gate check --gate plan` still answered `ask`, because
+neither the precise per-task path nor any glob matched. A guardrail that
+cannot see the artifact it asks for teaches agents that the artifact is
+pointless.
+
+This is in scope for this package because it is the same decision surface:
+the gate is being taught what evidence of planning looks like, and "a plan
+document in the repository's plans directory" is evidence it currently
+ignores. Widening the globs is not a risk-tiering change and should land even
+if the risk-tiering half is dropped.
+
 ## Repository evidence
 
+- `gate.py:_SPEC_GLOBS` omits `docs/plans/*.md`; `docs/plans/` holds
+  `unified-workflow-implementation.md`, `navigator-coverage-measure.md`, and
+  this document.
 - `gate.py:_has_precise_task_plan` keys purely on a file existing at
   `docs/codev/task/{task_id}/implementation-plan.md`. Presence of a file is the
   entire test; nothing about the change is consulted.
@@ -463,6 +504,31 @@ The `CHANGELOG.md` `[Unreleased]` section already holds the ADR-0039 and
 `review.max_lines` entries; this package adds to it and cuts the release,
 rather than starting a new section.
 
+## The version must be able to distinguish two builds
+
+`codev --version` cannot tell a source snapshot from the code it was taken
+from. A tool installed from this working tree on 31 August reported `0.5.0`;
+`main` reported `0.5.0` three waves of merged work later; and PyPI's latest
+release was `0.4.0` the whole time. Nothing in that picture is detectable by
+asking any of the three what version it is.
+
+The consequence was not cosmetic. The three Claude Code hooks became shims
+calling `codev gate check` in `57bde9c`, the frozen tool had no `gate`
+command, and gates fail open by design -- so 496 guardrail decisions were
+silently allowed without being checked, and only `452d5e7`'s degraded
+reporting made it visible at all.
+
+Two changes, both small and both belonging with the 0.6.0 cut:
+
+- **`codev self update` must not recommend a downgrade.** It prints `uv tool
+  upgrade open-codev-workflow` unconditionally, which for a source install
+  consults PyPI and finds an older release. It should detect an editable or
+  source install and say so instead.
+- **A source build must be distinguishable.** Appending the short commit to
+  the reported version for a non-release install is enough; the exact
+  mechanism is the implementer's call, but "two different trees report the
+  same version" must stop being possible.
+
 ## The migration note that must not be forgotten
 
 Anyone who has run `codev init` has `orchestrator.md` and `planner.md` on disk.
@@ -494,9 +560,12 @@ which means this plan's central claim -- that the developer experience improves
 -- is asserted rather than measured, exactly as every prior claim about it has
 been.
 
-**Accepted 2026-09-02: it is built first, in its own small pull request, and
-this plan does not start until it has recorded a 0.5.0 baseline.** The
-pre-change baseline is not recoverable once package 5 lands.
+**Accepted 2026-09-02, and landed 2026-09-02 in
+[#33](https://github.com/urban233/CoDev/pull/33).** The baseline is recorded at
+`90cf9f4`: six of nine walked lifecycle steps uncovered, and all five planning
+positions absent. Three of the findings folded into this plan -- in packages 3,
+4, and 6 -- were surfaced by building and using it, which is the first evidence
+that the measure earns its place.
 
 **The measure as the brief words it cannot be built, and is redefined.**
 Replaying "a recorded session" requires a transcript format that does not exist
