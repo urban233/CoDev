@@ -118,8 +118,27 @@ elif args[:2] == ["repo", "view"]:
             "nameWithOwner": "o/r",
             "defaultBranchRef": {"name": "main"},
         }))
+elif args[:2] == ["issue", "create"]:
+    number = state.setdefault("next_issue", 1)
+    state["next_issue"] = number + 1
+    issues = state.setdefault("issues", {})
+    issues[str(number)] = {
+        "title": args[args.index("--title") + 1] if "--title" in args else "",
+        "body": args[args.index("--body") + 1] if "--body" in args else "",
+        "url": "https://github.com/o/r/issues/%d" % number,
+    }
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    print(issues[str(number)]["url"])
 elif args[:2] == ["issue", "view"]:
-    print(json.dumps({"title": "t", "body": "b", "url": "https://github.com/o/r/issues/1"}))
+    number = args[2]
+    record = state.get("issues", {}).get(str(number))
+    if record is None:
+        record = {
+            "title": "t",
+            "body": "b",
+            "url": "https://github.com/o/r/issues/%s" % number,
+        }
+    print(json.dumps(record))
 else:
     fail("gh stub does not implement: " + " ".join(args))
 """

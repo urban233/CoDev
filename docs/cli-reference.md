@@ -113,6 +113,20 @@ block into container isolation
 ([ADR-0027](adr/0027-opt-in-docker-sandbox-for-the-native-eval-harness.md)); worktree
 isolation on the host stays the default.
 
+## Slice lifecycle
+
+The verbs an agent reaches for by default. Each replaces a role-file step that
+used to issue several commands with conditional flags between them; the
+granular `codev git` and `codev task` verbs they compose all still exist, for
+recovery and for a mid-session agent that needs one step on its own.
+
+| Command | Purpose |
+|---|---|
+| `codev slice begin --id <id> --base <sha> [--title <t> --body-file <f>] [--github-issue <N>] [--slice <name>]... [--json]` | Branch, GitHub issue, and round state in one call. Replaces `codev git branch` + an issue-existence check + `codev git issue-create` + `codev task start` with three mutually exclusive linkage flags, plus the `codev task relink` recovery path when the issue arrived late |
+| `codev round close --id <id> --role builder --evidence <file> [--message <t>] [--json]` | Commit the work and record the round against the exact resulting head. The round number is derived from state, not passed. Named for its caller: only whoever holds commit permission can know that head, which is why a builder never records its own round |
+| `codev slice publish --id <id> --title <t> [--json]` | Push the branch and open the slice's draft pull request. The body is always the task's rendered evidence, so the old "never pass `--body`" caveat has no way to be violated |
+| `codev slice land --id <id> [--outcome <o>] [--json]` | Advance to the next slice, or close the task when this was the last. Which one applies is a fact about the slice list, not a decision for the caller |
+
 ## Other
 
 | Command | Purpose |
