@@ -140,6 +140,14 @@ class TaskJsonSurfaceTests(unittest.TestCase):
                     "codev_workflow.cli.git_ops_module.detect_identity",
                     return_value="@alice",
                 ),
+                patch(
+                    "codev_workflow.cli.task_module.slice_ids",
+                    return_value=["item-1"],
+                ),
+                patch(
+                    "codev_workflow.cli.task_module.current_slice",
+                    return_value="item-1",
+                ),
             ):
                 payload = self._run(
                     [
@@ -158,6 +166,7 @@ class TaskJsonSurfaceTests(unittest.TestCase):
             self.assertEqual("Fix the thing", payload["summary"])
             self.assertEqual("@alice", payload["owner"])
             self.assertEqual("base-sha", payload["base_snapshot"])
+            self.assertEqual(["item-1"], payload["slices"])
 
     def test_record_json_echoes_the_round_it_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

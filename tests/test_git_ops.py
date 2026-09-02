@@ -516,13 +516,6 @@ class ClosingLineFromSliceListTests(unittest.TestCase):
     """ADR-0035, slice D2: the issue belongs to the task, so only the task's
     final slice closes it. The sibling-stack form (ADR-0034) still counts."""
 
-    def _set_slices(self, target: Path, task_id: str, slices: list[str]) -> None:
-        path = target / ".codev" / "task" / task_id / "round-state.json"
-        document = json.loads(path.read_text(encoding="utf-8"))
-        document["slices"] = slices
-        document["rounds"][-1]["slice_id"] = slices[0]
-        path.write_text(json.dumps(document), encoding="utf-8")
-
     def test_a_single_slice_task_closes_its_issue(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -537,19 +530,19 @@ class ClosingLineFromSliceListTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            task.start("item-1", base, target=target, link_ref="x")
-            self._set_slices(target, "item-1", ["slice-a", "slice-b"])
+            task.start("item-1", base, target=target, link_ref="x", slices=["a", "b"])
             self.assertEqual(
                 "Part of #7",
                 git_ops._closing_line(7, task_id="item-1", target=target),
             )
 
     def test_the_final_slice_of_a_sliced_task_closes_it(self) -> None:
+        """Advancing onto the last slice is what earns the closing line."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
-            task.start("item-1", base, target=target, link_ref="x")
-            self._set_slices(target, "item-1", ["slice-b"])
+            task.start("item-1", base, target=target, link_ref="x", slices=["a", "b"])
+            task.advance_slice("item-1", base, target=target)
             self.assertEqual(
                 "Closes #7",
                 git_ops._closing_line(7, task_id="item-1", target=target),

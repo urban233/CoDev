@@ -464,6 +464,14 @@ def _parser() -> argparse.ArgumentParser:
             "loop; omit for the default cold start"
         ),
     )
+    t_start.add_argument(
+        "--slice",
+        action="append",
+        default=None,
+        dest="slices",
+        help="repeatable, ordered: the slices this task holds (ADR-0035); "
+        "omit for a task that fits in one pull request",
+    )
     t_start.add_argument("--target", type=_target, default=Path.cwd())
 
     t_record = task_commands.add_parser(
@@ -545,6 +553,16 @@ def _parser() -> argparse.ArgumentParser:
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
     t_waive.add_argument("--target", type=_target, default=Path.cwd())
+
+    t_advance = task_commands.add_parser(
+        "advance-slice",
+        help="move a task on to its next slice and open a fresh round",
+    )
+    t_advance.add_argument("--id", required=True)
+    t_advance.add_argument(
+        "--head", required=True, help="the commit the finished slice landed on"
+    )
+    t_advance.add_argument("--target", type=_target, default=Path.cwd())
 
     t_relink = task_commands.add_parser(
         "relink",
@@ -628,6 +646,7 @@ def _parser() -> argparse.ArgumentParser:
         t_waive,
         t_relink,
         t_log,
+        t_advance,
         t_triage,
         t_escalate,
         t_escalations,
@@ -1239,6 +1258,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             description=args.description,
             owner=owner,
             entry=args.entry,
+            slices=args.slices,
         )
         if args.json:
             return _emit_json(
@@ -1246,6 +1266,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
                     "task_id": args.id,
                     "path": str(path),
                     "base_snapshot": args.base,
+                    "slices": task_module.slice_ids(args.id, target=target),
+                    "current_slice": task_module.current_slice(args.id, target=target),
                     "link_ref": link_ref,
                     "summary": summary,
                     "owner": owner,
@@ -1375,6 +1397,22 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 }
             )
         print(f"Waived {args.dimension!r} for task {args.id} at {path}")
+        return 0
+
+    if args.task_command == "advance-slice":
+        next_slice = task_module.advance_slice(args.id, args.head, target=target)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "slice_id": next_slice,
+                    "base_snapshot": args.head,
+                    "final_slice": task_module.is_final_slice(
+                        args.id, next_slice, target=target
+                    ),
+                }
+            )
+        print(f"Advanced {args.id} to slice {next_slice}")
         return 0
 
     if args.task_command == "relink":
