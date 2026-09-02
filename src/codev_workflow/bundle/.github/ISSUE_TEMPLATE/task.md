@@ -18,6 +18,11 @@ labels: task
      git.workflow is feature-branch. -->
 **Containment:** N/A
 
+<!-- One PR with an estimated size, or an ordered list of 2-4 slices, each
+     naming its decomposition strategy: preparatory refactor, contract-first,
+     behavior-vertical, or wiring-behind-a-guard. -->
+**Slices:** One PR
+
 ## Acceptance criteria
 
 <!-- Executable checks. Each line is a command and its expected result,
