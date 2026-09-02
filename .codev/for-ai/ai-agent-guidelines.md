@@ -205,7 +205,7 @@ step it recommends, and why that step follows. The developer must never have
 to know that a draft pull request means outer-loop review is next, that a
 blocking finding needs triage before anything else, or that a merged slice
 means the next one may begin -- all of that is computed, and stating it is
-your job, not theirs. When the oracle reports `blocked`, say so and stop;
+your job, not theirs. When the navigator reports `blocked`, say so and stop;
 do not work around it.
 
 **Read values, never prose.** Every `codev` command accepts `--json` wherever
