@@ -6,16 +6,16 @@ description: Two prompts you'll type often — starting a task, and starting out
 This is the exact wording behind [Talking to Your Agent](/CoDev/working-with-your-agent/)'s
 "What you actually say" section — copy-paste it rather than reconstructing it from memory.
 Two prompts you'll type often: kicking off the next task, and starting
-outer-loop review on an open pull request. Both assume CoDev is installed
-and you're about to switch your assistant's primary agent to `orchestrator`
-or `outer-loop-runner` (on OpenCode, `/agent orchestrator` or `/agent
-outer-loop-runner`; other platforms select the agent their own way).
+outer-loop review on an open pull request. Both assume CoDev is installed and
+that you're talking to `lead` — the only agent you start (on OpenCode, `/agent
+lead`; other platforms select the agent their own way). `lead` dispatches the
+outer-loop review itself, so the second prompt asks it for one rather than
+sending you to a different session.
 
 Fill in the bracketed parts. Everything else is meant to be typed as-is —
-these are deliberately short. `orchestrator` and `outer-loop-runner` ground
-themselves in the repository and ask you only for decisions that are
-actually yours to make; a longer prompt does not make either one safer, and
-mostly just repeats what they already do by default.
+these are deliberately short. `lead` grounds itself in the repository and asks
+you only for decisions that are actually yours to make; a longer prompt does
+not make it safer, and mostly just repeats what it already does by default.
 
 ## Starting the next task
 
@@ -32,7 +32,7 @@ after the fact.
 
 Why this is enough, and no more:
 
-- **You don't need to ask for a GitHub issue explicitly.** `orchestrator`
+- **You don't need to ask for a GitHub issue explicitly.** `lead`
   checks for one itself before opening round state, creates it if this
   repository tracks issues on GitHub and none exists yet, and `codev task
   start` refuses to proceed silently without one — you'll be told directly

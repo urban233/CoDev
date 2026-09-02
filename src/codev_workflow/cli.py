@@ -34,6 +34,7 @@ import argparse
 import json
 import platform
 import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -105,7 +106,9 @@ def _parser() -> argparse.ArgumentParser:
         prog="codev",
         description="Install and maintain human-guided AI delivery workflows.",
     )
-    parser.add_argument("--version", action="version", version=f"CoDev {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"CoDev {_reported_version()}"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     init = commands.add_parser("init", help="install CoDev into a repository")
@@ -1195,7 +1198,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(payload))
     else:
-        print(f"CoDev {__version__} - {target}")
+        print(f"CoDev {_reported_version()} - {target}")
         if args.verbose:
             print(f"Python {platform.python_version()} ({platform.system()})")
         if result.ok:
@@ -1379,7 +1382,35 @@ def _run_config_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _installed_from_source() -> Path | None:
+    """The working tree this CoDev runs from, when it is a source or editable
+    install rather than a released package.
+
+    A released wheel unpacks into `site-packages`; a source install imports
+    straight out of a checkout, which has a `pyproject.toml` beside the
+    package root. Distinguishing them matters because the upgrade advice is
+    opposite for each.
+    """
+    root = Path(__file__).resolve().parent.parent.parent
+    return root if (root / "pyproject.toml").is_file() else None
+
+
 def _self_update_hint() -> str:
+    source = _installed_from_source()
+    if source is not None:
+        # Telling a source install to `uv tool upgrade` sends it to PyPI,
+        # whose latest release can be *older* than the checkout it is running
+        # from -- advice that silently downgrades the tool, which is how a
+        # build three waves behind kept reporting itself healthy.
+        return (
+            f"This CoDev runs from a source checkout at {source}.\n"
+            "Upgrading means updating that checkout, not fetching a release:\n"
+            "  git -C "
+            f"{source} pull\n"
+            "If it is an editable install, that is all it takes. Otherwise "
+            "reinstall from it:\n"
+            f"  uv tool install --force --editable {source}"
+        )
     if shutil.which("pipx"):
         return "Run: pipx upgrade open-codev-workflow"
     if shutil.which("uv"):
@@ -1391,9 +1422,35 @@ def _self_update_hint() -> str:
     )
 
 
+def _reported_version() -> str:
+    """`__version__`, plus the commit when this is a source checkout.
+
+    Two different trees reporting the same version is how a tool installed
+    from source in August kept claiming 0.5.0 while `main` moved three waves
+    ahead of it -- and why 496 gate calls failed open unnoticed, since the
+    hooks called a `codev gate` subcommand the frozen build did not have.
+    A released install is unambiguous and reports the bare version.
+    """
+    source = _installed_from_source()
+    if source is None:
+        return __version__
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(source), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return f"{__version__}+source"
+    revision = commit.stdout.strip()
+    return f"{__version__}+source.{revision}" if revision else f"{__version__}+source"
+
+
 def _run_self_command(args: argparse.Namespace) -> int:
     if args.self_command == "version":
-        print(f"CoDev {__version__}")
+        print(f"CoDev {_reported_version()}")
         return 0
     if args.self_command == "update":
         print(_self_update_hint())

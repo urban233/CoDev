@@ -12,7 +12,7 @@ the one mistake in "A mistake you will probably also make" further down.
 
 :::tip[Who actually types these commands]
 Every `codev ...` command below is shown so you can see exactly what happens under the
-hood. In a real session, `orchestrator` runs almost all of them for you — you only supply
+hood. In a real session, `lead` runs almost all of them for you — you only supply
 the plain-language parts, in Step 2 and wherever the tutorial shows you approving
 something. See [Talking to Your Agent](/CoDev/working-with-your-agent/) for the shape of
 that conversation.
@@ -48,13 +48,13 @@ codev init --target . --agent-platform opencode
 ADD       .agents/skills/build-change/SKILL.md
 ADD       .agents/skills/build-change/agents/openai.yaml
 ...
-ADD       .opencode/agents/orchestrator.md
+ADD       .opencode/agents/lead.md
 ...
 ADD       docs/codev/README.md
 ...
 INTEGRATE AGENTS.md — append managed policy block
 INTEGRATE .gitignore — append escalation-log ignore rule
-INTEGRATE .opencode/opencode.json — integrated OpenCode agents: orchestrator, planner, ...
+INTEGRATE .opencode/opencode.json — integrated OpenCode agents: lead, lead, ...
 Installed CoDev 0.5.0 into /path/to/your/repo
 ```
 
@@ -80,7 +80,7 @@ Tasks in progress: 0
 
 ## Step 2: describe the bug to your AI assistant
 
-Start a session in the repository (on OpenCode, switch to the `orchestrator` agent) and
+Start a session in the repository (on OpenCode, switch to `lead` agent) and
 state the outcome in plain language:
 
 ```text
@@ -130,7 +130,7 @@ Started task descriptor-salt-stripping-fix at /path/to/your/repo/.codev/task/des
 
 (`--no-github-issue` is only correct for a scratch repo with no GitHub remote, like the one
 this was run against. In a real GitHub-backed repository, use `--github-issue <number>` or
-let the orchestrator create one for you — see
+let the lead create one for you — see
 [Starting Prompts](/CoDev/starting-prompts/) for why that's worth naming up
 front.)
 
@@ -143,7 +143,7 @@ codev git branch --id descriptor-salt-stripping-fix \
 Created branch codev/descriptor-salt-stripping-fix for descriptor-salt-stripping-fix
 ```
 
-An AI-driven `orchestrator` normally performs this recording and branching itself as part
+An AI-driven `lead` normally performs this recording and branching itself as part
 of the same conversation — these two commands are shown separately here so you see exactly
 what state they create.
 
@@ -183,7 +183,7 @@ Known limitations: none
 Review state: AWAITING INDEPENDENT REVIEW
 ```
 
-The builder does not commit or call `codev task record` itself — the orchestrator commits
+The builder does not commit or call `codev task record` itself — the lead commits
 the diff, then records the evidence against that exact resulting head:
 
 ```shell

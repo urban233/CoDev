@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import codev_workflow.cli as cli_module
 from codev_workflow.cli import (
     _apply_deprecated_aliases,
     _format_benchmark_report,
@@ -2740,12 +2741,36 @@ class CliTests(unittest.TestCase):
                 )
             self.assertEqual(1, code)
 
-    def test_self_version_and_update(self) -> None:
+    def test_self_version_reports_the_commit_for_a_source_install(self) -> None:
+        """Two trees reporting the same version is how an August build kept
+        claiming 0.5.0 while main moved three waves ahead of it, and how 496
+        gate calls failed open against a `codev gate` it did not have."""
         output = StringIO()
         with redirect_stdout(output):
             self.assertEqual(0, main(["self", "version"]))
+        printed = output.getvalue()
+        self.assertIn("CoDev", printed)
+        # The suite runs from this repository, which is a source checkout.
+        self.assertIn("+source", printed)
+
+    def test_self_update_does_not_send_a_source_install_to_the_index(self) -> None:
+        """`uv tool upgrade` resolves against PyPI, whose latest release can
+        be older than the checkout being run -- advice that downgrades."""
+        output = StringIO()
+        with redirect_stdout(output):
             self.assertEqual(0, main(["self", "update"]))
-        self.assertIn("CoDev", output.getvalue())
+        printed = output.getvalue()
+        self.assertIn("source checkout", printed)
+        self.assertNotIn("uv tool upgrade", printed)
+        self.assertNotIn("pipx upgrade", printed)
+
+    def test_self_update_advises_an_index_upgrade_for_a_released_install(
+        self,
+    ) -> None:
+        with patch.object(cli_module, "_installed_from_source", return_value=None):
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(0, main(["self", "update"]))
         self.assertIn("upgrade", output.getvalue().lower())
 
     def test_deprecated_aliases_rewrite_to_new_command_forms(self) -> None:

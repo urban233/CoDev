@@ -4,7 +4,7 @@ description: The exact command sequence a normal task goes through — what your
 ---
 
 :::note[This is what your agent runs, not what you type]
-In a normal session, `orchestrator` runs this exact sequence on your behalf — see
+In a normal session, `lead` runs this exact sequence on your behalf — see
 [Talking to Your Agent](/CoDev/working-with-your-agent/). Read this page to understand the
 mechanism, to run CoDev outside an agent session (CI, scripting), or to recover a task by
 hand.

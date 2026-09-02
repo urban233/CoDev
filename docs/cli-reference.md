@@ -18,7 +18,7 @@ All four preflight the entire operation first. A locally modified managed file b
 visible conflict; CoDev never silently overwrites it.
 
 `--agent-platform` accepts `opencode`, `junie`, `antigravity`, `claude`, or `all` (the
-default). OpenCode and Claude Code get the full orchestrator-driven workflow; Junie and
+default). OpenCode and Claude Code get the full lead-driven workflow; Junie and
 Antigravity get a single narrower `assistant` agent for bounded, surgical edits — see
 [ADR-0031](adr/0031-drop-codex-narrow-junie-and-antigravity-to-an-edit-assistant.md) for
 why. Pass it more than once, or a comma-separated list, to select several platforms at
@@ -63,7 +63,7 @@ to opt out and require every task to stand alone instead.
 | Command | Purpose |
 |---|---|
 | `codev task start --id <id> --base <sha> [--entry takeover\|direct-review]` | Open a new task |
-| `codev task record ...` | Record one builder or reviewer round (normally done by the orchestrator, not typed by hand) |
+| `codev task record ...` | Record one builder or reviewer round (normally done by the lead, not typed by hand) |
 | `codev task check --id <id> --head <sha>` | Ask whether the task may proceed to a pull request |
 | `codev task status [--target <path>]` | List tasks in progress |
 | `codev task log --id <id>` | Show one task's full round history |
