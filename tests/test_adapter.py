@@ -115,9 +115,7 @@ class VerifyAdapterTests(unittest.TestCase):
             result = verify_adapter("opencode", target=target)
         lead = {f.role: f for f in result.findings}["lead"]
         self.assertFalse(lead.ok)
-        self.assertTrue(
-            any("unrestricted shell execution" in p for p in lead.problems)
-        )
+        self.assertTrue(any("unrestricted shell execution" in p for p in lead.problems))
 
     def test_raw_git_push_permission_is_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -135,9 +133,7 @@ class VerifyAdapterTests(unittest.TestCase):
             result = verify_adapter("opencode", target=target)
         lead = {f.role: f for f in result.findings}["lead"]
         self.assertFalse(lead.ok)
-        self.assertTrue(
-            any("guarded `codev git` surface" in p for p in lead.problems)
-        )
+        self.assertTrue(any("guarded `codev git` surface" in p for p in lead.problems))
 
     def test_handwritten_pr_body_placeholder_is_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

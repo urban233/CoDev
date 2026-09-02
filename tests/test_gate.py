@@ -41,6 +41,12 @@ from codev_workflow.gate import GATES, check
 
 def _repo(target: Path) -> None:
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=target, check=True)
+    # A CI runner has no global git identity, so a repository that intends to
+    # commit must carry its own. Without this the commit fails with exit 128
+    # and every test in the class errors in setUp -- invisible on a developer
+    # machine, which has one configured.
+    for key, value in (("user.email", "t@example.com"), ("user.name", "Test")):
+        subprocess.run(["git", "config", key, value], cwd=target, check=True)
 
 
 class RiskTieredPlanGateTests(unittest.TestCase):
