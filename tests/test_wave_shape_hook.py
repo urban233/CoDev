@@ -9,6 +9,8 @@ test_claude_hook.py already uses for require_plan.py.
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -50,14 +52,35 @@ _MALFORMED_WAVE_PLAN = """\
 """
 
 
+def _codev_on_path() -> str:
+    """A directory holding a `codev` executable that runs this interpreter's
+    own codev_workflow.
+
+    The hooks are shims: the decision lives in `codev gate check`, so a test
+    that does not put `codev` on PATH exercises only the fail-open branch and
+    would pass no matter what the gate decided.
+    """
+    bindir = Path(tempfile.mkdtemp(prefix="codev-bin-"))
+    launcher = bindir / "codev"
+    launcher.write_text(
+        "#!/bin/sh\nexec " + shlex.quote(sys.executable) + ' -m codev_workflow "$@"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return str(bindir)
+
+
 def _run_hook(repo: Path, stdin: str) -> subprocess.CompletedProcess[str]:
+    env = dict(os.environ)
+    env["PATH"] = _codev_on_path() + os.pathsep + env.get("PATH", "")
     return subprocess.run(
         [sys.executable, str(_HOOK)],
         input=stdin,
         cwd=repo,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
+        env=env,
     )
 
 

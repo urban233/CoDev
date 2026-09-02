@@ -119,6 +119,11 @@ isolation on the host stays the default.
 |---|---|
 | `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it |
 | `codev task advance-slice --id <id> --head <sha>` | Move a task on to its next slice and open a fresh round (ADR-0035) |
+| `codev gate check --gate <name>` | Decide one guardrail for a tool-use payload read from stdin (ADR-0036). Every platform's hook calls this, so the rules are CoDev's, not one adapter's |
+| `codev task style --id <id> [--set pair\|delegate]` | Read or change a slice's work style (ADR-0038) |
+| `codev task pause --id <id> --head <sha> --reason <text>` | Record a human interruption of the current slice |
+| `codev task resume --id <id> --head <sha> --reason <text>` | Re-enter a paused slice in pair style; raises the round cap so pausing costs no budget |
+| `codev task waive-review --id <id> --reason <text>` | Record that this task lands without an independent human approval (ADR-0037). Human-authorized, never an agent's initiative |
 | `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; refuses if one already exists |
 | `codev self version` | Show the installed CoDev version |
 | `codev self update` | Show how to upgrade the installed CoDev tool |

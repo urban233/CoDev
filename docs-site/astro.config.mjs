@@ -53,6 +53,7 @@ export default defineConfig({
       plugins: [starlightLlmsTxt()],
       sidebar: [
         { label: 'Home', link: '/' },
+        { label: 'How CoDev Works', link: '/onboarding-guide/' },
         { label: 'Getting Started', link: '/getting-started/' },
         {
           label: 'Working With Your Agent',
@@ -62,7 +63,15 @@ export default defineConfig({
             { label: 'Examples', link: '/examples/' },
           ],
         },
-        { label: 'Concepts', link: '/concepts/' },
+        {
+          label: 'Concepts',
+          items: [
+            { label: 'The Workflow', link: '/concepts/' },
+            { label: 'Roles', link: '/roles/' },
+            { label: 'Slices and Stacks', link: '/slices/' },
+            { label: 'Evaluating Skills', link: '/evaluation/' },
+          ],
+        },
         {
           label: 'Tutorials',
           items: [
@@ -81,6 +90,7 @@ export default defineConfig({
             { label: 'Manual CLI Walkthrough', link: '/workflow-checklist/' },
             { label: 'Architecture', link: '/architecture/' },
           ],
+          collapsed: true,
         },
         { label: 'FAQ', link: '/faq/' },
       ],
