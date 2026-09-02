@@ -1,9 +1,10 @@
 """Tests for reading and summarizing the local gate-decision log.
 
 The log itself is written by the standalone hook scripts
-(.claude/hooks/require_plan.py, .claude/hooks/require_wave_shape.py, tested
-directly in test_claude_hook.py and test_wave_shape_hook.py); this module is
-read-only, so these tests write fixture JSONL directly.
+(.claude/hooks/require_plan.py, .claude/hooks/require_wave_shape.py,
+.claude/hooks/require_small_change.py, tested directly in
+test_claude_hook.py, test_wave_shape_hook.py, and test_small_change_hook.py);
+this module is read-only, so these tests write fixture JSONL directly.
 """
 
 from __future__ import annotations

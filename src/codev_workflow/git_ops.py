@@ -49,6 +49,7 @@ import re
 import shutil
 import subprocess
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -56,6 +57,7 @@ from codev_workflow import config, task
 from codev_workflow.installer import CoDevError, _read_lock
 
 GIT_STATE_FILENAME = "git-state.json"
+_TASK_BRANCH_PREFIX = "codev/"  # must match branch_name_for()
 PR_TEMPLATE_PATH = Path(".github/pull_request_template.md")
 _PR_TEMPLATE_MARKERS = (
     "summary",
@@ -72,7 +74,7 @@ class GitOpsError(Exception):
 
 
 def branch_name_for(task_id: str) -> str:
-    return f"codev/{task_id}"
+    return f"{_TASK_BRANCH_PREFIX}{task_id}"
 
 
 def _task_dir(target: Path, task_id: str) -> Path:
@@ -358,16 +360,50 @@ def _closes_issue_number(link_ref: str | None, *, target: Path) -> int | None:
     return int(match["number"])
 
 
-def _with_closes_line(body: str, link_ref: str | None, *, target: Path) -> str:
-    """Append `Closes #N` when link_ref names this repo's own GitHub issue.
+def _has_recorded_child(task_id: str, *, target: Path) -> bool:
+    """True when another task's recorded git-state.json names this task as
+    its `parent_task` -- the "last slice in a stack" is the one with no
+    such child (ADR-0034). Best-effort: an unreadable or malformed sibling
+    state file is skipped rather than raised, since this backs PR-body
+    text, not a hard requirement."""
+    task_root = target / Path(task.TASK_DIR_RELATIVE.as_posix())
+    if not task_root.is_dir():
+        return False
+    for state_path in task_root.glob(f"*/{GIT_STATE_FILENAME}"):
+        if state_path.parent.name == task_id:
+            continue
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(state, dict) and state.get("parent_task") == task_id:
+            return True
+    return False
+
+
+def _closing_line(issue_number: int, *, task_id: str, target: Path) -> str:
+    """`Part of #N` when this task has a recorded child (a later slice in
+    its stack still needs to land), `Closes #N` otherwise (ADR-0034)."""
+    if _has_recorded_child(task_id, target=target):
+        return f"Part of #{issue_number}"
+    return f"Closes #{issue_number}"
+
+
+def _with_issue_link_line(
+    body: str, link_ref: str | None, *, task_id: str, target: Path
+) -> str:
+    """Append a `Closes #N`/`Part of #N` line when link_ref names this
+    repo's own GitHub issue.
 
     Shared by every code path that writes a pull request body -- open_pr's
-    initial body and mark_ready's regenerated one alike -- so the auto-close
-    link, once earned, cannot be silently dropped by whichever call happens
-    to run last.
+    initial body and mark_ready's regenerated one alike -- so the link,
+    once earned, cannot be silently dropped by whichever call happens to
+    run last.
     """
     issue_number = _closes_issue_number(link_ref, target=target)
-    return f"{body}\n\nCloses #{issue_number}" if issue_number else body
+    if not issue_number:
+        return body
+    return f"{body}\n\n{_closing_line(issue_number, task_id=task_id, target=target)}"
 
 
 def _render_pr_template(task_id: str, *, target: Path) -> str:
@@ -384,7 +420,9 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"{PR_TEMPLATE_PATH} is absent; using CoDev's generated PR body instead",
             stacklevel=2,
         )
-        return _with_closes_line(generated, description.get("link_ref"), target=target)
+        return _with_issue_link_line(
+            generated, description.get("link_ref"), task_id=task_id, target=target
+        )
 
     template = template_path.read_text(encoding="utf-8")
     markers = {marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS}
@@ -395,7 +433,9 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"{', '.join(missing)}); using CoDev's generated PR body instead",
             stacklevel=2,
         )
-        return _with_closes_line(generated, description.get("link_ref"), target=target)
+        return _with_issue_link_line(
+            generated, description.get("link_ref"), task_id=task_id, target=target
+        )
 
     generated_without_trailing_newline = generated.rstrip()
     validation = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[-1]
@@ -411,7 +451,11 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"Latest task review: {description['latest_decision'] or 'in progress'}."
         ),
         "tracking": generated_without_trailing_newline.rsplit("\n\n", 1)[-1],
-        "closes": f"Closes #{issue_number}" if issue_number else "",
+        "closes": (
+            _closing_line(issue_number, task_id=task_id, target=target)
+            if issue_number
+            else ""
+        ),
     }
     for marker, token in markers.items():
         template = template.replace(token, values[marker])
@@ -440,14 +484,145 @@ def default_branch(target: Path) -> str:
     )
 
 
-def create_branch(task_id: str, base_snapshot: str, *, target: Path) -> str:
+def _resolve_pr_base(base: str | None, *, target: Path) -> str:
+    """`--base` if given, else `git.pr_base`, else the repository's default
+    branch -- the resolution order create_branch and open_pr share."""
+    if base is not None:
+        return base
+    configured = config.resolve("git.pr_base", target=target)
+    if configured is not None:
+        return configured.value
+    return default_branch(target)
+
+
+def _warn_if_base_behind_remote(base: str, *, target: Path) -> None:
+    """Warn, never raise, when a resolved base branch has a remote-tracking
+    counterpart ahead of it -- a stale local checkout otherwise silently
+    becomes the wrong starting point for a new task branch. A no-op when
+    `base` is not a local branch with an `origin/<base>` counterpart (an
+    explicit snapshot/tag/sha, or no such remote ref)."""
+    try:
+        _run_git(["rev-parse", "--verify", f"refs/remotes/origin/{base}"], cwd=target)
+    except GitOpsError:
+        return
+    try:
+        behind = int(
+            _run_git(["rev-list", "--count", f"{base}..origin/{base}"], cwd=target)
+        )
+    except GitOpsError:
+        return
+    if behind > 0:
+        warnings.warn(
+            f"local {base!r} is {behind} commit(s) behind origin/{base!r}; "
+            "consider fetching before branching from it",
+            stacklevel=2,
+        )
+
+
+def _other_recorded_task_on_head(*, target: Path) -> str | None:
+    """The other task id whose own recorded branch HEAD currently sits on,
+    or None when HEAD is not on any codev-managed task branch."""
+    branch = current_branch(target)
+    if not branch.startswith(_TASK_BRANCH_PREFIX):
+        return None
+    other_task_id = branch[len(_TASK_BRANCH_PREFIX) :]
+    if not other_task_id:
+        return None
+    try:
+        _load_git_state(other_task_id, target=target)
+    except GitOpsError:
+        return None
+    return other_task_id
+
+
+def _resolved_workflow(*, target: Path) -> str:
+    resolved = config.resolve("git.workflow", target=target)
+    return resolved.value if resolved is not None else config.DEFAULTS["git.workflow"]
+
+
+def create_branch(
+    task_id: str,
+    base_snapshot: str | None = None,
+    *,
+    target: Path,
+    allow_dirty: bool = False,
+    stack_on: str | None = None,
+) -> str:
     state_path = _git_state_path(target, task_id)
     if state_path.exists():
         raise GitOpsError(f"task {task_id!r} already has a branch recorded")
+
+    if not allow_dirty:
+        dirty = _dirty_product_paths(target)
+        if dirty:
+            raise GitOpsError(
+                "refusing to create a branch: the worktree has uncommitted "
+                f"changes ({', '.join(sorted(dirty)[:5])}"
+                f"{', ...' if len(dirty) > 5 else ''}) that would ride onto "
+                "the new branch -- commit or stash them first, or pass "
+                "--allow-dirty if that is intentional"
+            )
+
+    if stack_on is not None:
+        # ADR-0034: stacking is only supported under trunk-based
+        # development, and every stacking affordance disables itself
+        # cleanly under feature-branch rather than firing anyway.
+        workflow = _resolved_workflow(target=target)
+        if workflow != "trunk":
+            raise GitOpsError(
+                f"refusing --stack-on: git.workflow resolves to {workflow!r}, "
+                "not 'trunk' -- stacking is only supported under trunk-based "
+                "development (ADR-0034)"
+            )
+        try:
+            parent_state = _load_git_state(stack_on, target=target)
+        except GitOpsError as error:
+            raise GitOpsError(
+                f"refusing --stack-on {stack_on!r}: it has no branch yet -- "
+                f"create it first with `codev git branch --id {stack_on}`"
+            ) from error
+        resolved_base = cast(str, parent_state["branch"])
+    else:
+        # The foreign-branch guard below exists to catch *blind* branching
+        # while HEAD sits on unrelated, unmerged work. --stack-on replaces
+        # that concern with an explicit, named, already-verified parent --
+        # checkout -b starts from that parent's pinned commit regardless of
+        # HEAD's current branch, so there is nothing left for this guard to
+        # protect against once stacking is requested on purpose (ADR-0034).
+        other_task_id = _other_recorded_task_on_head(target=target)
+        if other_task_id is not None and other_task_id != task_id:
+            other_branch = branch_name_for(other_task_id)
+            other_state = _load_git_state(other_task_id, target=target)
+            ahead = int(
+                _run_git(
+                    ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
+                    cwd=target,
+                )
+            )
+            if ahead > 0:
+                raise GitOpsError(
+                    f"refusing to create a branch: HEAD is on {other_branch!r} "
+                    f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
+                    "not yet in its base -- check out the intended base branch "
+                    f"first, or continue work on {other_task_id!r} itself "
+                    "instead of branching a new task from underneath it"
+                )
+        resolved_base = _resolve_pr_base(base_snapshot, target=target)
+
+    _warn_if_base_behind_remote(resolved_base, target=target)
+    # Pin to the exact commit now, not the ref name: changed_files and
+    # task_size diff against this recorded value later, and a floating
+    # branch name (the parent's branch, or the default_branch/git.pr_base
+    # fallback) would silently pull in every commit it gains after this
+    # branch is created.
+    pinned_base = _run_git(["rev-parse", resolved_base], cwd=target)
+
     branch = branch_name_for(task_id)
-    _run_git(["checkout", "-b", branch, base_snapshot], cwd=target)
+    _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"branch": branch, "base_snapshot": base_snapshot}
+    payload: dict[str, Any] = {"branch": branch, "base_snapshot": pinned_base}
+    if stack_on is not None:
+        payload["parent_task"] = stack_on
     state_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -484,8 +659,141 @@ def changed_files(task_id: str, *, target: Path) -> list[str]:
     return [line for line in output.splitlines() if line]
 
 
+@dataclass(frozen=True)
+class TaskSize:
+    """Non-generated diff size for one task, plus the budget it is measured
+    against -- see docs/features/small-prs/design.md."""
+
+    lines_changed: int
+    files_changed: int
+    max_lines: int
+    max_files: int
+
+    @property
+    def over_budget(self) -> bool:
+        return (
+            self.lines_changed > self.max_lines or self.files_changed > self.max_files
+        )
+
+
+def _resolved_budget(key: str, *, target: Path) -> int:
+    default = int(config.DEFAULTS[key])
+    resolved = config.resolve(key, target=target)
+    if resolved is None:
+        return default
+    try:
+        return int(resolved.value)
+    except ValueError:
+        warnings.warn(
+            f"{key} = {resolved.value!r} is not an integer; using default {default}",
+            stacklevel=2,
+        )
+        return default
+
+
+def _generated_paths(paths: list[str], *, target: Path) -> set[str]:
+    """Paths `.gitattributes` marks `linguist-generated`, per design.md's
+    resolved decision: this is the only generated-file signal CoDev uses --
+    no CoDev-owned fallback exclude list. Returns an empty set, never
+    raises, when a repository has no matching `.gitattributes` entry."""
+    if not paths:
+        return set()
+    try:
+        output = _run_git(
+            ["check-attr", "linguist-generated", "--", *paths], cwd=target
+        )
+    except GitOpsError:
+        return set()
+    generated: set[str] = set()
+    for line in output.splitlines():
+        path, _, value = line.rpartition(": linguist-generated: ")
+        if path and value in ("set", "true"):
+            generated.add(path)
+    return generated
+
+
+def task_size(task_id: str, *, target: Path) -> TaskSize:
+    """Read-only non-generated changed-line and changed-file count for a
+    task's own branch against its recorded base snapshot, plus the resolved
+    `review.max_lines`/`review.max_files` budget.
+
+    Returns zero counts rather than raising when the task has no branch
+    recorded yet, matching changed_files's established posture -- this
+    backs `codev task size` and status --verbose, not a hard requirement.
+    """
+    max_lines = _resolved_budget("review.max_lines", target=target)
+    max_files = _resolved_budget("review.max_files", target=target)
+    try:
+        git_state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        return TaskSize(0, 0, max_lines, max_files)
+    try:
+        output = _run_git(
+            ["diff", "--numstat", git_state["base_snapshot"], git_state["branch"]],
+            cwd=target,
+        )
+    except GitOpsError:
+        return TaskSize(0, 0, max_lines, max_files)
+
+    # A task's own bookkeeping under .codev/task/<task_id>/ (git-state.json,
+    # round-state.json) rides on the same branch and would otherwise count
+    # against the very budget this exists to enforce -- exclude it before
+    # the linguist-generated check, not as an instance of it.
+    own_state_prefix = _task_dir(target, task_id).relative_to(target).as_posix() + "/"
+
+    rows = []
+    for line in output.splitlines():
+        if not line:
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) == 3 and not parts[2].startswith(own_state_prefix):
+            rows.append(parts)
+    generated = _generated_paths([path for _, _, path in rows], target=target)
+
+    lines_changed = 0
+    files_changed = 0
+    for added, deleted, path in rows:
+        if path in generated:
+            continue
+        files_changed += 1
+        if added != "-":
+            lines_changed += int(added)
+        if deleted != "-":
+            lines_changed += int(deleted)
+    return TaskSize(lines_changed, files_changed, max_lines, max_files)
+
+
 def own_branch(task_id: str, *, target: Path) -> str:
     return cast(str, _load_git_state(task_id, target=target)["branch"])
+
+
+def parent_task_id(task_id: str, *, target: Path) -> str | None:
+    """The recorded parent task id, or None when the task has no branch
+    recorded yet or was not created with --stack-on."""
+    try:
+        state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        return None
+    parent = state.get("parent_task")
+    return cast(str, parent) if parent else None
+
+
+def stack_depth(task_id: str, *, target: Path) -> int:
+    """1 for a task with no recorded parent; 1 + the parent's own depth
+    otherwise. Never raises: an unresolvable link in the chain -- a
+    missing parent state file, or a cycle -- stops the walk and returns
+    the depth reached so far, since this backs status reporting, not a
+    hard requirement."""
+    depth = 1
+    seen = {task_id}
+    current = task_id
+    while True:
+        parent = parent_task_id(current, target=target)
+        if not parent or parent in seen:
+            return depth
+        seen.add(parent)
+        depth += 1
+        current = parent
 
 
 def _ensure_on_own_branch(task_id: str, *, target: Path) -> str:
@@ -528,6 +836,17 @@ def _dirty_paths(target: Path) -> list[str]:
             path = path.split(" -> ", 1)[1]
         paths.append(path)
     return paths
+
+
+def _dirty_product_paths(target: Path) -> list[str]:
+    """_dirty_paths, excluding a task's own not-yet-committed
+    .codev/task/<id>/ bookkeeping. create_branch writes git-state.json to
+    disk before any commit exists to carry it, so that file alone must
+    never register as a reason to refuse creating a further branch."""
+    task_dir_prefix = task.TASK_DIR_RELATIVE.as_posix() + "/"
+    return [
+        path for path in _dirty_paths(target) if not path.startswith(task_dir_prefix)
+    ]
 
 
 def _refuse_if_mixed_dirty_paths(task_id: str, *, target: Path) -> None:
@@ -603,6 +922,34 @@ def _existing_pr_url(branch: str, *, target: Path) -> str | None:
         return None
 
 
+def _pr_state(branch: str, *, target: Path) -> str | None:
+    """The GitHub pull request state for `branch` ("OPEN"/"CLOSED"/
+    "MERGED"), or None when no pull request exists for it."""
+    try:
+        state = _run_gh(
+            ["pr", "view", branch, "--json", "state", "-q", ".state"], cwd=target
+        )
+    except GitOpsError:
+        return None
+    return state.strip()
+
+
+def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
+    """The recorded parent's branch, when this task was created with
+    --stack-on and that parent's own pull request is still open -- None
+    otherwise, so the caller falls through to --base/git.pr_base/the
+    repository's default branch (ADR-0034)."""
+    parent_id = parent_task_id(task_id, target=target)
+    if parent_id is None:
+        return None
+    try:
+        parent_state = _load_git_state(parent_id, target=target)
+    except GitOpsError:
+        return None
+    parent_branch = cast(str, parent_state["branch"])
+    return parent_branch if _pr_state(parent_branch, target=target) == "OPEN" else None
+
+
 def open_pr(
     task_id: str,
     title: str,
@@ -639,16 +986,15 @@ def open_pr(
             f"refusing to open a pull request: {branch!r} already has one open "
             f"at {existing} -- use `codev git mark-ready` instead"
         )
-    resolved_base = base
+    resolved_base = _stacked_pr_base(task_id, target=target)
     if resolved_base is None:
-        configured_base = config.resolve("git.pr_base", target=target)
-        resolved_base = configured_base.value if configured_base else None
-    if resolved_base is None:
-        resolved_base = default_branch(target)
+        resolved_base = _resolve_pr_base(base, target=target)
     final_body = (
         _render_pr_template(task_id, target=target)
         if use_template
-        else _with_closes_line(body, description.get("link_ref"), target=target)
+        else _with_issue_link_line(
+            body, description.get("link_ref"), task_id=task_id, target=target
+        )
     )
     return _run_gh(
         [
@@ -683,3 +1029,56 @@ def mark_ready(task_id: str, *, target: Path) -> None:
     final_body = _render_pr_template(task_id, target=target)
     _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)
+
+
+def restack(task_id: str, *, target: Path) -> str:
+    """Rebases a stacked task's branch onto its recorded parent's current
+    head, force-pushes with `--force-with-lease`, and re-baselines the
+    task's own tracked state so `task.check`'s drift comparison still
+    matches the rebase's new commit identity (ADR-0034).
+
+    Refuses when the caller is not on the task's own branch, when the
+    task has no recorded parent, or once the parent's pull request has
+    already merged. A rebase conflict is reported to the human -- the
+    repository is left mid-rebase, exactly as plain `git rebase` would
+    leave it, for `git rebase --continue`/`--abort` to resolve normally;
+    this never attempts to resolve one automatically.
+    """
+    branch = _ensure_on_own_branch(task_id, target=target)
+    parent_id = parent_task_id(task_id, target=target)
+    if parent_id is None:
+        raise GitOpsError(
+            f"refusing to restack {task_id!r}: it has no recorded parent -- "
+            "restack only applies to a task created with `codev git branch "
+            "--stack-on`"
+        )
+    parent_state = _load_git_state(parent_id, target=target)
+    parent_branch = cast(str, parent_state["branch"])
+    if _pr_state(parent_branch, target=target) == "MERGED":
+        raise GitOpsError(
+            f"refusing to restack: {parent_branch!r}'s pull request has "
+            "already merged -- rebase onto the repository's default branch "
+            "manually instead; restack is only for an in-flight parent"
+        )
+
+    try:
+        _run_git(["rebase", parent_branch], cwd=target)
+    except GitOpsError as error:
+        raise GitOpsError(
+            f"restack stopped: rebasing onto {parent_branch!r} reported a "
+            "conflict or another problem -- resolve it with `git status`, "
+            f"then `git rebase --continue` or `git rebase --abort`: {error}"
+        ) from error
+
+    new_head = current_head(target)
+    _run_git(["push", "--force-with-lease", "-u", "origin", branch], cwd=target)
+
+    pinned_parent_head = _run_git(["rev-parse", parent_branch], cwd=target)
+    git_state = _load_git_state(task_id, target=target)
+    git_state["base_snapshot"] = pinned_parent_head
+    _git_state_path(target, task_id).write_text(
+        json.dumps(git_state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    task.record_restack(task_id, new_head, target=target)
+    return new_head

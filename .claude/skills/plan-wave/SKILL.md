@@ -166,6 +166,20 @@ independently useful on its own, or when `git.workflow` resolves to
 cannot be resolved from accepted authority. Never turn an unresolved
 decision into an implementation assignment.
 
+Name the task's intended slicing in its own Slices field, choosing from
+one of four decomposition strategies:
+
+- **Preparatory refactor:** restructure existing code with no behavior
+  change, ahead of the task that actually needs the cleaner shape.
+- **Contract-first:** land the data model, schema, or API signature first,
+  with no execution logic behind it yet.
+- **Behavior-vertical:** build one small, end-to-end sub-feature at a time,
+  thin but complete top to bottom, rather than one technical layer of the
+  whole system at once.
+- **Wiring-behind-a-guard:** land the public interface inert -- a stub, a
+  not-implemented response, or off behind a flag -- then implement and
+  expose it in a later task.
+
 Use only ordinary dependency language:
 
 - **Blocked by:** work cannot begin safely.

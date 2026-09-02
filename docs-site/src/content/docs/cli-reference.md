@@ -43,7 +43,7 @@ selected, recorded in `.codev/lock.json`.
 
 | Command | Purpose |
 |---|---|
-| `codev status [--verbose] [--json] [--since <date>]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap, and (`--verbose`/`--json`) a `gate_decisions` count of Claude Code guardrail-hook asks by hook and decision |
+| `codev status [--verbose] [--json] [--since <date>]` | Bundle health, installed adapters, open tasks, WIP-per-owner, changed-file overlap, per-task size vs. `review.max_lines`/`review.max_files`, stacked-task depth, and (`--verbose`/`--json`) a `gate_decisions` count of Claude Code guardrail-hook asks by hook and decision |
 | `codev adapter list` | Show which platform adapters are installed |
 | `codev adapter add <platform>` | Add one adapter to an existing installation |
 | `codev adapter remove <platform>` | Remove one adapter (still works for a platform an older CoDev version installed, even after the current version drops it — see ADR-0031's migration note) |
@@ -89,11 +89,12 @@ product source itself.
 |---|---|
 | `codev git issue-create ...` | Create a GitHub issue (no task precondition) |
 | `codev git issue-view --number <n>` | Print an issue's body and all comments as JSON (read-only, no task precondition) |
-| `codev git branch --id <id> --base <sha>` | Create the task's own branch |
+| `codev git branch --id <id> [--base <sha> \| --stack-on <task-id>] [--allow-dirty]` | Create the task's own branch; `--base` defaults to `git.pr_base`, then the repository's default branch; `--stack-on` targets another task's own branch instead (ADR-0034, trunk workflow only) |
 | `codev git commit --id <id> --message <msg>` | Commit on that task's branch |
 | `codev git push --id <id>` | Push that task's branch |
 | `codev git open-pr --id <id> --title <title>` | Open the pull request as a draft |
 | `codev git mark-ready --id <id>` | Mark the PR ready for human review once the outer loop says so |
+| `codev git restack --id <id>` | Rebase a stacked task's branch onto its recorded parent's current head and force-push with `--force-with-lease` (ADR-0034) |
 
 This is the only path for an agent to mutate the repository or GitHub — raw `git
 commit`/`git push` are denied to every role for exactly this reason

@@ -21,6 +21,15 @@
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require_wave_shape.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require_small_change.py\""
+          }
+        ]
       }
     ]
   }

@@ -571,6 +571,17 @@ def _parser() -> argparse.ArgumentParser:
     t_status.add_argument("--json", action="store_true")
     t_status.add_argument("--target", type=_target, default=Path.cwd())
 
+    t_size = task_commands.add_parser(
+        "size",
+        help=(
+            "report a task's non-generated changed-line/file count against "
+            "review.max_lines/review.max_files"
+        ),
+    )
+    t_size.add_argument("--id", required=True)
+    t_size.add_argument("--json", action="store_true")
+    t_size.add_argument("--target", type=_target, default=Path.cwd())
+
     t_log = task_commands.add_parser("log", help="print one task's round history")
     t_log.add_argument("--id", required=True)
     t_log.add_argument("--target", type=_target, default=Path.cwd())
@@ -649,7 +660,25 @@ def _parser() -> argparse.ArgumentParser:
         "branch", help="create the task's own branch from a base snapshot"
     )
     g_branch.add_argument("--id", required=True)
-    g_branch.add_argument("--base", required=True, help="base git snapshot")
+    g_branch_base = g_branch.add_mutually_exclusive_group()
+    g_branch_base.add_argument(
+        "--base",
+        default=None,
+        help="base git snapshot; defaults to the 'git.pr_base' config value, "
+        "then the repository's default branch",
+    )
+    g_branch_base.add_argument(
+        "--stack-on",
+        default=None,
+        dest="stack_on",
+        help="stack this task's branch on another task's own recorded "
+        "branch (ADR-0034); requires git.workflow=trunk",
+    )
+    g_branch.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="proceed despite uncommitted worktree changes",
+    )
     g_branch.add_argument("--target", type=_target, default=Path.cwd())
 
     g_commit = git_commands.add_parser(
@@ -716,6 +745,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_mark_ready.add_argument("--id", required=True)
     g_mark_ready.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_restack = git_commands.add_parser(
+        "restack",
+        help="rebase a stacked task's branch onto its recorded parent's "
+        "current head and force-push (ADR-0034)",
+    )
+    g_restack.add_argument("--id", required=True)
+    g_restack.add_argument("--target", type=_target, default=Path.cwd())
     return parser
 
 
@@ -744,6 +781,21 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
     return argv
 
 
+def _print_size_report(task_id: str, *, target: Path) -> None:
+    """Surface a task's running size where splitting is still cheap -- see
+    docs/features/small-prs/design.md. Never raises: a measurement failure
+    must not block the commit or pull-request path it decorates."""
+    try:
+        size = git_ops_module.task_size(task_id, target=target)
+    except git_ops_module.GitOpsError:
+        return
+    status_word = "over budget" if size.over_budget else "within budget"
+    print(
+        f"Size: {size.lines_changed} line(s) (budget {size.max_lines}), "
+        f"{size.files_changed} file(s) (budget {size.max_files}) -- {status_word}"
+    )
+
+
 def _in_progress_owner_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in tasks:
@@ -754,6 +806,48 @@ def _in_progress_owner_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
             continue
         counts[owner] = counts.get(owner, 0) + 1
     return counts
+
+
+def _task_sizes(
+    tasks: list[dict[str, Any]], *, target: Path
+) -> dict[str, dict[str, int | bool]]:
+    in_progress_ids = [
+        item["task_id"] for item in tasks if item["status"] == "in_progress"
+    ]
+    sizes: dict[str, dict[str, int | bool]] = {}
+    for task_id in in_progress_ids:
+        size = git_ops_module.task_size(task_id, target=target)
+        sizes[task_id] = {
+            "lines_changed": size.lines_changed,
+            "files_changed": size.files_changed,
+            "max_lines": size.max_lines,
+            "max_files": size.max_files,
+            "over_budget": size.over_budget,
+        }
+    return sizes
+
+
+_DEEP_STACK_THRESHOLD = 3
+
+
+def _task_stacks(
+    tasks: list[dict[str, Any]], *, target: Path
+) -> dict[str, dict[str, int | str | bool]]:
+    in_progress_ids = [
+        item["task_id"] for item in tasks if item["status"] == "in_progress"
+    ]
+    stacks: dict[str, dict[str, int | str | bool]] = {}
+    for task_id in in_progress_ids:
+        parent = git_ops_module.parent_task_id(task_id, target=target)
+        if parent is None:
+            continue
+        depth = git_ops_module.stack_depth(task_id, target=target)
+        stacks[task_id] = {
+            "parent_task": parent,
+            "depth": depth,
+            "deep": depth > _DEEP_STACK_THRESHOLD,
+        }
+    return stacks
 
 
 def _changed_file_overlaps(
@@ -793,14 +887,20 @@ def _run_status_command(args: argparse.Namespace) -> int:
     }
     owner_counts: dict[str, int] = {}
     overlaps: list[dict[str, list[str]]] = []
+    sizes: dict[str, dict[str, int | bool]] = {}
+    stacks: dict[str, dict[str, int | str | bool]] = {}
     gate_decisions: dict[str, dict[str, int]] = {}
     if args.verbose:
         payload["python_version"] = platform.python_version()
         payload["system"] = platform.system()
         owner_counts = _in_progress_owner_counts(tasks)
         overlaps = _changed_file_overlaps(tasks, target=target)
+        sizes = _task_sizes(tasks, target=target)
+        stacks = _task_stacks(tasks, target=target)
         payload["tasks_in_progress_by_owner"] = owner_counts
         payload["changed_file_overlaps"] = overlaps
+        payload["task_sizes"] = sizes
+        payload["task_stacks"] = stacks
         decisions = hook_log_module.read_decisions(target=target, since=args.since)
         gate_decisions = hook_log_module.summarize_decisions(decisions)
         payload["gate_decisions"] = gate_decisions
@@ -829,6 +929,25 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 items = " & ".join(overlap["tasks"])
                 paths = ", ".join(overlap["paths"])
                 print(f"  {items}: {paths}")
+        if args.verbose and sizes:
+            print("Task sizes (non-generated changed lines/files vs. budget):")
+            for task_id in sorted(sizes):
+                size = sizes[task_id]
+                flag = " (over budget)" if size["over_budget"] else ""
+                print(
+                    f"  {task_id}: {size['lines_changed']}/{size['max_lines']} "
+                    f"lines, {size['files_changed']}/{size['max_files']} files"
+                    f"{flag}"
+                )
+        if args.verbose and stacks:
+            print("Task stacks:")
+            for task_id in sorted(stacks):
+                stack = stacks[task_id]
+                flag = " (deep stack, consider landing sooner)" if stack["deep"] else ""
+                print(
+                    f"  {task_id} stacked on {stack['parent_task']} "
+                    f"(depth {stack['depth']}){flag}"
+                )
         if args.verbose:
             if gate_decisions:
                 print("Gate decisions:")
@@ -1158,6 +1277,30 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 )
         return 0
 
+    if args.task_command == "size":
+        size = git_ops_module.task_size(args.id, target=target)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "task_id": args.id,
+                        "lines_changed": size.lines_changed,
+                        "files_changed": size.files_changed,
+                        "max_lines": size.max_lines,
+                        "max_files": size.max_files,
+                        "over_budget": size.over_budget,
+                    }
+                )
+            )
+        else:
+            status_word = "over budget" if size.over_budget else "within budget"
+            print(
+                f"{args.id}: {size.lines_changed} line(s) changed "
+                f"(budget {size.max_lines}), {size.files_changed} file(s) "
+                f"changed (budget {size.max_files}) -- {status_word}"
+            )
+        return 0
+
     if args.task_command == "log":
         print(task_module.log_text(args.id, target=target), end="")
         return 0
@@ -1215,7 +1358,13 @@ def _run_git_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.git_command == "branch":
-        branch = git_ops_module.create_branch(args.id, args.base, target=target)
+        branch = git_ops_module.create_branch(
+            args.id,
+            args.base,
+            target=target,
+            allow_dirty=args.allow_dirty,
+            stack_on=args.stack_on,
+        )
         print(f"Created branch {branch} for {args.id}")
         return 0
 
@@ -1239,6 +1388,7 @@ def _run_git_command(args: argparse.Namespace) -> int:
             evidence=evidence,
         )
         print(f"Committed {head} on {args.id}'s branch")
+        _print_size_report(args.id, target=target)
         return 0
 
     if args.git_command == "push":
@@ -1264,11 +1414,17 @@ def _run_git_command(args: argparse.Namespace) -> int:
             use_template=use_template,
         )
         print(url)
+        _print_size_report(args.id, target=target)
         return 0
 
     if args.git_command == "mark-ready":
         git_ops_module.mark_ready(args.id, target=target)
         print(f"Marked {args.id}'s pull request ready for review")
+        return 0
+
+    if args.git_command == "restack":
+        new_head = git_ops_module.restack(args.id, target=target)
+        print(f"Restacked {args.id}'s branch onto its parent; new head {new_head}")
         return 0
 
     return 2

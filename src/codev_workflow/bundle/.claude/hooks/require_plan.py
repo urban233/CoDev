@@ -42,6 +42,12 @@ _GATED_EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # full shell parse: a chained command ("git status && git commit ...")
 # after the first `&&`/`;`/`|` is a known, accepted gap for this heuristic,
 # not a security boundary -- see design.md's Quality and Risk.
+#
+# The `codev git` entries close a real gap named in
+# docs/features/small-prs/design.md: `codev git branch/commit/push/restack`
+# run the exact raw git mutation each name mirrors (checkout -b/commit/
+# push/rebase+push), so without these the guarded path bypassed this
+# guardrail entirely while the raw command right above it did not.
 _DESTRUCTIVE_BASH_PREFIXES = (
     "git commit",
     "git push",
@@ -52,6 +58,10 @@ _DESTRUCTIVE_BASH_PREFIXES = (
     "git rebase",
     "rm -rf",
     "rm -r ",
+    "codev git branch",
+    "codev git commit",
+    "codev git push",
+    "codev git restack",
 )
 
 _TASK_BRANCH_PREFIX = "codev/"  # must match git_ops.branch_name_for()

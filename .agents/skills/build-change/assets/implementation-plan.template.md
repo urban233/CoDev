@@ -5,6 +5,7 @@
 **Reviewer:** [independent reviewer]
 **Risk:** [low/normal/high/critical]
 **Containment:** [flag/config guard this part relies on, or N/A]
+**Slices:** [One PR with an estimated size, or an ordered list of 2-4 slices, each naming its decomposition strategy: preparatory refactor, contract-first, behavior-vertical, or wiring-behind-a-guard]
 **Base commit:** [Git commit]
 **Issue/work item:** [link or ID]
 **Brief/design/API:** [links or Not needed]

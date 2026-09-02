@@ -110,6 +110,23 @@ class ResolutionPrecedenceTests(unittest.TestCase):
             result = resolve("git.workflow", target=target)
         self.assertEqual(ResolvedValue("feature-branch", "project"), result)
 
+    def test_review_max_lines_defaults_to_400(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve("review.max_lines", target=Path(directory))
+        self.assertEqual(ResolvedValue("400", "default"), result)
+
+    def test_review_max_files_defaults_to_8(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve("review.max_files", target=Path(directory))
+        self.assertEqual(ResolvedValue("8", "default"), result)
+
+    def test_review_max_lines_project_value_overrides_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            set_value("review.max_lines", "250", target=target)
+            result = resolve("review.max_lines", target=target)
+        self.assertEqual(ResolvedValue("250", "project"), result)
+
 
 class GlobalPathTests(unittest.TestCase):
     # Each branch is exercised on its real OS only: pathlib refuses to
@@ -207,6 +224,8 @@ class ListValuesTests(unittest.TestCase):
                 "model": ResolvedValue("global-model", "global"),
                 "adapter": ResolvedValue("opencode", "project"),
                 "git.workflow": ResolvedValue("trunk", "default"),
+                "review.max_lines": ResolvedValue("400", "default"),
+                "review.max_files": ResolvedValue("8", "default"),
             },
             result,
         )
