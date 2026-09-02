@@ -641,7 +641,7 @@ class TaskSizeTests(unittest.TestCase):
             size = git_ops.task_size("item-1", target=target)
             self.assertEqual(0, size.lines_changed)
             self.assertEqual(0, size.files_changed)
-            self.assertEqual(400, size.max_lines)
+            self.assertEqual(600, size.max_lines)
             self.assertEqual(8, size.max_files)
             self.assertFalse(size.over_budget)
 

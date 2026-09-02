@@ -2815,7 +2815,7 @@ class CliTests(unittest.TestCase):
                 {
                     "model": {"value": "anthropic/claude", "source": "project"},
                     "git.workflow": {"value": "trunk", "source": "default"},
-                    "review.max_lines": {"value": "400", "source": "default"},
+                    "review.max_lines": {"value": "600", "source": "default"},
                     "review.max_files": {"value": "8", "source": "default"},
                     "review.required_approvals": {"value": "1", "source": "default"},
                     "review.sensitive_paths": {"value": "", "source": "default"},

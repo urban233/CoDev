@@ -113,7 +113,7 @@ class ResolutionPrecedenceTests(unittest.TestCase):
     def test_review_max_lines_defaults_to_400(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = resolve("review.max_lines", target=Path(directory))
-        self.assertEqual(ResolvedValue("400", "default"), result)
+        self.assertEqual(ResolvedValue("600", "default"), result)
 
     def test_review_max_files_defaults_to_8(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -224,7 +224,7 @@ class ListValuesTests(unittest.TestCase):
                 "model": ResolvedValue("global-model", "global"),
                 "adapter": ResolvedValue("opencode", "project"),
                 "git.workflow": ResolvedValue("trunk", "default"),
-                "review.max_lines": ResolvedValue("400", "default"),
+                "review.max_lines": ResolvedValue("600", "default"),
                 "review.max_files": ResolvedValue("8", "default"),
                 "review.required_approvals": ResolvedValue("1", "default"),
                 "review.sensitive_paths": ResolvedValue("", "default"),

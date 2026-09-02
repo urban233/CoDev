@@ -49,10 +49,19 @@ DEFAULTS: dict[str, str] = {
     # is the explicit override, with no containment expectation. See
     # ADR-0033.
     "git.workflow": "trunk",
-    # Google's published change-list guidance: a task whose non-generated
-    # diff exceeds either budget is a prompt to reconsider slicing, not a
-    # hard limit. See docs/features/small-prs/design.md.
-    "review.max_lines": "400",
+    # A prompt to reconsider slicing, not a hard limit -- see
+    # docs/features/small-prs/design.md.
+    #
+    # This began at 400, taken from Google's published median change-list
+    # guidance, and that turned out to be too strict in practice: it fired on
+    # changes that were genuinely one coherent purpose, mostly because a real
+    # change carries its tests with it. Size is one input into whether a
+    # change is reviewable, not the input -- a 500-line change doing one
+    # thing is easier to review than a 300-line change spanning four
+    # subsystems, and a line count cannot tell those apart. The threshold is
+    # set where it catches the genuinely unreviewable rather than the merely
+    # substantial.
+    "review.max_lines": "600",
     "review.max_files": "8",
     # ADR-0037: one approving review from a human who is neither the task
     # owner nor a bot. Two only where the risk warrants it -- requiring two
