@@ -49,6 +49,11 @@ DEFAULTS: dict[str, str] = {
     # is the explicit override, with no containment expectation. See
     # ADR-0033.
     "git.workflow": "trunk",
+    # Google's published change-list guidance: a task whose non-generated
+    # diff exceeds either budget is a prompt to reconsider slicing, not a
+    # hard limit. See docs/features/small-prs/design.md.
+    "review.max_lines": "400",
+    "review.max_files": "8",
 }
 
 

@@ -42,7 +42,7 @@ from codev_workflow.cli import (
     _skill_name,
     main,
 )
-from codev_workflow.git_ops import GitOpsError
+from codev_workflow.git_ops import GitOpsError, TaskSize
 from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
 
@@ -91,6 +91,88 @@ class CliTests(unittest.TestCase):
                             open_pr.call_args.kwargs["use_template"],
                         )
                         open_pr.reset_mock()
+
+    def test_git_commit_and_open_pr_print_the_running_size(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.commit", return_value="head-sha"
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.open_pr",
+                    return_value="https://github.com/o/r/pull/1",
+                ),
+                patch(
+                    "codev_workflow.cli.task_module.pr_description",
+                    return_value="generated",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=TaskSize(410, 3, 400, 8),
+                ),
+            ):
+                commit_output = StringIO()
+                with redirect_stdout(commit_output):
+                    main(
+                        [
+                            "git",
+                            "commit",
+                            "--id",
+                            "item-1",
+                            "--message",
+                            "msg",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+                open_pr_output = StringIO()
+                with redirect_stdout(open_pr_output):
+                    main(
+                        [
+                            "git",
+                            "open-pr",
+                            "--id",
+                            "item-1",
+                            "--title",
+                            "title",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            for output in (commit_output.getvalue(), open_pr_output.getvalue()):
+                self.assertIn("Size: 410 line(s)", output)
+                self.assertIn("over budget", output)
+
+    def test_size_report_failure_never_blocks_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.commit", return_value="head-sha"
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    side_effect=GitOpsError("boom"),
+                ),
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        [
+                            "git",
+                            "commit",
+                            "--id",
+                            "item-1",
+                            "--message",
+                            "msg",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("Committed head-sha", output.getvalue())
+            self.assertNotIn("Size:", output.getvalue())
 
     def test_init_check_diff_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1543,6 +1625,119 @@ class CliTests(unittest.TestCase):
             self.assertEqual({"alice": 1}, payload["tasks_in_progress_by_owner"])
             self.assertEqual([], payload["changed_file_overlaps"])
 
+    def test_status_verbose_reports_task_sizes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+                main(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--owner",
+                        "alice",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.changed_files", return_value=[]
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=TaskSize(450, 3, 400, 8),
+                ),
+            ):
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(["status", "--target", str(target), "--verbose"])
+                json_output = StringIO()
+                with redirect_stdout(json_output):
+                    main(["status", "--target", str(target), "--verbose", "--json"])
+            self.assertEqual(0, code)
+            text = output.getvalue()
+            self.assertIn("Task sizes", text)
+            self.assertIn("item-1: 450/400 lines, 3/8 files (over budget)", text)
+            payload = json.loads(json_output.getvalue())
+            self.assertEqual(
+                {
+                    "lines_changed": 450,
+                    "files_changed": 3,
+                    "max_lines": 400,
+                    "max_files": 8,
+                    "over_budget": True,
+                },
+                payload["task_sizes"]["item-1"],
+            )
+
+    def test_task_size_command_reports_measurement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                redirect_stdout(StringIO()),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=TaskSize(120, 3, 400, 8),
+                ),
+            ):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+                text_output = StringIO()
+                with redirect_stdout(text_output):
+                    code = main(
+                        ["task", "size", "--id", "item-1", "--target", str(target)]
+                    )
+                json_output = StringIO()
+                with redirect_stdout(json_output):
+                    main(
+                        [
+                            "task",
+                            "size",
+                            "--id",
+                            "item-1",
+                            "--target",
+                            str(target),
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("120 line(s) changed (budget 400)", text_output.getvalue())
+            self.assertIn("within budget", text_output.getvalue())
+            self.assertEqual(
+                {
+                    "task_id": "item-1",
+                    "lines_changed": 120,
+                    "files_changed": 3,
+                    "max_lines": 400,
+                    "max_files": 8,
+                    "over_budget": False,
+                },
+                json.loads(json_output.getvalue()),
+            )
+
+    def test_task_size_command_reports_over_budget_but_exits_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                redirect_stdout(StringIO()),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=TaskSize(500, 9, 400, 8),
+                ),
+            ):
+                main(["init", "--target", str(target), "--agent-platform", "opencode"])
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        ["task", "size", "--id", "item-1", "--target", str(target)]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("over budget", output.getvalue())
+
     def test_status_without_verbose_omits_owner_and_overlap_keys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -1875,6 +2070,8 @@ class CliTests(unittest.TestCase):
                 {
                     "model": {"value": "anthropic/claude", "source": "project"},
                     "git.workflow": {"value": "trunk", "source": "default"},
+                    "review.max_lines": {"value": "400", "source": "default"},
+                    "review.max_files": {"value": "8", "source": "default"},
                 },
                 json.loads(list_output.getvalue()),
             )

@@ -284,6 +284,89 @@ class ChangedFilesTests(unittest.TestCase):
             self.assertEqual([], git_ops.changed_files("item-1", target=target))
 
 
+class TaskSizeTests(unittest.TestCase):
+    def test_zero_counts_when_no_branch_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            size = git_ops.task_size("item-1", target=target)
+            self.assertEqual(0, size.lines_changed)
+            self.assertEqual(0, size.files_changed)
+            self.assertEqual(400, size.max_lines)
+            self.assertEqual(8, size.max_files)
+            self.assertFalse(size.over_budget)
+
+    def test_counts_lines_and_files_changed_since_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "one.txt").write_text("a\nb\nc\n", encoding="utf-8")
+            (target / "two.txt").write_text("d\ne\n", encoding="utf-8")
+            git_ops.commit("item-1", "add two files", target=target)
+            size = git_ops.task_size("item-1", target=target)
+            self.assertEqual(5, size.lines_changed)
+            self.assertEqual(2, size.files_changed)
+
+    def test_linguist_generated_paths_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / ".gitattributes").write_text(
+                "generated.txt linguist-generated=true\n", encoding="utf-8"
+            )
+            (target / "generated.txt").write_text("x\n" * 10, encoding="utf-8")
+            (target / "real.txt").write_text("y\n", encoding="utf-8")
+            git_ops.commit("item-1", "add generated and real files", target=target)
+            size = git_ops.task_size("item-1", target=target)
+            # .gitattributes itself is not marked generated, so it counts too.
+            self.assertEqual(2, size.lines_changed)
+            self.assertEqual(2, size.files_changed)
+
+    def test_configured_budget_overrides_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            config.set_value("review.max_lines", "1", target=target)
+            (target / "one.txt").write_text("a\nb\n", encoding="utf-8")
+            git_ops.commit("item-1", "add one.txt", target=target)
+            size = git_ops.task_size("item-1", target=target)
+            self.assertEqual(1, size.max_lines)
+            self.assertTrue(size.over_budget)
+
+    def test_own_task_bookkeeping_is_excluded_from_the_count(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            # create_branch already committed nothing; git-state.json rides
+            # along on the next commit's `git add -A` alongside real content.
+            (target / "one.txt").write_text("a\n", encoding="utf-8")
+            git_ops.commit("item-1", "add one.txt", target=target)
+            output = subprocess.run(
+                ["git", "diff", "--numstat", base, "codev/item-1"],
+                cwd=target,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+            self.assertIn(".codev/task/item-1/git-state.json", output)
+            size = git_ops.task_size("item-1", target=target)
+            self.assertEqual(1, size.lines_changed)
+            self.assertEqual(1, size.files_changed)
+
+    def test_non_integer_configured_budget_falls_back_to_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            config.set_value("review.max_files", "not-a-number", target=target)
+            with self.assertWarns(UserWarning):
+                size = git_ops.task_size("item-1", target=target)
+            self.assertEqual(8, size.max_files)
+
+
 class PushTests(unittest.TestCase):
     def test_push_sends_the_own_branch_to_origin(self) -> None:
         with (

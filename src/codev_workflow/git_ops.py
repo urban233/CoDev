@@ -49,6 +49,7 @@ import re
 import shutil
 import subprocess
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -482,6 +483,110 @@ def changed_files(task_id: str, *, target: Path) -> list[str]:
     except GitOpsError:
         return []
     return [line for line in output.splitlines() if line]
+
+
+@dataclass(frozen=True)
+class TaskSize:
+    """Non-generated diff size for one task, plus the budget it is measured
+    against -- see docs/features/small-prs/design.md."""
+
+    lines_changed: int
+    files_changed: int
+    max_lines: int
+    max_files: int
+
+    @property
+    def over_budget(self) -> bool:
+        return (
+            self.lines_changed > self.max_lines or self.files_changed > self.max_files
+        )
+
+
+def _resolved_budget(key: str, *, target: Path) -> int:
+    default = int(config.DEFAULTS[key])
+    resolved = config.resolve(key, target=target)
+    if resolved is None:
+        return default
+    try:
+        return int(resolved.value)
+    except ValueError:
+        warnings.warn(
+            f"{key} = {resolved.value!r} is not an integer; using default {default}",
+            stacklevel=2,
+        )
+        return default
+
+
+def _generated_paths(paths: list[str], *, target: Path) -> set[str]:
+    """Paths `.gitattributes` marks `linguist-generated`, per design.md's
+    resolved decision: this is the only generated-file signal CoDev uses --
+    no CoDev-owned fallback exclude list. Returns an empty set, never
+    raises, when a repository has no matching `.gitattributes` entry."""
+    if not paths:
+        return set()
+    try:
+        output = _run_git(
+            ["check-attr", "linguist-generated", "--", *paths], cwd=target
+        )
+    except GitOpsError:
+        return set()
+    generated: set[str] = set()
+    for line in output.splitlines():
+        path, _, value = line.rpartition(": linguist-generated: ")
+        if path and value in ("set", "true"):
+            generated.add(path)
+    return generated
+
+
+def task_size(task_id: str, *, target: Path) -> TaskSize:
+    """Read-only non-generated changed-line and changed-file count for a
+    task's own branch against its recorded base snapshot, plus the resolved
+    `review.max_lines`/`review.max_files` budget.
+
+    Returns zero counts rather than raising when the task has no branch
+    recorded yet, matching changed_files's established posture -- this
+    backs `codev task size` and status --verbose, not a hard requirement.
+    """
+    max_lines = _resolved_budget("review.max_lines", target=target)
+    max_files = _resolved_budget("review.max_files", target=target)
+    try:
+        git_state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        return TaskSize(0, 0, max_lines, max_files)
+    try:
+        output = _run_git(
+            ["diff", "--numstat", git_state["base_snapshot"], git_state["branch"]],
+            cwd=target,
+        )
+    except GitOpsError:
+        return TaskSize(0, 0, max_lines, max_files)
+
+    # A task's own bookkeeping under .codev/task/<task_id>/ (git-state.json,
+    # round-state.json) rides on the same branch and would otherwise count
+    # against the very budget this exists to enforce -- exclude it before
+    # the linguist-generated check, not as an instance of it.
+    own_state_prefix = _task_dir(target, task_id).relative_to(target).as_posix() + "/"
+
+    rows = []
+    for line in output.splitlines():
+        if not line:
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) == 3 and not parts[2].startswith(own_state_prefix):
+            rows.append(parts)
+    generated = _generated_paths([path for _, _, path in rows], target=target)
+
+    lines_changed = 0
+    files_changed = 0
+    for added, deleted, path in rows:
+        if path in generated:
+            continue
+        files_changed += 1
+        if added != "-":
+            lines_changed += int(added)
+        if deleted != "-":
+            lines_changed += int(deleted)
+    return TaskSize(lines_changed, files_changed, max_lines, max_files)
 
 
 def own_branch(task_id: str, *, target: Path) -> str:
