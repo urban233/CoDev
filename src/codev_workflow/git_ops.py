@@ -43,6 +43,7 @@ docs/adr/0003-outer-loop-triage-and-pr-landing.md.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -50,6 +51,7 @@ import shutil
 import subprocess
 import warnings
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, cast
 
@@ -993,6 +995,91 @@ def _pr_state(branch: str, *, target: Path) -> str | None:
     return state.strip()
 
 
+@dataclass(frozen=True)
+class HumanApproval:
+    """Whether a pull request carries the independent human approval
+    ADR-0037 requires, and who supplied it."""
+
+    approvals: tuple[str, ...]
+    required: int
+    excluded_owner: str | None
+
+    @property
+    def satisfied(self) -> bool:
+        return len(self.approvals) >= self.required
+
+
+_BOT_SUFFIX = "[bot]"
+
+
+def human_approval(
+    branch: str, *, owner: str | None, required: int = 1, target: Path
+) -> HumanApproval | None:
+    """The approving reviews on `branch`'s pull request that count toward
+    ADR-0037's gate: state APPROVED, author neither the task owner nor a bot.
+
+    Returns None when GitHub cannot answer at all, so a caller reports
+    "cannot tell" rather than "not approved" -- the two are different, and
+    only one of them should ever block a human.
+
+    GitHub already refuses to let a pull request's *author* approve it, but
+    the task owner and the pull request's author are not always the same
+    person, so the owner is excluded here by name rather than assumed.
+    """
+    try:
+        raw = _run_gh(
+            ["pr", "view", branch, "--json", "reviews", "-q", ".reviews"], cwd=target
+        )
+    except GitOpsError:
+        return None
+    try:
+        reviews = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return None
+    approvals: list[str] = []
+    for review in reviews:
+        if not isinstance(review, dict) or review.get("state") != "APPROVED":
+            continue
+        login = (review.get("author") or {}).get("login")
+        if not login or login.endswith(_BOT_SUFFIX):
+            continue
+        if owner is not None and login == owner:
+            continue
+        if login not in approvals:
+            approvals.append(login)
+    return HumanApproval(tuple(approvals), required, owner)
+
+
+def _resolved_globs(key: str, *, target: Path) -> list[str]:
+    resolved = config.resolve(key, target=target)
+    raw = resolved.value if resolved is not None else config.DEFAULTS[key]
+    return [pattern.strip() for pattern in raw.split(",") if pattern.strip()]
+
+
+def matching_paths(task_id: str, key: str, *, target: Path) -> list[str]:
+    """The task's changed files that match one of `key`'s configured globs."""
+    patterns = _resolved_globs(key, target=target)
+    if not patterns:
+        return []
+    return [
+        path
+        for path in changed_files(task_id, target=target)
+        if any(fnmatch(path, pattern) for pattern in patterns)
+    ]
+
+
+def required_approvals(task_id: str, *, target: Path) -> int:
+    """How many independent human approvals this task's change needs.
+
+    The configured default, raised to two when the change touches a path the
+    team declared sensitive (ADR-0037). Risk is a property of what the
+    change touches, which is knowable without asking GitHub for labels."""
+    base = _resolved_budget("review.required_approvals", target=target)
+    if matching_paths(task_id, "review.sensitive_paths", target=target):
+        return max(base, 2)
+    return base
+
+
 def pull_request_state(branch: str, *, target: Path) -> str | None:
     """Public, read-only pull-request state for a branch: "OPEN", "CLOSED",
     "MERGED", or None when GitHub cannot answer -- no pull request, no
@@ -1087,6 +1174,35 @@ _MARK_READY_REASONS = (
 )
 
 
+_OWNERSHIP_STATEMENT = (
+    "I directed this change and I own it. This is an ownership statement, "
+    "not an approval -- ADR-0037 requires a separate approving review from "
+    "someone who is neither this task's owner nor a bot."
+)
+
+
+def _resolve_reviewer(task_id: str, *, target: Path) -> str | None:
+    """The task's recorded independent reviewer, falling back to a
+    CODEOWNERS suggestion for the paths it actually touched.
+
+    Never returns the task owner: a change's author cannot be its
+    independent reviewer, however little of it they typed (ADR-0037)."""
+    try:
+        described = task.describe(task_id, target=target)
+    except task.TaskError:
+        return None
+    owner = described.get("owner")
+    recorded = described.get("reviewer")
+    if recorded and recorded != owner:
+        return str(recorded)
+    for candidate in suggest_owners(
+        changed_files(task_id, target=target), target=target
+    ):
+        if candidate != owner:
+            return candidate
+    return None
+
+
 def mark_ready(task_id: str, *, target: Path) -> None:
     branch = _ensure_on_own_branch(task_id, target=target)
     head = current_head(target)
@@ -1097,7 +1213,26 @@ def mark_ready(task_id: str, *, target: Path) -> None:
             f"{result.reason!r}, not one of {_MARK_READY_REASONS} ({result.message})"
         )
     final_body = _render_pr_template(task_id, target=target)
+    final_body = f"{final_body}\n\n{_OWNERSHIP_STATEMENT}"
+    waiver = None
+    with contextlib.suppress(task.TaskError):
+        waiver = task.review_waiver(task_id, target=target)
+    if waiver is not None:
+        # Never omit this: a body that simply lacks an approval line reads as
+        # "not reviewed yet", which is a different claim from "deliberately
+        # landed without independent review".
+        final_body = (
+            f"{final_body}\n\n**No independent review.** Waived by "
+            f"{waiver.get('by') or 'the task owner'}: {waiver['reason']}"
+        )
     _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
+    reviewer = _resolve_reviewer(task_id, target=target)
+    if reviewer is not None:
+        # Best-effort: a reviewer GitHub will not accept (no write access,
+        # not a collaborator) must not block taking the pull request out of
+        # draft, which is the step that actually matters here.
+        with contextlib.suppress(GitOpsError):
+            _run_gh(["pr", "edit", branch, "--add-reviewer", reviewer], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)
 
 

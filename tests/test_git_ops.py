@@ -1574,7 +1574,11 @@ class MarkReadyTests(unittest.TestCase):
                 call for call in run_gh.call_args_list if "edit" in call.args[0]
             )
             body = edit_call.args[0][edit_call.args[0].index("--body") + 1]
-            self.assertEqual(task.pr_description("item-1", target=target), body)
+            self.assertTrue(
+                body.startswith(task.pr_description("item-1", target=target))
+            )
+            self.assertIn("I directed this change and I own it", body)
+            self.assertIn("not an approval", body)
             self.assertNotEqual(task.log_text("item-1", target=target), body)
         self.assertNotIn("round 1:", body)
 

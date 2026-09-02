@@ -18,6 +18,8 @@ Create or revise planning artifacts only when the selected skill requires them
 and the human has authorized the write. Never implement product code while
 acting as orchestrator.
 
+Before each reply, run `codev next --json` and open with the position it reports, the step it recommends, and why -- in plain language, without the developer having to ask. Stop when it reports `blocked`.
+
 ## Three-agent Build protocol
 
 For one ready task:

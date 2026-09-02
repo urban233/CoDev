@@ -35,7 +35,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codev_workflow import git_ops, task
-from codev_workflow.oracle import _BY_CHECK_REASON, next_action
+from codev_workflow.oracle import _BY_CHECK_REASON, NextAction, next_action
 
 
 def _init_repo(target: Path) -> str:
@@ -168,14 +168,62 @@ class GitHubPositionTests(unittest.TestCase):
             target=target,
         )
 
+    def _open_pr(
+        self, target: Path, approval: git_ops.HumanApproval | None
+    ) -> NextAction:
+        with (
+            patch.object(git_ops, "pull_request_state", return_value="OPEN"),
+            patch.object(git_ops, "human_approval", return_value=approval),
+        ):
+            return next_action(target=target)
+
     def test_an_open_pull_request_waits_on_a_human(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             self._ready_task(target)
-            with patch.object(git_ops, "pull_request_state", return_value="OPEN"):
-                action = next_action(target=target)
+            action = self._open_pr(target, git_ops.HumanApproval((), 1, "@alice"))
         self.assertIn("awaiting human review", action.position)
-        self.assertIn("human decision", action.reason)
+        self.assertIn("is not an approval", action.reason)
+
+    def test_an_independent_approval_satisfies_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._ready_task(target)
+            action = self._open_pr(
+                target, git_ops.HumanApproval(("@bob",), 1, "@alice")
+            )
+        self.assertEqual("approved by a human", action.position)
+        self.assertEqual("ok_human_approved", action.check_reason)
+
+    def test_two_required_approvals_are_not_met_by_one(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._ready_task(target)
+            action = self._open_pr(
+                target, git_ops.HumanApproval(("@bob",), 2, "@alice")
+            )
+        self.assertIn("awaiting human review", action.position)
+        self.assertIn("1 of 2", action.reason)
+
+    def test_unreachable_github_reports_unknown_not_unapproved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._ready_task(target)
+            action = self._open_pr(target, None)
+        self.assertIn("review state unknown", action.position)
+
+    def test_a_waived_review_is_reported_as_waived_not_approved(self) -> None:
+        """Nothing may conflate "nobody reviewed this" with "someone
+        approved it"."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._ready_task(target)
+            task.waive_review("item-1", "solo maintainer", target=target)
+            action = self._open_pr(target, None)
+        self.assertEqual("independent review waived", action.position)
+        self.assertEqual("ok_human_review_waived", action.check_reason)
+        self.assertIn("solo maintainer", action.reason)
+        self.assertNotEqual("ok_human_approved", action.check_reason)
 
     def test_a_merged_final_slice_recommends_closing_the_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

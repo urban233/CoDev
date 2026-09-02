@@ -73,9 +73,13 @@ class NextAction:
 # outcomes already are the routing table, and a missing entry should be a
 # visible KeyError in a test rather than a silent fallthrough in a session.
 _BY_CHECK_REASON: dict[str, tuple[str, str, str | None, bool]] = {
+    # Covers both a freshly opened round and one whose builder has already
+    # reported, so the reason must not claim a builder round exists -- the
+    # discovery step for slice C1 caught it asserting exactly that on a task
+    # that had only just started.
     "ok_waiting_on_reviewer": (
         "review the round",
-        "the builder's round is recorded and no reviewer verdict is in yet",
+        "this round has no reviewer verdict recorded yet",
         "dispatch lightweight-reviewer against the current head",
         False,
     ),
@@ -271,16 +275,74 @@ def _github_position(
             slice_id=slice_id,
         )
     if state == "OPEN":
+        return _open_pull_request_position(task_id, branch, slice_id, target=target)
+    return None
+
+
+def _open_pull_request_position(
+    task_id: str, branch: str, slice_id: str, *, target: Path
+) -> NextAction:
+    """ADR-0037's gate, reported rather than enforced: the machine gates
+    being satisfied is not a human approval, and the difference is the whole
+    point of the rename in ADR-0037."""
+    waiver = task.review_waiver(task_id, target=target)
+    if waiver is not None:
         return NextAction(
-            position="pull request open, awaiting human review",
-            recommendation="wait for an independent human approval",
+            position="independent review waived",
+            recommendation="merge is the human's decision, then land the slice",
             reason=(
-                "the machine gates are satisfied and the pull request is open; "
-                "approval is a human decision this tool does not make"
+                "no independent review was obtained; a human waived the "
+                f"requirement on the record -- {waiver['reason']}"
             ),
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_human_review_waived",
+        )
+    owner = task.describe(task_id, target=target).get("owner")
+    # `required` travels on the record itself, so the count reported and the
+    # count compared against can never diverge.
+    approval = git_ops.human_approval(
+        branch,
+        owner=owner,
+        required=git_ops.required_approvals(task_id, target=target),
+        target=target,
+    )
+    if approval is None:
+        return NextAction(
+            position="pull request open, review state unknown",
+            recommendation="check the pull request's reviews by hand",
+            reason="GitHub could not be asked whether an approval exists",
             task_id=task_id,
             branch=branch,
             slice_id=slice_id,
             check_reason="ok_machine_review_complete",
         )
-    return None
+    if approval.satisfied:
+        return NextAction(
+            position="approved by a human",
+            recommendation="merge is the human's decision, then land the slice",
+            reason=(
+                f"{len(approval.approvals)} of {approval.required} required "
+                "independent approval(s) recorded: "
+                f"{', '.join(approval.approvals)}"
+            ),
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_human_approved",
+        )
+    return NextAction(
+        position="pull request open, awaiting human review",
+        recommendation="wait for an independent human approval",
+        reason=(
+            f"{len(approval.approvals)} of {approval.required} required "
+            "independent approval(s) recorded; the machine gates being "
+            "satisfied is not "
+            "an approval, and neither the task owner nor a bot can supply one"
+        ),
+        task_id=task_id,
+        branch=branch,
+        slice_id=slice_id,
+        check_reason="ok_machine_review_complete",
+    )

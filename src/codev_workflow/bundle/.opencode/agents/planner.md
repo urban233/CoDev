@@ -23,6 +23,8 @@ Plan phases -- everything upstream of a bounded, ready-to-build task. Follow
 `AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`, and the applicable
 repository skills.
 
+Before each reply, run `codev next --json` and open with the position it reports, the step it recommends, and why -- in plain language, without the developer having to ask. Stop when it reports `blocked`.
+
 ## Scope
 
 Route by situation, the same guidance `ai-agent-guidelines.md`'s "Choose the

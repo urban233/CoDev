@@ -131,6 +131,15 @@ def deprecated_reason_for(reason: str) -> str | None:
 
 VALID_ENTRY_MODES = ("takeover", "direct-review")
 
+# ADR-0038: how a slice gets built. `pair` keeps the work in the developer's
+# own session -- the loop does not dispatch `builder` -- but records the same
+# rounds, runs the same reviewer, and lands the same evidence. Pair mode is a
+# work style the loop supports, not an exit from it: if it fell outside the
+# state machine, the work a developer cares most about would be the work
+# carrying no record.
+VALID_WORK_STYLES = ("pair", "delegate")
+DEFAULT_WORK_STYLE = "delegate"
+
 # ADR-0018: the outer loop's five specialist reviewers, by name -- reused to
 # validate a round's optional `specialist_selection` audit record.
 SPECIALIST_NAMES = (
@@ -308,13 +317,29 @@ def start(
     owner: str | None = None,
     entry: str | None = None,
     slices: list[str] | None = None,
+    reviewer: str | None = None,
+    pair_slices: list[str] | None = None,
 ) -> Path:
     resolved_max_rounds = _normalize_max_rounds(max_rounds)
     resolved_slices = _normalize_slices(task_id, slices)
+    styles = {slice_id: DEFAULT_WORK_STYLE for slice_id in resolved_slices}
+    for slice_id in pair_slices or []:
+        if slice_id not in styles:
+            raise TaskError(
+                f"cannot mark {slice_id!r} as pair work: this task holds "
+                f"{resolved_slices}"
+            )
+        styles[slice_id] = "pair"
     _validate_optional_text("link_ref", link_ref)
     _validate_optional_text("summary", summary)
     _validate_optional_text("description", description)
     _validate_optional_text("owner", owner)
+    _validate_optional_text("reviewer", reviewer)
+    if reviewer is not None and owner is not None and reviewer == owner:
+        raise TaskError(
+            "the independent reviewer must not be the task owner (ADR-0037): "
+            f"both resolve to {owner!r}"
+        )
     if entry is not None and entry not in VALID_ENTRY_MODES:
         raise TaskError(
             f"entry must be null or one of {VALID_ENTRY_MODES}, got {entry!r}"
@@ -341,6 +366,7 @@ def start(
         # accepted plan's slice list. A change that genuinely fits in one
         # pull request is a task holding exactly one slice.
         "slices": resolved_slices,
+        "slice_styles": styles,
         "current_slice": resolved_slices[0],
         "rounds": [
             {
@@ -356,6 +382,10 @@ def start(
         "summary": summary,
         "description": description,
         "owner": owner,
+        # ADR-0037: the task owns its independent reviewer, and a slice
+        # inherits it. The owner is the author of the change however little
+        # of it they typed, so the two must differ.
+        "reviewer": reviewer,
         "entry": entry,
     }
     _save(task_id, state, target=target)
@@ -1171,6 +1201,45 @@ def waive(
     return path
 
 
+def waive_review(
+    task_id: str, reason: str, *, target: Path, by: str | None = None
+) -> Path:
+    """Human-authorized: this task lands without the independent human
+    approval ADR-0037 requires.
+
+    ADR-0037's own Consequences section calls for this: a repository with no
+    second engineer -- a solo adopter -- cannot satisfy that gate by
+    construction, and must be able to record that it is deliberately
+    operating without one rather than silently failing every task.
+
+    Deliberately per-task and reason-bearing rather than a configuration
+    flag. A flag is set once and applies silently to every task afterwards,
+    which reproduces the reflexive-approval failure ADR-0037 exists to
+    prevent, only globally and invisibly. Restating the reason each time is
+    the point, not friction to be optimized away.
+
+    Like `waive`, this never claims something happened that did not: the
+    oracle reports a distinct state, and the pull-request body says the
+    review was waived rather than omitting the line.
+    """
+    _validate_required_text("reason", reason)
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    state["review_waiver"] = {
+        "reason": reason,
+        "by": by,
+        "at": _utc_now_iso(),
+    }
+    _save(task_id, state, target=target)
+    return _task_path(target, task_id)
+
+
+def review_waiver(task_id: str, *, target: Path) -> dict[str, Any] | None:
+    """The recorded waiver of independent review, or None."""
+    waiver: dict[str, Any] | None = _load(task_id, target=target).get("review_waiver")
+    return waiver
+
+
 def relink(
     task_id: str,
     link_ref: str,
@@ -1224,6 +1293,7 @@ def describe(task_id: str, *, target: Path) -> dict[str, Any]:
         "summary": state.get("summary"),
         "description": state.get("description"),
         "owner": state.get("owner"),
+        "reviewer": state.get("reviewer"),
         "entry": state.get("entry"),
     }
 
@@ -1287,6 +1357,90 @@ def describe_base_snapshot(task_id: str, *, target: Path) -> str:
     not the branch's."""
     base: str = _load(task_id, target=target)["base_snapshot"]
     return base
+
+
+def work_style(task_id: str, slice_id: str | None = None, *, target: Path) -> str:
+    """How the named slice is built -- `pair` or `delegate` (ADR-0038).
+    Defaults to the slice being worked."""
+    state = _load(task_id, target=target)
+    resolved = slice_id or current_slice_id(state)
+    style: str = state.get("slice_styles", {}).get(resolved, DEFAULT_WORK_STYLE)
+    return style
+
+
+def set_work_style(
+    task_id: str, slice_id: str | None, style: str, *, target: Path
+) -> str:
+    """Change a slice's work style while it is still open. ADR-0038 makes
+    this changeable mid-slice on purpose: a developer who realises partway
+    through that a change needs their hands should not have to leave the
+    loop to get that."""
+    if style not in VALID_WORK_STYLES:
+        raise TaskError(f"style must be one of {VALID_WORK_STYLES}, got {style!r}")
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    resolved = slice_id or current_slice_id(state)
+    if resolved not in state["slices"]:
+        raise TaskError(f"task {task_id!r} holds no slice {resolved!r}")
+    state.setdefault("slice_styles", {})[resolved] = style
+    _save(task_id, state, target=target)
+    return resolved
+
+
+def pause(task_id: str, head: str, reason: str, *, target: Path) -> None:
+    """Record that a human interrupted this slice mid-round (ADR-0038).
+
+    Interrupting used to leave files edited, nothing committed, nothing
+    recorded, and the next `check` reporting `stop_drift` -- a false report
+    about what happened, and the developer's in-progress work losing its
+    traceability. Pausing makes the interruption a recorded fact with the
+    partial head attached, so `resume` can re-baseline onto it."""
+    _validate_required_text("reason", reason)
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    state["paused"] = {"head": head, "reason": reason, "at": _utc_now_iso()}
+    _save(task_id, state, target=target)
+    record_escalation(
+        task_id,
+        "critical_interrupt",
+        reason,
+        target=target,
+        phase=state["rounds"][-1]["phase"],
+        round_number=state["current_round"],
+    )
+
+
+def resume(
+    task_id: str, head: str, reason: str, *, target: Path, by: str | None = None
+) -> str:
+    """Re-enter a paused slice in `pair` style, absorbing whatever was
+    written by hand while it was paused.
+
+    Raises the round cap for the resumed phase by one, because the round
+    this opens is not the failure mode the cap guards against. The cap
+    exists to stop the loop churning on the same problem without human
+    attention; a pause and resume is *definitionally* human attention --
+    the developer took the keyboard, and `pause` recorded a
+    `critical_interrupt` with a stated reason to prove it. Spending cap on
+    that would stop a developer for something unrelated to their code.
+
+    The cap is raised rather than the round exempted from counting. A
+    `counts_toward_cap` flag would make `_phase_round_count` lie about how
+    many rounds have happened; raising the cap keeps every round a round and
+    leaves the change visible in `reopens` history and `codev task log`.
+    """
+    state = _load(task_id, target=target)
+    if state.get("paused") is None:
+        raise TaskError(f"task {task_id!r} is not paused")
+    phase = state["rounds"][-1]["phase"]
+    raised = dict(state["max_rounds"])
+    raised[phase] = raised[phase] + 1
+    reopen(task_id, head, reason, target=target, by=by, max_rounds=raised)
+    slice_id = set_work_style(task_id, None, "pair", target=target)
+    resumed = _load(task_id, target=target)
+    resumed.pop("paused", None)
+    _save(task_id, resumed, target=target)
+    return slice_id
 
 
 def current_slice(task_id: str, *, target: Path) -> str:

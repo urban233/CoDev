@@ -2817,6 +2817,9 @@ class CliTests(unittest.TestCase):
                     "git.workflow": {"value": "trunk", "source": "default"},
                     "review.max_lines": {"value": "400", "source": "default"},
                     "review.max_files": {"value": "8", "source": "default"},
+                    "review.required_approvals": {"value": "1", "source": "default"},
+                    "review.sensitive_paths": {"value": "", "source": "default"},
+                    "review.pair_paths": {"value": "", "source": "default"},
                 },
                 json.loads(list_output.getvalue()),
             )
