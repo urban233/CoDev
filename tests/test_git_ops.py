@@ -512,6 +512,107 @@ class StackOnTests(unittest.TestCase):
             self.assertFalse(git_ops._has_recorded_child("item-2", target=target))
 
 
+class SliceBranchTests(unittest.TestCase):
+    """ADR-0035: a slice owns its branch and one pull request."""
+
+    def test_a_one_slice_task_keeps_the_branch_name_it_always_had(self) -> None:
+        self.assertEqual("codev/auth", git_ops.branch_name_for_slice("auth", "auth"))
+
+    def test_a_slice_branch_uses_a_flat_separator_not_a_path_segment(self) -> None:
+        """git stores refs as files, so codev/auth and codev/auth/schema
+        cannot coexist -- which would break the one-slice-then-many case."""
+        self.assertEqual(
+            "codev/auth--schema", git_ops.branch_name_for_slice("auth", "schema")
+        )
+
+    def test_a_declared_stack_produces_one_branch_per_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start(
+                "feat", base, target=target, link_ref="x", slices=["a", "b", "c"]
+            )
+            git_ops.create_branch("feat", base, target=target)
+            (target / "one.py").write_text("x = 1\n", encoding="utf-8")
+            first = git_ops.commit("feat", "slice a", target=target)
+
+            task.advance_slice("feat", first, target=target)
+            second_branch = git_ops.start_slice_branch("feat", "b", target=target)
+            recorded = git_ops.slice_branches("feat", target=target)
+
+        self.assertEqual("codev/feat--b", second_branch)
+        self.assertEqual({"a", "b"}, set(recorded))
+        # The second slice is cut from where the first currently sits, not
+        # from the trunk -- that is what makes a stack a stack.
+        self.assertEqual(first, recorded["b"]["base_snapshot"])
+
+    def test_own_branch_follows_the_slice_being_worked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("feat", base, target=target, link_ref="x", slices=["a", "b"])
+            git_ops.create_branch("feat", base, target=target)
+            (target / "one.py").write_text("x = 1\n", encoding="utf-8")
+            head = git_ops.commit("feat", "slice a", target=target)
+            self.assertEqual("codev/feat--a", git_ops.own_branch("feat", target=target))
+            task.advance_slice("feat", head, target=target)
+            git_ops.start_slice_branch("feat", "b", target=target)
+            self.assertEqual("codev/feat--b", git_ops.own_branch("feat", target=target))
+
+    def test_starting_a_slice_twice_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("feat", base, target=target, link_ref="x", slices=["a", "b"])
+            git_ops.create_branch("feat", base, target=target)
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.start_slice_branch("feat", "a", target=target)
+
+    def test_a_slice_with_no_earlier_branch_has_nothing_to_stack_on(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("feat", base, target=target, link_ref="x", slices=["a", "b"])
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.start_slice_branch("feat", "b", target=target)
+
+
+class DirtyPathParsingTests(unittest.TestCase):
+    """Regression: porcelain's status field is two columns wide with a
+    leading space for a modified-but-unstaged file, and stripping the git
+    output ate it -- so the first path lost its first character and every
+    prefix check against it silently failed."""
+
+    def test_a_modified_unstaged_dotfile_keeps_its_leading_dot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            tracked = target / ".codev" / "task" / "x" / "round-state.json"
+            tracked.parent.mkdir(parents=True)
+            tracked.write_text("{}\n", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=target, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.email=t@e.com",
+                    "-c",
+                    "user.name=T",
+                    "commit",
+                    "-qm",
+                    "add",
+                ],
+                cwd=target,
+                check=True,
+            )
+            tracked.write_text('{"changed": true}\n', encoding="utf-8")
+            dirty = git_ops._dirty_paths(target)
+            product = git_ops._dirty_product_paths(target)
+        self.assertEqual([".codev/task/x/round-state.json"], dirty)
+        # ...and therefore it is excluded as the task's own bookkeeping.
+        self.assertEqual([], product)
+
+
 class SliceSizeTests(unittest.TestCase):
     """ADR-0035, slice D4: the budget bounds one reviewer's reading, and a
     reviewer reads one pull request -- so it applies per slice."""

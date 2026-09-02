@@ -1583,18 +1583,36 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "advance-slice":
         next_slice = task_module.advance_slice(args.id, args.head, target=target)
+        # ADR-0035: a slice is one pull request, so advancing creates and
+        # checks out its branch. Best-effort -- round state has already moved,
+        # and a task whose branch was never created through codev git (or a
+        # dirty worktree) must not leave the two disagreeing silently.
+        slice_branch: str | None = None
+        branch_error: str | None = None
+        try:
+            slice_branch = git_ops_module.start_slice_branch(
+                args.id, next_slice, target=target
+            )
+        except git_ops_module.GitOpsError as error:
+            branch_error = str(error)
         if args.json:
             return _emit_json(
                 {
                     "task_id": args.id,
                     "slice_id": next_slice,
                     "base_snapshot": args.head,
+                    "branch": slice_branch,
+                    "branch_error": branch_error,
                     "final_slice": task_module.is_final_slice(
                         args.id, next_slice, target=target
                     ),
                 }
             )
-        print(f"Advanced {args.id} to slice {next_slice}")
+        if slice_branch is not None:
+            print(f"Advanced {args.id} to slice {next_slice} on {slice_branch}")
+        else:
+            print(f"Advanced {args.id} to slice {next_slice}")
+            print(f"note: no branch was created -- {branch_error}")
         return 0
 
     if args.task_command == "waive-review":
