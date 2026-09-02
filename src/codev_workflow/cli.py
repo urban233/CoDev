@@ -401,7 +401,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     codeowners_parser = commands.add_parser(
-        "codeowners", help="scaffold a starter CODEOWNERS file; run directly by a human"
+        "codeowners", help="scaffold a starter CODEOWNERS file"
     )
     codeowners_commands = codeowners_parser.add_subparsers(
         dest="codeowners_command", required=True

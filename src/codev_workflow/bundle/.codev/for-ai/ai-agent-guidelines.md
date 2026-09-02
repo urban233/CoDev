@@ -198,6 +198,16 @@ Where the platform provides repository-local subagents, keep the human in one
 `orchestrator` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
+**Read values, never prose.** Every `codev` command accepts `--json` wherever
+its result feeds a later command, and that is the only supported way to carry
+a value forward. Never scrape an identifier out of a command's
+human-readable sentence, and never fall back to raw `git` for something a
+guarded command already returns — `codev git commit --json` reports the
+`head` the next `codev task check --head` needs, `codev git open-pr --json`
+reports the pull request's `url` and `number`, and `codev git restack --json`
+reports the new `head`. Human-readable output is for the developer reading
+along; it is not an interface and may be reworded.
+
 Most tasks start cold, and every numbered step below applies as
 written. Two other entry modes (`codev task start --entry <mode>`): a
 **takeover** item already has unfinished human commits beyond its base

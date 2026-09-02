@@ -117,7 +117,7 @@ isolation on the host stays the default.
 
 | Command | Purpose |
 |---|---|
-| `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS` — human-run directly, never agent-invoked |
+| `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; refuses if one already exists |
 | `codev self version` | Show the installed CoDev version |
 | `codev self update` | Show how to upgrade the installed CoDev tool |
 

@@ -117,7 +117,9 @@ applies as written. Two other cases:
    git commit --id <task-id> --message <summary> --round <round>
    --evidence <evidence.json>` — against the exact resulting head. The
    builder never records its own evidence: without commit permission it
-   cannot know that head in advance.
+   cannot know that head in advance. Pass `--json` and read the `head`
+   field for step 9's `--head`; never scrape it from the printed sentence
+   or re-derive it with raw `git`.
 7. Dispatch `code-audit-gate` against that exact head — a narrow, autonomous
    subagent scoped to style and documentation only, never logic or
    behavior; it self-fixes anything it finds and reports back a short
