@@ -642,7 +642,7 @@ class TaskSizeTests(unittest.TestCase):
             self.assertEqual(0, size.lines_changed)
             self.assertEqual(0, size.files_changed)
             self.assertEqual(600, size.max_lines)
-            self.assertEqual(8, size.max_files)
+            self.assertEqual(12, size.max_files)
             self.assertFalse(size.over_budget)
 
     def test_counts_lines_and_files_changed_since_base(self) -> None:
@@ -713,7 +713,7 @@ class TaskSizeTests(unittest.TestCase):
             config.set_value("review.max_files", "not-a-number", target=target)
             with self.assertWarns(UserWarning):
                 size = git_ops.task_size("item-1", target=target)
-            self.assertEqual(8, size.max_files)
+            self.assertEqual(12, size.max_files)
 
 
 class PushTests(unittest.TestCase):

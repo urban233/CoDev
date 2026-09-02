@@ -62,7 +62,13 @@ DEFAULTS: dict[str, str] = {
     # set where it catches the genuinely unreviewable rather than the merely
     # substantial.
     "review.max_lines": "600",
-    "review.max_files": "8",
+    # Raised alongside max_lines, and for the same reason: eight files was
+    # tripping on changes with one purpose whose tests and fixtures live
+    # beside the code they cover. Breadth is still a real review cost --
+    # twelve files across twelve subsystems is harder than 600 lines in two
+    # -- so this stays deliberately tighter than the line budget rather than
+    # scaled with it.
+    "review.max_files": "12",
     # ADR-0037: one approving review from a human who is neither the task
     # owner nor a bot. Two only where the risk warrants it -- requiring two
     # everywhere will not survive contact with a team of eight, and Google

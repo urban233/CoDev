@@ -15,6 +15,12 @@ Semantic Versioning.
   subsystems, and a line count cannot tell those apart. Set it back with
   `codev config set review.max_lines 400` if the old threshold suited your
   team.
+- **`review.max_files` now defaults to 12, up from 8**, raised alongside
+  `review.max_lines` and for the same reason: eight files tripped on changes
+  with one purpose whose tests and fixtures live beside the code they cover.
+  It stays deliberately tighter than the line budget rather than scaled with
+  it, because breadth is its own review cost -- twelve files across twelve
+  subsystems is harder to review than 600 lines in two.
 - **`codev task check` renames two reasons** (ADR-0037): `ok_approve` becomes
   `ok_machine_review_complete`, and `ok_approve_with_deferrals` becomes
   `ok_machine_review_complete_with_deferrals`. Neither ever meant a human had
