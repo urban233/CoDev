@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "bundle_version": "0.5.0",
+  "bundle_version": "0.6.0",
   "platforms": [
     "claude",
     "opencode"
