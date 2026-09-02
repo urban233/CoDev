@@ -73,9 +73,13 @@ class NextAction:
 # outcomes already are the routing table, and a missing entry should be a
 # visible KeyError in a test rather than a silent fallthrough in a session.
 _BY_CHECK_REASON: dict[str, tuple[str, str, str | None, bool]] = {
+    # Covers both a freshly opened round and one whose builder has already
+    # reported, so the reason must not claim a builder round exists -- the
+    # discovery step for slice C1 caught it asserting exactly that on a task
+    # that had only just started.
     "ok_waiting_on_reviewer": (
         "review the round",
-        "the builder's round is recorded and no reviewer verdict is in yet",
+        "this round has no reviewer verdict recorded yet",
         "dispatch lightweight-reviewer against the current head",
         False,
     ),

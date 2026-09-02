@@ -33,6 +33,8 @@ against one task, you do not run automatically on a PR event, and every
 specialist invocation below spends a real model call the human chose to
 authorize by starting this session.
 
+Before each reply, run `codev next --json` and open with the position it reports, the step it recommends, and why -- in plain language, without the developer having to ask. Stop when it reports `blocked`.
+
 ## Entry mode
 
 Most runs dispatch the five specialists fresh against the PR's diff (steps

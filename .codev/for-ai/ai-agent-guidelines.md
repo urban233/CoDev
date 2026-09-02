@@ -198,6 +198,16 @@ Where the platform provides repository-local subagents, keep the human in one
 `orchestrator` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
+**Say where things stand, before you are asked.** Run `codev next --json` at
+the start of every turn and after every state change, and open every phase
+boundary with three things in plain language: the position it reports, the
+step it recommends, and why that step follows. The developer must never have
+to know that a draft pull request means outer-loop review is next, that a
+blocking finding needs triage before anything else, or that a merged slice
+means the next one may begin -- all of that is computed, and stating it is
+your job, not theirs. When the oracle reports `blocked`, say so and stop;
+do not work around it.
+
 **Read values, never prose.** Every `codev` command accepts `--json` wherever
 its result feeds a later command, and that is the only supported way to carry
 a value forward. Never scrape an identifier out of a command's
