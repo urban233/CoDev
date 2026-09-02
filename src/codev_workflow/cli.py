@@ -617,6 +617,27 @@ def _parser() -> argparse.ArgumentParser:
     t_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
     t_escalations.add_argument("--target", type=_target, default=Path.cwd())
 
+    # ADR-0036, slice A2: `check`, `status`, and `size` already emitted JSON;
+    # these are the verbs that did not, so an agent could not read back what
+    # it had just recorded without parsing prose.
+    for _task_verb_parser in (
+        t_start,
+        t_record,
+        t_close,
+        t_reopen,
+        t_waive,
+        t_relink,
+        t_log,
+        t_triage,
+        t_escalate,
+        t_escalations,
+    ):
+        _task_verb_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the values an agent needs next as JSON (ADR-0036)",
+        )
+
     git_parser = commands.add_parser(
         "git", help="guarded git/GitHub mutation for one task's own branch"
     )
@@ -833,8 +854,10 @@ def _print_size_report(task_id: str, *, target: Path) -> None:
     )
 
 
-def _emit_json(payload: dict[str, Any]) -> int:
-    """Print one agent-facing payload and return the CLI success code."""
+def _emit_json(payload: Any) -> int:
+    """Print one agent-facing payload and return the CLI success code. Takes
+    a bare list as well as a mapping, since `escalations` is a sequence and
+    `status` already established that shape."""
     print(json.dumps(payload))
     return 0
 
@@ -1217,6 +1240,18 @@ def _run_task_command(args: argparse.Namespace) -> int:
             owner=owner,
             entry=args.entry,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "path": str(path),
+                    "base_snapshot": args.base,
+                    "link_ref": link_ref,
+                    "summary": summary,
+                    "owner": owner,
+                    "entry": args.entry,
+                }
+            )
         print(f"Started task {args.id} at {path}")
         return 0
 
@@ -1250,6 +1285,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 target=target,
                 specialist_selection=selection,
             )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "round": args.round,
+                    "role": args.role,
+                    "head": args.head,
+                }
+            )
         print(f"Recorded round {args.round} ({args.role}) for {args.id}")
         return 0
 
@@ -1274,6 +1318,10 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "close":
         task_module.close(args.id, args.outcome, target=target)
+        if args.json:
+            return _emit_json(
+                {"task_id": args.id, "outcome": args.outcome, "status": "closed"}
+            )
         print(f"Closed task {args.id} as {args.outcome}")
         return 0
 
@@ -1289,6 +1337,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             max_rounds=args.max_rounds,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "path": str(path),
+                    "head": args.head,
+                    "by": by,
+                }
+            )
         print(f"Reopened task {args.id} at {path}")
         return 0
 
@@ -1303,6 +1360,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "dimension": args.dimension,
+                    "path": str(path),
+                    "by": by,
+                }
+            )
         print(f"Waived {args.dimension!r} for task {args.id} at {path}")
         return 0
 
@@ -1320,6 +1386,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "link_ref": link_ref,
+                    "path": str(path),
+                    "by": by,
+                }
+            )
         print(f"Relinked task {args.id} to {link_ref!r} at {path}")
         return 0
 
@@ -1368,6 +1443,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.task_command == "log":
+        if args.json:
+            return _emit_json(task_module.log_records(args.id, target=target))
         print(task_module.log_text(args.id, target=target), end="")
         return 0
 
@@ -1377,6 +1454,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
         if by is None:
             by = git_ops_module.detect_identity(target=target)
         task_module.record_triage(args.id, args.round, triage, target=target, by=by)
+        if args.json:
+            return _emit_json({"task_id": args.id, "round": args.round, "by": by})
         print(f"Recorded triage for round {args.round} of {args.id}")
         return 0
 
@@ -1389,10 +1468,23 @@ def _run_task_command(args: argparse.Namespace) -> int:
             phase=args.phase,
             round_number=args.round_number,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "trigger": args.trigger,
+                    "phase": args.phase,
+                    "round": args.round_number,
+                }
+            )
         print(f"Recorded escalation for {args.id}: {args.trigger}")
         return 0
 
     if args.task_command == "escalations":
+        if args.json:
+            return _emit_json(
+                task_module.read_escalations(target=target, since=args.since)
+            )
         print(task_module.escalations_text(target=target, since=args.since), end="")
         return 0
 
