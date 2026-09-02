@@ -107,6 +107,50 @@ what it already does by default.
   </Fragment>
 </Exchange>
 
+### Being told where things stand, without asking
+
+Your agent opens every phase boundary with this on its own. You do not prompt
+for it.
+
+<Exchange>
+  <Fragment slot="you">
+    "Where are we?"
+  </Fragment>
+  <Fragment slot="agent">
+    "Task <code>auth-rotation</code> is in the outer phase, round 1, with two blocking
+    findings waiting on you. Nothing can proceed until they are addressed or deferred
+    with a reason. Which should we fix now?" — computed from the task's own state, not
+    remembered.
+  </Fragment>
+</Exchange>
+
+### Asking for a part to be built with you
+
+<Exchange>
+  <Fragment slot="you">
+    "The token-rotation slice I want to write with you — don't delegate that one."
+  </Fragment>
+  <Fragment slot="agent">
+    Marks that slice as pair work. When the loop reaches it, it does not dispatch the
+    builder; it works alongside you. The same rounds are recorded and the same reviewer
+    runs, so the work still carries its evidence.
+  </Fragment>
+</Exchange>
+
+### Interrupting, and coming back
+
+<Exchange>
+  <Fragment slot="you">
+    "Stop — I want to take this by hand for a bit." <em>(later)</em> "Okay, pick it back
+    up."
+  </Fragment>
+  <Fragment slot="agent">
+    Records the interruption with the partial commit attached, then resumes on that
+    commit in pair style, absorbing what you wrote rather than reporting it as drift.
+    The round cap is raised to match, so pausing costs you nothing.
+  </Fragment>
+</Exchange>
+
 <Aside type="tip">
   Every one of these has a full copy-paste version on [Starting
   Prompts](/CoDev/starting-prompts/) — this page shows the shape of the conversation, that
