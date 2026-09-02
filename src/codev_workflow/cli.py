@@ -660,11 +660,19 @@ def _parser() -> argparse.ArgumentParser:
         "branch", help="create the task's own branch from a base snapshot"
     )
     g_branch.add_argument("--id", required=True)
-    g_branch.add_argument(
+    g_branch_base = g_branch.add_mutually_exclusive_group()
+    g_branch_base.add_argument(
         "--base",
         default=None,
         help="base git snapshot; defaults to the 'git.pr_base' config value, "
         "then the repository's default branch",
+    )
+    g_branch_base.add_argument(
+        "--stack-on",
+        default=None,
+        dest="stack_on",
+        help="stack this task's branch on another task's own recorded "
+        "branch (ADR-0034); requires git.workflow=trunk",
     )
     g_branch.add_argument(
         "--allow-dirty",
@@ -1308,7 +1316,11 @@ def _run_git_command(args: argparse.Namespace) -> int:
 
     if args.git_command == "branch":
         branch = git_ops_module.create_branch(
-            args.id, args.base, target=target, allow_dirty=args.allow_dirty
+            args.id,
+            args.base,
+            target=target,
+            allow_dirty=args.allow_dirty,
+            stack_on=args.stack_on,
         )
         print(f"Created branch {branch} for {args.id}")
         return 0

@@ -115,7 +115,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("Created branch codev/item-1", output.getvalue())
             create_branch.assert_called_once_with(
-                "item-1", None, target=target.resolve(), allow_dirty=True
+                "item-1", None, target=target.resolve(), allow_dirty=True, stack_on=None
             )
 
     def test_git_branch_passes_explicit_base_through(self) -> None:
@@ -141,7 +141,11 @@ class CliTests(unittest.TestCase):
                     ]
                 )
             create_branch.assert_called_once_with(
-                "item-1", "develop", target=target.resolve(), allow_dirty=False
+                "item-1",
+                "develop",
+                target=target.resolve(),
+                allow_dirty=False,
+                stack_on=None,
             )
 
     def test_git_commit_and_open_pr_print_the_running_size(self) -> None:

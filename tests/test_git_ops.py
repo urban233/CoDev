@@ -386,6 +386,75 @@ class CreateBranchGuardTests(unittest.TestCase):
             self.assertEqual(base, state["base_snapshot"])
 
 
+class StackOnTests(unittest.TestCase):
+    def test_child_branches_from_the_parents_current_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "parent-only.txt").write_text("p\n", encoding="utf-8")
+            parent_head = git_ops.commit("item-1", "parent change", target=target)
+
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertEqual("codev/item-2", git_ops.current_branch(target))
+            self.assertEqual(parent_head, git_ops.current_head(target))
+
+            state = json.loads(
+                (target / ".codev/task/item-2/git-state.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual("item-1", state["parent_task"])
+            self.assertEqual(parent_head, state["base_snapshot"])
+
+    def test_child_sees_parents_changes_as_already_merged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "parent-only.txt").write_text("p\n", encoding="utf-8")
+            git_ops.commit("item-1", "parent change", target=target)
+
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertEqual([], git_ops.changed_files("item-2", target=target))
+
+    def test_foreign_branch_guard_does_not_fire_when_stacking_on_purpose(
+        self,
+    ) -> None:
+        # HEAD is on item-1's own branch, with real unmerged commits -- the
+        # ordinary create_branch guard would refuse this. --stack-on names
+        # the parent explicitly, so it should not.
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "parent-only.txt").write_text("p\n", encoding="utf-8")
+            git_ops.commit("item-1", "parent change", target=target)
+
+            branch = git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertEqual("codev/item-2", branch)
+
+    def test_refuses_to_stack_on_a_task_with_no_recorded_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            with self.assertRaises(git_ops.GitOpsError) as caught:
+                git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertIn("item-1", str(caught.exception))
+
+    def test_refuses_to_stack_under_feature_branch_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            config.set_value("git.workflow", "feature-branch", target=target)
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-q", "-m", "configure feature-branch"], cwd=target)
+            with self.assertRaises(git_ops.GitOpsError) as caught:
+                git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertIn("feature-branch", str(caught.exception))
+
+
 class ChangedFilesTests(unittest.TestCase):
     def test_returns_empty_list_when_no_branch_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -704,6 +773,72 @@ class OpenPrTests(unittest.TestCase):
             command = create_call.args[0]
         self.assertIn("release", command)
         self.assertNotIn("develop", command)
+
+    def _stacked_child_ready_for_pr(self, target: Path) -> None:
+        base = _init_repo(target)
+        task.start("item-1", base, target=target)
+        git_ops.create_branch("item-1", base, target=target)
+        task.record_reviewer(
+            "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+        )
+        parent_head = git_ops.current_head(target)
+        task.start("item-2", parent_head, target=target)
+        git_ops.create_branch("item-2", target=target, stack_on="item-1")
+        task.record_reviewer(
+            "item-2", 1, parent_head, [], {}, "READY_FOR_OUTER_LOOP", target=target
+        )
+
+    @staticmethod
+    def _fake_gh_with_parent_pr_state(state: str) -> Callable[..., str]:
+        def fake(args: list[str], *, cwd: Path) -> str:
+            if args[:2] == ["pr", "view"]:
+                branch = args[2]
+                if "state" in args:
+                    return state if branch == "codev/item-1" else "MERGED"
+                raise git_ops.GitOpsError("no pull requests found")
+            return "https://github.com/o/r/pull/2"
+
+        return fake
+
+    def test_stacked_task_targets_the_parents_branch_while_its_pr_is_open(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._stacked_child_ready_for_pr(target)
+            with patch.object(
+                git_ops,
+                "_run_gh",
+                side_effect=self._fake_gh_with_parent_pr_state("OPEN"),
+            ) as run_gh:
+                git_ops.open_pr("item-2", "title", "body", target=target)
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+        self.assertIn("codev/item-1", create_call.args[0])
+
+    def test_stacked_task_falls_back_to_default_base_once_parent_pr_is_merged(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._stacked_child_ready_for_pr(target)
+            with patch.object(
+                git_ops,
+                "_run_gh",
+                side_effect=self._fake_gh_with_parent_pr_state("MERGED"),
+            ) as run_gh:
+                git_ops.open_pr("item-2", "title", "body", target=target, base="main")
+            create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            command = create_call.args[0]
+        self.assertIn("main", command)
+        self.assertNotIn("codev/item-1", command)
 
     def test_falls_back_to_repository_default_branch_when_unconfigured(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

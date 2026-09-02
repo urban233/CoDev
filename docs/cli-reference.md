@@ -80,7 +80,7 @@ for what using this actually looks like end to end.
 |---|---|
 | `codev git issue-create ...` | Create a GitHub issue (no task precondition) |
 | `codev git issue-view --number <n>` | Print an issue's body and all comments as JSON (read-only, no task precondition) |
-| `codev git branch --id <id> [--base <sha>] [--allow-dirty]` | Create the task's own branch; `--base` defaults to `git.pr_base`, then the repository's default branch |
+| `codev git branch --id <id> [--base <sha> \| --stack-on <task-id>] [--allow-dirty]` | Create the task's own branch; `--base` defaults to `git.pr_base`, then the repository's default branch; `--stack-on` targets another task's own branch instead (ADR-0034, trunk workflow only) |
 | `codev git commit --id <id> --message <msg>` | Commit on that task's branch |
 | `codev git push --id <id>` | Push that task's branch |
 | `codev git open-pr --id <id> --title <title>` | Open the pull request as a draft |

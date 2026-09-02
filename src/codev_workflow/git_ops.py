@@ -493,12 +493,18 @@ def _other_recorded_task_on_head(*, target: Path) -> str | None:
     return other_task_id
 
 
+def _resolved_workflow(*, target: Path) -> str:
+    resolved = config.resolve("git.workflow", target=target)
+    return resolved.value if resolved is not None else config.DEFAULTS["git.workflow"]
+
+
 def create_branch(
     task_id: str,
     base_snapshot: str | None = None,
     *,
     target: Path,
     allow_dirty: bool = False,
+    stack_on: str | None = None,
 ) -> str:
     state_path = _git_state_path(target, task_id)
     if state_path.exists():
@@ -515,37 +521,66 @@ def create_branch(
                 "--allow-dirty if that is intentional"
             )
 
-    other_task_id = _other_recorded_task_on_head(target=target)
-    if other_task_id is not None and other_task_id != task_id:
-        other_branch = branch_name_for(other_task_id)
-        other_state = _load_git_state(other_task_id, target=target)
-        ahead = int(
-            _run_git(
-                ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
-                cwd=target,
-            )
-        )
-        if ahead > 0:
+    if stack_on is not None:
+        # ADR-0034: stacking is only supported under trunk-based
+        # development, and every stacking affordance disables itself
+        # cleanly under feature-branch rather than firing anyway.
+        workflow = _resolved_workflow(target=target)
+        if workflow != "trunk":
             raise GitOpsError(
-                f"refusing to create a branch: HEAD is on {other_branch!r} "
-                f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
-                "not yet in its base -- check out the intended base branch "
-                f"first, or continue work on {other_task_id!r} itself "
-                "instead of branching a new task from underneath it"
+                f"refusing --stack-on: git.workflow resolves to {workflow!r}, "
+                "not 'trunk' -- stacking is only supported under trunk-based "
+                "development (ADR-0034)"
             )
+        try:
+            parent_state = _load_git_state(stack_on, target=target)
+        except GitOpsError as error:
+            raise GitOpsError(
+                f"refusing --stack-on {stack_on!r}: it has no branch yet -- "
+                f"create it first with `codev git branch --id {stack_on}`"
+            ) from error
+        resolved_base = cast(str, parent_state["branch"])
+    else:
+        # The foreign-branch guard below exists to catch *blind* branching
+        # while HEAD sits on unrelated, unmerged work. --stack-on replaces
+        # that concern with an explicit, named, already-verified parent --
+        # checkout -b starts from that parent's pinned commit regardless of
+        # HEAD's current branch, so there is nothing left for this guard to
+        # protect against once stacking is requested on purpose (ADR-0034).
+        other_task_id = _other_recorded_task_on_head(target=target)
+        if other_task_id is not None and other_task_id != task_id:
+            other_branch = branch_name_for(other_task_id)
+            other_state = _load_git_state(other_task_id, target=target)
+            ahead = int(
+                _run_git(
+                    ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
+                    cwd=target,
+                )
+            )
+            if ahead > 0:
+                raise GitOpsError(
+                    f"refusing to create a branch: HEAD is on {other_branch!r} "
+                    f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
+                    "not yet in its base -- check out the intended base branch "
+                    f"first, or continue work on {other_task_id!r} itself "
+                    "instead of branching a new task from underneath it"
+                )
+        resolved_base = _resolve_pr_base(base_snapshot, target=target)
 
-    resolved_base = _resolve_pr_base(base_snapshot, target=target)
     _warn_if_base_behind_remote(resolved_base, target=target)
     # Pin to the exact commit now, not the ref name: changed_files and
     # task_size diff against this recorded value later, and a floating
-    # branch name (the default_branch/git.pr_base fallback) would silently
-    # pull in every commit main gains after this branch is created.
+    # branch name (the parent's branch, or the default_branch/git.pr_base
+    # fallback) would silently pull in every commit it gains after this
+    # branch is created.
     pinned_base = _run_git(["rev-parse", resolved_base], cwd=target)
 
     branch = branch_name_for(task_id)
     _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"branch": branch, "base_snapshot": pinned_base}
+    payload: dict[str, Any] = {"branch": branch, "base_snapshot": pinned_base}
+    if stack_on is not None:
+        payload["parent_task"] = stack_on
     state_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -816,6 +851,36 @@ def _existing_pr_url(branch: str, *, target: Path) -> str | None:
         return None
 
 
+def _parent_pr_is_open(branch: str, *, target: Path) -> bool:
+    try:
+        state = _run_gh(
+            ["pr", "view", branch, "--json", "state", "-q", ".state"], cwd=target
+        )
+    except GitOpsError:
+        return False
+    return state.strip() == "OPEN"
+
+
+def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
+    """The recorded parent's branch, when this task was created with
+    --stack-on and that parent's own pull request is still open -- None
+    otherwise, so the caller falls through to --base/git.pr_base/the
+    repository's default branch (ADR-0034)."""
+    try:
+        git_state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        return None
+    parent_task_id = git_state.get("parent_task")
+    if not parent_task_id:
+        return None
+    try:
+        parent_state = _load_git_state(cast(str, parent_task_id), target=target)
+    except GitOpsError:
+        return None
+    parent_branch = cast(str, parent_state["branch"])
+    return parent_branch if _parent_pr_is_open(parent_branch, target=target) else None
+
+
 def open_pr(
     task_id: str,
     title: str,
@@ -852,7 +917,9 @@ def open_pr(
             f"refusing to open a pull request: {branch!r} already has one open "
             f"at {existing} -- use `codev git mark-ready` instead"
         )
-    resolved_base = _resolve_pr_base(base, target=target)
+    resolved_base = _stacked_pr_base(task_id, target=target)
+    if resolved_base is None:
+        resolved_base = _resolve_pr_base(base, target=target)
     final_body = (
         _render_pr_template(task_id, target=target)
         if use_template
