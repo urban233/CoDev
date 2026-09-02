@@ -1134,6 +1134,13 @@ def describe_all(*, target: Path) -> list[dict[str, Any]]:
     return results
 
 
+def log_records(task_id: str, *, target: Path) -> dict[str, Any]:
+    """The task's full recorded state -- everything `log_text` renders, as
+    data. ADR-0036: `codev task log --json` is the machine-readable form of
+    an item's whole history, so an agent never parses the rendered text."""
+    return _load(task_id, target=target)
+
+
 def log_text(task_id: str, *, target: Path) -> str:
     state = _load(task_id, target=target)
     lines = [
