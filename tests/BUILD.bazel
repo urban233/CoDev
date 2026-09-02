@@ -1,4 +1,13 @@
-load("@rules_python//python:defs.bzl", "py_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+
+# Shared support for the integration tier -- a real repository, a real bare
+# remote, and a `gh` stubbed at the process boundary. Not a test itself, so
+# it is a library every test target can depend on rather than a src.
+py_library(
+    name = "integration_support",
+    srcs = ["integration_support.py", "__init__.py"],
+    imports = [".."],
+)
 
 [
     py_test(
@@ -7,6 +16,7 @@ load("@rules_python//python:defs.bzl", "py_test")
         deps = [
             "//src/codev_workflow:codev_workflow",
             "//scripts:scripts",
+            ":integration_support",
         ],
     )
     for test_file in glob(["test_*.py"])
