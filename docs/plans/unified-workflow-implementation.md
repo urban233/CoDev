@@ -209,12 +209,12 @@ replay tests.
   version-4 artifacts behind. That property is worth preserving explicitly and
   is why the writers stay untouched in this slice.
 
-### Decisions needed
+### Decisions accepted
 
-One, and it should be settled before the slice starts rather than during it:
-whether version-4 writing is enabled in this slice or deferred to Wave 2.
-**Recommendation: defer.** Reading both shapes while writing only version 3
-keeps the revert clean, and Wave 2 needs its own slice for the writers anyway.
+**Version-4 writing is deferred to Wave 2 (accepted 2026-09-02).** This slice
+reads both schema shapes and writes only version 3. The revert therefore leaves
+no version-4 artifact on disk, which is the property that makes the highest-risk
+slice in this plan safe to land first. Slice D1 enables the writers.
 
 ---
 
@@ -260,10 +260,12 @@ keeps the revert clean, and Wave 2 needs its own slice for the writers anyway.
 ### Slices
 
 **E-prep-1 - Rename with a deprecation window.** *Preparatory refactor.*
-Rename the reason string, keep the old one resolving with a warning, update both
-gate checks, every bundle instruction, the CLI reference, and the changelog.
-`ok_approve_with_deferrals` is renamed consistently in the same slice — leaving
-one of the pair renamed is worse than renaming neither. Estimated 300 lines.
+`ok_approve` becomes `ok_machine_review_complete` and
+`ok_approve_with_deferrals` becomes `ok_machine_review_complete_with_deferrals`,
+in the same slice. Both old names keep resolving with a deprecation warning for
+one release. Updates both gate checks (`git_ops.py:978`, `:1026`), every bundle
+instruction naming either value, `docs/cli-reference.md`, and `CHANGELOG.md`.
+Estimated 300 lines.
 
 ### Validation
 
@@ -275,15 +277,16 @@ one of the pair renamed is worse than renaming neither. Estimated 300 lines.
 
 - Adopters may have scripts reading `codev task check --json`'s reason. The
   deprecation window is the containment; the changelog entry is the notice.
-- The new name is not chosen here on purpose. ADR-0037 requires only that it say
-  what it means, and naming is exactly the kind of decision worth one human
-  answer rather than an agent's preference.
+- The name was referred to the accountable human rather than chosen by the
+  drafting agent, and is now settled; see "Decisions accepted" above.
 
-### Decisions needed
+### Decisions accepted
 
-One: the replacement name. **Recommendation:** `ok_machine_review_complete`,
+**The replacement name is `ok_machine_review_complete` (accepted 2026-09-02)**,
 paired with `ok_machine_review_complete_with_deferrals`. It is long, and it is
 long in the direction that prevents the confusion ADR-0037 exists to prevent.
+Both names change together in this slice; renaming one of the pair and not the
+other is worse than renaming neither.
 
 ---
 
@@ -394,7 +397,7 @@ the plan as a whole if scope has to be cut.
 ## Task G - Gate logic moves into `codev`
 
 **Risk:** normal. **Decision:** brief item 8. **Depends on:** nothing in Waves 1
-to 3.
+to 3. **In scope, scheduled last within Wave 4** (accepted 2026-09-02).
 
 - **G1 - `codev gate check`** owning the decisions in `require_plan.py`,
   `require_wave_shape.py`, and `require_small_change.py`. ~350 lines.
@@ -453,21 +456,29 @@ repo-local binary.
   Wave 2's machinery to build Wave 1.
 - **Twenty slices is a lot of review capacity.** `plan-wave` treats review as
   real work and caps concurrent items per reviewer. At one reviewer this is a
-  long queue, and cutting scope is a legitimate response to that — Task G is the
-  most separable, since nothing else depends on it.
+  long queue. Task G was offered as the first cut and was kept (accepted
+  2026-09-02), scheduled last within Wave 4; it remains the separable task if
+  capacity turns out to be the binding constraint later.
 - **The docs site is last on purpose**, which means the product is
   under-documented for the duration. Accepted deliberately: the alternative is
   documenting a workflow that is about to change.
 
-## Decisions needed before Wave 1 starts
+## Decisions accepted before Wave 1
 
-1. **The replacement name for `ok_approve`.** Recommendation:
-   `ok_machine_review_complete`.
-2. **Whether D-prep-1 writes version 4 or only reads it.** Recommendation: reads
-   only, so the revert stays clean.
-3. **Whether Task G is in scope at all**, given the review-capacity risk above.
-   Recommendation: keep it, but schedule it last within Wave 4 — it is the one
-   task whose absence blocks nothing.
+All three were referred to the accountable human and settled on 2026-09-02.
+Wave 1 is unblocked.
+
+1. **`ok_approve` becomes `ok_machine_review_complete`**, with
+   `ok_approve_with_deferrals` becoming
+   `ok_machine_review_complete_with_deferrals` in the same slice.
+2. **D-prep-1 reads version 4 without writing it.** Slice D1 enables the
+   writers, so the highest-risk slice stays cleanly revertible.
+3. **Task G stays in scope**, scheduled last within Wave 4.
+
+No decision remains outstanding for Wave 1. Waves 2 and 3 each still open with
+an assumption their first slice must settle — the outcome-to-recommendation
+mapping for B1, and GitHub's review-authorship distinction for E2 — both
+recorded in the brief and named in place above.
 
 ## Completion evidence
 
