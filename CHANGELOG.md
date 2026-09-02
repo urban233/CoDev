@@ -5,6 +5,16 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Removed
+- **`codev git branch --stack-on` is removed** (ADR-0039). Sibling-task
+  stacking and slice stacking answered the same question twice, and the
+  sibling form spread one reviewable outcome across several tasks -- several
+  issues, owners, and reviewers -- which is the coupling ADR-0035's task/slice
+  split exists to remove. A stack is now one task, an ordered slice list, and
+  one branch and pull request per slice. Existing branches and pull requests
+  are untouched; an open sibling stack must be finished by hand or
+  re-expressed as one task's slices.
+
 ### Changed
 - **`review.max_lines` now defaults to 600, up from 400.** The original figure
   came from Google's published median change-list guidance and proved too

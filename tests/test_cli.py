@@ -364,7 +364,7 @@ class GitJsonSurfaceTests(unittest.TestCase):
         self.assertEqual(0, code)
         return output.getvalue()
 
-    def test_branch_json_reports_the_branch_and_its_parent(self) -> None:
+    def test_branch_json_reports_the_branch_and_its_slice(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with (
@@ -373,8 +373,8 @@ class GitJsonSurfaceTests(unittest.TestCase):
                     return_value="codev/item-1",
                 ),
                 patch(
-                    "codev_workflow.cli.git_ops_module.parent_task_id",
-                    return_value="item-0",
+                    "codev_workflow.cli.task_module.current_slice",
+                    return_value="item-1",
                 ),
             ):
                 payload = self._run(["git", "branch", "--id", "item-1"], target)
@@ -382,7 +382,7 @@ class GitJsonSurfaceTests(unittest.TestCase):
                 {
                     "task_id": "item-1",
                     "branch": "codev/item-1",
-                    "parent_task": "item-0",
+                    "slice_id": "item-1",
                 },
                 payload,
             )
@@ -476,13 +476,13 @@ class GitJsonSurfaceTests(unittest.TestCase):
                     return_value="codev/item-2",
                 ),
                 patch(
-                    "codev_workflow.cli.git_ops_module.parent_task_id",
-                    return_value="item-1",
+                    "codev_workflow.cli.task_module.current_slice",
+                    return_value="b",
                 ),
             ):
                 payload = self._run(["git", "restack", "--id", "item-2"], target)
             self.assertEqual("new-head-sha", payload["head"])
-            self.assertEqual("item-1", payload["parent_task"])
+            self.assertEqual("b", payload["slice_id"])
 
     def test_issue_create_json_carries_the_number_and_owners(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -661,7 +661,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertIn("Created branch codev/item-1", output.getvalue())
             create_branch.assert_called_once_with(
-                "item-1", None, target=target.resolve(), allow_dirty=True, stack_on=None
+                "item-1", None, target=target.resolve(), allow_dirty=True
             )
 
     def test_git_branch_passes_explicit_base_through(self) -> None:
@@ -691,7 +691,6 @@ class CliTests(unittest.TestCase):
                 "develop",
                 target=target.resolve(),
                 allow_dirty=False,
-                stack_on=None,
             )
 
     def test_git_restack_prints_the_new_head(self) -> None:
@@ -2324,101 +2323,6 @@ class CliTests(unittest.TestCase):
                 },
                 payload["task_sizes"]["item-1"],
             )
-
-    def test_status_verbose_reports_task_stacks(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory)
-            with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "opencode"])
-                main(
-                    [
-                        "task",
-                        "start",
-                        "--id",
-                        "item-2",
-                        "--base",
-                        "base-sha",
-                        "--owner",
-                        "alice",
-                        "--target",
-                        str(target),
-                    ]
-                )
-            with (
-                patch(
-                    "codev_workflow.cli.git_ops_module.changed_files", return_value=[]
-                ),
-                patch(
-                    "codev_workflow.cli.git_ops_module.task_size",
-                    return_value=TaskSize(10, 1, 400, 8),
-                ),
-                patch(
-                    "codev_workflow.cli.git_ops_module.parent_task_id",
-                    return_value="item-1",
-                ),
-                patch("codev_workflow.cli.git_ops_module.stack_depth", return_value=5),
-            ):
-                output = StringIO()
-                with redirect_stdout(output):
-                    code = main(["status", "--target", str(target), "--verbose"])
-                json_output = StringIO()
-                with redirect_stdout(json_output):
-                    main(["status", "--target", str(target), "--verbose", "--json"])
-            self.assertEqual(0, code)
-            text = output.getvalue()
-            self.assertIn("Task stacks:", text)
-            self.assertIn("item-2 stacked on item-1 (depth 5)", text)
-            self.assertIn("deep stack, consider landing sooner", text)
-            payload = json.loads(json_output.getvalue())
-            self.assertEqual(
-                {"parent_task": "item-1", "depth": 5, "deep": True},
-                payload["task_stacks"]["item-2"],
-            )
-
-    def test_status_verbose_omits_task_stacks_section_for_standalone_tasks(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            target = Path(directory)
-            with redirect_stdout(StringIO()):
-                main(["init", "--target", str(target), "--agent-platform", "opencode"])
-                main(
-                    [
-                        "task",
-                        "start",
-                        "--id",
-                        "item-1",
-                        "--base",
-                        "base-sha",
-                        "--owner",
-                        "alice",
-                        "--target",
-                        str(target),
-                    ]
-                )
-            with (
-                patch(
-                    "codev_workflow.cli.git_ops_module.changed_files", return_value=[]
-                ),
-                patch(
-                    "codev_workflow.cli.git_ops_module.task_size",
-                    return_value=TaskSize(10, 1, 400, 8),
-                ),
-                patch(
-                    "codev_workflow.cli.git_ops_module.parent_task_id",
-                    return_value=None,
-                ),
-            ):
-                output = StringIO()
-                with redirect_stdout(output):
-                    code = main(["status", "--target", str(target), "--verbose"])
-                json_output = StringIO()
-                with redirect_stdout(json_output):
-                    main(["status", "--target", str(target), "--verbose", "--json"])
-            self.assertEqual(0, code)
-            self.assertNotIn("Task stacks:", output.getvalue())
-            payload = json.loads(json_output.getvalue())
-            self.assertEqual({}, payload["task_stacks"])
 
     def test_task_size_command_reports_measurement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
