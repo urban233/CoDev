@@ -993,6 +993,14 @@ def _pr_state(branch: str, *, target: Path) -> str | None:
     return state.strip()
 
 
+def pull_request_state(branch: str, *, target: Path) -> str | None:
+    """Public, read-only pull-request state for a branch: "OPEN", "CLOSED",
+    "MERGED", or None when GitHub cannot answer -- no pull request, no
+    remote, or no credentials. The oracle treats None as "cannot tell" and
+    falls back to a local recommendation rather than reporting a guess."""
+    return _pr_state(branch, target=target)
+
+
 def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
     """The recorded parent's branch, when this task was created with
     --stack-on and that parent's own pull request is still open -- None

@@ -117,6 +117,8 @@ isolation on the host stays the default.
 
 | Command | Purpose |
 |---|---|
+| `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it |
+| `codev task advance-slice --id <id> --head <sha>` | Move a task on to its next slice and open a fresh round (ADR-0035) |
 | `codev codeowners init` | Scaffold a starter `.github/CODEOWNERS`; refuses if one already exists |
 | `codev self version` | Show the installed CoDev version |
 | `codev self update` | Show how to upgrade the installed CoDev tool |

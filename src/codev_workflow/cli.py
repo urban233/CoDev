@@ -43,6 +43,7 @@ from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import git_ops as git_ops_module
 from codev_workflow import hook_log as hook_log_module
+from codev_workflow import oracle as oracle_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -392,6 +393,22 @@ def _parser() -> argparse.ArgumentParser:
     c_list = config_commands.add_parser("list", help="show every resolved config key")
     c_list.add_argument("--target", type=_target, default=Path.cwd())
     c_list.add_argument("--json", action="store_true")
+
+    next_parser = commands.add_parser(
+        "next",
+        help="where the work stands and the one thing to do next (ADR-0036); "
+        "an agent reads this, a developer does not have to",
+    )
+    next_parser.add_argument(
+        "--id", default=None, help="override the task inferred from the branch"
+    )
+    next_parser.add_argument(
+        "--no-github",
+        action="store_true",
+        help="skip the pull-request lookup and answer from local state only",
+    )
+    next_parser.add_argument("--json", action="store_true")
+    next_parser.add_argument("--target", type=_target, default=Path.cwd())
 
     self_parser = commands.add_parser("self", help="manage the installed codev tool")
     self_commands = self_parser.add_subparsers(dest="self_command", required=True)
@@ -1236,6 +1253,22 @@ def _run_codeowners_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _run_next_command(args: argparse.Namespace) -> int:
+    action = oracle_module.next_action(
+        target=args.target.resolve(),
+        task_id=args.id,
+        check_github=not args.no_github,
+    )
+    if args.json:
+        return _emit_json(action.as_dict())
+    print(f"Position: {action.position}")
+    print(f"Next: {action.recommendation}")
+    print(f"Why: {action.reason}")
+    if action.command:
+        print(f"Run: {action.command}")
+    return 1 if action.blocked else 0
+
+
 def _run_task_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     if args.task_command == "start":
@@ -1961,6 +1994,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_self_command(args)
         if args.command == "codeowners":
             return _run_codeowners_command(args)
+        if args.command == "next":
+            return _run_next_command(args)
         if args.command == "task":
             return _run_task_command(args)
         if args.command == "git":
