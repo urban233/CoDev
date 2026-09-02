@@ -922,14 +922,16 @@ def _existing_pr_url(branch: str, *, target: Path) -> str | None:
         return None
 
 
-def _parent_pr_is_open(branch: str, *, target: Path) -> bool:
+def _pr_state(branch: str, *, target: Path) -> str | None:
+    """The GitHub pull request state for `branch` ("OPEN"/"CLOSED"/
+    "MERGED"), or None when no pull request exists for it."""
     try:
         state = _run_gh(
             ["pr", "view", branch, "--json", "state", "-q", ".state"], cwd=target
         )
     except GitOpsError:
-        return False
-    return state.strip() == "OPEN"
+        return None
+    return state.strip()
 
 
 def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
@@ -937,19 +939,15 @@ def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
     --stack-on and that parent's own pull request is still open -- None
     otherwise, so the caller falls through to --base/git.pr_base/the
     repository's default branch (ADR-0034)."""
-    try:
-        git_state = _load_git_state(task_id, target=target)
-    except GitOpsError:
-        return None
-    parent_task_id = git_state.get("parent_task")
-    if not parent_task_id:
+    parent_id = parent_task_id(task_id, target=target)
+    if parent_id is None:
         return None
     try:
-        parent_state = _load_git_state(cast(str, parent_task_id), target=target)
+        parent_state = _load_git_state(parent_id, target=target)
     except GitOpsError:
         return None
     parent_branch = cast(str, parent_state["branch"])
-    return parent_branch if _parent_pr_is_open(parent_branch, target=target) else None
+    return parent_branch if _pr_state(parent_branch, target=target) == "OPEN" else None
 
 
 def open_pr(
@@ -1031,3 +1029,56 @@ def mark_ready(task_id: str, *, target: Path) -> None:
     final_body = _render_pr_template(task_id, target=target)
     _run_gh(["pr", "edit", branch, "--body", final_body], cwd=target)
     _run_gh(["pr", "ready", branch], cwd=target)
+
+
+def restack(task_id: str, *, target: Path) -> str:
+    """Rebases a stacked task's branch onto its recorded parent's current
+    head, force-pushes with `--force-with-lease`, and re-baselines the
+    task's own tracked state so `task.check`'s drift comparison still
+    matches the rebase's new commit identity (ADR-0034).
+
+    Refuses when the caller is not on the task's own branch, when the
+    task has no recorded parent, or once the parent's pull request has
+    already merged. A rebase conflict is reported to the human -- the
+    repository is left mid-rebase, exactly as plain `git rebase` would
+    leave it, for `git rebase --continue`/`--abort` to resolve normally;
+    this never attempts to resolve one automatically.
+    """
+    branch = _ensure_on_own_branch(task_id, target=target)
+    parent_id = parent_task_id(task_id, target=target)
+    if parent_id is None:
+        raise GitOpsError(
+            f"refusing to restack {task_id!r}: it has no recorded parent -- "
+            "restack only applies to a task created with `codev git branch "
+            "--stack-on`"
+        )
+    parent_state = _load_git_state(parent_id, target=target)
+    parent_branch = cast(str, parent_state["branch"])
+    if _pr_state(parent_branch, target=target) == "MERGED":
+        raise GitOpsError(
+            f"refusing to restack: {parent_branch!r}'s pull request has "
+            "already merged -- rebase onto the repository's default branch "
+            "manually instead; restack is only for an in-flight parent"
+        )
+
+    try:
+        _run_git(["rebase", parent_branch], cwd=target)
+    except GitOpsError as error:
+        raise GitOpsError(
+            f"restack stopped: rebasing onto {parent_branch!r} reported a "
+            "conflict or another problem -- resolve it with `git status`, "
+            f"then `git rebase --continue` or `git rebase --abort`: {error}"
+        ) from error
+
+    new_head = current_head(target)
+    _run_git(["push", "--force-with-lease", "-u", "origin", branch], cwd=target)
+
+    pinned_parent_head = _run_git(["rev-parse", parent_branch], cwd=target)
+    git_state = _load_git_state(task_id, target=target)
+    git_state["base_snapshot"] = pinned_parent_head
+    _git_state_path(target, task_id).write_text(
+        json.dumps(git_state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    task.record_restack(task_id, new_head, target=target)
+    return new_head

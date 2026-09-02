@@ -148,6 +148,22 @@ class CliTests(unittest.TestCase):
                 stack_on=None,
             )
 
+    def test_git_restack_prints_the_new_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch(
+                "codev_workflow.cli.git_ops_module.restack",
+                return_value="new-head-sha",
+            ) as restack:
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        ["git", "restack", "--id", "item-2", "--target", str(target)]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("new-head-sha", output.getvalue())
+            restack.assert_called_once_with("item-2", target=target.resolve())
+
     def test_git_commit_and_open_pr_print_the_running_size(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

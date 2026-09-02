@@ -258,6 +258,22 @@ class RequirePlanHookTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual("ask", payload["hookSpecificOutput"]["permissionDecision"])
 
+    def test_asks_on_codev_git_restack_without_spec(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "codev git restack --id item-2"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertEqual("ask", payload["hookSpecificOutput"]["permissionDecision"])
+
     def test_ignores_codev_git_read_only_commands(self) -> None:
         subprocess.run(
             ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True

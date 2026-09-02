@@ -166,9 +166,13 @@ stack carries the auto-close link.
 `codev git restack --id <child>` verifies it is on the child's own branch,
 refuses when the parent's pull request has already merged, rebases the child
 onto the parent's current head, force-pushes with `--force-with-lease`, and
-re-baselines `base_snapshot` through the same in-place update `task.reopen`
-performs. It records the restack in the item's history rather than opening a
-new round, because a rebase produces no new review evidence.
+re-baselines `git-state.json`'s `base_snapshot`. On the `task.py` side, a new
+`record_restack` (not `reopen` -- see the resolved open question below)
+updates `base_snapshot` and, if the current round already recorded a
+builder or reviewer verdict, that verdict's own `head_snapshot` too, so
+`task.check`'s drift comparison keeps matching the rebase's new commit
+identity. It records the restack in the item's own history rather than
+opening a new round, because a rebase produces no new review evidence.
 
 ### APIs and contracts
 
@@ -277,12 +281,12 @@ affordance at all.
 | Question | Owner | Evidence needed | Blocking? |
 |---|---|---|---|
 | ~~Is `.gitattributes` `linguist-generated` a sufficient generated-file signal on its own?~~ | Martin Urban | Resolved 2026-09-02: yes, `linguist-generated` only, no CoDev-owned fallback list. CoDev's own repository has no `.gitattributes` today, so the exclusion is inert here until one is added -- an accepted, named limitation, not a gap to patch with a second exclude list | Resolved |
-| Can `restack` reuse `task.reopen`'s re-baselining directly, or does a rebase need a distinct code path? | Implementer | Read `task.reopen`'s round-state handling and prototype one restack against a two-task stack | Yes, before this design is accepted |
+| ~~Can `restack` reuse `task.reopen`'s re-baselining directly, or does a rebase need a distinct code path?~~ | Implementer | Resolved 2026-09-02: no, a distinct code path (`task.record_restack`) was needed. `reopen` unconditionally appends a new round and consumes round-cap budget; `task.check`'s drift comparison reads the *latest round's own* `head_snapshot`, not just `base_snapshot`, so re-baselining only `base_snapshot` (as originally described) would not have cleared drift for a task with any recorded builder/reviewer evidence -- confirmed with a real prototype in `RecordRestackTests` | Resolved |
 | Can "last slice in the stack" be derived from recorded parent links alone, or does it need an explicit flag on the final task? | Implementer | Prototype against a three-task stack | No; the fallback is an explicit flag |
 | Do the commit-time nudge and the open-pr gate need separate thresholds? | Martin Urban | Real usage on CoDev's own next feature | No; ship one pair, split later if it proves too coarse |
 
 ## Acceptance
 
-- [ ] Both blocking open questions resolved.
+- [x] Both blocking open questions resolved.
 - [x] Stacking ADR written and accepted: [ADR-0034](../../adr/0034-stacked-task-branches.md).
 - [ ] Accountable human accepts planning against this design.

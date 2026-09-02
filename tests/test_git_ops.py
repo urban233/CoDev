@@ -35,6 +35,7 @@ import unittest
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from codev_workflow import config, git_ops, task
@@ -1119,6 +1120,219 @@ class OpenPrTests(unittest.TestCase):
             )
             body_index = pr_create_call.args[0].index("--body") + 1
         self.assertEqual("body", pr_create_call.args[0][body_index])
+
+
+class RestackTests(unittest.TestCase):
+    def _stacked_pair(self, target: Path) -> str:
+        base = _init_repo(target)
+        task.start("item-1", base, target=target)
+        git_ops.create_branch("item-1", base, target=target)
+        task.start("item-2", base, target=target)
+        git_ops.create_branch("item-2", target=target, stack_on="item-1")
+        return base
+
+    def test_refuses_when_not_on_the_own_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._stacked_pair(target)
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.restack("item-2", target=target)
+
+    def test_refuses_for_a_task_with_no_recorded_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            with self.assertRaises(git_ops.GitOpsError) as caught:
+                git_ops.restack("item-1", target=target)
+            self.assertIn("no recorded parent", str(caught.exception))
+
+    def test_refuses_once_the_parents_pr_has_merged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._stacked_pair(target)
+            with (
+                patch.object(git_ops, "_run_gh", return_value="MERGED"),
+                self.assertRaises(git_ops.GitOpsError) as caught,
+            ):
+                git_ops.restack("item-2", target=target)
+            self.assertIn("already merged", str(caught.exception))
+
+    def test_rebases_onto_the_parents_new_head_and_force_pushes(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            self._stacked_pair(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "-q", "origin", "codev/item-2"], cwd=target)
+
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            (target / "parent-later.txt").write_text("p\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1",
+                "a later parent commit",
+                target=target,
+                paths=["parent-later.txt"],
+            )
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+
+            with patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()):
+                new_head = git_ops.restack("item-2", target=target)
+
+            self.assertEqual(new_head, git_ops.current_head(target))
+            self.assertIn(
+                "parent-later.txt", git_ops.changed_files("item-1", target=target)
+            )
+            # item-2's own diff against its (now-advanced) base must not
+            # pick up item-1's content as if item-2 had authored it.
+            self.assertNotIn(
+                "parent-later.txt", git_ops.changed_files("item-2", target=target)
+            )
+            remote_log = _run_capture(["log", "--oneline", "codev/item-2"], cwd=origin)
+        self.assertIn("a later parent commit", remote_log)
+
+    def test_uses_force_with_lease_never_a_bare_force(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            self._stacked_pair(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "-q", "origin", "codev/item-2"], cwd=target)
+
+            real_run = subprocess.run
+            captured: list[list[str]] = []
+
+            def spy(args: list[str], **kwargs: Any) -> Any:
+                if args[:1] == ["git"]:
+                    captured.append(args)
+                return real_run(args, **kwargs)
+
+            with (
+                patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()),
+                patch("subprocess.run", side_effect=spy),
+            ):
+                git_ops.restack("item-2", target=target)
+
+            push_calls = [args for args in captured if "push" in args]
+        self.assertTrue(push_calls)
+        for call in push_calls:
+            self.assertIn("--force-with-lease", call)
+            self.assertNotIn("--force", call)
+
+    def test_re_baselines_git_state_base_snapshot(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            self._stacked_pair(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "-q", "origin", "codev/item-2"], cwd=target)
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            (target / "parent-later.txt").write_text("p\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1",
+                "a later parent commit",
+                target=target,
+                paths=["parent-later.txt"],
+            )
+            new_parent_head = git_ops.current_head(target)
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+
+            with patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()):
+                git_ops.restack("item-2", target=target)
+
+            state = json.loads(
+                (target / ".codev/task/item-2/git-state.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        self.assertEqual(new_parent_head, state["base_snapshot"])
+
+    def test_clears_task_check_drift_after_restacking(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            self._stacked_pair(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "-q", "origin", "codev/item-2"], cwd=target)
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+            (target / "child.txt").write_text("c\n", encoding="utf-8")
+            head = git_ops.commit(
+                "item-2",
+                "child change",
+                target=target,
+                paths=["child.txt"],
+                round_number=1,
+                evidence={"validation": "pytest passed"},
+            )
+            task.record_reviewer(
+                "item-2", 1, head, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            (target / "parent-later.txt").write_text("p\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1",
+                "a later parent commit",
+                target=target,
+                paths=["parent-later.txt"],
+            )
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+
+            with patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()):
+                new_head = git_ops.restack("item-2", target=target)
+
+            result = task.check("item-2", new_head, target=target)
+        self.assertTrue(result.ok)
+        self.assertNotEqual(head, new_head)
+
+    def test_conflict_leaves_the_repository_mid_rebase_for_a_human(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._stacked_pair(target)
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+            (target / "README.md").write_text("child version\n", encoding="utf-8")
+            git_ops.commit(
+                "item-2",
+                "child conflicting change",
+                target=target,
+                paths=["README.md"],
+            )
+
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            (target / "README.md").write_text("parent version\n", encoding="utf-8")
+            git_ops.commit(
+                "item-1",
+                "parent conflicting change",
+                target=target,
+                paths=["README.md"],
+            )
+            _run(["checkout", "-q", "codev/item-2"], cwd=target)
+
+            with (
+                patch.object(git_ops, "_run_gh", side_effect=_gh_no_existing_pr()),
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.restack("item-2", target=target)
+
+            status = _run_capture(["status"], cwd=target)
+        self.assertIn("rebas", status.lower())
 
 
 class CreateIssueTests(unittest.TestCase):

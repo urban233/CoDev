@@ -85,6 +85,7 @@ for what using this actually looks like end to end.
 | `codev git push --id <id>` | Push that task's branch |
 | `codev git open-pr --id <id> --title <title>` | Open the pull request as a draft |
 | `codev git mark-ready --id <id>` | Mark the PR ready for human review once the outer loop says so |
+| `codev git restack --id <id>` | Rebase a stacked task's branch onto its recorded parent's current head and force-push with `--force-with-lease` (ADR-0034) |
 
 This is the only path for an agent to mutate the repository or GitHub — raw `git
 commit`/`git push` are denied to every role for exactly this reason

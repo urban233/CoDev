@@ -977,6 +977,46 @@ def reopen(
     return path
 
 
+def record_restack(
+    task_id: str, new_head: str, *, target: Path, by: str | None = None
+) -> Path:
+    """Reconciles round-state after `codev git restack` rewrites a
+    stacked task's own branch history (ADR-0034).
+
+    A rebase changes a commit's identity without changing its tree, so
+    the round evidence it affects is still valid -- unlike `reopen`, this
+    appends no new round and records no new builder/reviewer verdict; it
+    only updates the pointers `check`'s drift comparison reads, so the
+    rebase itself does not look like drift. Updates `base_snapshot` and,
+    when the current round already recorded a builder or reviewer
+    verdict, that verdict's own `head_snapshot` too. Every call is
+    appended to `restacks`, mirroring `reopens`' visibility.
+    """
+    _validate_required_text("new_head", new_head)
+    _validate_optional_text("by", by)
+    state = _load(task_id, target=target)
+    _ensure_in_progress(state)
+    previous_base = state["base_snapshot"]
+    state["base_snapshot"] = new_head
+    latest = state["rounds"][-1]
+    if latest["reviewer"] is not None:
+        latest["reviewer"]["head_snapshot"] = new_head
+    elif latest["builder"] is not None:
+        latest["builder"]["head_snapshot"] = new_head
+    state.setdefault("restacks", []).append(
+        {
+            "timestamp": _utc_now_iso(),
+            "round": latest["round"],
+            "previous_base_snapshot": previous_base,
+            "new_head": new_head,
+            "by": by,
+        }
+    )
+    path = _task_path(target, task_id)
+    _save(task_id, state, target=target)
+    return path
+
+
 def waive(
     task_id: str,
     dimension: str,

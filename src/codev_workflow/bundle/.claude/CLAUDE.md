@@ -29,12 +29,12 @@ a `PreToolUse` hook pauses for confirmation before the first source edit, or
 the first repository-mutating git command -- raw (`git commit`, `git push`,
 `git merge`, `git reset`, `git checkout`, `git clean`, `git rebase`) or
 through the guarded surface (`codev git branch`, `codev git commit`,
-`codev git push`) -- if no design or plan document exists yet for the
-active branch -- checked both precisely, against the current task's own
-recorded plan when the branch follows `codev git branch`'s naming, and as a
-coarser repo-wide fallback for planning work that predates a task. Both
-exist to keep implementation
-behind an explicit discussion or an accepted plan -- propose a plan before
+`codev git push`, `codev git restack`) -- if no design or plan document
+exists yet for the active branch -- checked both precisely, against the
+current task's own recorded plan when the branch follows `codev git
+branch`'s naming, and as a coarser repo-wide fallback for planning work
+that predates a task. Both exist to keep implementation behind an explicit
+discussion or an accepted plan -- propose a plan before
 editing rather than starting directly, even when the guardrail doesn't
 catch it. See `docs/features/claude-code/design.md` for why, and its
 "Guardrail Design" section if the hook's check needs adjusting.

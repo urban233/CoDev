@@ -745,6 +745,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_mark_ready.add_argument("--id", required=True)
     g_mark_ready.add_argument("--target", type=_target, default=Path.cwd())
+
+    g_restack = git_commands.add_parser(
+        "restack",
+        help="rebase a stacked task's branch onto its recorded parent's "
+        "current head and force-push (ADR-0034)",
+    )
+    g_restack.add_argument("--id", required=True)
+    g_restack.add_argument("--target", type=_target, default=Path.cwd())
     return parser
 
 
@@ -1412,6 +1420,11 @@ def _run_git_command(args: argparse.Namespace) -> int:
     if args.git_command == "mark-ready":
         git_ops_module.mark_ready(args.id, target=target)
         print(f"Marked {args.id}'s pull request ready for review")
+        return 0
+
+    if args.git_command == "restack":
+        new_head = git_ops_module.restack(args.id, target=target)
+        print(f"Restacked {args.id}'s branch onto its parent; new head {new_head}")
         return 0
 
     return 2

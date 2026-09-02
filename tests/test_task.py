@@ -48,6 +48,7 @@ from codev_workflow.task import (
     read_escalations,
     record_builder,
     record_escalation,
+    record_restack,
     record_reviewer,
     record_triage,
     relink,
@@ -720,6 +721,75 @@ class ReopenTests(unittest.TestCase):
             text = log_text("item-1", target=target)
         self.assertIn("builder @ head1", text)
         self.assertIn("reviewer @ head1: READY_FOR_OUTER_LOOP", text)
+
+
+class RecordRestackTests(unittest.TestCase):
+    def test_clears_drift_after_a_rebase_without_opening_a_new_round(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-2", "base-sha", target=target)
+            record_builder("item-2", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-2", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            self.assertFalse(check("item-2", "rebased-head", target=target).ok)
+
+            record_restack("item-2", "rebased-head", target=target)
+            result = check("item-2", "rebased-head", target=target)
+            summary = describe("item-2", target=target)
+
+        self.assertTrue(result.ok)
+        self.assertEqual("ok_ready_for_pr", result.reason)
+        self.assertEqual(1, summary["current_round"])
+
+    def test_updates_the_current_rounds_recorded_head_not_only_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-2", "base-sha", target=target)
+            record_builder("item-2", 1, "head1", {"note": "original"}, target=target)
+            record_reviewer(
+                "item-2", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            record_restack("item-2", "rebased-head", target=target)
+            text = log_text("item-2", target=target)
+        self.assertIn("reviewer @ rebased-head: READY_FOR_OUTER_LOOP", text)
+
+    def test_does_not_mutate_previous_round_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-2", "base-sha", target=target)
+            record_builder("item-2", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-2", 1, "head1", [], {}, "CHANGES_REQUIRED", target=target
+            )
+            record_builder("item-2", 2, "head2", {}, target=target)
+            record_reviewer(
+                "item-2", 2, "head2", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            record_restack("item-2", "rebased-head", target=target)
+            text = log_text("item-2", target=target)
+        self.assertIn("builder @ head1", text)
+        self.assertIn("reviewer @ head1: CHANGES_REQUIRED", text)
+        self.assertIn("reviewer @ rebased-head: READY_FOR_OUTER_LOOP", text)
+
+    def test_refuses_for_a_closed_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-2", "base-sha", target=target)
+            record_builder("item-2", 1, "head1", {}, target=target)
+            record_reviewer(
+                "item-2", 1, "head1", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            close("item-2", "abandoned", target=target)
+            with self.assertRaises(TaskError):
+                record_restack("item-2", "rebased-head", target=target)
+
+    def test_rejects_empty_new_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-2", "base-sha", target=target)
+            with self.assertRaises(TaskError):
+                record_restack("item-2", "   ", target=target)
 
 
 class DescribeAllTests(unittest.TestCase):
