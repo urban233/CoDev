@@ -401,7 +401,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     codeowners_parser = commands.add_parser(
-        "codeowners", help="scaffold a starter CODEOWNERS file; run directly by a human"
+        "codeowners", help="scaffold a starter CODEOWNERS file"
     )
     codeowners_commands = codeowners_parser.add_subparsers(
         dest="codeowners_command", required=True
@@ -617,6 +617,27 @@ def _parser() -> argparse.ArgumentParser:
     t_escalations.add_argument("--since", help="ISO 8601 timestamp lower bound")
     t_escalations.add_argument("--target", type=_target, default=Path.cwd())
 
+    # ADR-0036, slice A2: `check`, `status`, and `size` already emitted JSON;
+    # these are the verbs that did not, so an agent could not read back what
+    # it had just recorded without parsing prose.
+    for _task_verb_parser in (
+        t_start,
+        t_record,
+        t_close,
+        t_reopen,
+        t_waive,
+        t_relink,
+        t_log,
+        t_triage,
+        t_escalate,
+        t_escalations,
+    ):
+        _task_verb_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the values an agent needs next as JSON (ADR-0036)",
+        )
+
     git_parser = commands.add_parser(
         "git", help="guarded git/GitHub mutation for one task's own branch"
     )
@@ -753,6 +774,27 @@ def _parser() -> argparse.ArgumentParser:
     )
     g_restack.add_argument("--id", required=True)
     g_restack.add_argument("--target", type=_target, default=Path.cwd())
+
+    # ADR-0036: the guarded git surface is the one an agent is *required* to
+    # use, so every verb in it must hand back the values the next command
+    # consumes rather than a sentence to parse. Human-readable output stays
+    # the default and stays byte-compatible. `issue-view` already emits JSON
+    # unconditionally; it accepts the flag so an agent can pass it uniformly.
+    for _git_verb_parser in (
+        g_issue_create,
+        g_issue_view,
+        g_branch,
+        g_commit,
+        g_push,
+        g_open_pr,
+        g_mark_ready,
+        g_restack,
+    ):
+        _git_verb_parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the values an agent needs next as JSON (ADR-0036)",
+        )
     return parser
 
 
@@ -781,19 +823,66 @@ def _apply_deprecated_aliases(argv: list[str]) -> list[str]:
     return argv
 
 
-def _print_size_report(task_id: str, *, target: Path) -> None:
-    """Surface a task's running size where splitting is still cheap -- see
-    docs/features/small-prs/design.md. Never raises: a measurement failure
-    must not block the commit or pull-request path it decorates."""
+def _size_payload(task_id: str, *, target: Path) -> dict[str, Any] | None:
+    """A task's running size as JSON-ready fields, or None when it cannot be
+    measured. Never raises: a measurement failure must not block the commit
+    or pull-request path it decorates."""
     try:
         size = git_ops_module.task_size(task_id, target=target)
     except git_ops_module.GitOpsError:
+        return None
+    return {
+        "lines_changed": size.lines_changed,
+        "files_changed": size.files_changed,
+        "max_lines": size.max_lines,
+        "max_files": size.max_files,
+        "over_budget": size.over_budget,
+    }
+
+
+def _print_size_report(task_id: str, *, target: Path) -> None:
+    """Surface a task's running size where splitting is still cheap -- see
+    docs/features/small-prs/design.md."""
+    size = _size_payload(task_id, target=target)
+    if size is None:
         return
-    status_word = "over budget" if size.over_budget else "within budget"
+    status_word = "over budget" if size["over_budget"] else "within budget"
     print(
-        f"Size: {size.lines_changed} line(s) (budget {size.max_lines}), "
-        f"{size.files_changed} file(s) (budget {size.max_files}) -- {status_word}"
+        f"Size: {size['lines_changed']} line(s) (budget {size['max_lines']}), "
+        f"{size['files_changed']} file(s) (budget {size['max_files']}) -- "
+        f"{status_word}"
     )
+
+
+def _emit_json(payload: Any) -> int:
+    """Print one agent-facing payload and return the CLI success code. Takes
+    a bare list as well as a mapping, since `escalations` is a sequence and
+    `status` already established that shape."""
+    print(json.dumps(payload))
+    return 0
+
+
+def _github_number(url: str) -> int | None:
+    """The issue or pull-request number trailing a GitHub URL, or None when
+    the URL does not end in one."""
+    tail = url.rstrip("/").rsplit("/", 1)[-1]
+    return int(tail) if tail.isdigit() else None
+
+
+def _recorded_branch(task_id: str, *, target: Path) -> str | None:
+    """The task's own recorded branch, or None when none is recorded yet."""
+    try:
+        return git_ops_module.own_branch(task_id, target=target)
+    except git_ops_module.GitOpsError:
+        return None
+
+
+def _recorded_parent(task_id: str, *, target: Path) -> str | None:
+    """The task this one is stacked on (ADR-0034), or None."""
+    try:
+        return git_ops_module.parent_task_id(task_id, target=target)
+    except git_ops_module.GitOpsError:
+        return None
 
 
 def _in_progress_owner_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
@@ -1151,6 +1240,18 @@ def _run_task_command(args: argparse.Namespace) -> int:
             owner=owner,
             entry=args.entry,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "path": str(path),
+                    "base_snapshot": args.base,
+                    "link_ref": link_ref,
+                    "summary": summary,
+                    "owner": owner,
+                    "entry": args.entry,
+                }
+            )
         print(f"Started task {args.id} at {path}")
         return 0
 
@@ -1184,6 +1285,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 target=target,
                 specialist_selection=selection,
             )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "round": args.round,
+                    "role": args.role,
+                    "head": args.head,
+                }
+            )
         print(f"Recorded round {args.round} ({args.role}) for {args.id}")
         return 0
 
@@ -1208,6 +1318,10 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "close":
         task_module.close(args.id, args.outcome, target=target)
+        if args.json:
+            return _emit_json(
+                {"task_id": args.id, "outcome": args.outcome, "status": "closed"}
+            )
         print(f"Closed task {args.id} as {args.outcome}")
         return 0
 
@@ -1223,6 +1337,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             max_rounds=args.max_rounds,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "path": str(path),
+                    "head": args.head,
+                    "by": by,
+                }
+            )
         print(f"Reopened task {args.id} at {path}")
         return 0
 
@@ -1237,6 +1360,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "dimension": args.dimension,
+                    "path": str(path),
+                    "by": by,
+                }
+            )
         print(f"Waived {args.dimension!r} for task {args.id} at {path}")
         return 0
 
@@ -1254,6 +1386,15 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             by=by,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "link_ref": link_ref,
+                    "path": str(path),
+                    "by": by,
+                }
+            )
         print(f"Relinked task {args.id} to {link_ref!r} at {path}")
         return 0
 
@@ -1302,6 +1443,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.task_command == "log":
+        if args.json:
+            return _emit_json(task_module.log_records(args.id, target=target))
         print(task_module.log_text(args.id, target=target), end="")
         return 0
 
@@ -1311,6 +1454,8 @@ def _run_task_command(args: argparse.Namespace) -> int:
         if by is None:
             by = git_ops_module.detect_identity(target=target)
         task_module.record_triage(args.id, args.round, triage, target=target, by=by)
+        if args.json:
+            return _emit_json({"task_id": args.id, "round": args.round, "by": by})
         print(f"Recorded triage for round {args.round} of {args.id}")
         return 0
 
@@ -1323,10 +1468,23 @@ def _run_task_command(args: argparse.Namespace) -> int:
             phase=args.phase,
             round_number=args.round_number,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "trigger": args.trigger,
+                    "phase": args.phase,
+                    "round": args.round_number,
+                }
+            )
         print(f"Recorded escalation for {args.id}: {args.trigger}")
         return 0
 
     if args.task_command == "escalations":
+        if args.json:
+            return _emit_json(
+                task_module.read_escalations(target=target, since=args.since)
+            )
         print(task_module.escalations_text(target=target, since=args.since), end="")
         return 0
 
@@ -1342,17 +1500,30 @@ def _run_git_command(args: argparse.Namespace) -> int:
             body = args.body
         else:
             raise git_ops_module.GitOpsError("either --body or --body-file is required")
-        if args.paths:
-            suggested = git_ops_module.suggest_owners(args.paths, target=target)
-            if suggested:
-                print(f"Suggested owners (from CODEOWNERS): {', '.join(suggested)}")
+        suggested = (
+            git_ops_module.suggest_owners(args.paths, target=target)
+            if args.paths
+            else []
+        )
+        if suggested and not args.json:
+            print(f"Suggested owners (from CODEOWNERS): {', '.join(suggested)}")
         url = git_ops_module.create_issue(
             args.title, body, target=target, assignees=args.assignees
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "url": url,
+                    "number": _github_number(url),
+                    "suggested_owners": suggested,
+                }
+            )
         print(url)
         return 0
 
     if args.git_command == "issue-view":
+        # Already machine-readable; --json is accepted so an agent can pass it
+        # uniformly across the group, and changes nothing.
         payload = git_ops_module.view_issue(args.number, target=target)
         print(json.dumps(payload))
         return 0
@@ -1365,6 +1536,14 @@ def _run_git_command(args: argparse.Namespace) -> int:
             allow_dirty=args.allow_dirty,
             stack_on=args.stack_on,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "branch": branch,
+                    "parent_task": _recorded_parent(args.id, target=target),
+                }
+            )
         print(f"Created branch {branch} for {args.id}")
         return 0
 
@@ -1387,12 +1566,28 @@ def _run_git_command(args: argparse.Namespace) -> int:
             round_number=args.round_number,
             evidence=evidence,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "head": head,
+                    "branch": _recorded_branch(args.id, target=target),
+                    "size": _size_payload(args.id, target=target),
+                }
+            )
         print(f"Committed {head} on {args.id}'s branch")
         _print_size_report(args.id, target=target)
         return 0
 
     if args.git_command == "push":
         git_ops_module.push(args.id, target=target)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "branch": _recorded_branch(args.id, target=target),
+                }
+            )
         print(f"Pushed {args.id}'s branch")
         return 0
 
@@ -1413,17 +1608,44 @@ def _run_git_command(args: argparse.Namespace) -> int:
             base=args.base,
             use_template=use_template,
         )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "url": url,
+                    "number": _github_number(url),
+                    "branch": _recorded_branch(args.id, target=target),
+                    "size": _size_payload(args.id, target=target),
+                }
+            )
         print(url)
         _print_size_report(args.id, target=target)
         return 0
 
     if args.git_command == "mark-ready":
         git_ops_module.mark_ready(args.id, target=target)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "branch": _recorded_branch(args.id, target=target),
+                    "ready": True,
+                }
+            )
         print(f"Marked {args.id}'s pull request ready for review")
         return 0
 
     if args.git_command == "restack":
         new_head = git_ops_module.restack(args.id, target=target)
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "head": new_head,
+                    "branch": _recorded_branch(args.id, target=target),
+                    "parent_task": _recorded_parent(args.id, target=target),
+                }
+            )
         print(f"Restacked {args.id}'s branch onto its parent; new head {new_head}")
         return 0
 

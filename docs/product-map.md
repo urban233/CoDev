@@ -78,6 +78,10 @@ against -- including whether something already here covers it.
 
 ### CLI commands
 
+Every command below is agent-invocable. `codev init` is the single bootstrap
+exception ADR-0036 names: it necessarily precedes any agent session, because
+no agent exists before the bundle is installed.
+
 | Command | Phase | Purpose |
 |---|---|---|
 | `init` / `diff` / `update` / `remove` | Cross-cutting | Install, preview, apply, or remove the bundle itself |
@@ -85,7 +89,7 @@ against -- including whether something already here covers it.
 | `adapter list/add/verify` | Cross-cutting | Manage and structurally verify one platform adapter |
 | `config get/set/list` | Cross-cutting | Layered configuration (flags > env > project > global > default) |
 | `self version/update` | Cross-cutting | Installed-tool version and upgrade guidance |
-| `codeowners init` | Ship (one-time setup) | Scaffold a starter `.github/CODEOWNERS`; human-run directly, never agent-invoked |
+| `codeowners init` | Ship (one-time setup) | Scaffold a starter `.github/CODEOWNERS`; agent-invocable under the ordinary confirmation posture, and refuses if one already exists (ADR-0036) |
 | `task start/record/check/close/status/log/triage/escalate/escalations` | Build, Review | Read/write one task's round state; read-only w.r.t. product source (ADR-0001). `start --entry {takeover,direct-review}` (ADR-0006) marks whether the item's code is unfinished human work joining the inner loop, or finished human work going straight to the outer loop |
 | `git issue-create/branch/commit/push/open-pr/mark-ready` | Understand (issue-create only), Build, Ship | The only path to mutating the repository or GitHub; `issue-create` alone has no task precondition |
 | `eval task create/run` / `eval benchmark run` | Cross-cutting | General-purpose skill-evaluation harness — bring your own skill or agent, in your own repository, and test it with OpenCode; not limited to CoDev's bundled skills |

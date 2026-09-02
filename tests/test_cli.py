@@ -34,6 +34,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from codev_workflow.cli import (
@@ -45,6 +46,488 @@ from codev_workflow.cli import (
 from codev_workflow.git_ops import GitOpsError, TaskSize
 from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
+
+
+class TaskJsonSurfaceTests(unittest.TestCase):
+    """ADR-0036, slice A2: the task verbs that previously reported only in
+    prose now hand back what an agent recorded, and the human-readable
+    default is unchanged."""
+
+    def _run(self, argv: list[str], target: Path) -> Any:
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*argv, "--target", str(target), "--json"])
+        self.assertEqual(0, code)
+        return json.loads(output.getvalue())
+
+    def _text(self, argv: list[str], target: Path) -> str:
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*argv, "--target", str(target)])
+        self.assertEqual(0, code)
+        return output.getvalue()
+
+    def test_start_json_reports_the_linkage_it_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.task_module.start",
+                    return_value=target / "round-state.json",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.fetch_issue",
+                    return_value={
+                        "url": "https://github.com/o/r/issues/7",
+                        "title": "Fix the thing",
+                    },
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="@alice",
+                ),
+            ):
+                payload = self._run(
+                    [
+                        "task",
+                        "start",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "base-sha",
+                        "--github-issue",
+                        "7",
+                    ],
+                    target,
+                )
+            self.assertEqual("https://github.com/o/r/issues/7", payload["link_ref"])
+            self.assertEqual("Fix the thing", payload["summary"])
+            self.assertEqual("@alice", payload["owner"])
+            self.assertEqual("base-sha", payload["base_snapshot"])
+
+    def test_record_json_echoes_the_round_it_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            evidence = target / "evidence.json"
+            evidence.write_text("{}", encoding="utf-8")
+            with patch("codev_workflow.cli.task_module.record_builder"):
+                payload = self._run(
+                    [
+                        "task",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--head",
+                        "head-sha",
+                        "--role",
+                        "builder",
+                        "--evidence",
+                        str(evidence),
+                    ],
+                    target,
+                )
+            self.assertEqual(
+                {
+                    "task_id": "item-1",
+                    "round": 1,
+                    "role": "builder",
+                    "head": "head-sha",
+                },
+                payload,
+            )
+
+    def test_close_waive_and_escalate_report_their_own_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch("codev_workflow.cli.task_module.close"),
+                patch(
+                    "codev_workflow.cli.task_module.waive",
+                    return_value=target / "s.json",
+                ),
+                patch("codev_workflow.cli.task_module.record_escalation"),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="@alice",
+                ),
+            ):
+                closed = self._run(
+                    ["task", "close", "--id", "item-1", "--outcome", "approved"], target
+                )
+                waived = self._run(
+                    [
+                        "task",
+                        "waive",
+                        "--id",
+                        "item-1",
+                        "--dimension",
+                        "concurrency",
+                        "--reason",
+                        "no concurrent paths",
+                    ],
+                    target,
+                )
+                escalated = self._run(
+                    [
+                        "task",
+                        "escalate",
+                        "--id",
+                        "item-1",
+                        "--trigger",
+                        "stop_round_cap",
+                        "--cause",
+                        "cap reached",
+                    ],
+                    target,
+                )
+            self.assertEqual("closed", closed["status"])
+            self.assertEqual("concurrency", waived["dimension"])
+            self.assertEqual("@alice", waived["by"])
+            self.assertEqual("stop_round_cap", escalated["trigger"])
+            self.assertIsNone(escalated["phase"])
+
+    def test_log_json_returns_the_recorded_state_not_rendered_text(self) -> None:
+        state = {"task_id": "item-1", "status": "in_progress", "rounds": [{"round": 1}]}
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch(
+                "codev_workflow.cli.task_module.log_records", return_value=state
+            ):
+                payload = self._run(["task", "log", "--id", "item-1"], target)
+            self.assertEqual(state, payload)
+
+    def test_escalations_json_returns_a_list_of_records(self) -> None:
+        records = [{"task_id": "item-1", "trigger": "stop_drift", "round": 2}]
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch(
+                "codev_workflow.cli.task_module.read_escalations", return_value=records
+            ):
+                payload = self._run(["task", "escalations"], target)
+            self.assertEqual(records, payload)
+
+    def test_human_readable_output_is_unchanged_without_the_flag(self) -> None:
+        """The same compatibility control slice A1 established, for the task
+        verbs this slice touches."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch("codev_workflow.cli.task_module.close"),
+                patch(
+                    "codev_workflow.cli.task_module.waive",
+                    return_value=target / "s.json",
+                ),
+                patch("codev_workflow.cli.task_module.record_escalation"),
+                patch(
+                    "codev_workflow.cli.task_module.escalations_text",
+                    return_value="No escalations recorded.\n",
+                ),
+                patch(
+                    "codev_workflow.cli.task_module.log_text", return_value="task log\n"
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="@alice",
+                ),
+            ):
+                self.assertEqual(
+                    "Closed task item-1 as approved\n",
+                    self._text(
+                        ["task", "close", "--id", "item-1", "--outcome", "approved"],
+                        target,
+                    ),
+                )
+                self.assertEqual(
+                    f"Waived 'concurrency' for task item-1 at {target / 's.json'}\n",
+                    self._text(
+                        [
+                            "task",
+                            "waive",
+                            "--id",
+                            "item-1",
+                            "--dimension",
+                            "concurrency",
+                            "--reason",
+                            "r",
+                        ],
+                        target,
+                    ),
+                )
+                self.assertEqual(
+                    "Recorded escalation for item-1: stop_round_cap\n",
+                    self._text(
+                        [
+                            "task",
+                            "escalate",
+                            "--id",
+                            "item-1",
+                            "--trigger",
+                            "stop_round_cap",
+                            "--cause",
+                            "c",
+                        ],
+                        target,
+                    ),
+                )
+                self.assertEqual(
+                    "task log\n", self._text(["task", "log", "--id", "item-1"], target)
+                )
+                self.assertEqual(
+                    "No escalations recorded.\n",
+                    self._text(["task", "escalations"], target),
+                )
+
+
+class GitJsonSurfaceTests(unittest.TestCase):
+    """ADR-0036: every guarded git verb hands back the values the next
+    command consumes, and the human-readable default is unchanged."""
+
+    SIZE = TaskSize(lines_changed=12, files_changed=2, max_lines=400, max_files=8)
+
+    def _run(self, argv: list[str], target: Path) -> dict[str, Any]:
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*argv, "--target", str(target), "--json"])
+        self.assertEqual(0, code)
+        payload: dict[str, Any] = json.loads(output.getvalue())
+        return payload
+
+    def _text(self, argv: list[str], target: Path) -> str:
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*argv, "--target", str(target)])
+        self.assertEqual(0, code)
+        return output.getvalue()
+
+    def test_branch_json_reports_the_branch_and_its_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_branch",
+                    return_value="codev/item-1",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.parent_task_id",
+                    return_value="item-0",
+                ),
+            ):
+                payload = self._run(["git", "branch", "--id", "item-1"], target)
+            self.assertEqual(
+                {
+                    "task_id": "item-1",
+                    "branch": "codev/item-1",
+                    "parent_task": "item-0",
+                },
+                payload,
+            )
+
+    def test_commit_json_carries_the_head_the_next_check_needs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.commit", return_value="head-sha"
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    return_value="codev/item-1",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=self.SIZE,
+                ),
+            ):
+                payload = self._run(
+                    ["git", "commit", "--id", "item-1", "--message", "m"], target
+                )
+            self.assertEqual("head-sha", payload["head"])
+            self.assertEqual("codev/item-1", payload["branch"])
+            self.assertEqual(12, payload["size"]["lines_changed"])
+            self.assertFalse(payload["size"]["over_budget"])
+
+    def test_push_json_reports_the_pushed_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch("codev_workflow.cli.git_ops_module.push"),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    return_value="codev/item-1",
+                ),
+            ):
+                payload = self._run(["git", "push", "--id", "item-1"], target)
+            self.assertEqual({"task_id": "item-1", "branch": "codev/item-1"}, payload)
+
+    def test_open_pr_json_carries_the_url_and_its_number(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.open_pr",
+                    return_value="https://github.com/o/r/pull/15",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    return_value="codev/item-1",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.task_size",
+                    return_value=self.SIZE,
+                ),
+                patch(
+                    "codev_workflow.cli.task_module.pr_description", return_value="body"
+                ),
+            ):
+                payload = self._run(
+                    ["git", "open-pr", "--id", "item-1", "--title", "t"], target
+                )
+            self.assertEqual("https://github.com/o/r/pull/15", payload["url"])
+            self.assertEqual(15, payload["number"])
+
+    def test_mark_ready_json_confirms_the_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch("codev_workflow.cli.git_ops_module.mark_ready"),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    return_value="codev/item-1",
+                ),
+            ):
+                payload = self._run(["git", "mark-ready", "--id", "item-1"], target)
+            self.assertTrue(payload["ready"])
+
+    def test_restack_json_carries_the_new_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.restack",
+                    return_value="new-head-sha",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    return_value="codev/item-2",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.parent_task_id",
+                    return_value="item-1",
+                ),
+            ):
+                payload = self._run(["git", "restack", "--id", "item-2"], target)
+            self.assertEqual("new-head-sha", payload["head"])
+            self.assertEqual("item-1", payload["parent_task"])
+
+    def test_issue_create_json_carries_the_number_and_owners(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_issue",
+                    return_value="https://github.com/o/r/issues/42",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.suggest_owners",
+                    return_value=["@alice"],
+                ),
+            ):
+                payload = self._run(
+                    [
+                        "git",
+                        "issue-create",
+                        "--title",
+                        "t",
+                        "--body",
+                        "b",
+                        "--path",
+                        "src/x.py",
+                    ],
+                    target,
+                )
+            self.assertEqual(42, payload["number"])
+            self.assertEqual(["@alice"], payload["suggested_owners"])
+
+    def test_a_missing_git_state_leaves_the_field_null_rather_than_failing(
+        self,
+    ) -> None:
+        """The payload helpers must never turn a missing record into an error
+        on a path that has already succeeded."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch("codev_workflow.cli.git_ops_module.push"),
+                patch(
+                    "codev_workflow.cli.git_ops_module.own_branch",
+                    side_effect=GitOpsError("no branch recorded"),
+                ),
+            ):
+                payload = self._run(["git", "push", "--id", "item-1"], target)
+            self.assertIsNone(payload["branch"])
+
+    def test_human_readable_output_is_unchanged_without_the_flag(self) -> None:
+        """The compatibility control: --json is additive, and the default
+        output an adopter script or recovery procedure reads must not move."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_branch",
+                    return_value="codev/item-1",
+                ),
+                patch("codev_workflow.cli.git_ops_module.push"),
+                patch(
+                    "codev_workflow.cli.git_ops_module.mark_ready",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.restack",
+                    return_value="new-head-sha",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_issue",
+                    return_value="https://github.com/o/r/issues/42",
+                ),
+                patch(
+                    "codev_workflow.cli.git_ops_module.suggest_owners",
+                    return_value=["@alice"],
+                ),
+            ):
+                self.assertEqual(
+                    "Created branch codev/item-1 for item-1\n",
+                    self._text(["git", "branch", "--id", "item-1"], target),
+                )
+                self.assertEqual(
+                    "Pushed item-1's branch\n",
+                    self._text(["git", "push", "--id", "item-1"], target),
+                )
+                self.assertEqual(
+                    "Marked item-1's pull request ready for review\n",
+                    self._text(["git", "mark-ready", "--id", "item-1"], target),
+                )
+                self.assertEqual(
+                    "Restacked item-2's branch onto its parent; "
+                    "new head new-head-sha\n",
+                    self._text(["git", "restack", "--id", "item-2"], target),
+                )
+                self.assertEqual(
+                    "Suggested owners (from CODEOWNERS): @alice\n"
+                    "https://github.com/o/r/issues/42\n",
+                    self._text(
+                        [
+                            "git",
+                            "issue-create",
+                            "--title",
+                            "t",
+                            "--body",
+                            "b",
+                            "--path",
+                            "src/x.py",
+                        ],
+                        target,
+                    ),
+                )
 
 
 class CliTests(unittest.TestCase):
