@@ -59,6 +59,11 @@ def _run(args: list[str], *, cwd: Path) -> None:
 
 def _init_repo(target: Path) -> str:
     _run(["init", "-b", "main"], cwd=target)
+    # With auto-gc off nothing repacks in the background, so a temporary
+    # directory's teardown cannot race git still writing into it. That race
+    # failed a build on ubuntu/3.11 with "Directory not empty" while every
+    # assertion in the test had passed.
+    _run(["config", "gc.auto", "0"], cwd=target)
     _run(["config", "user.name", "Test User"], cwd=target)
     _run(["config", "user.email", "test@example.com"], cwd=target)
     (target / "README.md").write_text("hello\n", encoding="utf-8")
@@ -311,6 +316,7 @@ class CreateBranchGuardTests(unittest.TestCase):
             origin = Path(origin_dir)
             target = Path(work_dir)
             _run(["init", "--bare", "-b", "main"], cwd=origin)
+            _run(["config", "gc.auto", "0"], cwd=origin)
             base = _init_repo(target)
             _run(["remote", "add", "origin", str(origin)], cwd=target)
             _run(["push", "origin", "main"], cwd=target)
@@ -358,6 +364,7 @@ class CreateBranchGuardTests(unittest.TestCase):
             origin = Path(origin_dir)
             target = Path(work_dir)
             _run(["init", "--bare", "-b", "main"], cwd=origin)
+            _run(["config", "gc.auto", "0"], cwd=origin)
             base = _init_repo(target)
             _run(["remote", "add", "origin", str(origin)], cwd=target)
             _run(["push", "origin", "main"], cwd=target)
@@ -700,6 +707,7 @@ class PushTests(unittest.TestCase):
             origin = Path(origin_dir)
             target = Path(work_dir)
             _run(["init", "--bare", "-b", "main"], cwd=origin)
+            _run(["config", "gc.auto", "0"], cwd=origin)
             base = _init_repo(target)
             _run(["remote", "add", "origin", str(origin)], cwd=target)
             _run(["push", "origin", "main"], cwd=target)
@@ -723,6 +731,7 @@ class PushTests(unittest.TestCase):
             origin = Path(origin_dir)
             target = Path(work_dir)
             _run(["init", "--bare", "-b", "main"], cwd=origin)
+            _run(["config", "gc.auto", "0"], cwd=origin)
             base = _init_repo(target)
             _run(["remote", "add", "origin", str(origin)], cwd=target)
             _run(["push", "origin", "main"], cwd=target)
