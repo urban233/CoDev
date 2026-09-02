@@ -177,6 +177,10 @@ GITIGNORE_BLOCK = """# codev:start
 .codev/task/escalations.jsonl
 # CoDev local gate-decision log -- not shared or committed.
 .codev/hooks/decisions.jsonl
+# Pull-request data the review skills fetch -- a cache of GitHub's answers,
+# rebuilt on demand. Without this, `codev git commit`'s `git add -A` sweeps
+# thousands of lines of API responses into the change under review.
+.codev/pr-review/
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
