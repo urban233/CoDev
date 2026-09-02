@@ -196,14 +196,25 @@ class Sandbox:
     """A work repository with a real bare origin, and `gh` on PATH."""
 
     def __init__(self) -> None:
-        self._temporary = tempfile.TemporaryDirectory()
+        # ignore_cleanup_errors, because teardown removing a directory git is
+        # still writing into is not a test result. A push into the bare origin
+        # can leave git working in `origin/objects` after the push returns; on
+        # a loaded runner that outlived cleanup and raised
+        # "OSError: [Errno 39] Directory not empty", failing a test whose
+        # assertions had all passed. A leaked temporary directory is harmless;
+        # a red build that says nothing about the code is not.
+        self._temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self._temporary.name)
         self.origin = root / "origin"
         self.work = root / "work"
         self.origin.mkdir()
         self.work.mkdir()
         run_git(["init", "-q", "--bare"], cwd=self.origin)
+        # And remove the cause as well as tolerating it: with auto-gc off,
+        # nothing is repacking in the background for cleanup to race.
+        run_git(["config", "gc.auto", "0"], cwd=self.origin)
         run_git(["init", "-q", "-b", "main"], cwd=self.work)
+        run_git(["config", "gc.auto", "0"], cwd=self.work)
         run_git(["config", "user.email", "t@example.com"], cwd=self.work)
         run_git(["config", "user.name", "Test"], cwd=self.work)
         run_git(["remote", "add", "origin", str(self.origin)], cwd=self.work)
