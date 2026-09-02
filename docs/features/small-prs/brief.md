@@ -197,11 +197,13 @@ carry that:
 - `codev git restack` force-pushes. It is the first CoDev command that rewrites
   already-pushed history, so it must refuse on a branch it does not own, refuse
   once the parent's pull request has merged, and never use a bare `--force`.
-- One task, one branch, one pull request is not an accepted decision anywhere
-  in `docs/adr/`; `git_ops.create_branch` and `git_ops.open_pr` simply
-  implement it. Making stacking first-class changes the task-to-pull-request
-  relationship across the workflow contract, the skills, and the CLI, so it
-  needs its own ADR under ADR-0025's practice, not a design-document footnote.
+- ADR-0002 already accepted "operates only on the one branch created for the
+  work item... never the branch checked out at run start" as part of its
+  guarded-CLI decision. Stacking narrows that guarantee rather than
+  reversing it — a task with no `--stack-on` keeps the exact original
+  behavior — but it is still a real amendment to an accepted decision, not
+  a design-document footnote, so it needs its own ADR under ADR-0025's
+  practice, explicitly scoped to that one clause.
 
 ## Assumptions and discovery
 

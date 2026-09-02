@@ -53,16 +53,18 @@ either number. `git_ops.changed_files` (`git_ops.py:466`) already runs `git diff
 raising when a task has no branch recorded, because it backs `codev status
 --verbose`'s informational overlap check. It reports names, never counts.
 
-**The task-to-pull-request relationship is hardcoded, not decided.**
-`git_ops.branch_name_for` (`git_ops.py:74`) derives exactly one branch name,
-`codev/<task-id>`, from a task id. `create_branch` (`git_ops.py:443`) refuses
-once `git-state.json` exists for that task, and records only `{"branch",
-"base_snapshot"}`. `open_pr` (`git_ops.py:606`) refuses when the branch already
-has an open pull request. No accepted decision in `docs/adr/` states this
-one-to-one relationship; ADR-0001 governs the lifecycle command family and
-ADR-0002 the inner loop's self-healing, neither the branch-to-pull-request
-mapping. It is an implementation property, which is why changing it needs a
-decision record of its own.
+**The task-to-pull-request relationship is accepted, not merely
+implemented.** `git_ops.branch_name_for` derives exactly one branch name,
+`codev/<task-id>`, from a task id. `create_branch` refuses once
+`git-state.json` exists for that task, and records only `{"branch",
+"base_snapshot"}`. `open_pr` refuses when the branch already has an open
+pull request. ADR-0002 already accepts this as durable, not just as an
+implementation choice: its guarded-CLI decision states the wrapper
+"operates only on the one branch created for the work item... never the
+branch checked out at run start." Stacking narrows that guarantee -- a
+task with no `--stack-on` keeps the exact original behavior -- but it is
+still a real amendment to an accepted decision, scoped to that one clause,
+which is why it needs its own ADR rather than a design-document footnote.
 
 **A stack would break issue linkage today.** Both pull-request body paths write
 an auto-close line. `_with_closes_line` (`git_ops.py:361`) appends `Closes #N`
@@ -282,5 +284,5 @@ affordance at all.
 ## Acceptance
 
 - [ ] Both blocking open questions resolved.
-- [ ] Stacking ADR written and accepted.
+- [x] Stacking ADR written and accepted: [ADR-0034](../../adr/0034-stacked-task-branches.md).
 - [ ] Accountable human accepts planning against this design.
