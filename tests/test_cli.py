@@ -92,6 +92,58 @@ class CliTests(unittest.TestCase):
                         )
                         open_pr.reset_mock()
 
+    def test_git_branch_defaults_base_to_none_and_wires_allow_dirty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch(
+                "codev_workflow.cli.git_ops_module.create_branch",
+                return_value="codev/item-1",
+            ) as create_branch:
+                output = StringIO()
+                with redirect_stdout(output):
+                    code = main(
+                        [
+                            "git",
+                            "branch",
+                            "--id",
+                            "item-1",
+                            "--allow-dirty",
+                            "--target",
+                            str(target),
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertIn("Created branch codev/item-1", output.getvalue())
+            create_branch.assert_called_once_with(
+                "item-1", None, target=target.resolve(), allow_dirty=True
+            )
+
+    def test_git_branch_passes_explicit_base_through(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with (
+                patch(
+                    "codev_workflow.cli.git_ops_module.create_branch",
+                    return_value="codev/item-1",
+                ) as create_branch,
+                redirect_stdout(StringIO()),
+            ):
+                main(
+                    [
+                        "git",
+                        "branch",
+                        "--id",
+                        "item-1",
+                        "--base",
+                        "develop",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            create_branch.assert_called_once_with(
+                "item-1", "develop", target=target.resolve(), allow_dirty=False
+            )
+
     def test_git_commit_and_open_pr_print_the_running_size(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

@@ -57,6 +57,7 @@ from codev_workflow import config, task
 from codev_workflow.installer import CoDevError, _read_lock
 
 GIT_STATE_FILENAME = "git-state.json"
+_TASK_BRANCH_PREFIX = "codev/"  # must match branch_name_for()
 PR_TEMPLATE_PATH = Path(".github/pull_request_template.md")
 _PR_TEMPLATE_MARKERS = (
     "summary",
@@ -73,7 +74,7 @@ class GitOpsError(Exception):
 
 
 def branch_name_for(task_id: str) -> str:
-    return f"codev/{task_id}"
+    return f"{_TASK_BRANCH_PREFIX}{task_id}"
 
 
 def _task_dir(target: Path, task_id: str) -> Path:
@@ -441,14 +442,110 @@ def default_branch(target: Path) -> str:
     )
 
 
-def create_branch(task_id: str, base_snapshot: str, *, target: Path) -> str:
+def _resolve_pr_base(base: str | None, *, target: Path) -> str:
+    """`--base` if given, else `git.pr_base`, else the repository's default
+    branch -- the resolution order create_branch and open_pr share."""
+    if base is not None:
+        return base
+    configured = config.resolve("git.pr_base", target=target)
+    if configured is not None:
+        return configured.value
+    return default_branch(target)
+
+
+def _warn_if_base_behind_remote(base: str, *, target: Path) -> None:
+    """Warn, never raise, when a resolved base branch has a remote-tracking
+    counterpart ahead of it -- a stale local checkout otherwise silently
+    becomes the wrong starting point for a new task branch. A no-op when
+    `base` is not a local branch with an `origin/<base>` counterpart (an
+    explicit snapshot/tag/sha, or no such remote ref)."""
+    try:
+        _run_git(["rev-parse", "--verify", f"refs/remotes/origin/{base}"], cwd=target)
+    except GitOpsError:
+        return
+    try:
+        behind = int(
+            _run_git(["rev-list", "--count", f"{base}..origin/{base}"], cwd=target)
+        )
+    except GitOpsError:
+        return
+    if behind > 0:
+        warnings.warn(
+            f"local {base!r} is {behind} commit(s) behind origin/{base!r}; "
+            "consider fetching before branching from it",
+            stacklevel=2,
+        )
+
+
+def _other_recorded_task_on_head(*, target: Path) -> str | None:
+    """The other task id whose own recorded branch HEAD currently sits on,
+    or None when HEAD is not on any codev-managed task branch."""
+    branch = current_branch(target)
+    if not branch.startswith(_TASK_BRANCH_PREFIX):
+        return None
+    other_task_id = branch[len(_TASK_BRANCH_PREFIX) :]
+    if not other_task_id:
+        return None
+    try:
+        _load_git_state(other_task_id, target=target)
+    except GitOpsError:
+        return None
+    return other_task_id
+
+
+def create_branch(
+    task_id: str,
+    base_snapshot: str | None = None,
+    *,
+    target: Path,
+    allow_dirty: bool = False,
+) -> str:
     state_path = _git_state_path(target, task_id)
     if state_path.exists():
         raise GitOpsError(f"task {task_id!r} already has a branch recorded")
+
+    if not allow_dirty:
+        dirty = _dirty_product_paths(target)
+        if dirty:
+            raise GitOpsError(
+                "refusing to create a branch: the worktree has uncommitted "
+                f"changes ({', '.join(sorted(dirty)[:5])}"
+                f"{', ...' if len(dirty) > 5 else ''}) that would ride onto "
+                "the new branch -- commit or stash them first, or pass "
+                "--allow-dirty if that is intentional"
+            )
+
+    other_task_id = _other_recorded_task_on_head(target=target)
+    if other_task_id is not None and other_task_id != task_id:
+        other_branch = branch_name_for(other_task_id)
+        other_state = _load_git_state(other_task_id, target=target)
+        ahead = int(
+            _run_git(
+                ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
+                cwd=target,
+            )
+        )
+        if ahead > 0:
+            raise GitOpsError(
+                f"refusing to create a branch: HEAD is on {other_branch!r} "
+                f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
+                "not yet in its base -- check out the intended base branch "
+                f"first, or continue work on {other_task_id!r} itself "
+                "instead of branching a new task from underneath it"
+            )
+
+    resolved_base = _resolve_pr_base(base_snapshot, target=target)
+    _warn_if_base_behind_remote(resolved_base, target=target)
+    # Pin to the exact commit now, not the ref name: changed_files and
+    # task_size diff against this recorded value later, and a floating
+    # branch name (the default_branch/git.pr_base fallback) would silently
+    # pull in every commit main gains after this branch is created.
+    pinned_base = _run_git(["rev-parse", resolved_base], cwd=target)
+
     branch = branch_name_for(task_id)
-    _run_git(["checkout", "-b", branch, base_snapshot], cwd=target)
+    _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"branch": branch, "base_snapshot": base_snapshot}
+    payload = {"branch": branch, "base_snapshot": pinned_base}
     state_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -635,6 +732,17 @@ def _dirty_paths(target: Path) -> list[str]:
     return paths
 
 
+def _dirty_product_paths(target: Path) -> list[str]:
+    """_dirty_paths, excluding a task's own not-yet-committed
+    .codev/task/<id>/ bookkeeping. create_branch writes git-state.json to
+    disk before any commit exists to carry it, so that file alone must
+    never register as a reason to refuse creating a further branch."""
+    task_dir_prefix = task.TASK_DIR_RELATIVE.as_posix() + "/"
+    return [
+        path for path in _dirty_paths(target) if not path.startswith(task_dir_prefix)
+    ]
+
+
 def _refuse_if_mixed_dirty_paths(task_id: str, *, target: Path) -> None:
     """Refuse a path-less `git add -A` when the dirty worktree mixes
     CoDev-managed changes with everything else -- prevents concurrent
@@ -744,12 +852,7 @@ def open_pr(
             f"refusing to open a pull request: {branch!r} already has one open "
             f"at {existing} -- use `codev git mark-ready` instead"
         )
-    resolved_base = base
-    if resolved_base is None:
-        configured_base = config.resolve("git.pr_base", target=target)
-        resolved_base = configured_base.value if configured_base else None
-    if resolved_base is None:
-        resolved_base = default_branch(target)
+    resolved_base = _resolve_pr_base(base, target=target)
     final_body = (
         _render_pr_template(task_id, target=target)
         if use_template

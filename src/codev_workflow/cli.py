@@ -660,7 +660,17 @@ def _parser() -> argparse.ArgumentParser:
         "branch", help="create the task's own branch from a base snapshot"
     )
     g_branch.add_argument("--id", required=True)
-    g_branch.add_argument("--base", required=True, help="base git snapshot")
+    g_branch.add_argument(
+        "--base",
+        default=None,
+        help="base git snapshot; defaults to the 'git.pr_base' config value, "
+        "then the repository's default branch",
+    )
+    g_branch.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="proceed despite uncommitted worktree changes",
+    )
     g_branch.add_argument("--target", type=_target, default=Path.cwd())
 
     g_commit = git_commands.add_parser(
@@ -1297,7 +1307,9 @@ def _run_git_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.git_command == "branch":
-        branch = git_ops_module.create_branch(args.id, args.base, target=target)
+        branch = git_ops_module.create_branch(
+            args.id, args.base, target=target, allow_dirty=args.allow_dirty
+        )
         print(f"Created branch {branch} for {args.id}")
         return 0
 

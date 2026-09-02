@@ -242,6 +242,37 @@ class RequirePlanHookTests(unittest.TestCase):
             "git command", payload["hookSpecificOutput"]["permissionDecisionReason"]
         )
 
+    def test_asks_on_codev_git_branch_without_spec(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "codev git branch --id item-1 --base main"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertEqual("ask", payload["hookSpecificOutput"]["permissionDecision"])
+
+    def test_ignores_codev_git_read_only_commands(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "some-feature"], cwd=self.repo, check=True
+        )
+        result = _run_hook_json(
+            self.repo,
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "codev git issue-view --number 7"},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
+
     def test_allows_destructive_bash_command_with_precise_task_plan(self) -> None:
         subprocess.run(
             ["git", "checkout", "-q", "-b", "codev/some-task-id"],

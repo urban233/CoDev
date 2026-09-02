@@ -260,6 +260,132 @@ class BranchAndCommitTests(unittest.TestCase):
             self.assertIn("product.py", git_ops.changed_files("item-1", target=target))
 
 
+class CreateBranchGuardTests(unittest.TestCase):
+    def test_dirty_worktree_is_refused_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            (target / "uncommitted.txt").write_text("wip\n", encoding="utf-8")
+            with self.assertRaises(git_ops.GitOpsError):
+                git_ops.create_branch("item-1", base, target=target)
+
+    def test_allow_dirty_permits_branching_with_uncommitted_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            (target / "uncommitted.txt").write_text("wip\n", encoding="utf-8")
+            branch = git_ops.create_branch(
+                "item-1", base, target=target, allow_dirty=True
+            )
+            self.assertEqual("codev/item-1", branch)
+            self.assertEqual("codev/item-1", git_ops.current_branch(target))
+
+    def test_refuses_to_branch_from_another_tasks_branch_with_unmerged_commits(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "one.txt").write_text("a\n", encoding="utf-8")
+            git_ops.commit("item-1", "item-1's own change", target=target)
+            with self.assertRaises(git_ops.GitOpsError) as caught:
+                git_ops.create_branch("item-2", base, target=target)
+            self.assertIn("item-1", str(caught.exception))
+
+    def test_allows_branching_from_another_tasks_branch_with_no_commits_yet(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            branch = git_ops.create_branch("item-2", base, target=target)
+            self.assertEqual("codev/item-2", branch)
+
+    def test_base_defaults_to_the_repository_default_branch(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            base = _init_repo(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "origin", "main"], cwd=target)
+            _run(["remote", "set-head", "origin", "-a"], cwd=target)
+
+            branch = git_ops.create_branch("item-1", target=target)
+            self.assertEqual("codev/item-1", branch)
+            state = json.loads(
+                (target / ".codev/task/item-1/git-state.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(base, state["base_snapshot"])
+
+    def test_base_defaults_to_configured_pr_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            _run(["checkout", "-q", "-b", "develop"], cwd=target)
+            (target / "develop-only.txt").write_text("d\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-q", "-m", "develop commit"], cwd=target)
+            develop_head = git_ops.current_head(target)
+            _run(["checkout", "-q", "main"], cwd=target)
+            config.set_value("git.pr_base", "develop", target=target)
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-q", "-m", "configure pr_base"], cwd=target)
+
+            git_ops.create_branch("item-1", target=target)
+            state = json.loads(
+                (target / ".codev/task/item-1/git-state.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(develop_head, state["base_snapshot"])
+            self.assertNotEqual(base, state["base_snapshot"])
+
+    def test_defaulted_base_is_pinned_to_a_commit_not_a_floating_branch_name(
+        self,
+    ) -> None:
+        with (
+            tempfile.TemporaryDirectory() as origin_dir,
+            tempfile.TemporaryDirectory() as work_dir,
+        ):
+            origin = Path(origin_dir)
+            target = Path(work_dir)
+            _run(["init", "--bare", "-b", "main"], cwd=origin)
+            base = _init_repo(target)
+            _run(["remote", "add", "origin", str(origin)], cwd=target)
+            _run(["push", "origin", "main"], cwd=target)
+            _run(["remote", "set-head", "origin", "-a"], cwd=target)
+
+            git_ops.create_branch("item-1", target=target)
+            _run(["checkout", "-q", "main"], cwd=target)
+            (target / "later.txt").write_text("later\n", encoding="utf-8")
+            # Scoped add, not -A: item-1's still-uncommitted git-state.json
+            # is also untracked right now, and -A would sweep it onto main
+            # too, which then vanishes on checkout back to codev/item-1.
+            _run(["add", "later.txt"], cwd=target)
+            _run(["commit", "-q", "-m", "a later main commit"], cwd=target)
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            # If base_snapshot had been left as the floating name "main"
+            # instead of pinned to a sha, this diff would now pick up
+            # later.txt even though item-1 never touched it.
+            self.assertNotIn(
+                "later.txt", git_ops.changed_files("item-1", target=target)
+            )
+            state = json.loads(
+                (target / ".codev/task/item-1/git-state.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(base, state["base_snapshot"])
+
+
 class ChangedFilesTests(unittest.TestCase):
     def test_returns_empty_list_when_no_branch_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
