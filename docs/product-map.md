@@ -71,6 +71,11 @@ at Specify (`specify-project`'s own scope explicitly includes it).
 
 ## Surface inventory
 
+Three tables follow: the CLI commands, the named skills, and the agents.
+Together they are the whole surface a developer touches once CoDev is
+installed, which is what makes them the place to check a proposed capability
+against -- including whether something already here covers it.
+
 ### CLI commands
 
 | Command | Phase | Purpose |
