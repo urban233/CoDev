@@ -488,6 +488,14 @@ def _parser() -> argparse.ArgumentParser:
         "not be the owner, and is resolved from CODEOWNERS when omitted",
     )
     t_start.add_argument(
+        "--pair-slice",
+        action="append",
+        default=None,
+        dest="pair_slices",
+        help="repeatable: build this slice in pair style (ADR-0038) -- the "
+        "loop works with the developer instead of dispatching builder",
+    )
+    t_start.add_argument(
         "--slice",
         action="append",
         default=None,
@@ -576,6 +584,36 @@ def _parser() -> argparse.ArgumentParser:
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
     t_waive.add_argument("--target", type=_target, default=Path.cwd())
+
+    t_style = task_commands.add_parser(
+        "style", help="read or change a slice's work style (ADR-0038)"
+    )
+    t_style.add_argument("--id", required=True)
+    t_style.add_argument("--slice", default=None, dest="slice_id")
+    t_style.add_argument(
+        "--set", default=None, dest="style", choices=("pair", "delegate")
+    )
+    t_style.add_argument("--json", action="store_true")
+    t_style.add_argument("--target", type=_target, default=Path.cwd())
+
+    t_pause = task_commands.add_parser(
+        "pause", help="record a human interruption of the current slice"
+    )
+    t_pause.add_argument("--id", required=True)
+    t_pause.add_argument("--head", required=True)
+    t_pause.add_argument("--reason", required=True)
+    t_pause.add_argument("--json", action="store_true")
+    t_pause.add_argument("--target", type=_target, default=Path.cwd())
+
+    t_resume = task_commands.add_parser(
+        "resume", help="re-enter a paused slice in pair style"
+    )
+    t_resume.add_argument("--id", required=True)
+    t_resume.add_argument("--head", required=True)
+    t_resume.add_argument("--reason", required=True)
+    t_resume.add_argument("--by", default=None)
+    t_resume.add_argument("--json", action="store_true")
+    t_resume.add_argument("--target", type=_target, default=Path.cwd())
 
     t_advance = task_commands.add_parser(
         "advance-slice",
@@ -1313,6 +1351,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             entry=args.entry,
             slices=args.slices,
             reviewer=args.reviewer,
+            pair_slices=args.pair_slices,
         )
         if args.json:
             return _emit_json(
@@ -1325,6 +1364,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
                     "link_ref": link_ref,
                     "summary": summary,
                     "owner": owner,
+                    "reviewer": args.reviewer,
                     "entry": args.entry,
                 }
             )
@@ -1451,6 +1491,57 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 }
             )
         print(f"Waived {args.dimension!r} for task {args.id} at {path}")
+        return 0
+
+    if args.task_command == "style":
+        if args.style is not None:
+            slice_id = task_module.set_work_style(
+                args.id, args.slice_id, args.style, target=target
+            )
+        else:
+            slice_id = args.slice_id or task_module.current_slice(
+                args.id, target=target
+            )
+        style = task_module.work_style(args.id, slice_id, target=target)
+        pair_paths = git_ops_module.matching_paths(
+            args.id, "review.pair_paths", target=target
+        )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "slice_id": slice_id,
+                    "style": style,
+                    "pair_paths_touched": pair_paths,
+                    "pair_required": bool(pair_paths),
+                }
+            )
+        print(f"{slice_id}: {style}")
+        if pair_paths:
+            print(
+                "note: this slice touches declared pair paths "
+                f"({', '.join(pair_paths[:5])}) -- build it with the developer"
+            )
+        return 0
+
+    if args.task_command == "pause":
+        task_module.pause(args.id, args.head, args.reason, target=target)
+        if args.json:
+            return _emit_json(
+                {"task_id": args.id, "paused_head": args.head, "reason": args.reason}
+            )
+        print(f"Paused {args.id} at {args.head}")
+        return 0
+
+    if args.task_command == "resume":
+        slice_id = task_module.resume(
+            args.id, args.head, args.reason, target=target, by=args.by
+        )
+        if args.json:
+            return _emit_json(
+                {"task_id": args.id, "slice_id": slice_id, "style": "pair"}
+            )
+        print(f"Resumed {args.id} on slice {slice_id} in pair style")
         return 0
 
     if args.task_command == "advance-slice":

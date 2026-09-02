@@ -52,6 +52,7 @@ from codev_workflow.task import (
     escalations_text,
     is_final_slice,
     log_text,
+    pause,
     pr_description,
     read_escalations,
     record_builder,
@@ -61,10 +62,13 @@ from codev_workflow.task import (
     record_triage,
     relink,
     reopen,
+    resume,
+    set_work_style,
     slice_ids,
     start,
     triage_note,
     waive,
+    work_style,
 )
 
 FULL_COVERAGE = {
@@ -108,6 +112,87 @@ def _blocking(location: str, category: str) -> dict[str, Any]:
         "rank": 1,
         "summary": "needs a fix",
     }
+
+
+class WorkStyleTests(unittest.TestCase):
+    """ADR-0038: work style is a recorded property of a slice, and pair work
+    stays inside the state machine."""
+
+    def test_slices_default_to_delegate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target, slices=["a", "b"])
+            self.assertEqual("delegate", work_style("item-1", "a", target=target))
+            self.assertEqual("delegate", work_style("item-1", "b", target=target))
+
+    def test_a_slice_can_be_declared_pair_at_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start(
+                "item-1",
+                "base",
+                target=target,
+                slices=["a", "b"],
+                pair_slices=["b"],
+            )
+            self.assertEqual("delegate", work_style("item-1", "a", target=target))
+            self.assertEqual("pair", work_style("item-1", "b", target=target))
+
+    def test_pair_marking_an_unknown_slice_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with self.assertRaises(TaskError):
+                start("item-1", "base", target=target, slices=["a"], pair_slices=["z"])
+
+    def test_style_is_changeable_while_the_slice_is_open(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            set_work_style("item-1", None, "pair", target=target)
+            self.assertEqual("pair", work_style("item-1", target=target))
+
+    def test_a_legacy_task_defaults_every_slice_to_delegate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            _rewrite_as_v3(target, "item-1")
+            self.assertEqual("delegate", work_style("item-1", target=target))
+
+
+class PauseResumeTests(unittest.TestCase):
+    """ADR-0038: interrupting used to leave the next check reporting
+    stop_drift -- a false report about what happened."""
+
+    def test_pausing_records_a_critical_interrupt_escalation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            pause("item-1", "partial-head", "taking this by hand", target=target)
+            records = read_escalations(target=target)
+        self.assertEqual(1, len(records))
+        self.assertEqual("critical_interrupt", records[0]["trigger"])
+
+    def test_resuming_reenters_in_pair_style_on_the_partial_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            record_reviewer(
+                "item-1", 1, "base", [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            pause("item-1", "partial-head", "taking this by hand", target=target)
+            resume("item-1", "partial-head", "continuing by hand", target=target)
+            document = _read_state(target, "item-1")
+            style = work_style("item-1", target=target)
+        self.assertEqual("pair", style)
+        self.assertEqual("partial-head", document["base_snapshot"])
+        self.assertNotIn("paused", document)
+
+    def test_resuming_a_task_that_was_never_paused_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base", target=target)
+            with self.assertRaises(TaskError):
+                resume("item-1", "head", "why", target=target)
 
 
 class IndependentReviewerTests(unittest.TestCase):
