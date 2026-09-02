@@ -360,16 +360,50 @@ def _closes_issue_number(link_ref: str | None, *, target: Path) -> int | None:
     return int(match["number"])
 
 
-def _with_closes_line(body: str, link_ref: str | None, *, target: Path) -> str:
-    """Append `Closes #N` when link_ref names this repo's own GitHub issue.
+def _has_recorded_child(task_id: str, *, target: Path) -> bool:
+    """True when another task's recorded git-state.json names this task as
+    its `parent_task` -- the "last slice in a stack" is the one with no
+    such child (ADR-0034). Best-effort: an unreadable or malformed sibling
+    state file is skipped rather than raised, since this backs PR-body
+    text, not a hard requirement."""
+    task_root = target / Path(task.TASK_DIR_RELATIVE.as_posix())
+    if not task_root.is_dir():
+        return False
+    for state_path in task_root.glob(f"*/{GIT_STATE_FILENAME}"):
+        if state_path.parent.name == task_id:
+            continue
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(state, dict) and state.get("parent_task") == task_id:
+            return True
+    return False
+
+
+def _closing_line(issue_number: int, *, task_id: str, target: Path) -> str:
+    """`Part of #N` when this task has a recorded child (a later slice in
+    its stack still needs to land), `Closes #N` otherwise (ADR-0034)."""
+    if _has_recorded_child(task_id, target=target):
+        return f"Part of #{issue_number}"
+    return f"Closes #{issue_number}"
+
+
+def _with_issue_link_line(
+    body: str, link_ref: str | None, *, task_id: str, target: Path
+) -> str:
+    """Append a `Closes #N`/`Part of #N` line when link_ref names this
+    repo's own GitHub issue.
 
     Shared by every code path that writes a pull request body -- open_pr's
-    initial body and mark_ready's regenerated one alike -- so the auto-close
-    link, once earned, cannot be silently dropped by whichever call happens
-    to run last.
+    initial body and mark_ready's regenerated one alike -- so the link,
+    once earned, cannot be silently dropped by whichever call happens to
+    run last.
     """
     issue_number = _closes_issue_number(link_ref, target=target)
-    return f"{body}\n\nCloses #{issue_number}" if issue_number else body
+    if not issue_number:
+        return body
+    return f"{body}\n\n{_closing_line(issue_number, task_id=task_id, target=target)}"
 
 
 def _render_pr_template(task_id: str, *, target: Path) -> str:
@@ -386,7 +420,9 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"{PR_TEMPLATE_PATH} is absent; using CoDev's generated PR body instead",
             stacklevel=2,
         )
-        return _with_closes_line(generated, description.get("link_ref"), target=target)
+        return _with_issue_link_line(
+            generated, description.get("link_ref"), task_id=task_id, target=target
+        )
 
     template = template_path.read_text(encoding="utf-8")
     markers = {marker: f"<!-- codev:{marker} -->" for marker in _PR_TEMPLATE_MARKERS}
@@ -397,7 +433,9 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"{', '.join(missing)}); using CoDev's generated PR body instead",
             stacklevel=2,
         )
-        return _with_closes_line(generated, description.get("link_ref"), target=target)
+        return _with_issue_link_line(
+            generated, description.get("link_ref"), task_id=task_id, target=target
+        )
 
     generated_without_trailing_newline = generated.rstrip()
     validation = generated_without_trailing_newline.split("\n\n## Validation\n", 1)[-1]
@@ -413,7 +451,11 @@ def _render_pr_template(task_id: str, *, target: Path) -> str:
             f"Latest task review: {description['latest_decision'] or 'in progress'}."
         ),
         "tracking": generated_without_trailing_newline.rsplit("\n\n", 1)[-1],
-        "closes": f"Closes #{issue_number}" if issue_number else "",
+        "closes": (
+            _closing_line(issue_number, task_id=task_id, target=target)
+            if issue_number
+            else ""
+        ),
     }
     for marker, token in markers.items():
         template = template.replace(token, values[marker])
@@ -725,6 +767,35 @@ def own_branch(task_id: str, *, target: Path) -> str:
     return cast(str, _load_git_state(task_id, target=target)["branch"])
 
 
+def parent_task_id(task_id: str, *, target: Path) -> str | None:
+    """The recorded parent task id, or None when the task has no branch
+    recorded yet or was not created with --stack-on."""
+    try:
+        state = _load_git_state(task_id, target=target)
+    except GitOpsError:
+        return None
+    parent = state.get("parent_task")
+    return cast(str, parent) if parent else None
+
+
+def stack_depth(task_id: str, *, target: Path) -> int:
+    """1 for a task with no recorded parent; 1 + the parent's own depth
+    otherwise. Never raises: an unresolvable link in the chain -- a
+    missing parent state file, or a cycle -- stops the walk and returns
+    the depth reached so far, since this backs status reporting, not a
+    hard requirement."""
+    depth = 1
+    seen = {task_id}
+    current = task_id
+    while True:
+        parent = parent_task_id(current, target=target)
+        if not parent or parent in seen:
+            return depth
+        seen.add(parent)
+        depth += 1
+        current = parent
+
+
 def _ensure_on_own_branch(task_id: str, *, target: Path) -> str:
     branch = own_branch(task_id, target=target)
     actual = current_branch(target)
@@ -923,7 +994,9 @@ def open_pr(
     final_body = (
         _render_pr_template(task_id, target=target)
         if use_template
-        else _with_closes_line(body, description.get("link_ref"), target=target)
+        else _with_issue_link_line(
+            body, description.get("link_ref"), task_id=task_id, target=target
+        )
     )
     return _run_gh(
         [

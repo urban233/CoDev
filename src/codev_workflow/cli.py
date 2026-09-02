@@ -819,6 +819,29 @@ def _task_sizes(
     return sizes
 
 
+_DEEP_STACK_THRESHOLD = 3
+
+
+def _task_stacks(
+    tasks: list[dict[str, Any]], *, target: Path
+) -> dict[str, dict[str, int | str | bool]]:
+    in_progress_ids = [
+        item["task_id"] for item in tasks if item["status"] == "in_progress"
+    ]
+    stacks: dict[str, dict[str, int | str | bool]] = {}
+    for task_id in in_progress_ids:
+        parent = git_ops_module.parent_task_id(task_id, target=target)
+        if parent is None:
+            continue
+        depth = git_ops_module.stack_depth(task_id, target=target)
+        stacks[task_id] = {
+            "parent_task": parent,
+            "depth": depth,
+            "deep": depth > _DEEP_STACK_THRESHOLD,
+        }
+    return stacks
+
+
 def _changed_file_overlaps(
     tasks: list[dict[str, Any]], *, target: Path
 ) -> list[dict[str, list[str]]]:
@@ -857,6 +880,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
     owner_counts: dict[str, int] = {}
     overlaps: list[dict[str, list[str]]] = []
     sizes: dict[str, dict[str, int | bool]] = {}
+    stacks: dict[str, dict[str, int | str | bool]] = {}
     gate_decisions: dict[str, dict[str, int]] = {}
     if args.verbose:
         payload["python_version"] = platform.python_version()
@@ -864,9 +888,11 @@ def _run_status_command(args: argparse.Namespace) -> int:
         owner_counts = _in_progress_owner_counts(tasks)
         overlaps = _changed_file_overlaps(tasks, target=target)
         sizes = _task_sizes(tasks, target=target)
+        stacks = _task_stacks(tasks, target=target)
         payload["tasks_in_progress_by_owner"] = owner_counts
         payload["changed_file_overlaps"] = overlaps
         payload["task_sizes"] = sizes
+        payload["task_stacks"] = stacks
         decisions = hook_log_module.read_decisions(target=target, since=args.since)
         gate_decisions = hook_log_module.summarize_decisions(decisions)
         payload["gate_decisions"] = gate_decisions
@@ -904,6 +930,15 @@ def _run_status_command(args: argparse.Namespace) -> int:
                     f"  {task_id}: {size['lines_changed']}/{size['max_lines']} "
                     f"lines, {size['files_changed']}/{size['max_files']} files"
                     f"{flag}"
+                )
+        if args.verbose and stacks:
+            print("Task stacks:")
+            for task_id in sorted(stacks):
+                stack = stacks[task_id]
+                flag = " (deep stack, consider landing sooner)" if stack["deep"] else ""
+                print(
+                    f"  {task_id} stacked on {stack['parent_task']} "
+                    f"(depth {stack['depth']}){flag}"
                 )
         if args.verbose:
             if gate_decisions:

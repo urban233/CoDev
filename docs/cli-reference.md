@@ -33,7 +33,7 @@ selected, recorded in `.codev/lock.json`.
 
 | Command | Purpose |
 |---|---|
-| `codev status [--verbose] [--json]` | Bundle health, installed adapters, open tasks, WIP-per-owner and changed-file overlap |
+| `codev status [--verbose] [--json] [--since <date>]` | Bundle health, installed adapters, open tasks, WIP-per-owner, changed-file overlap, per-task size vs. `review.max_lines`/`review.max_files`, stacked-task depth, and (`--verbose`/`--json`) a `gate_decisions` count of Claude Code guardrail-hook asks by hook and decision |
 | `codev adapter list` | Show which platform adapters are installed |
 | `codev adapter add <platform>` | Add one adapter to an existing installation |
 | `codev adapter remove <platform>` | Remove one adapter (still works for a platform an older CoDev version installed, even after the current version drops it — see ADR-0031's migration note) |

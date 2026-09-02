@@ -454,6 +454,62 @@ class StackOnTests(unittest.TestCase):
                 git_ops.create_branch("item-2", target=target, stack_on="item-1")
             self.assertIn("feature-branch", str(caught.exception))
 
+    def test_parent_task_id_is_none_for_a_standalone_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            self.assertIsNone(git_ops.parent_task_id("item-1", target=target))
+
+    def test_parent_task_id_is_none_for_an_unknown_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            self.assertIsNone(git_ops.parent_task_id("unknown", target=target))
+
+    def test_parent_task_id_reads_the_recorded_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertEqual("item-1", git_ops.parent_task_id("item-2", target=target))
+
+    def test_stack_depth_is_one_for_a_standalone_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            self.assertEqual(1, git_ops.stack_depth("item-1", target=target))
+
+    def test_stack_depth_counts_the_full_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            git_ops.create_branch("item-3", target=target, stack_on="item-2")
+            self.assertEqual(1, git_ops.stack_depth("item-1", target=target))
+            self.assertEqual(2, git_ops.stack_depth("item-2", target=target))
+            self.assertEqual(3, git_ops.stack_depth("item-3", target=target))
+
+    def test_has_recorded_child_false_for_a_standalone_task(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            self.assertFalse(git_ops._has_recorded_child("item-1", target=target))
+
+    def test_has_recorded_child_true_once_a_child_is_created(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            self.assertTrue(git_ops._has_recorded_child("item-1", target=target))
+            # item-2 itself has no child yet.
+            self.assertFalse(git_ops._has_recorded_child("item-2", target=target))
+
 
 class ChangedFilesTests(unittest.TestCase):
     def test_returns_empty_list_when_no_branch_recorded(self) -> None:
@@ -967,6 +1023,47 @@ class OpenPrTests(unittest.TestCase):
             )
             body_index = pr_create_call.args[0].index("--body") + 1
         self.assertIn("Closes #7", pr_create_call.args[0][body_index])
+
+    def test_writes_part_of_instead_of_closes_when_a_child_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start(
+                "item-1",
+                base,
+                target=target,
+                link_ref="https://github.com/o/r/issues/7",
+            )
+            git_ops.create_branch("item-1", base, target=target)
+            task.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            # item-2 stacks on item-1, recording item-1 as its parent --
+            # item-1 now has a child and should no longer close the issue.
+            git_ops.create_branch("item-2", target=target, stack_on="item-1")
+            _run(["checkout", "-q", "codev/item-1"], cwd=target)
+            _write_pr_template(target)
+
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr(repo_view="o/r")
+            ) as run_gh:
+                git_ops.open_pr(
+                    "item-1",
+                    "title",
+                    task.pr_description("item-1", target=target),
+                    target=target,
+                    base="main",
+                    use_template=True,
+                )
+            pr_create_call = next(
+                call
+                for call in run_gh.call_args_list
+                if call.args[0][:2] == ["pr", "create"]
+            )
+            body_index = pr_create_call.args[0].index("--body") + 1
+            body = pr_create_call.args[0][body_index]
+        self.assertIn("Part of #7", body)
+        self.assertNotIn("Closes #7", body)
 
     def test_does_not_append_closes_issue_for_a_different_repo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
