@@ -57,12 +57,20 @@ booth becomes a tripwire.
 
 ## Consequences
 
-- Two measurement holes had to be closed first. `codev task size` answers with
+- **Three** measurement holes had to be closed, the third found by this
+  pull request's own outer-loop review rather than by writing the tier. `codev task size` answers with
   zeros and `over_budget: false` for a task that does not exist, and for one
   whose state carries no base to diff against. A measurement of nothing is not
   a measurement of a small change; without the guard, any branch merely
   *named* `codev/...` would skip the gate. That `task size` reports a
   confident answer it cannot support remains a defect in its own right.
+  The third was `_measure` returning a size of zero when it cannot load
+  `git-state.json`: a branch merely *named* `codev/...`, given round state by
+  hand without `codev git branch` ever recording it, measured as zero and
+  skipped the gate however large it grew -- reproduced with a 500-line change
+  scoring `within-budget-small-change`. That three separate paths all report a
+  confident zero is the argument for fixing `_measure` at source, which this
+  decision deliberately does not do.
 - Size is measured in-process. Shelling out to `codev task size` dated from
   the hooks being standalone scripts; with the gates inside the package it
   made both depend on an executable being on PATH and being the same build --

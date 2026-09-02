@@ -1,0 +1,1314 @@
+[
+  {
+    "sha": "a0a243736847b4f13276ca5cf4e0493ae022d39c",
+    "node_id": "C_kwDOTrLMktoAKGEwYTI0MzczNjg0N2I0ZjEzMjc2Y2E1Y2Y0ZTA0OTNhZTAyMmQzOWM",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:07:14Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:07:14Z"
+      },
+      "message": "chore(task): close navigator-coverage now its pull request has landed\n\nThe lifecycle's own closing bookkeeping, left over because the frozen CLI had\nno codev next to surface it after #33 merged.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "5ca1027e9611a8139278f9d31aaa0b96c447ab63",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/5ca1027e9611a8139278f9d31aaa0b96c447ab63"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/a0a243736847b4f13276ca5cf4e0493ae022d39c",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/a0a243736847b4f13276ca5cf4e0493ae022d39c",
+    "html_url": "https://github.com/urban233/CoDev/commit/a0a243736847b4f13276ca5cf4e0493ae022d39c",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/a0a243736847b4f13276ca5cf4e0493ae022d39c/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "0c0dac53e3a505e9a1aff42efe29967aeec46bbe",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/0c0dac53e3a505e9a1aff42efe29967aeec46bbe",
+        "html_url": "https://github.com/urban233/CoDev/commit/0c0dac53e3a505e9a1aff42efe29967aeec46bbe"
+      }
+    ]
+  },
+  {
+    "sha": "d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+    "node_id": "C_kwDOTrLMktoAKGQxYWNjOWYzYjAxZWVlNzMwZjM2M2Y0MjQ5YmY0YjUwZTA3MjljMmQ",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:07:39Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:07:39Z"
+      },
+      "message": "docs(plans): fold three findings from building the measure into the DX plan\n\nAll three were surfaced by building and then using the navigator coverage\nmeasure, not by reading code, which is the first evidence it earns its place.\n\n_github_position is consulted only for ok_machine_review_complete, so every\nother reason skips GitHub and a merged slice is still told to open a pull\nrequest. Found on main, minutes after #33 merged, when codev next said exactly\nthat. Package 3.\n\ngate.py's _SPEC_GLOBS does not cover docs/plans/*.md, which is where this\nrepository keeps every accepted plan including the two authorizing this work.\nReproduced live: on a branch carrying a committed, accepted plan, the plan gate\nstill answered ask. Package 4, and it should land even if the risk-tiering half\nof that package is dropped, because it is not a risk-tiering change.\n\ncodev --version cannot distinguish a source snapshot from the tree it came\nfrom -- a 31 August snapshot, main three waves later, and PyPI's actual latest\nrelease all reported different-or-equal numbers with no way to tell. That is\nhow 496 gate calls failed open unnoticed after the hooks became shims in\n57bde9c. Package 6, with the 0.6.0 cut.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "9fffcc19a3b0c810fce9609cd935f8716bc70ba5",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/9fffcc19a3b0c810fce9609cd935f8716bc70ba5"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+    "html_url": "https://github.com/urban233/CoDev/commit/d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/d1acc9f3b01eee730f363f4249bf4b50e0729c2d/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "a0a243736847b4f13276ca5cf4e0493ae022d39c",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/a0a243736847b4f13276ca5cf4e0493ae022d39c",
+        "html_url": "https://github.com/urban233/CoDev/commit/a0a243736847b4f13276ca5cf4e0493ae022d39c"
+      }
+    ]
+  },
+  {
+    "sha": "9aab14545eaacbeee689ba62eef315524080a2f7",
+    "node_id": "C_kwDOTrLMktoAKDlhYWIxNDU0NWVhYWNiZWVlNjg5YmE2MmVlZjMxNTUyNDA4MGEyZjc",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:08:01Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:08:01Z"
+      },
+      "message": "chore(bundle): update this repository's installed guidelines for the rename\n\nThe installed copy of a CoDev-managed file, kept in step with its source in\nsrc/codev_workflow/bundle/. Separate commit because codev git commit refuses\nto mix managed and product paths in one.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "edde69de2b0ae36beece01d5722b9fadca9e81a5",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/edde69de2b0ae36beece01d5722b9fadca9e81a5"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/9aab14545eaacbeee689ba62eef315524080a2f7",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/9aab14545eaacbeee689ba62eef315524080a2f7",
+    "html_url": "https://github.com/urban233/CoDev/commit/9aab14545eaacbeee689ba62eef315524080a2f7",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/9aab14545eaacbeee689ba62eef315524080a2f7/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/d1acc9f3b01eee730f363f4249bf4b50e0729c2d",
+        "html_url": "https://github.com/urban233/CoDev/commit/d1acc9f3b01eee730f363f4249bf4b50e0729c2d"
+      }
+    ]
+  },
+  {
+    "sha": "6a766298b6a11e05a4e82d91895ad4d11a647600",
+    "node_id": "C_kwDOTrLMktoAKDZhNzY2Mjk4YjZhMTFlMDVhNGU4MmQ5MTg5NWFkNGQxMWE2NDc2MDA",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:08:12Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:08:12Z"
+      },
+      "message": "refactor(navigator)!: rename the oracle to the navigator\n\nPackage 1 of the developer-experience plan, and deliberately a rename and\nnothing else so the packages after it read as behavior diffs.\n\nThe name comes from the half of a driver/navigator pair that does not have\nhands on the keyboard, which is exactly this module's job: it says where the\nwork stands and what comes next, and never acts. In a pair slice (ADR-0038)\nthe metaphor stops being decorative -- the developer drives and this navigates.\n'Consult the oracle' also invited the reading that the answer is unexplained,\nwhich is the opposite of what a module returning a reason with every answer is\nfor.\n\nguidance and workflow were considered and rejected: an agent consults a\nnavigator but merely reads guidance, and workflow collides with the package\nname codev_workflow.\n\nPublic behavior is unchanged. codev next keeps its spelling, every NextAction\nfield keeps its name, and the thirteen-outcome table is untouched -- the whole\nsuite passes without a single test assertion changing.\n\nNot renamed: ADR-0036 and ADR-0037, which are append-only; the unified-workflow\nbrief and implementation plan, which are historical records of what was decided\nat the time; and audit-google-python-style's 'verifier or oracle script', which\nis the unrelated test-oracle sense of the word.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "020326378431605a0066733ceecc7db74abab425",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/020326378431605a0066733ceecc7db74abab425"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/6a766298b6a11e05a4e82d91895ad4d11a647600",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/6a766298b6a11e05a4e82d91895ad4d11a647600",
+    "html_url": "https://github.com/urban233/CoDev/commit/6a766298b6a11e05a4e82d91895ad4d11a647600",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/6a766298b6a11e05a4e82d91895ad4d11a647600/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "9aab14545eaacbeee689ba62eef315524080a2f7",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/9aab14545eaacbeee689ba62eef315524080a2f7",
+        "html_url": "https://github.com/urban233/CoDev/commit/9aab14545eaacbeee689ba62eef315524080a2f7"
+      }
+    ]
+  },
+  {
+    "sha": "38c9ecec94374738a0d405f0b252f9b036bb055a",
+    "node_id": "C_kwDOTrLMktoAKDM4YzllY2VjOTQzNzQ3MzhhMGQ0MDVmMGIyNTJmOWIwMzZiYjA1NWE",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:16:28Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:16:28Z"
+      },
+      "message": "feat(cli): add the composite slice and round verbs\n\nPackage 2 of the developer-experience plan. ADR-0036 established that the CLI\nis an agent interface; this finishes the thought, because an interface whose\ncorrect use needs a twenty-five-line protocol is a procedure, not an interface.\n\nFour verbs, each replacing one numbered step in a role file that issued\nseveral commands with conditional flags between them:\n\ncodev slice begin -- branch, GitHub issue, and round state in one call. It\nreplaces codev git branch, an issue-existence check, codev git issue-create,\ncodev task start with three mutually exclusive linkage flags, and the codev\ntask relink recovery path for an issue that arrived late. Branch first and\nissue second, deliberately: both orders can fail partway, and this one leaves\na local branch with no round state, which codev next reports and a developer\ncan delete, rather than an issue on GitHub that nothing points at.\n\ncodev round close -- commit and record the round against the exact resulting\nhead. Named for its caller, not its subject: only whoever holds commit\npermission can know that head, which is precisely why a builder never records\nits own round, and a verb spelled 'record --role builder' invites the call the\ndesign forbids. The round number is derived from state rather than passed,\nbecause a caller that guesses it wrong silently writes into the wrong slot.\n\ncodev slice publish -- push and open the draft pull request. The body is\nalways the task's rendered evidence, so the old 'never pass --body' caveat\nnow has no way to be violated rather than being documented more loudly.\n\ncodev slice land -- advance to the next slice, or close the task when this was\nthe last. Which one applies is a fact about the slice list, not a decision the\ncaller should be making.\n\nNothing is removed. The granular git and task verbs these compose are still\nthere for recovery paths and for a mid-session agent that needs one step\nalone, and the composites call the same git_ops and task functions rather than\nreimplementing them -- the plan's stop condition was that a composite needing\nlogic which does not already exist is a new capability in disguise.\n\nThe issue-linkage rule is extracted to _resolve_linkage and now has one\nimplementation that both task start and slice begin call, rather than two\ncopies free to drift about when a task may exist without an issue.\n\ncodev issue draft, the fifth verb the plan listed, is deliberately not added.\nIts only remaining caller after slice begin exists is the planner's issue-only\nshort circuit, and codev git issue-create --body-file already does exactly\nthat job. The caveat it was meant to remove is removed by deleting prose in\npackage 5, not by adding a synonym.\n\nThe gh stub grows issue create, and issue view now answers for issues the stub\nwas actually told about instead of a fixed placeholder.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "5bc73ad7a3d8ff16e26d41a0df4d6aece1fb1321",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/5bc73ad7a3d8ff16e26d41a0df4d6aece1fb1321"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/38c9ecec94374738a0d405f0b252f9b036bb055a",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/38c9ecec94374738a0d405f0b252f9b036bb055a",
+    "html_url": "https://github.com/urban233/CoDev/commit/38c9ecec94374738a0d405f0b252f9b036bb055a",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/38c9ecec94374738a0d405f0b252f9b036bb055a/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "6a766298b6a11e05a4e82d91895ad4d11a647600",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/6a766298b6a11e05a4e82d91895ad4d11a647600",
+        "html_url": "https://github.com/urban233/CoDev/commit/6a766298b6a11e05a4e82d91895ad4d11a647600"
+      }
+    ]
+  },
+  {
+    "sha": "c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+    "node_id": "C_kwDOTrLMktoAKGM1NjFmZTk4NDI0ZmM2Yjk2NWIzNDlkYWYwYTI3YjJlM2U1YmM5MmU",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:25:20Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:25:20Z"
+      },
+      "message": "feat(navigator): answer for the whole lifecycle, and stop dead-ending\n\nPackage 3 of the developer-experience plan. Navigator coverage goes from six\nuncovered steps of nine to zero of eight, measured by the walk landed in #33.\n\nThe planning phases get positions. Every state before a task existed collapsed\ninto one sentence -- 'pick up an issue and start a task' -- which left the\nwhole Understand, Design and Plan half unguided, and that is the half where a\ndeveloper has the least context and the most to decide. The navigator now\nresolves brief, design, wave plan, and plan from the artifacts a repository\nactually holds, reading the Status: line those artifacts already carry rather\nthan introducing a metadata format for anyone to keep in step. A drafted plan\nis reported as blocking its own downstream work, because recommending work\nthat nothing authorizes is worse than saying what is missing.\n\nBlocked positions carry options. Each is a label, a command, and what choosing\nit means. No authority moves -- choosing is still a human's job -- but a stop\nthat offers 'absorb the change as pair work' alongside 'escalate' reads as a\ndecision rather than a wall, and every one of those escapes already existed.\n\nGitHub is consulted for any position where a pull request could exist, not\nonly the two reasons that imply human review. That restriction is why a\nmerged slice sitting at ok_ready_for_pr was told to open a pull request it had\nalready merged.\n\nok_waiting_on_reviewer is split into the three states it conflated. task.check\ncannot tell a freshly opened round from one whose builder has reported --\nneither has a reviewer verdict -- so the single entry recommended the reviewer\nin every case, including before any work existed. An agent that follows that\nreviews an empty diff. The two facts that separate them are local and cheap: a\nbuilder receipt on the current round, and whether the worktree holds\nuncommitted work. It counts product paths only, or opening round state would\nmake every fresh slice look like it already had work waiting.\n\nA draft pull request is no longer reported as awaiting human review. Nobody\ncan review a draft; mark-ready is what requests it, and nothing the navigator\nsaid ever named that step.\n\nRecommendations now name the composite verbs from package 2, which is what\nactually moves the measure -- package 2 built them and this points at them, so\nneither package moves the number alone.\n\nNot renamed to a composite: 'branch exists, no round state' still recommends\ncodev task start, because slice begin creates the branch and the branch is\nwhat already exists. That position is the recovery path, and recovery needs\nthe granular verb.\n\nThe baseline records why nine steps became eight: slice begin collapsed two\ntransitions into one. That is the lifecycle getting shorter, not the walk\nskipping a step.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "f0ab5ad9feca52cb87cc720d63ade7a93da3ad77",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/f0ab5ad9feca52cb87cc720d63ade7a93da3ad77"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+    "html_url": "https://github.com/urban233/CoDev/commit/c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/c561fe98424fc6b965b349daf0a27b2e3e5bc92e/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "38c9ecec94374738a0d405f0b252f9b036bb055a",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/38c9ecec94374738a0d405f0b252f9b036bb055a",
+        "html_url": "https://github.com/urban233/CoDev/commit/38c9ecec94374738a0d405f0b252f9b036bb055a"
+      }
+    ]
+  },
+  {
+    "sha": "b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+    "node_id": "C_kwDOTrLMktoAKGI5MTYzZmY5ZDUzMThhMmViM2Q5MDdkZmI0Nzc4NjEyNWNkMWVkMzY",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:33:02Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:33:02Z"
+      },
+      "message": "feat(gate)!: risk-tier the plan gate, and let it see this repo's plans\n\nPackage 4 of the developer-experience plan, and the one that trades ceremony\nfor ergonomics deliberately.\n\nThe plan gate keyed purely on a file existing, so it asked the same question\nof a one-file bug fix and a subsystem rewrite. Ceremony that cannot tell those\napart does not produce plans; it teaches agents to route around the gate.\n\nIt now tiers, as a changed default rather than a configuration key. Within the\nslice's size budget on a task branch, the focus card in the conversation\nsatisfies it. Past the budget it asks again. Dependency and environment\nmanifests, CI workflow definitions, and migrations ask regardless of size --\na one-line version bump changes what the code computes, which for research\nsoftware surfaces as an unreproducible result rather than an outage; a\nworkflow file decides whether anything is checked at all; a migration is\nirreversible against real data. A repository-mutating git command is never\ntiered: a push is not made safe by the change being small.\n\nThis reads as a weakening and is not, because of when the gate fires. It runs\nbefore an edit, so the only diff it can see is the one already on the branch.\nThe old gate interrupted before the work started, when a developer knows least\nabout what the change will need. This one interrupts when the change outgrows\nwhat a focus card can carry. Toll booth to tripwire.\n\nTwo holes found while building it, both closed. codev task size answers with\nzeros and over_budget=false for a task that does not exist, and for one whose\nstate carries no base to diff against; either would have let any branch merely\nnamed codev/... skip the gate entirely. A measurement of nothing is not a\nmeasurement of a small change, so the tier requires real round state with a\nreal base before believing the number.\n\nSize is now measured in-process. Shelling out to codev task size dated from\nthe hooks being standalone scripts outside the package; with the gates living\nin codev_workflow it made both of them depend on a codev being on PATH and\nbeing the same build -- the same class of silent failure that let 496 gate\ncalls pass unchecked.\n\n_SPEC_GLOBS finally covers docs/plans/*.md, where this repository keeps every\naccepted plan including the ones authorizing this work. A guardrail that\ncannot see the artifact it asks for teaches agents the artifact is pointless.\nThis half is not a risk-tiering change and stands on its own.\n\nNo existing gate test had to be converted from ask to allow. The plan required\neach to be re-examined individually rather than in bulk; every one still\nasserts what it always did, which is the strongest evidence the tier is\nadditive rather than a blanket relaxation.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "dfd0b5f8c2d03ee7a6ccac4723ad5311fefe8027",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/dfd0b5f8c2d03ee7a6ccac4723ad5311fefe8027"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+    "html_url": "https://github.com/urban233/CoDev/commit/b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/b9163ff9d5318a2eb3d907dfb47786125cd1ed36/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/c561fe98424fc6b965b349daf0a27b2e3e5bc92e",
+        "html_url": "https://github.com/urban233/CoDev/commit/c561fe98424fc6b965b349daf0a27b2e3e5bc92e"
+      }
+    ]
+  },
+  {
+    "sha": "45c6866817918a59a0dd942b47d574da6d813bbb",
+    "node_id": "C_kwDOTrLMktoAKDQ1YzY4NjY4MTc5MThhNTlhMGRkOTQyYjQ3ZDU3NGRhNmQ4MTNiYmI",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:51:09Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:51:09Z"
+      },
+      "message": "refactor(agents)!: lead replaces orchestrator and planner\n\nThe installed copies of the role, guideline, and integration files, updated for\nADR-0040 alongside their bundle sources. Separate commit because codev git\ncommit refuses to mix CoDev-managed paths with product changes in one.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "edfb02afea1a4b545125914c1399be7f08286205",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/edfb02afea1a4b545125914c1399be7f08286205"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/45c6866817918a59a0dd942b47d574da6d813bbb",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/45c6866817918a59a0dd942b47d574da6d813bbb",
+    "html_url": "https://github.com/urban233/CoDev/commit/45c6866817918a59a0dd942b47d574da6d813bbb",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/45c6866817918a59a0dd942b47d574da6d813bbb/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/b9163ff9d5318a2eb3d907dfb47786125cd1ed36",
+        "html_url": "https://github.com/urban233/CoDev/commit/b9163ff9d5318a2eb3d907dfb47786125cd1ed36"
+      }
+    ]
+  },
+  {
+    "sha": "8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+    "node_id": "C_kwDOTrLMktoAKDhjMzYzNDlmZTZiMGYzODZkYmY5YTNlZTAyYjU2ZTZlNzE2NDg2OWM",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:51:28Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T22:51:28Z"
+      },
+      "message": "feat(agents)!: collapse three human-facing agents into lead\n\nPackage 5 of the developer-experience plan, and the clause of the\nunified-workflow brief's item 8 that never shipped: 'the three sessions\ncollapse into one run ... because a session boundary the developer has to\nnotice is a command by another name'.\n\norchestrator becomes lead, the only agent a developer talks to. planner is\nremoved: roughly forty of its fifty-six lines routed to skills lead now\ninvokes directly, codev next computes the routing its Scope section described\nin prose, and its one unique behavior -- the issue-only short circuit -- is\ncodev git issue-create --body-file. outer-loop-runner keeps its file and loses\nits trigger; it holds irreducible protocol that folding into lead would\nreproduce as the long role file this package exists to remove, so lead\ndispatches it, permission-gated like the specialists (ADR-0021).\n\nThirteen roles become eleven. Three human-facing roles become one, which is\nthe number that matters.\n\nlead.md's body is 69 lines against orchestrator.md's 167, inside the 80-line\nbudget without needing the lead-protocol skill the plan held in reserve. That\nbudget was the test of whether packages 2 and 3 went far enough, and they did:\nthe ten-step build protocol is four composite verbs, and the routing prose is\na codev next call.\n\nTwo migration defects found by dogfooding the update on this repository, both\nfixed rather than documented.\n\nA retired role file was retained, not deleted -- 'upstream removed; retained\nlocally'. That is right for a doc and wrong for a role: every adapter treats a\nfile in its agents directory as an invocable agent, so an existing\ninstallation would have ended up with orchestrator.md beside lead.md, which is\nexactly the confusion this consolidation removes. An untouched retired role is\nnow deleted; a locally edited one stays a conflict the developer resolves.\n\nA retired OpenCode agent left its hash in the lock forever, because the\nreconciliation loop only iterated the agents that still ship. codev status\nreported drift that no update could resolve. Retired agents now leave both the\nconfig and the lock, with the same edited-means-conflict policy.\n\nOpenCode's default_agent migrates from orchestrator to lead rather than being\npreserved as a local change, because the old value names an agent that no\nlonger ships.\n\nFour ADRs record the decisions of packages 1 through 4 -- 0040 the lead agent,\n0041 composite verbs, 0042 the navigator, 0043 the risk-tiered gate. ADR-0030\nand ADR-0031 are resolved from Proposed to Accepted rather than left\nindefinite while later ADRs build on them.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "0907bed69949782a427d7fb21ad486499b543506",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/0907bed69949782a427d7fb21ad486499b543506"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+    "html_url": "https://github.com/urban233/CoDev/commit/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "45c6866817918a59a0dd942b47d574da6d813bbb",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/45c6866817918a59a0dd942b47d574da6d813bbb",
+        "html_url": "https://github.com/urban233/CoDev/commit/45c6866817918a59a0dd942b47d574da6d813bbb"
+      }
+    ]
+  },
+  {
+    "sha": "986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+    "node_id": "C_kwDOTrLMktoAKDk4NmVhM2JhZDQzNTdkZWRmOWY3NDU3YTQwYmZlNGU0MjAxODIzYTI",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:01:20Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:01:20Z"
+      },
+      "message": "docs: describe the tool that now exists, and cut 0.6.0\n\nPackage 6, the last of the developer-experience plan.\n\nThe documentation site, product map, and CLI reference described three\nhuman-facing agents and a developer who chose between them. They describe one\nagent now. The roles page leads with lead and says plainly what changed and\nwhy; the tutorials and starting prompts stop telling anyone to switch sessions.\nTwo passages needed rewriting rather than renaming -- a blind substitution had\nproduced 'lead for build work, lead for anything upstream' and 'lead never\ninvokes lead', which is what happens when a rename touches prose that was\nabout the distinction being removed.\n\ncodev --version reports the commit for a source install: 0.6.0+source.abc1234.\nTwo trees reporting the same version is how a build installed from source in\nAugust kept claiming 0.5.0 while main moved three waves ahead of it, and why\n496 gate calls failed open against a codev gate subcommand it did not have.\n\ncodev self update no longer tells a source install to fetch a release. uv tool\nupgrade resolves against the index, whose latest release was 0.4.0 the whole\ntime -- advice that silently downgrades the tool it is meant to update. It now\ndetects a source checkout and says how to update that instead.\n\n0.5.0 becomes 0.6.0. This is breaking: role files are renamed and removed, and\nplanner disappears as an invocable agent. CoDev is pre-1.0, and phase-6's\nreading stands -- in the 0.x line the minor version is the breaking-change\nboundary. The changelog's Upgrading section says what codev update does to an\nexisting installation, including that it stops and asks rather than discarding\na retired role you edited.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "c2de815b45eab77ba82c110e211372797d9d1646",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/c2de815b45eab77ba82c110e211372797d9d1646"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+    "html_url": "https://github.com/urban233/CoDev/commit/986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/986ea3bad4357dedf9f7457a40bfe4e4201823a2/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c",
+        "html_url": "https://github.com/urban233/CoDev/commit/8c36349fe6b0f386dbf9a3ee02b56e6e7164869c"
+      }
+    ]
+  },
+  {
+    "sha": "cc9e2ae0326524f9cb933c28480a7141bd95381b",
+    "node_id": "C_kwDOTrLMktoAKGNjOWUyYWUwMzI2NTI0ZjljYjkzM2MyODQ4MGE3MTQxYmQ5NTM4MWI",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:03:23Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:03:23Z"
+      },
+      "message": "chore(task): open direct-review round state for the DX work\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "a29ebb0c65a4910852178970961430f1b768c991",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/a29ebb0c65a4910852178970961430f1b768c991"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/cc9e2ae0326524f9cb933c28480a7141bd95381b",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/cc9e2ae0326524f9cb933c28480a7141bd95381b",
+    "html_url": "https://github.com/urban233/CoDev/commit/cc9e2ae0326524f9cb933c28480a7141bd95381b",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/cc9e2ae0326524f9cb933c28480a7141bd95381b/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/986ea3bad4357dedf9f7457a40bfe4e4201823a2",
+        "html_url": "https://github.com/urban233/CoDev/commit/986ea3bad4357dedf9f7457a40bfe4e4201823a2"
+      }
+    ]
+  },
+  {
+    "sha": "d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+    "node_id": "C_kwDOTrLMktoAKGQwYTAxODdkZWU0ZmQyZTkwN2FmZTM5ODUzYjZlZGM3ODU4MWI4ZjY",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:12:02Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:12:02Z"
+      },
+      "message": "chore(bundle): record the 0.6.0 bundle version in the lock\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "fbeedb18a196dda230345ab4111c689cc3eb38e4",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/fbeedb18a196dda230345ab4111c689cc3eb38e4"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+    "html_url": "https://github.com/urban233/CoDev/commit/d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/d0a0187dee4fd2e907afe39853b6edc78581b8f6/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "cc9e2ae0326524f9cb933c28480a7141bd95381b",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/cc9e2ae0326524f9cb933c28480a7141bd95381b",
+        "html_url": "https://github.com/urban233/CoDev/commit/cc9e2ae0326524f9cb933c28480a7141bd95381b"
+      }
+    ]
+  },
+  {
+    "sha": "12d997df243c440b16923d715c44d40c19fd1f99",
+    "node_id": "C_kwDOTrLMktoAKDEyZDk5N2RmMjQzYzQ0MGIxNjkyM2Q3MTVjNDRkNDBjMTlmZDFmOTk",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:12:02Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:12:02Z"
+      },
+      "message": "fix(ci): three failures the local suite could not see\n\npackaging/BUILD.bazel carries a third copy of the version, beside\npyproject.toml and __init__.py, and release-integrity compares all three. The\n0.6.0 bump missed it.\n\ntests/test_adapter.py was edited by script and never reformatted, which\nfmt-check caught and my ruff run did not, because I formatted the files I\nwrote rather than the ones I touched.\n\nRiskTieredPlanGateTests built a repository and committed into it without\nconfiguring an identity, so every test in the class errored in setUp with git\nexit 128. This passed locally only because a developer machine has a global\ngit identity and a CI runner has none -- the existing integration Sandbox\nalready sets one, and the new helper did not follow it. Verified by running\nthe whole suite with GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM pointed at\n/dev/null, which reproduces the runner and now passes.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "6c540a73d1a229a1f9dd2f3640cdfefb67252274",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/6c540a73d1a229a1f9dd2f3640cdfefb67252274"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/12d997df243c440b16923d715c44d40c19fd1f99",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/12d997df243c440b16923d715c44d40c19fd1f99",
+    "html_url": "https://github.com/urban233/CoDev/commit/12d997df243c440b16923d715c44d40c19fd1f99",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/12d997df243c440b16923d715c44d40c19fd1f99/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/d0a0187dee4fd2e907afe39853b6edc78581b8f6",
+        "html_url": "https://github.com/urban233/CoDev/commit/d0a0187dee4fd2e907afe39853b6edc78581b8f6"
+      }
+    ]
+  },
+  {
+    "sha": "e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+    "node_id": "C_kwDOTrLMktoAKGU3ZTgyNGE3NjZiMDA4NTBlOGU1NzFhYjBiYmNmODljMDdhOGUyOWI",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:22:17Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:22:17Z"
+      },
+      "message": "fix(test): annotate the composite-verb helper's return type\n\ntests/test_composite_verbs.py's run() returned a bare dict, which mypy rejects\nunder this project's settings. Both quality and release-integrity run the type\ncheck, so one missing annotation failed two jobs.\n\nFound by CI rather than locally because I ran mypy on the files I had just\nedited instead of the check the repository actually defines. Verified this time\nwith mypy over src and tests together, which is what CI runs.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "a259137eebb34bbd4eff896c3ff969dc5aaf64e1",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/a259137eebb34bbd4eff896c3ff969dc5aaf64e1"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+    "html_url": "https://github.com/urban233/CoDev/commit/e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/e7e824a766b00850e8e571ab0bbcf89c07a8e29b/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "12d997df243c440b16923d715c44d40c19fd1f99",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/12d997df243c440b16923d715c44d40c19fd1f99",
+        "html_url": "https://github.com/urban233/CoDev/commit/12d997df243c440b16923d715c44d40c19fd1f99"
+      }
+    ]
+  },
+  {
+    "sha": "bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+    "node_id": "C_kwDOTrLMktoAKGJiOTRlYTE0YTNiMjYzYTZmYTkwYzBkNTg1ZjA0Y2NmZjE2NDY1Mzc",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:29:14Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:29:14Z"
+      },
+      "message": "fix(ci): update verify-dist's hardcoded bundled-agent list\n\nA fourth place the role set is written down, after ADAPTER_ROLE_PATHS,\nOPENCODE_AGENT_CONFIGS, and the installer tests: verify-dist asserts the exact\nfilenames shipped inside the wheel, and still expected orchestrator.md and\nplanner.md.\n\nThe assertion is worth keeping -- it catches a role that silently fails to be\npackaged, which no unit test would see because they all read the source tree\nrather than the built wheel. Checked against the bundle directory rather than\nretyped.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "1c36c4e002491da18c45ee4dd00c5f44dc8f1f28",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/1c36c4e002491da18c45ee4dd00c5f44dc8f1f28"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+    "html_url": "https://github.com/urban233/CoDev/commit/bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/bb94ea14a3b263a6fa90c0d585f04ccff1646537/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/e7e824a766b00850e8e571ab0bbcf89c07a8e29b",
+        "html_url": "https://github.com/urban233/CoDev/commit/e7e824a766b00850e8e571ab0bbcf89c07a8e29b"
+      }
+    ]
+  },
+  {
+    "sha": "085a1e34763fba7d995e57473f4df256ed2fc114",
+    "node_id": "C_kwDOTrLMktoAKDA4NWExZTM0NzYzZmJhN2Q5OTVlNTc0NzNmNGRmMjU2ZWQyZmMxMTQ",
+    "commit": {
+      "author": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:35:37Z"
+      },
+      "committer": {
+        "name": "Martin Urban",
+        "email": "martin.urban@studmail.w-hs.de",
+        "date": "2026-09-02T23:35:37Z"
+      },
+      "message": "fix(test): stop test_git_ops racing its own teardown\n\nThe same teardown race fixed for the integration Sandbox, in the file that\nmakes its own temporary directories rather than using it: TemporaryDirectory\ncleanup removing a tree git was still writing into, raising 'Directory not\nempty' on ubuntu/3.11 after every assertion in the test had passed.\n\nFixed at the cause rather than the symptom, and in one place rather than\nninety-four: gc.auto=0 in _init_repo, which every repository in the file goes\nthrough, and on the four bare origins, which are pushed into and so are where a\nbackground repack is most likely.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>",
+      "tree": {
+        "sha": "a7c050fc81c86e40b2023b71e296558b2cde7996",
+        "url": "https://api.github.com/repos/urban233/CoDev/git/trees/a7c050fc81c86e40b2023b71e296558b2cde7996"
+      },
+      "url": "https://api.github.com/repos/urban233/CoDev/git/commits/085a1e34763fba7d995e57473f4df256ed2fc114",
+      "comment_count": 0,
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    },
+    "url": "https://api.github.com/repos/urban233/CoDev/commits/085a1e34763fba7d995e57473f4df256ed2fc114",
+    "html_url": "https://github.com/urban233/CoDev/commit/085a1e34763fba7d995e57473f4df256ed2fc114",
+    "comments_url": "https://api.github.com/repos/urban233/CoDev/commits/085a1e34763fba7d995e57473f4df256ed2fc114/comments",
+    "author": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "committer": {
+      "login": "urban233",
+      "id": 81388165,
+      "node_id": "MDQ6VXNlcjgxMzg4MTY1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/81388165?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/urban233",
+      "html_url": "https://github.com/urban233",
+      "followers_url": "https://api.github.com/users/urban233/followers",
+      "following_url": "https://api.github.com/users/urban233/following{/other_user}",
+      "gists_url": "https://api.github.com/users/urban233/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/urban233/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/urban233/subscriptions",
+      "organizations_url": "https://api.github.com/users/urban233/orgs",
+      "repos_url": "https://api.github.com/users/urban233/repos",
+      "events_url": "https://api.github.com/users/urban233/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/urban233/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "parents": [
+      {
+        "sha": "bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+        "url": "https://api.github.com/repos/urban233/CoDev/commits/bb94ea14a3b263a6fa90c0d585f04ccff1646537",
+        "html_url": "https://github.com/urban233/CoDev/commit/bb94ea14a3b263a6fa90c0d585f04ccff1646537"
+      }
+    ]
+  }
+]

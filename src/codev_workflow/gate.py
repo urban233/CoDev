@@ -414,12 +414,22 @@ def _within_size_budget(repo_root: Path, branch: str) -> bool | None:
     # measurement of a small change, and trusting it would let any branch
     # merely *named* `codev/...` skip the gate entirely. Require a base
     # snapshot before believing the number.
-    state_path = repo_root / ".codev" / "task" / task_id / "round-state.json"
+    task_dir = repo_root / ".codev" / "task" / task_id
     try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = json.loads((task_dir / "round-state.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(state, dict) or not state.get("base_snapshot"):
+        return None
+    # And the branch must be one CoDev recorded. `_measure` returns
+    # TaskSize(0, 0, ...) when it cannot load `git-state.json`, which is
+    # indistinguishable from a genuinely small change -- so a branch merely
+    # *named* `codev/...` and given round state by hand, without
+    # `codev git branch` ever recording it, would measure as zero and skip
+    # the gate however large it grew. Found by the outer-loop review of the
+    # pull request that introduced this tier, and reproduced with a 500-line
+    # change scoring `within-budget-small-change`.
+    if not (task_dir / "git-state.json").is_file():
         return None
     size = _slice_size(task_id, repo_root=repo_root)
     if size is None or "over_budget" not in size:

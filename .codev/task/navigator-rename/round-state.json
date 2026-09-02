@@ -1,5 +1,21 @@
 {
   "base_snapshot": "0c0dac5",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrency surface in this change (rename, composite CLI verbs, navigator answers, gate risk-tiering, agent-role consolidation, docs) -- concurrency-specialist not dispatched per task instructions.",
+      "round": 1,
+      "timestamp": "2026-09-02T23:46:16Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No deployment, migration, or runtime rollout surface in this change -- rollout-specialist not dispatched per task instructions.",
+      "round": 1,
+      "timestamp": "2026-09-02T23:46:16Z"
+    }
+  ],
   "current_round": 1,
   "current_slice": "navigator-rename",
   "description": null,
@@ -16,9 +32,65 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "The four composite CLI verbs (slice begin/publish/land, round close) were read in cli.py's _run_slice_command/_run_round_command: each is a thin sequencing wrapper over existing git_ops/task functions (create_branch, task.start, git_ops.push, git_ops.open_pr, task.pr_description, task.close, task.advance_slice, git_ops.commit) with no reimplemented logic, satisfying the plan's stated stop condition. The oracle.py -> navigator.py rename (git show 6a76629) is a clean git-detected rename with no behavior diff, consistent with its own commit message.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "PR35-GATE-ZERO-MEASURE-MISSING-GIT-STATE: gate.py's _within_size_budget allows an over-budget change through the risk-tiered plan gate when round-state.json exists (with a valid base_snapshot and schema version) but git-state.json is absent -- a real, documented recovery state (branch exists, codev task start run without create_branch). Empirically reproduced: a 500-line commit on such a branch returned decision=allow, reason=within-budget-small-change.",
+            "passed": false
+          },
+          "error_handling": {
+            "evidence": "Root cause of the same finding: git_ops.py's task_size/_measure catch GitOpsError (missing git-state.json) and silently return TaskSize(0,0,...) instead of surfacing an unmeasurable state, which gate.py cannot distinguish from a genuinely small, measured change.",
+            "passed": false
+          },
+          "maintainability": {
+            "evidence": "navigator.py's _planning_position/_is_accepted read arbitrary repository files defensively: OSError is caught and treated as 'makes no claim', decode uses errors='replace', and only a bounded 600-byte prefix is scanned -- no exception path found that could crash or mislead beyond a benign false-negative (a very long preamble before the Status: line), which only causes the navigator to ask again rather than skip a check, since it is advisory guidance rather than an enforcement gate.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "No shell=True/os.system/eval in changed non-test .py files. installer.py's retirement-deletion paths (role files under _is_agent_role_file, and OpenCode's retired-agent removal) both hash-check the on-disk content against the last-recorded managed hash before deleting, and raise CoDevError/produce a 'conflict' operation instead of deleting when local edits are present -- verified by reading plan()'s retirement branch (installer.py ~1067-1094) and the OpenCode agent-retirement branch (~772-786). A developer's own edits cannot be silently destroyed by the new deletion behavior.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "tests/test_gate_risk_tier.py exercises the risk-tiered budget path end-to-end against a real branch/commit for the allow and ask directions; tests/test_gate.py covers the two previously-closed measurement holes (nonexistent task, no base_snapshot). No assertion in the oracle-to-navigator rename changed, matching the PR's stated intent. The missing case is the one recorded as blocking above -- round-state.json valid but git-state.json absent -- which the correction should add a regression test for.",
+            "passed": true
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "PR35-GATE-ZERO-MEASURE-MISSING-GIT-STATE",
+            "location": "src/codev_workflow/gate.py:392-427 (_within_size_budget); src/codev_workflow/git_ops.py task_size/_measure (zero-on-GitOpsError fallback)",
+            "rank": 1,
+            "summary": "P1, high confidence, empirically reproduced. _within_size_budget only checks that round-state.json is readable JSON with a truthy base_snapshot before trusting the size it gets back. When a task branch already exists and codev task start is run without a prior create_branch (the exact recovery state navigator.py's own 'branch exists, no round state' position recommends), round-state.json is fully valid (current schema, real base_snapshot) but git-state.json never gets created. slice_size then reaches _measure, which calls _load_git_state, catches the resulting GitOpsError, and returns TaskSize(0,0,max_lines,max_files) with over_budget=False -- indistinguishable from a genuinely small, measured change. Repro: created a codev/<task> branch this way, committed a 500-line file (10x review.max_lines) on it, then called gate.check('plan', edit tool_input) -- result was decision=allow, reason=within-budget-small-change. This is the third hole in the plan gate's size relaxation (ADR-0043), alongside the two already closed (nonexistent task; task with no base_snapshot) -- both of which the ADR explicitly calls out as 'a measurement of nothing' that must not read as small. Correction: require git-state.json to exist (not just round-state.json's base_snapshot) before _within_size_budget trusts a measurement, or have _measure/task_size distinguish 'measured as truly zero' from 'could not measure' so callers can tell the two apart."
+          }
+        ],
+        "head_snapshot": "085a1e34763fba7d995e57473f4df256ed2fc114",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist",
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 1,
-      "slice_id": "navigator-rename"
+      "slice_id": "navigator-rename",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "PR35-GATE-ZERO-MEASURE-MISSING-GIT-STATE": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {

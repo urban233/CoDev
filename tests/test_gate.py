@@ -99,6 +99,28 @@ class RiskTieredPlanGateTests(unittest.TestCase):
         """
         self.assertEqual("ask", self._edit("src/foo.py"))
 
+    def test_a_branch_codev_never_recorded_still_asks(self) -> None:
+        """The third zero-measurement hole, found by the outer-loop review of
+        the pull request that introduced this tier.
+
+        `_measure` returns a size of zero when it cannot load
+        `git-state.json`, which is indistinguishable from a genuinely small
+        change. A branch merely *named* `codev/...`, given round state by hand
+        without `codev git branch` ever recording it, therefore measured as
+        zero and skipped the gate however large it grew -- reproduced with a
+        500-line change scoring `within-budget-small-change`.
+        """
+        self._open_round_state()
+        # Round state is valid and carries a real base; only the branch record
+        # is missing, which is exactly the case that used to measure as zero.
+        self.assertFalse((self.target / ".codev/task/a-task/git-state.json").exists())
+        (self.target / "big.py").write_text(
+            "\n".join(f"line_{n} = {n}" for n in range(500)), encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git("commit", "-qm", "500 lines")
+        self.assertEqual("ask", self._edit("src/foo.py"))
+
     def test_a_dependency_manifest_asks_however_small_the_change(self) -> None:
         """Size is the wrong question for a file where one line changes what
         the code computes."""
