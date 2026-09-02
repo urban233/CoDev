@@ -37,12 +37,13 @@ import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from codev_workflow import __version__
 from codev_workflow import config as config_module
 from codev_workflow import gate as gate_module
 from codev_workflow import git_ops as git_ops_module
+from codev_workflow import health as health_module
 from codev_workflow import hook_log as hook_log_module
 from codev_workflow import oracle as oracle_module
 from codev_workflow import task as task_module
@@ -1080,6 +1081,12 @@ def _run_status_command(args: argparse.Namespace) -> int:
         "issues": list(result.issues),
         "adapters": platforms,
         "tasks_in_progress": in_progress,
+        # Reported unconditionally, not behind --verbose: a capability that
+        # is silently not working is exactly what someone skimming status
+        # needs to see.
+        "degraded": [
+            finding.as_dict() for finding in health_module.degraded(target=target)
+        ],
     }
     owner_counts: dict[str, int] = {}
     overlaps: list[dict[str, list[str]]] = []
@@ -1115,6 +1122,14 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 print(f"  - {issue}")
         print(f"Adapters: {', '.join(platforms) if platforms else 'none'}")
         print(f"Tasks in progress: {in_progress}")
+        findings = cast("list[dict[str, Any]]", payload["degraded"])
+        if findings:
+            print(f"Degraded: {len(findings)} capability(ies) silently not working:")
+            for finding in findings:
+                print(f"  - {finding['name']}: {finding['detail']}")
+                print(f"    impact: {finding['impact']}")
+        else:
+            print("Degraded: none -- every capability checked is working")
         if args.verbose and owner_counts:
             print("Work in progress by owner:")
             for owner, count in sorted(owner_counts.items()):
