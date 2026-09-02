@@ -129,12 +129,28 @@ def main() -> None:
     tool_name = str(payload.get("tool_name") or "")
     decision = _decide(raw, repo_root)
     if decision is None:
+        # The gate could not be consulted at all -- most often `codev` is not
+        # on PATH. Allowing is right; staying silent about it is not, because
+        # a repository where every hook fails open looks exactly like one
+        # with no guardrails configured.
+        _log_decision(
+            repo_root,
+            "degraded",
+            tool_name=tool_name,
+            reason="`codev gate check` could not be run, so this tool call "
+            "was allowed without being checked",
+        )
         _allow()
         return
     reason = str(decision.get("reason") or "")
-    if decision.get("decision") == "ask":
+    verdict = decision.get("decision")
+    if verdict == "ask":
         _log_decision(repo_root, "ask", tool_name=tool_name, reason=reason)
         _ask(reason)
+        return
+    if verdict == "degraded":
+        _log_decision(repo_root, "degraded", tool_name=tool_name, reason=reason)
+        _allow()
         return
     # `recorded` is false when the gate never applied -- an unwatched tool or
     # an unreadable payload. Logging those would count every unrelated tool

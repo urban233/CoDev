@@ -111,6 +111,11 @@ class GateDecision:
     def asks(self) -> bool:
         return self.decision == "ask"
 
+    @property
+    def allows(self) -> bool:
+        """`degraded` allows the tool call too -- it just did not check."""
+        return self.decision in ("allow", "degraded")
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "gate": self.gate,
@@ -126,6 +131,13 @@ def _allow(gate: str, reason: str) -> GateDecision:
 
 def _not_applicable(gate: str, reason: str) -> GateDecision:
     return GateDecision("allow", reason, gate, recorded=False)
+
+
+def _degraded(gate: str, reason: str) -> GateDecision:
+    """The gate could not decide. It allows -- a guardrail that errors must
+    never block work -- but this is not a guardrail that passed, and the two
+    must not look the same in the record."""
+    return GateDecision("degraded", reason, gate)
 
 
 def _ask(gate: str, reason: str) -> GateDecision:
@@ -424,7 +436,9 @@ def _small_change_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision
         return _not_applicable(gate, "not-a-gated-tool")
     size = _slice_size(task_id, repo_root=repo_root)
     if size is None:
-        return _allow(gate, "unmeasurable")
+        return _degraded(
+            gate, "the slice size could not be measured, so it was not checked"
+        )
     if not size.get("over_budget"):
         return _allow(gate, "within-budget")
     return _ask(
@@ -485,4 +499,4 @@ def check(gate: str, payload: Any, *, target: Path) -> GateDecision:
     try:
         return _GATES[gate](payload, repo_root)
     except Exception as error:  # noqa: BLE001 - guardrails fail open
-        return _allow(gate, f"internal-error: {error}")
+        return _degraded(gate, f"internal error: {error}")
