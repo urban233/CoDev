@@ -45,14 +45,15 @@ to design a test strategy outside an open planning or build session, audit
 an existing test suite's health, or triage one specific flaky or brittle
 test.
 
-Where the platform provides a repository-local `planner` subagent, it is the
-dedicated, human-started entry point for `specify-project`, `define-product`,
-`design-solution`, and `plan-wave` — a session decoupled from `Build`,
-`Review`, and `Ship`, which stay `orchestrator`'s. `planner` never implements
-product code and never invokes `builder`, `reviewer`, or `orchestrator`;
-handing a ready task from a `planner` session to a `Build` session is the
-human's decision, made by starting a fresh `orchestrator` session, not an
-automatic continuation.
+`lead` is the only agent a developer talks to. It invokes `specify-project`,
+`define-product`, `design-solution`, and `plan-wave` directly for the
+`Understand` phases, and dispatches `builder`, `reviewer`,
+`lightweight-reviewer`, `code-audit-gate`, `outer-loop-runner`, and the five
+specialists for `Build`, `Review`, and `Ship`. Earlier versions split these
+across separate human-started sessions; they are phases now, not sessions, and
+`codev next` names which one the work is in. Never tell a developer to start a
+different session -- a session boundary they have to notice is a command by
+another name.
 
 ## Choose the path
 
@@ -195,7 +196,7 @@ with exactly one of: `READY FOR HUMAN APPROVAL`, `CHANGES REQUIRED`, or
 ## Three-agent Build execution
 
 Where the platform provides repository-local subagents, keep the human in one
-`orchestrator` conversation and automate the mechanical handoffs between
+`lead` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
 **Say where things stand, before you are asked.** Run `codev next --json` at
@@ -267,7 +268,7 @@ ready, with no inner-loop round recorded at all.
    publish, deploy, migrate data, or expand rollout. It returns an evidence
    receipt with the exact base snapshot, validation, deviations, and
    limitations — not a head snapshot, since it never commits and so cannot
-   know one. The orchestrator commits the result and records the builder's
+   know one. `lead` commits the result and records the builder's
    round in one call — `codev git commit --round <round> --evidence
    <evidence.json>` — against the exact resulting head. The builder never
    records its own evidence.
@@ -291,7 +292,7 @@ ready, with no inner-loop round recorded at all.
      snapshot, *before* recording the reviewer round that produced
      `ok_ready_for_pr`. It self-fixes anything it finds and reports back a
      short summary instead of stopping for approval, since nothing in its
-     scope needs one; the orchestrator commits again only if it changed
+     scope needs one; `lead` commits again only if it changed
      anything, then records the reviewer round exactly once, against
      whichever head is now final, carrying `lightweight-reviewer`'s verdict
      plus that summary as an evidence note. Resolving this before the
@@ -312,8 +313,8 @@ ready, with no inner-loop round recorded at all.
      must change materially, work collides, or safe validation is
      unavailable.
 6. Once a pull request opens, tell the human plainly that outer-loop review
-   continues via `outer-loop-runner` for this task — a separate,
-   human-triggered switch, not something the orchestrator attempts or
+   continues via `outer-loop-runner`, which `lead` dispatches for this
+   task — not something `lead` performs itself or
    continues on its own. Close the item with `codev task close` only once
    that concludes and the human has acted. Return the final evidence
    receipt, reviewer decision, and residual risks. Stop before merge,
@@ -329,13 +330,13 @@ approval before merge.
 ## Outer-loop execution
 
 Where the platform provides repository-local subagents, a separate,
-human-triggered `outer-loop-runner` takes a task with an open pull
+`outer-loop-runner`, dispatched by `lead`, takes a task with an open pull
 request from there to a human-ready review. It is a distinct entry point,
-not a continuation of the inner-loop `orchestrator` conversation — the
+a fresh subagent rather than a continuation of `lead`'s context — the
 human starts it deliberately, and every specialist invocation inside it
 spends a model call the human chose to authorize.
 
-A second, equally human-triggered entry acts on the PR's existing review
+A second, equally deliberate entry acts on the PR's existing review
 comments instead of dispatching the five specialists fresh: fetch
 `comments`/`reviews` alongside the usual metadata/diff/checks, draft a
 finding directly from each actionable comment — trusting its content, not

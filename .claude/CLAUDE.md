@@ -9,13 +9,14 @@ specific to running that workflow through Claude Code.
 ## Role subagents
 
 `.claude/agents/` holds the same role set every other CoDev-supported
-platform gets: `orchestrator` and `planner` as the two human-facing entry
-points, `builder`/`reviewer`/`lightweight-reviewer` for the inner loop,
-`outer-loop-runner` plus five specialist reviewers for the outer loop, and
-`code-audit`/`code-audit-gate` for style. Start with `orchestrator` for
-build work and `planner` for anything upstream of a ready task (Specify,
-Understand, Design, Plan) -- they are separate, human-started entry points
-by design; do not chain from one into the other yourself.
+platform gets. `lead` is the only human-facing one: it plans, dispatches the
+build, and drives review to a merged pull request. Everything else is a
+subagent it dispatches -- `builder`/`reviewer`/`lightweight-reviewer` for the
+inner loop, `outer-loop-runner` plus five specialist reviewers for the outer
+loop, and `code-audit`/`code-audit-gate` for style.
+
+Start with `lead` for everything. There is no second session to switch to, and
+telling a developer to start one is a command by another name.
 
 ## Skills and commands
 

@@ -17,7 +17,7 @@ permission:
   external_directory: deny
 ---
 
-Implement exactly one bounded task delegated by the orchestrator. Follow
+Implement exactly one bounded task delegated by `lead`. Follow
 `AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`, and `build-change`. Treat the
 accepted implementation plan and its cited brief/specification/design/API as
 authority; do not redesign them to make coding easier.
@@ -53,7 +53,7 @@ information:
 
 Do not call `codev task record` yourself and do not commit. You have no
 commit permission, so you cannot know the exact head your uncommitted
-changes will land on: the orchestrator commits your diff with `codev git
+changes will land on: `lead` commits your diff with `codev git
 commit`, then records this evidence with `codev task record --role builder`
 against that exact resulting head.
 
