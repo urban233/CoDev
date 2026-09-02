@@ -29,14 +29,16 @@ selected missing values in OpenCode configuration, preserving all project-owned 
 Full orchestrator-driven workflow, using its official `.claude/agents/` location. Unlike
 Antigravity, Claude Code has no configurable skills path, so the shared skills are
 mirrored into `.claude/skills/` at install time instead of referenced in place. Claude
-Code additionally ships a `.claude/settings.json` and two guardrail hooks — a category no
-other adapter has. `require_plan.py` defaults new sessions into Plan Mode and pauses for
-confirmation before the first source edit, or the first repository-mutating git command,
-when no design or plan document exists yet for the active branch. `require_wave_shape.py`
-asks (never denies) when a wave plan's "Later waves" section already holds a populated
-task table, checked on saving the document and on `codev git issue-create` — reinforcing
-rolling-wave planning's rule to detail only the current wave and keep later waves coarse.
-Both fail open on any internal error and log every ask/allow decision to a local,
+Code additionally ships a `.claude/settings.json` and three guardrail hooks — a category
+no other adapter has. `require_plan.py` defaults new sessions into Plan Mode and pauses
+for confirmation before the first source edit, or the first repository-mutating git
+command, when no design or plan document exists yet for the active branch.
+`require_wave_shape.py` asks (never denies) when a wave plan's "Later waves" section
+already holds a populated task table, checked on saving the document and on `codev git
+issue-create` — reinforcing rolling-wave planning's rule to detail only the current wave
+and keep later waves coarse. `require_small_change.py` asks when a task's diff exceeds
+its `review.max_lines`/`review.max_files` budget, checked on `codev git open-pr`. All
+three fail open on any internal error and log every ask/allow decision to a local,
 gitignored gate-decision log surfaced by `codev status`'s `gate_decisions` field.
 
 ## Junie
