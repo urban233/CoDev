@@ -784,19 +784,11 @@ def _parser() -> argparse.ArgumentParser:
         "branch", help="create the task's own branch from a base snapshot"
     )
     g_branch.add_argument("--id", required=True)
-    g_branch_base = g_branch.add_mutually_exclusive_group()
-    g_branch_base.add_argument(
+    g_branch.add_argument(
         "--base",
         default=None,
         help="base git snapshot; defaults to the 'git.pr_base' config value, "
         "then the repository's default branch",
-    )
-    g_branch_base.add_argument(
-        "--stack-on",
-        default=None,
-        dest="stack_on",
-        help="stack this task's branch on another task's own recorded "
-        "branch (ADR-0034); requires git.workflow=trunk",
     )
     g_branch.add_argument(
         "--allow-dirty",
@@ -992,14 +984,6 @@ def _recorded_branch(task_id: str, *, target: Path) -> str | None:
         return None
 
 
-def _recorded_parent(task_id: str, *, target: Path) -> str | None:
-    """The task this one is stacked on (ADR-0034), or None."""
-    try:
-        return git_ops_module.parent_task_id(task_id, target=target)
-    except git_ops_module.GitOpsError:
-        return None
-
-
 def _in_progress_owner_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in tasks:
@@ -1039,19 +1023,25 @@ _DEEP_STACK_THRESHOLD = 3
 def _task_stacks(
     tasks: list[dict[str, Any]], *, target: Path
 ) -> dict[str, dict[str, int | str | bool]]:
-    in_progress_ids = [
-        item["task_id"] for item in tasks if item["status"] == "in_progress"
-    ]
+    """Per-task slice stacks (ADR-0039). A task holding one slice is not a
+    stack and is omitted, matching what the sibling-task form reported."""
     stacks: dict[str, dict[str, int | str | bool]] = {}
-    for task_id in in_progress_ids:
-        parent = git_ops_module.parent_task_id(task_id, target=target)
-        if parent is None:
+    for item in tasks:
+        if item["status"] != "in_progress":
             continue
-        depth = git_ops_module.stack_depth(task_id, target=target)
+        task_id = item["task_id"]
+        try:
+            slices = task_module.slice_ids(task_id, target=target)
+            current = task_module.current_slice(task_id, target=target)
+        except task_module.TaskError:
+            continue
+        if len(slices) < 2:
+            continue
         stacks[task_id] = {
-            "parent_task": parent,
-            "depth": depth,
-            "deep": depth > _DEEP_STACK_THRESHOLD,
+            "slices": len(slices),
+            "current_slice": current,
+            "position": slices.index(current) + 1 if current in slices else 0,
+            "deep": len(slices) > 4,
         }
     return stacks
 
@@ -1151,8 +1141,8 @@ def _run_status_command(args: argparse.Namespace) -> int:
                 stack = stacks[task_id]
                 flag = " (deep stack, consider landing sooner)" if stack["deep"] else ""
                 print(
-                    f"  {task_id} stacked on {stack['parent_task']} "
-                    f"(depth {stack['depth']}){flag}"
+                    f"  {task_id}: slice {stack['position']} of "
+                    f"{stack['slices']} ({stack['current_slice']}){flag}"
                 )
         if args.verbose:
             if gate_decisions:
@@ -1794,14 +1784,13 @@ def _run_git_command(args: argparse.Namespace) -> int:
             args.base,
             target=target,
             allow_dirty=args.allow_dirty,
-            stack_on=args.stack_on,
         )
         if args.json:
             return _emit_json(
                 {
                     "task_id": args.id,
                     "branch": branch,
-                    "parent_task": _recorded_parent(args.id, target=target),
+                    "slice_id": task_module.current_slice(args.id, target=target),
                 }
             )
         print(f"Created branch {branch} for {args.id}")
@@ -1903,7 +1892,7 @@ def _run_git_command(args: argparse.Namespace) -> int:
                     "task_id": args.id,
                     "head": new_head,
                     "branch": _recorded_branch(args.id, target=target),
-                    "parent_task": _recorded_parent(args.id, target=target),
+                    "slice_id": task_module.current_slice(args.id, target=target),
                 }
             )
         print(f"Restacked {args.id}'s branch onto its parent; new head {new_head}")

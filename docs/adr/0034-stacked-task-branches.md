@@ -1,6 +1,6 @@
 # ADR-0034: A task's branch may target a recorded sibling task's branch
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0039](0039-slice-stacking-replaces-sibling-task-stacking.md)
 **Date:** 2026-09-02
 **Owner:** Martin Urban
 **Related design:** [docs/features/small-prs/design.md](../features/small-prs/design.md)

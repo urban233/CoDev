@@ -400,35 +400,13 @@ def _closes_issue_number(link_ref: str | None, *, target: Path) -> int | None:
     return int(match["number"])
 
 
-def _has_recorded_child(task_id: str, *, target: Path) -> bool:
-    """True when another task's recorded git-state.json names this task as
-    its `parent_task` -- the "last slice in a stack" is the one with no
-    such child (ADR-0034). Best-effort: an unreadable or malformed sibling
-    state file is skipped rather than raised, since this backs PR-body
-    text, not a hard requirement."""
-    task_root = target / Path(task.TASK_DIR_RELATIVE.as_posix())
-    if not task_root.is_dir():
-        return False
-    for state_path in task_root.glob(f"*/{GIT_STATE_FILENAME}"):
-        if state_path.parent.name == task_id:
-            continue
-        try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(state, dict) and state.get("parent_task") == task_id:
-            return True
-    return False
-
-
 def _more_slices_remain(task_id: str, *, target: Path) -> bool:
     """True when this task holds a later slice than the one currently being
     worked (ADR-0035). Read from the task's own ordered slice list, which is
     the collection that owns the issue -- not inferred from sibling state.
 
-    Best-effort for the same reason `_has_recorded_child` is: this backs
-    pull-request body text, so unreadable round state means "cannot tell",
-    not an exception."""
+    Best-effort: this backs pull-request body text, so unreadable round
+    state means "cannot tell", not an exception."""
     try:
         return not task.is_final_slice(
             task_id, task.current_slice(task_id, target=target), target=target
@@ -441,14 +419,9 @@ def _closing_line(issue_number: int, *, task_id: str, target: Path) -> str:
     """`Part of #N` while anything in this task still has to land, `Closes
     #N` on the piece that finishes it.
 
-    Two things can mean "more remains", and both are checked. The task's own
-    slice list is authoritative (ADR-0035): the issue belongs to the task,
-    so only its final slice closes it. A recorded child task is the older
-    sibling-stack form (ADR-0034), still supported for stacks created that
-    way."""
-    if _more_slices_remain(task_id, target=target) or _has_recorded_child(
-        task_id, target=target
-    ):
+    The task's ordered slice list is the only source (ADR-0035, ADR-0039):
+    the issue belongs to the task, so only its final slice closes it."""
+    if _more_slices_remain(task_id, target=target):
         return f"Part of #{issue_number}"
     return f"Closes #{issue_number}"
 
@@ -610,7 +583,6 @@ def create_branch(
     *,
     target: Path,
     allow_dirty: bool = False,
-    stack_on: str | None = None,
 ) -> str:
     state_path = _git_state_path(target, task_id)
     if state_path.exists():
@@ -627,51 +599,26 @@ def create_branch(
                 "--allow-dirty if that is intentional"
             )
 
-    if stack_on is not None:
-        # ADR-0034: stacking is only supported under trunk-based
-        # development, and every stacking affordance disables itself
-        # cleanly under feature-branch rather than firing anyway.
-        workflow = _resolved_workflow(target=target)
-        if workflow != "trunk":
-            raise GitOpsError(
-                f"refusing --stack-on: git.workflow resolves to {workflow!r}, "
-                "not 'trunk' -- stacking is only supported under trunk-based "
-                "development (ADR-0034)"
+    # Catch blind branching while HEAD sits on unrelated, unmerged work.
+    other_task_id = _other_recorded_task_on_head(target=target)
+    if other_task_id is not None and other_task_id != task_id:
+        other_branch = branch_name_for(other_task_id)
+        other_state = _load_git_state(other_task_id, target=target)
+        ahead = int(
+            _run_git(
+                ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
+                cwd=target,
             )
-        try:
-            parent_state = _load_git_state(stack_on, target=target)
-        except GitOpsError as error:
+        )
+        if ahead > 0:
             raise GitOpsError(
-                f"refusing --stack-on {stack_on!r}: it has no branch yet -- "
-                f"create it first with `codev git branch --id {stack_on}`"
-            ) from error
-        resolved_base = cast(str, parent_state["branch"])
-    else:
-        # The foreign-branch guard below exists to catch *blind* branching
-        # while HEAD sits on unrelated, unmerged work. --stack-on replaces
-        # that concern with an explicit, named, already-verified parent --
-        # checkout -b starts from that parent's pinned commit regardless of
-        # HEAD's current branch, so there is nothing left for this guard to
-        # protect against once stacking is requested on purpose (ADR-0034).
-        other_task_id = _other_recorded_task_on_head(target=target)
-        if other_task_id is not None and other_task_id != task_id:
-            other_branch = branch_name_for(other_task_id)
-            other_state = _load_git_state(other_task_id, target=target)
-            ahead = int(
-                _run_git(
-                    ["rev-list", "--count", f"{other_state['base_snapshot']}..HEAD"],
-                    cwd=target,
-                )
+                f"refusing to create a branch: HEAD is on {other_branch!r} "
+                f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
+                "not yet in its base -- check out the intended base branch "
+                f"first, or continue work on {other_task_id!r} itself "
+                "instead of branching a new task from underneath it"
             )
-            if ahead > 0:
-                raise GitOpsError(
-                    f"refusing to create a branch: HEAD is on {other_branch!r} "
-                    f"({other_task_id!r}'s own branch) with {ahead} commit(s) "
-                    "not yet in its base -- check out the intended base branch "
-                    f"first, or continue work on {other_task_id!r} itself "
-                    "instead of branching a new task from underneath it"
-                )
-        resolved_base = _resolve_pr_base(base_snapshot, target=target)
+    resolved_base = _resolve_pr_base(base_snapshot, target=target)
 
     _warn_if_base_behind_remote(resolved_base, target=target)
     # Pin to the exact commit now, not the ref name: changed_files and
@@ -696,8 +643,6 @@ def create_branch(
         "base_snapshot": pinned_base,
         "slice_branches": {slice_id: {"branch": branch, "base_snapshot": pinned_base}},
     }
-    if stack_on is not None:
-        payload["parent_task"] = stack_on
     state_path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -873,6 +818,16 @@ def _measure(task_id: str, base: str, *, target: Path) -> TaskSize:
     return TaskSize(lines_changed, files_changed, max_lines, max_files)
 
 
+def _branch_exists(branch: str, *, target: Path) -> bool:
+    try:
+        _run_git(
+            ["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=target
+        )
+    except GitOpsError:
+        return False
+    return True
+
+
 def slice_branches(task_id: str, *, target: Path) -> dict[str, dict[str, str]]:
     """Every slice of this task that has a branch, by slice id. A task
     recorded before slices reads as one entry named for the task."""
@@ -965,35 +920,6 @@ def slice_base_snapshot(task_id: str, *, target: Path) -> str | None:
         return None
     recorded = slice_branches(task_id, target=target).get(slice_id)
     return recorded["base_snapshot"] if recorded else None
-
-
-def parent_task_id(task_id: str, *, target: Path) -> str | None:
-    """The recorded parent task id, or None when the task has no branch
-    recorded yet or was not created with --stack-on."""
-    try:
-        state = _load_git_state(task_id, target=target)
-    except GitOpsError:
-        return None
-    parent = state.get("parent_task")
-    return cast(str, parent) if parent else None
-
-
-def stack_depth(task_id: str, *, target: Path) -> int:
-    """1 for a task with no recorded parent; 1 + the parent's own depth
-    otherwise. Never raises: an unresolvable link in the chain -- a
-    missing parent state file, or a cycle -- stops the walk and returns
-    the depth reached so far, since this backs status reporting, not a
-    hard requirement."""
-    depth = 1
-    seen = {task_id}
-    current = task_id
-    while True:
-        parent = parent_task_id(current, target=target)
-        if not parent or parent in seen:
-            return depth
-        seen.add(parent)
-        depth += 1
-        current = parent
 
 
 def _ensure_on_own_branch(task_id: str, *, target: Path) -> str:
@@ -1254,22 +1180,6 @@ def _previous_slice_branch(task_id: str, *, target: Path) -> str | None:
     return branch
 
 
-def _stacked_pr_base(task_id: str, *, target: Path) -> str | None:
-    """The recorded parent's branch, when this task was created with
-    --stack-on and that parent's own pull request is still open -- None
-    otherwise, so the caller falls through to --base/git.pr_base/the
-    repository's default branch (ADR-0034)."""
-    parent_id = parent_task_id(task_id, target=target)
-    if parent_id is None:
-        return None
-    try:
-        parent_state = _load_git_state(parent_id, target=target)
-    except GitOpsError:
-        return None
-    parent_branch = cast(str, parent_state["branch"])
-    return parent_branch if _pr_state(parent_branch, target=target) == "OPEN" else None
-
-
 def open_pr(
     task_id: str,
     title: str,
@@ -1309,9 +1219,7 @@ def open_pr(
     # A slice stacks on the slice before it (ADR-0035) ahead of the older
     # sibling-task form (ADR-0034), which stays supported for stacks created
     # that way.
-    resolved_base = _previous_slice_branch(task_id, target=target) or _stacked_pr_base(
-        task_id, target=target
-    )
+    resolved_base = _previous_slice_branch(task_id, target=target)
     if resolved_base is None:
         resolved_base = _resolve_pr_base(base, target=target)
     final_body = (
@@ -1407,54 +1315,89 @@ def mark_ready(task_id: str, *, target: Path) -> None:
     _run_gh(["pr", "ready", branch], cwd=target)
 
 
-def restack(task_id: str, *, target: Path) -> str:
-    """Rebases a stacked task's branch onto its recorded parent's current
-    head, force-pushes with `--force-with-lease`, and re-baselines the
-    task's own tracked state so `task.check`'s drift comparison still
-    matches the rebase's new commit identity (ADR-0034).
+def restack(task_id: str, *, target: Path) -> list[str]:
+    """Rebase every slice after the current one onto its predecessor, in
+    order, and force-push each (ADR-0039).
 
-    Refuses when the caller is not on the task's own branch, when the
-    task has no recorded parent, or once the parent's pull request has
-    already merged. A rebase conflict is reported to the human -- the
-    repository is left mid-rebase, exactly as plain `git rebase` would
-    leave it, for `git rebase --continue`/`--abort` to resolve normally;
-    this never attempts to resolve one automatically.
+    Review changing an earlier slice is the moment a stack either survives or
+    turns into manual work, so this cascades rather than rebasing one branch:
+    amend slice one, restack, and slices two and three follow.
+
+    Carries forward ADR-0034's force-push standard unchanged, since that was
+    never about the sibling relationship ADR-0039 replaced: `--force-with-
+    lease` only and never a bare `--force`; refused once the predecessor's
+    pull request has merged; and a rebase conflict reported to the human,
+    never resolved automatically. A conflict stops the cascade where it
+    happened -- slices already rebased keep their new history, and the
+    message names which slice to resume from.
     """
-    branch = _ensure_on_own_branch(task_id, target=target)
-    parent_id = parent_task_id(task_id, target=target)
-    if parent_id is None:
+    # Derive the branch names rather than reading git-state.json's
+    # slice_branches: that file is committed, so an earlier slice's branch
+    # carries the version written before the later slices existed. Amending
+    # slice one means standing on exactly that branch, which is precisely
+    # when a cascade is wanted. The slice list itself is written once at
+    # `task start`, so it is complete on every branch.
+    order = task.slice_ids(task_id, target=target)
+    recorded = {
+        slice_id: {"branch": branch_name_for_slice(task_id, slice_id)}
+        for slice_id in order
+        if _branch_exists(branch_name_for_slice(task_id, slice_id), target=target)
+    }
+    current = task.current_slice(task_id, target=target)
+    if current not in order:
+        raise GitOpsError(f"task {task_id!r} holds no slice {current!r}")
+
+    children = [s for s in order[order.index(current) + 1 :] if s in recorded]
+    if not children:
         raise GitOpsError(
-            f"refusing to restack {task_id!r}: it has no recorded parent -- "
-            "restack only applies to a task created with `codev git branch "
-            "--stack-on`"
-        )
-    parent_state = _load_git_state(parent_id, target=target)
-    parent_branch = cast(str, parent_state["branch"])
-    if _pr_state(parent_branch, target=target) == "MERGED":
-        raise GitOpsError(
-            f"refusing to restack: {parent_branch!r}'s pull request has "
-            "already merged -- rebase onto the repository's default branch "
-            "manually instead; restack is only for an in-flight parent"
+            f"refusing to restack {task_id!r}: slice {current!r} has no later "
+            "slice with a branch, so there is nothing to rebase onto it"
         )
 
+    # A cascade checks out each child in turn, and git refuses to switch
+    # branches over local modifications. Refuse up front with a message that
+    # says so, rather than failing partway with a raw git error and leaving
+    # some slices rebased and others not.
+    dirty = _dirty_paths(target)
+    if dirty:
+        raise GitOpsError(
+            "refusing to restack: the worktree has uncommitted changes "
+            f"({', '.join(sorted(dirty)[:5])}) and a cascade must check out "
+            "each slice in turn -- commit or stash them first"
+        )
+
+    started_on = current_branch(target)
+    rebased: list[str] = []
+    parent_slice = current
     try:
-        _run_git(["rebase", parent_branch], cwd=target)
-    except GitOpsError as error:
-        raise GitOpsError(
-            f"restack stopped: rebasing onto {parent_branch!r} reported a "
-            "conflict or another problem -- resolve it with `git status`, "
-            f"then `git rebase --continue` or `git rebase --abort`: {error}"
-        ) from error
-
-    new_head = current_head(target)
-    _run_git(["push", "--force-with-lease", "-u", "origin", branch], cwd=target)
-
-    pinned_parent_head = _run_git(["rev-parse", parent_branch], cwd=target)
-    git_state = _load_git_state(task_id, target=target)
-    git_state["base_snapshot"] = pinned_parent_head
-    _git_state_path(target, task_id).write_text(
-        json.dumps(git_state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-
-    task.record_restack(task_id, new_head, target=target)
-    return new_head
+        for child in children:
+            parent_branch = recorded[parent_slice]["branch"]
+            if _pr_state(parent_branch, target=target) == "MERGED":
+                raise GitOpsError(
+                    f"refusing to restack onto {parent_branch!r}: its pull "
+                    "request has already merged, so the child belongs on the "
+                    "trunk -- retarget it instead"
+                )
+            child_branch = recorded[child]["branch"]
+            _run_git(["checkout", child_branch], cwd=target)
+            try:
+                _run_git(["rebase", parent_branch], cwd=target)
+            except GitOpsError as error:
+                raise GitOpsError(
+                    f"restack stopped at slice {child!r}: rebasing "
+                    f"{child_branch!r} onto {parent_branch!r} reported a "
+                    "conflict, and the repository is left mid-rebase for you "
+                    "to resolve with `git rebase --continue`/`--abort`. "
+                    f"Slices already rebased: {rebased or 'none'}. "
+                    f"Original error: {error}"
+                ) from error
+            _run_git(
+                ["push", "--force-with-lease", "-u", "origin", child_branch],
+                cwd=target,
+            )
+            rebased.append(child)
+            parent_slice = child
+    finally:
+        with contextlib.suppress(GitOpsError):
+            _run_git(["checkout", started_on], cwd=target)
+    return rebased
