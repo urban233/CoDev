@@ -222,7 +222,20 @@
         }
       },
       "round": 3,
-      "slice_id": "lead-as-skill-plan"
+      "slice_id": "lead-as-skill-plan",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "PR41-DEFAULT-AGENT-UNTESTED": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "PR41-DEFAULT-AGENT-VALUE-NOT-PROVENANCE": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
