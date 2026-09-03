@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "95239190897c0b85a5974d105c211583878c48a1",
+  "base_snapshot": "4fe8ceeecef09a57915d28d0786be7fac6725412",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -14,16 +14,44 @@
       "reason": "No deployment, migration, or runtime rollout surface in this change -- rollout-specialist not dispatched per task instructions.",
       "round": 1,
       "timestamp": "2026-09-02T23:46:16Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrency surface: this change updates workflow agents, CLI guidance, navigator answers, and documentation without shared runtime state or parallel execution behavior.",
+      "round": 2,
+      "timestamp": "2026-09-03T00:13:49Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No rollout surface: this change has no deployment, migration, production exposure, or operational rollout behavior.",
+      "round": 2,
+      "timestamp": "2026-09-03T00:13:50Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "error_handling",
+      "reason": "Human-authorized waiver: the remaining error-handling finding is non-blocking and this single-case outer correction is limited to bundled guidance synchronization.",
+      "round": 4,
+      "timestamp": "2026-09-03T00:37:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "test_quality",
+      "reason": "Human-authorized waiver: the remaining test-quality finding is non-blocking and this single-case outer correction is limited to bundled guidance synchronization.",
+      "round": 4,
+      "timestamp": "2026-09-03T00:37:13Z"
     }
   ],
-  "current_round": 2,
+  "current_round": 5,
   "current_slice": "navigator-rename",
   "description": null,
   "entry": "direct-review",
   "link_ref": "https://github.com/urban233/CoDev/issues/34",
   "max_rounds": {
     "inner": 2,
-    "outer": 3
+    "outer": 4
   },
   "owner": "urban233",
   "reopens": [
@@ -40,6 +68,34 @@
       "reason": "Closed the third zero-measurement hole in the plan gate as pair work: a six-line guard plus its regression test did not warrant dispatching a builder.",
       "timestamp": "2026-09-02T23:58:01Z",
       "to_round": 2
+    },
+    {
+      "by": null,
+      "from_round": 3,
+      "head": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+      "max_rounds": {
+        "inner": 2,
+        "outer": 4
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Human authorized one additional outer correction round for this single case to address the remaining bundled-guidance protocol mismatch.",
+      "timestamp": "2026-09-03T00:29:33Z",
+      "to_round": 4
+    },
+    {
+      "by": "urban233",
+      "from_round": 4,
+      "head": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+      "max_rounds": {
+        "inner": 2,
+        "outer": 4
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Human explicitly requested a fresh outer review to verify previously waived error-handling and test-quality dimensions.",
+      "timestamp": "2026-09-03T00:39:29Z",
+      "to_round": 5
     }
   ],
   "reviewer": null,
@@ -111,8 +167,252 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "The OpenCode lead exceeds the accepted 80-line limit.",
+            "passed": false
+          },
+          "correctness": {
+            "evidence": "Status: Not Accepted is classified as accepted by substring matching.",
+            "passed": false
+          },
+          "error_handling": {
+            "evidence": "slice begin can leave an orphan branch when validation/linkage fails after branch creation.",
+            "passed": false
+          },
+          "maintainability": {
+            "evidence": "Canonical guidance is stale and documentation contains duplicated role names.",
+            "passed": false
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "No blocking security, privacy, or compatibility defect; two non-blocking risks were identified.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "The navigator resume-option test has vacuous control flow and does not assert the intended commands.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "correctness-001",
+            "location": "src/codev_workflow/navigator.py:332-335",
+            "rank": 1,
+            "summary": "_is_accepted accepts Status: Not Accepted because it uses substring matching; parse an exact normalized status and add a regression test."
+          },
+          {
+            "blocking": true,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "ARCH-PR35-001",
+            "location": ".opencode/agents/lead.md:1-102",
+            "rank": 2,
+            "summary": "OpenCode lead.md is 102 lines despite the accepted 80-line architectural limit; reduce it and assert the limit."
+          },
+          {
+            "blocking": true,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "MAINT-PR35-001",
+            "location": "src/codev_workflow/bundle/.codev/for-ai/ai-agent-guidelines.md:232-299; docs/for-ai/ai-agent-guidelines.md:153-175",
+            "rank": 3,
+            "summary": "Installed and repository guidance retain the obsolete Orchestrator protocol; synchronize them with the lead/composite-verb protocol."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "error-handling-001",
+            "location": "src/codev_workflow/cli.py:1542-1571",
+            "rank": 4,
+            "summary": "slice begin creates a branch before validating input/linkage, leaving orphan state on failure; validate first and test no mutation."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "SEC-PR35-001",
+            "location": "src/codev_workflow/cli.py:4137-4141",
+            "rank": 5,
+            "summary": "Self-update advice interpolates an unquoted checkout path into shell commands; use shell-safe quoting and test metacharacters."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "DATA-PR35-002",
+            "location": "src/codev_workflow/cli.py:4328-4342",
+            "rank": 6,
+            "summary": "slice land marks the task approved without verifying the PR is merged; require MERGED and test PR states."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "test-quality-001",
+            "location": "tests/test_navigator.py:91-111",
+            "rank": 7,
+            "summary": "The resume-option test can pass vacuously; assert expected blocked reasons and executable commands explicitly."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "MAINT-PR35-002",
+            "location": "docs-site/src/content/docs/cli-reference.md:7; docs/product-map.md:39; docs-site/src/content/docs/tutorials/your-first-fix.md:51-52",
+            "rank": 8,
+            "summary": "Documentation contains duplicated role names such as lead and lead; replace them with intended predecessor roles and add consistency validation."
+          }
+        ],
+        "head_snapshot": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "security-data-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
       "round": 2,
+      "slice_id": "navigator-rename",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "ARCH-PR35-001": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "MAINT-PR35-001": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "correctness-001": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "Both lead files are 78 lines and preserve required behavior.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "Exact status parsing rejects Not Accepted and the regression test passes.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "Bundled guidance retains primitive lifecycle commands while repository guidance uses composite verbs.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "MAINT-PR35-001",
+            "location": "src/codev_workflow/bundle/.codev/for-ai/ai-agent-guidelines.md:240-303",
+            "rank": 1,
+            "summary": "Bundled guidance still prescribes obsolete primitive lifecycle commands; synchronize it with the composite-verb protocol."
+          }
+        ],
+        "head_snapshot": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
+      "round": 3,
+      "slice_id": "navigator-rename",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "MAINT-PR35-001": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "maintainability": {
+            "evidence": "Bundled and repository guidance use the lead/composite-verb protocol; obsolete primitive lifecycle commands are absent.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+        "specialist_selection": {
+          "specialists": [
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
+      "round": 4,
+      "slice_id": "navigator-rename"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "error_handling": {
+            "evidence": "Dimension independently reviewed; one non-blocking partial-mutation finding remains.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "Dimension independently reviewed; one non-blocking vacuous-assertion finding remains.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "PR35-SLICE-BEGIN-PARTIAL-MUTATION",
+            "location": "src/codev_workflow/cli.py:1537-1573",
+            "rank": 1,
+            "summary": "slice begin can leave a branch, git-state, or orphan issue after later validation/linkage failure; preflight before mutation and add failure tests."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "PR35-NAVIGATOR-RESUME-ASSERTION-VACUOUS",
+            "location": "tests/test_navigator.py:74-88",
+            "rank": 2,
+            "summary": "The resume-option test can pass when all resume options disappear; assert affected reasons and pause-then-resume commands explicitly."
+          }
+        ],
+        "head_snapshot": "4fe8ceeecef09a57915d28d0786be7fac6725412",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
+      "round": 5,
       "slice_id": "navigator-rename"
     }
   ],
