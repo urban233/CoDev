@@ -7,23 +7,28 @@ CoDev installs a set of agents with deliberately unequal powers. The
 constraints are the design: an agent that can both write code and approve it
 is not a review system.
 
-You start two of them. The rest are invoked for you.
+You start none of them. All are invoked for you.
 
-## The one you start
+## Who you actually talk to
 
-| Agent | Phase | What it does |
-|---|---|---|
-| `lead` | All of them | The only agent you talk to. Plans, dispatches the build, and drives review to a merged pull request. **Never edits product code itself** |
+There is no agent to start or select
+([ADR-0044](https://github.com/urban233/CoDev/blob/main/docs/adr/0044-lead-is-not-an-agent.md)).
+Earlier versions asked you to start a `planner` session for upstream work,
+then an `orchestrator` (later `lead`) session for the build, then an
+`outer-loop-runner` session for review, and to know when to switch. A session
+boundary you have to notice is a command by another name, and CoDev's
+position is that you do not run commands -- whether that boundary is a
+separate session or a separate agent identity you have to dispatch first.
 
-There is one entry point, and it is `lead`. Earlier versions asked you to start
-a `planner` session for upstream work and an `outer-loop-runner` session for
-review, then to know when to switch. A session boundary you have to notice is a
-command by another name, and CoDev's position is that you do not run commands
-([ADR-0040](https://github.com/urban233/CoDev/blob/main/docs/adr/0040-the-lead-agent-is-the-only-human-facing-agent.md)).
+Coordination is what `AGENTS.md` and `.codev/for-ai/ai-agent-guidelines.md`
+already tell an ordinary session to do: run the navigator every turn, dispatch
+the roles below, request review, never touch product code directly outside a
+`pair` slice. Every session already reads them. There is nothing else to
+start.
 
-`lead` opens every turn by telling you where the work stands, what it
-recommends, and why -- computed by the navigator, not remembered. When it is
-blocked it says so and offers the choices, rather than stopping at a wall.
+Every turn opens with where the work stands, what it recommends, and why --
+computed by the navigator, not remembered. When it is blocked it says so and
+offers the choices, rather than stopping at a wall.
 
 ## The inner loop
 
@@ -39,15 +44,19 @@ mechanical cleanup never spends any of the outer loop's round budget.
 
 ## The outer loop
 
-`lead` dispatches `outer-loop-runner` once a pull request is open. It fetches
-the pull request, gates on CI, dispatches the specialists, and drives
-human-triaged correction to a landed change. It used to be a session you
-started yourself; now it is a subagent, and the only thing that changed is who
-starts it.
+Once a pull request is open, the `outer-loop-review` skill takes over -- not
+a separate agent, a set of instructions the same conversation loads on
+demand. It fetches the pull request, gates on CI, dispatches the specialists,
+and drives human-triaged correction to a landed change. It used to be a
+session you started yourself, then a subagent that session dispatched; now
+it is guidance loaded into the conversation you are already having.
 
 Five specialists review the exact diff in parallel. You choose which to
-dispatch — each spends a real model call, so each is permission-gated — and
-skipping one is offered as a recorded waiver with a reason, never assumed.
+dispatch — each spends a real model call, and the skill asks you explicitly
+before dispatching any of them, which is the guarantee
+([ADR-0021](https://github.com/urban233/CoDev/blob/main/docs/adr/0021-opencode-specialist-dispatch-permission-gate.md)) —
+and skipping one is offered as a recorded waiver with a reason, never
+assumed.
 
 | Specialist | Dimensions it owns |
 |---|---|
@@ -67,8 +76,9 @@ is neither the task's owner nor a bot.
 > An agent may write code, or it may review code. Never both, for the same
 > change.
 
-`builder` cannot review. Reviewers cannot edit. `lead` never writes
-product code. An agent may check its own work; it may never approve it.
+`builder` cannot review. Reviewers cannot edit. Coordination never writes
+product code outside an explicitly recorded `pair` slice. An agent may check
+its own work; it may never approve it.
 
 ## Next
 

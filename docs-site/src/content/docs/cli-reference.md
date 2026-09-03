@@ -4,7 +4,7 @@ description: Every codev command, grouped by what it's for.
 ---
 
 :::note[You typically never run these yourself]
-`lead` and `lead` run this CLI on your behalf during a normal session — see
+Your agent runs this CLI on your behalf during a normal session — see
 [Talking to Your Agent](/CoDev/working-with-your-agent/). This page is the exact reference
 for what they run: useful for scripting, CI, debugging, or understanding the mechanism —
 not a list of commands you're expected to type.
@@ -28,7 +28,7 @@ All four preflight the entire operation first. A locally modified managed file b
 visible conflict; CoDev never silently overwrites it.
 
 `--agent-platform` accepts `opencode`, `junie`, `antigravity`, `claude`, or `all` (the
-default). OpenCode and Claude Code get the full lead-driven workflow; Junie and
+default). OpenCode and Claude Code get the full workflow; Junie and
 Antigravity get a single narrower `assistant` agent for bounded, surgical edits — see
 [ADR-0031](https://github.com/urban233/CoDev/blob/main/docs/adr/0031-drop-codex-narrow-junie-and-antigravity-to-an-edit-assistant.md)
 for why. Pass it more than once, or a comma-separated list, to select several platforms at
@@ -73,7 +73,7 @@ usefulness boundary, provided the task states its own containment.
 | Command | Purpose |
 |---|---|
 | `codev task start --id <id> --base <sha> [--entry takeover\|direct-review]` | Open a new task |
-| `codev task record ...` | Record one builder or reviewer round (normally done by the lead, not typed by hand) |
+| `codev task record ...` | Record one builder or reviewer round (normally automated by your agent, not typed by hand) |
 | `codev task check --id <id> --head <sha>` | Ask whether the task may proceed to a pull request |
 | `codev task status [--target <path>]` | List tasks in progress |
 | `codev task log --id <id>` | Show one task's full round history |

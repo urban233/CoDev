@@ -5,7 +5,7 @@ description: Coordinating two developers on the same feature through a shared co
 
 :::tip[Who actually types these commands]
 As in the earlier tutorials, the `codev ...` commands below are what each developer's
-`lead` runs on their behalf. What's yours to do — and Priya's and Marcus's, below —
+agent runs on their behalf. What's yours to do — and Priya's and Marcus's, below —
 is agreeing on the contract in plain language before either lane starts building.
 :::
 

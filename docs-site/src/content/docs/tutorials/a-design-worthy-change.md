@@ -46,10 +46,10 @@ A one-line salt-stripping fix didn't have either property. This one has both.
 
 ## Step 1: describe the change
 
-State the outcome to your assistant. Where the platform supports a separate `lead`
-entry point (OpenCode, Claude Code), switch to it for Understand/Design work — it's a
-distinct, human-started entry point from `lead`, decoupled from execution
-([ADR-0024](https://github.com/urban233/CoDev/blob/main/docs/adr/0024-lead-primary-agent.md)):
+State the outcome to your assistant -- there is no separate entry point to switch to
+for design work, on any platform
+([ADR-0044](https://github.com/urban233/CoDev/blob/main/docs/adr/0044-lead-is-not-an-agent.md)).
+The same conversation reads the situation and invokes `design-solution` itself:
 
 ```text
 We need to compute TPSA alongside the existing molecular weight in the screening
