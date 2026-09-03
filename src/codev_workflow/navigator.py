@@ -332,7 +332,8 @@ def _is_accepted(path: Path) -> bool | None:
     for line in head.splitlines():
         stripped = line.strip().replace("*", "")
         if stripped.lower().startswith("status:"):
-            return "accepted" in stripped.lower()
+            status = stripped.split(":", 1)[1].strip().lower()
+            return bool(status.split() and status.split()[0] == "accepted")
     return None
 
 
