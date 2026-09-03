@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "3388dc23b5aa95fc405d7141bf634cdf4fe23a87",
+  "branch": "codev/lead-as-skill-plan",
+  "slice_branches": {
+    "lead-as-skill-plan": {
+      "base_snapshot": "3388dc23b5aa95fc405d7141bf634cdf4fe23a87",
+      "branch": "codev/lead-as-skill-plan"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "base_snapshot": "3388dc23b5aa95fc405d7141bf634cdf4fe23a87",
+  "current_round": 1,
+  "current_slice": "lead-as-skill-plan",
+  "description": null,
+  "entry": null,
+  "link_ref": "https://github.com/urban233/CoDev/issues/40",
+  "max_rounds": {
+    "inner": 2,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "lead-as-skill-plan"
+    }
+  ],
+  "slice_styles": {
+    "lead-as-skill-plan": "delegate"
+  },
+  "slices": [
+    "lead-as-skill-plan"
+  ],
+  "status": "in_progress",
+  "summary": "Plan: lead becomes a skill, not an agent, on every platform",
+  "task_id": "lead-as-skill-plan"
+}
