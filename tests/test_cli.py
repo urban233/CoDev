@@ -2518,9 +2518,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            # Ten roles, not eleven: `orchestrator` and `planner` became the
-            # single `lead`.
-            self.assertEqual(10, len(payload["findings"]))
+            # Eight roles, not ten: `lead` and `outer-loop-runner` are not
+            # agents any more (ADR-0044) -- coordination is what every
+            # ordinary session already reads, and the outer loop's protocol
+            # is the outer-loop-review skill, loaded on demand.
+            self.assertEqual(8, len(payload["findings"]))
 
     def test_adapter_verify_passes_for_claude_on_a_fresh_install(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2542,17 +2544,19 @@ class CliTests(unittest.TestCase):
             self.assertEqual(0, code)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload["ok"])
-            # Ten roles, not eleven: `orchestrator` and `planner` became the
-            # single `lead`.
-            self.assertEqual(10, len(payload["findings"]))
+            # Eight roles, not ten: `lead` and `outer-loop-runner` are not
+            # agents any more (ADR-0044) -- coordination is what every
+            # ordinary session already reads, and the outer loop's protocol
+            # is the outer-loop-review skill, loaded on demand.
+            self.assertEqual(8, len(payload["findings"]))
 
     def test_adapter_verify_fails_when_lifecycle_wiring_is_stripped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             with redirect_stdout(StringIO()):
                 main(["init", "--target", str(target), "--agent-platform", "opencode"])
-            (target / ".opencode/agents/lead.md").write_text(
-                "# lead\n", encoding="utf-8"
+            (target / ".opencode/agents/builder.md").write_text(
+                "# builder\n", encoding="utf-8"
             )
             output = StringIO()
             with redirect_stdout(output):

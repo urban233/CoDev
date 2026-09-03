@@ -63,7 +63,7 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(any(path.endswith(".pyc") for path in bundled))
         self.assertFalse(any(path.endswith(".template") for path in bundled))
         skills = sorted((self.target / ".agents" / "skills").glob("*/SKILL.md"))
-        self.assertEqual(15, len(skills))
+        self.assertEqual(16, len(skills))
         self.assertTrue((self.target / ".agents/skills/pr-review/SKILL.md").is_file())
         self.assertTrue(
             (self.target / ".agents/skills/design-skill-eval/SKILL.md").is_file()
@@ -92,7 +92,8 @@ class InstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("audit-google-python-style: allow", audit_agent)
         self.assertIn("audit-google-typescript-style: allow", audit_agent)
-        self.assertTrue((self.target / ".opencode/agents/lead.md").is_file())
+        self.assertTrue((self.target / ".opencode/agents/builder.md").is_file())
+        self.assertFalse((self.target / ".opencode/agents/lead.md").exists())
         self.assertTrue((self.target / ".junie/agents/assistant.md").is_file())
         self.assertTrue((self.target / ".agents/agents/assistant.md").is_file())
         self.assertTrue((self.target / "docs/codev/README.md").is_file())
@@ -289,9 +290,7 @@ class InstallerTests(unittest.TestCase):
                 "code-audit.md",
                 "concurrency-specialist.md",
                 "correctness-tests-specialist.md",
-                "lead.md",
                 "lightweight-reviewer.md",
-                "outer-loop-runner.md",
                 "reviewer.md",
                 "rollout-specialist.md",
                 "security-data-specialist.md",
@@ -314,11 +313,12 @@ class InstallerTests(unittest.TestCase):
     def test_updating_removes_a_role_the_bundle_stopped_shipping(self) -> None:
         """The migration that protects every existing installation.
 
-        `orchestrator.md` and `planner.md` became `lead.md`. Retaining them
-        the way a retired doc is retained would leave a developer with three
-        human-facing agents instead of one -- the exact confusion the
-        consolidation removed -- because every adapter treats a file in its
-        agents directory as invocable.
+        `orchestrator.md` and `planner.md` became `lead.md` (ADR-0040), then
+        `lead.md` and `outer-loop-runner.md` were removed entirely (ADR-0044).
+        Retaining either the way a retired doc is retained would leave a
+        developer with an invocable agent naming a role that no longer
+        exists, because every adapter treats a file in its agents directory
+        as invocable.
         """
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -336,7 +336,36 @@ class InstallerTests(unittest.TestCase):
             installer.apply_plan(target, installer.plan_update(target))
 
             self.assertFalse(retired.exists())
-            self.assertTrue((target / ".claude/agents/lead.md").is_file())
+            self.assertTrue((target / ".claude/agents/builder.md").is_file())
+            self.assertFalse((target / ".claude/agents/lead.md").exists())
+
+    def test_updating_removes_lead_and_outer_loop_runner(self) -> None:
+        """ADR-0044's own migration: an installation made under ADR-0040 has
+        `lead.md` and `outer-loop-runner.md` on disk. Neither is an agent any
+        more; both must go, and nothing replaces them -- coordination now
+        lives in `.codev/for-ai/ai-agent-guidelines.md`, which every
+        installation already carries and updates in place."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("claude",), "none")
+            )
+            lock = json.loads((target / ".codev/lock.json").read_text("utf-8"))
+            retired_roles = {
+                ".claude/agents/lead.md": "# lead\n",
+                ".claude/agents/outer-loop-runner.md": "# outer-loop-runner\n",
+            }
+            for relative, content in retired_roles.items():
+                path = target / relative
+                path.write_text(content, encoding="utf-8")
+                lock["files"][relative] = installer._sha256(path.read_bytes())
+            (target / ".codev/lock.json").write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            for relative in retired_roles:
+                self.assertFalse((target / relative).exists())
+            self.assertTrue((target / ".codev/for-ai/ai-agent-guidelines.md").is_file())
 
     def test_a_locally_edited_retired_role_is_a_conflict_not_a_deletion(self) -> None:
         """Deleting a developer's own edits is never the default, even for a
@@ -389,7 +418,7 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn(
                 "orchestrator", lock["integrations"]["opencode_agent_hashes"]
             )
-            self.assertIn("lead", config["agent"])
+            self.assertIn("builder", config["agent"])
 
     def test_bundle_filters_claude_adapter_files(self) -> None:
         claude_files = installer._bundle_files(("claude",))
@@ -404,8 +433,6 @@ class InstallerTests(unittest.TestCase):
                 ".claude/agents/concurrency-specialist.md",
                 ".claude/agents/correctness-tests-specialist.md",
                 ".claude/agents/lightweight-reviewer.md",
-                ".claude/agents/lead.md",
-                ".claude/agents/outer-loop-runner.md",
                 ".claude/agents/reviewer.md",
                 ".claude/agents/rollout-specialist.md",
                 ".claude/agents/security-data-specialist.md",
