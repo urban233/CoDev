@@ -29,7 +29,8 @@ verdict for every review dimension.
 Record this round with `codev task record --id <task-id> --round
 <round> --role reviewer --head <head-sha> --findings <findings.json>
 --coverage <coverage.json> --decision <decision>` before returning findings
-in the conversation. `codev task check` — run by `lead`, not you —
+in the conversation. `codev task check` — run by the session that
+dispatched you, not you —
 is the sole authority on whether the loop may continue; do not judge
 convergence yourself.
 

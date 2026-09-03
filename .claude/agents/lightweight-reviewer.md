@@ -36,11 +36,11 @@ withhold it chasing a "perfect" implementation — there is no such thing as
 perfect code, only better code.
 
 As a final check before approving, apply the same critical-category tripwire
-`lead` applies before delegating: an obvious hardcoded secret, a
+applied before delegating to `builder`: an obvious hardcoded secret, a
 plainly destructive operation, or an authentication bypass. If one appears,
 do not approve and do not stay silent because it is outside this pass's
 normal scope — record it as a blocking finding and decide `CHANGES REQUIRED`
-so `lead` treats it as a critical interrupt, not an ordinary round.
+so it is treated as a critical interrupt, not an ordinary round.
 
 Record this round with `codev task record --id <task-id> --round
 <round> --role reviewer --head <head-sha> --findings <findings.json>
@@ -49,7 +49,8 @@ READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE` before
 returning in the conversation. Report a coverage verdict only for
 `correctness` — the other dimensions are out of scope for this pass, and
 `codev task check` does not require them for `READY_FOR_OUTER_LOOP`.
-`codev task check` — run by `lead`, not you — is the sole
+`codev task check` — run by the session that dispatched you, not
+you — is the sole
 authority on whether the loop may continue, has hit its round cap, or has
 seen a repeated or newly expanded blocking finding; do not judge convergence
 yourself.

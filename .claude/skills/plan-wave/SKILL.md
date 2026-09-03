@@ -253,7 +253,7 @@ contain a backtick, `$`, or double quote — a shell corrupts those
 characters before `codev` ever sees the text, silently mangling the issue.
 
 If a developer starts implementation directly, without a session that ran
-this Handoff first, `lead` checks and creates the issue itself
+this Handoff first, `codev slice begin` checks and creates the issue itself
 before opening round state — this Handoff is the first opportunity to do it,
 not the only one.
 
