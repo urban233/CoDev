@@ -39,7 +39,12 @@
     {
       "builder": null,
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {},
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "6f66d7c64d99d28206fc50208d4c344a27f4fe99"
+      },
       "round": 2,
       "slice_id": "accepted-status-and-prose"
     }
