@@ -1,6 +1,6 @@
 # Lead Is a Skill, Not an Agent - Implementation Plan
 
-**Status:** Draft, not yet approved for implementation
+**Status:** Accepted 2026-09-03 by Martin Urban
 **Owner:** Martin Urban
 **Author:** Claude Sonnet 5 (drafted; not an approval)
 **Supersedes in part:** [ADR-0040](../adr/0040-the-lead-agent-is-the-only-human-facing-agent.md)
