@@ -1,12 +1,12 @@
 {
-  "base_snapshot": "689b7e858375c0c33b4fd7577126666b1e48c8d7",
-  "current_round": 2,
+  "base_snapshot": "7db75fb191fdbcdab22f9ce7afeebf6fb9a74a49",
+  "current_round": 3,
   "current_slice": "accepted-status-and-prose",
   "description": null,
   "entry": null,
   "link_ref": "https://github.com/urban233/CoDev/issues/36",
   "max_rounds": {
-    "inner": 3,
+    "inner": 4,
     "outer": 2
   },
   "owner": "urban233",
@@ -24,6 +24,20 @@
       "reason": "Recovery and follow-up done as pair work: restoring the branch state, correcting the status match, and closing two managed-ignore gaps did not warrant dispatching a builder.",
       "timestamp": "2026-09-03T13:04:15Z",
       "to_round": 2
+    },
+    {
+      "by": "urban233",
+      "from_round": 2,
+      "head": "7db75fb191fdbcdab22f9ce7afeebf6fb9a74a49",
+      "max_rounds": {
+        "inner": 4,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Fixed task.check's drift comparison to look through a task's own trailing bookkeeping commits, with regression tests reproducing the exact deadlock this slice hit live -- pair work, not a builder round.",
+      "timestamp": "2026-09-03T14:03:28Z",
+      "to_round": 3
     }
   ],
   "reviewer": null,
@@ -46,6 +60,13 @@
         "head_snapshot": "6f66d7c64d99d28206fc50208d4c344a27f4fe99"
       },
       "round": 2,
+      "slice_id": "accepted-status-and-prose"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 3,
       "slice_id": "accepted-status-and-prose"
     }
   ],
