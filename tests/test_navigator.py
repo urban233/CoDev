@@ -91,6 +91,26 @@ class RoutingTableTests(unittest.TestCase):
                 )
 
 
+class OptionCommandTests(unittest.TestCase):
+    """An option that names a command which refuses from that position is
+    worse than no option: it reads as a way out and is not one."""
+
+    def test_no_option_names_resume_without_pause(self) -> None:
+        """`codev task resume` acts on a paused slice and refuses with 'is
+        not paused' otherwise. Three options named it alone, which was found
+        by taking one of them on this module's own pull request."""
+        for reason, routing in _BY_CHECK_REASON.items():
+            for option in routing.options:
+                command = option.command or ""
+                if "codev task resume" in command:
+                    self.assertIn(
+                        "codev task pause",
+                        command,
+                        f"{reason}: resume needs a paused slice, so the "
+                        "option must name pause first",
+                    )
+
+
 class LocalPositionTests(unittest.TestCase):
     def test_a_repository_with_no_planning_artifact_says_to_frame_the_work(
         self,

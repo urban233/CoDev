@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "0c0dac5",
+  "base_snapshot": "95239190897c0b85a5974d105c211583878c48a1",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -16,16 +16,32 @@
       "timestamp": "2026-09-02T23:46:16Z"
     }
   ],
-  "current_round": 1,
+  "current_round": 2,
   "current_slice": "navigator-rename",
   "description": null,
   "entry": "direct-review",
   "link_ref": "https://github.com/urban233/CoDev/issues/34",
   "max_rounds": {
     "inner": 2,
-    "outer": 2
+    "outer": 3
   },
   "owner": "urban233",
+  "reopens": [
+    {
+      "by": "urban233",
+      "from_round": 1,
+      "head": "95239190897c0b85a5974d105c211583878c48a1",
+      "max_rounds": {
+        "inner": 2,
+        "outer": 3
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Closed the third zero-measurement hole in the plan gate as pair work: a six-line guard plus its regression test did not warrant dispatching a builder.",
+      "timestamp": "2026-09-02T23:58:01Z",
+      "to_round": 2
+    }
+  ],
   "reviewer": null,
   "round_schema_version": 4,
   "rounds": [
@@ -91,10 +107,17 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 2,
+      "slice_id": "navigator-rename"
     }
   ],
   "slice_styles": {
-    "navigator-rename": "delegate"
+    "navigator-rename": "pair"
   },
   "slices": [
     "navigator-rename"

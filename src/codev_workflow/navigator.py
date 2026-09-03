@@ -196,9 +196,13 @@ _BY_CHECK_REASON: dict[str, _Routing] = {
         (
             Option(
                 "absorb the change as pair work",
-                "codev task resume --reason <why>",
+                "codev task pause, then codev task resume --reason <why>",
                 "the edits become part of the record and the round cap is "
-                "raised so the interruption costs no budget",
+                "raised so the interruption costs no budget. `resume` acts on "
+                "a paused slice, so `pause` records the interruption first -- "
+                "naming only `resume` here sent a caller to a command that "
+                "refuses with 'is not paused', found by taking this very "
+                "option on this module's own pull request",
             ),
             Option(
                 "escalate",
@@ -215,8 +219,9 @@ _BY_CHECK_REASON: dict[str, _Routing] = {
         (
             Option(
                 "take the keyboard",
-                "codev task resume --reason <why>",
-                "pair work continues the slice and raises the cap by one",
+                "codev task pause, then codev task resume --reason <why>",
+                "pair work continues the slice and raises the cap by one; "
+                "`resume` acts on a paused slice, so `pause` comes first",
             ),
             Option(
                 "escalate",
@@ -233,7 +238,7 @@ _BY_CHECK_REASON: dict[str, _Routing] = {
         (
             Option(
                 "re-scope the correction",
-                "codev task resume --reason <why>",
+                "codev task pause, then codev task resume --reason <why>",
                 "the repeated finding is worked by hand rather than by another "
                 "identical builder pass",
             ),
