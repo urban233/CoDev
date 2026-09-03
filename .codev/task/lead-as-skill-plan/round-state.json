@@ -9,7 +9,7 @@
       "timestamp": "2026-09-03T20:47:51Z"
     }
   ],
-  "current_round": 3,
+  "current_round": 4,
   "current_slice": "lead-as-skill-plan",
   "description": null,
   "entry": null,
@@ -63,7 +63,18 @@
       "slice_id": "lead-as-skill-plan"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed_files": [
+            "src/codev_workflow/installer.py",
+            "tests/test_installer.py"
+          ],
+          "deviations": "none",
+          "limitations": "plan_update's pre-existing `default_managed = default_managed or opencode.default_agent_managed` line is now a functional no-op since the flag only ever passes through unchanged; left untouched as out of scope for this narrow fix",
+          "validation": "ruff check src tests, mypy src tests, full unittest discover -s tests -- all pass (818 tests); independently re-verified by reading the diff and re-running validation before this commit"
+        },
+        "head_snapshot": "9cf95e7419234cdb12b8963ac0254a23c45b3fae"
+      },
       "phase": "outer",
       "reviewer": {
         "coverage": {
@@ -236,6 +247,24 @@
           }
         }
       }
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed_files": [
+            "src/codev_workflow/installer.py",
+            "tests/test_installer.py"
+          ],
+          "deviations": "none",
+          "limitations": "plan_update's pre-existing default_managed-or-flag line is now a functional no-op; left untouched as out of scope for this narrow fix",
+          "validation": "ruff check src tests, mypy src tests, full unittest discover -s tests -- all pass (818 tests, including 3 new tests characterizing the fix and the regression it corrects). Independently re-verified by the outer-loop coordinator, not just the builder's self-report."
+        },
+        "head_snapshot": "9cf95e7419234cdb12b8963ac0254a23c45b3fae"
+      },
+      "phase": "outer",
+      "reviewer": null,
+      "round": 4,
+      "slice_id": "lead-as-skill-plan"
     }
   ],
   "slice_styles": {
