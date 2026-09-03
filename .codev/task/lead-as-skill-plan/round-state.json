@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "ac53661c45fa7b44ec9a3100eb21da29d1de4883",
+  "base_snapshot": "871af4852d5dec1f7b6ee8cf2109f624c73a6686",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -9,7 +9,7 @@
       "timestamp": "2026-09-03T20:47:51Z"
     }
   ],
-  "current_round": 4,
+  "current_round": 5,
   "current_slice": "lead-as-skill-plan",
   "description": null,
   "entry": null,
@@ -33,6 +33,20 @@
       "reason": "A ~90-file architectural implementation across bundle source, both platforms' live installs, tests, docs, and a version cut -- not a scoped builder round.",
       "timestamp": "2026-09-03T20:15:41Z",
       "to_round": 2
+    },
+    {
+      "by": "urban233",
+      "from_round": 4,
+      "head": "871af4852d5dec1f7b6ee8cf2109f624c73a6686",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round 4 was finalized (READY_FOR_HUMAN_APPROVAL) with only correctness/test_quality coverage recorded, before the security_privacy_data_compatibility gap was addressed. The owner explicitly authorized dispatching security-data-specialist for real coverage rather than a waiver; round 5 is needed to record its verdict since round 4's reviewer entry is write-once and already spent.",
+      "timestamp": "2026-09-03T21:21:56Z",
+      "to_round": 5
     }
   ],
   "reviewer": null,
@@ -262,8 +276,29 @@
         "head_snapshot": "9cf95e7419234cdb12b8963ac0254a23c45b3fae"
       },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist narrow re-verification: _prepare_opencode's deletion gate is a genuine 'default_agent_managed and retired_default_agent', not an or or a value-only check; plan_update threads the lock's real provenance flag through unmodified; plan_init correctly relies on the False default since a fresh install has no prior claim. Read the diff directly, not taken on the builder's word.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist mutation-tested the three new tests in a throwaway copy: reverting the provenance gate to pre-fix semantics makes test_updating_preserves_an_unmanaged_default_agent_value_of_lead fail with KeyError, confirming it genuinely encodes the regression; disabling deletion entirely fails both removal tests, confirming neither passes vacuously. Full suite green, 818 tests.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "871af4852d5dec1f7b6ee8cf2109f624c73a6686"
+      },
       "round": 4,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 5,
       "slice_id": "lead-as-skill-plan"
     }
   ],
