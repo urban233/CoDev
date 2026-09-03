@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "0c0dac53e3a505e9a1aff42efe29967aeec46bbe",
+  "branch": "codev/navigator-rename",
+  "slice_branches": {
+    "navigator-rename": {
+      "base_snapshot": "0c0dac53e3a505e9a1aff42efe29967aeec46bbe",
+      "branch": "codev/navigator-rename"
+    }
+  }
+}

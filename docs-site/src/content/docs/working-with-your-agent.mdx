@@ -9,18 +9,17 @@ import Exchange from '../../components/Exchange.astro';
 ## The core idea
 
 In normal use, you never type a `codev` command. You describe what you want, in plain
-language, to an AI agent — `orchestrator` for build work, `planner` for anything upstream
-of a ready task. The agent inspects the actual repository, proposes a plan, and — once you
-approve it — runs `codev` on your behalf: opening the task, committing, recording review
-rounds, opening the pull request. The CLI is the agent's hands. It doesn't have to be
-yours.
+language, to `lead` — the one agent CoDev gives you. It inspects the actual repository,
+proposes a plan, and — once you approve it — runs `codev` on your behalf: opening the
+task, committing, recording review rounds, opening the pull request. The CLI is the
+agent's hands. It doesn't have to be yours.
 
 Everything else on this site that shows a `codev ...` command is showing you the
 *mechanism*, not a script to type. [CLI Reference](/CoDev/cli-reference/) and the
 [Manual CLI Walkthrough](/CoDev/workflow-checklist/) exist for the moments that genuinely
 call for it — CI, scripting, recovering a task by hand — not for everyday work.
 
-## The two agents you talk to
+## The one agent you talk to
 
 <table>
   <thead>
@@ -28,24 +27,26 @@ call for it — CI, scripting, recovering a task by hand — not for everyday wo
   </thead>
   <tbody>
     <tr>
-      <td><code>orchestrator</code></td>
-      <td>Getting a change built, reviewed, and shipped</td>
-      <td>Understand (small changes) → Build → Review → Ship</td>
-    </tr>
-    <tr>
-      <td><code>planner</code></td>
-      <td>Anything upstream of a ready task</td>
-      <td>Specify → Understand (larger changes) → Design → Plan</td>
+      <td><code>lead</code></td>
+      <td>Everything</td>
+      <td>Specify → Understand → Design → Plan → Build → Review → Ship</td>
     </tr>
   </tbody>
 </table>
 
-They're separate, human-started entry points by design — `planner` never invokes
-`orchestrator`/`builder`/`reviewer` itself, and `orchestrator` doesn't do design work.
-You pick which one to talk to based on what you're trying to do right now, the same way
-you'd pick which colleague to walk over to. How you switch between them is
-platform-specific — see [Agent Platforms](/CoDev/agent-platforms/) for the exact mechanism
-on OpenCode, Claude Code, Junie, and Antigravity.
+There is one entry point, and there is nothing to switch between. Earlier versions of
+CoDev asked you to start a `planner` session for design work, an `orchestrator` session
+for building, and an `outer-loop-runner` session for review — and to know which one you
+needed. A session boundary you have to notice is a command by another name, and CoDev's
+whole position is that you don't run commands.
+
+The separation still exists, but underneath: `lead` never edits product code itself, and
+the agents it dispatches can't review their own work. That's a permission boundary now,
+not a thing you operate. See [Roles](/CoDev/roles/) for who does what.
+
+`lead` opens every turn by telling you where the work stands, what it recommends next,
+and why — without you asking. When something blocks it, it says so and offers you the
+choices rather than stopping at a wall.
 
 ## What you actually say
 
@@ -164,7 +165,7 @@ the [Manual CLI Walkthrough](/CoDev/workflow-checklist/) walks the exact sequenc
 goes through end to end. Both are genuinely useful — for understanding what your agent is
 actually doing under the hood, for wiring CoDev into CI, or for recovering a task by hand
 when no agent session is available — but neither is required reading before you start
-using CoDev. Talk to `orchestrator` or `planner` first; read those pages when you're
+using CoDev. Talk to `lead` first; read those pages when you're
 curious or when you actually need to run something yourself.
 
 ## Where to go next

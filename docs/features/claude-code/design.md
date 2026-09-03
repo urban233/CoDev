@@ -203,6 +203,13 @@ parallel one:
 
 ## Guardrail Design
 
+> **Superseded in part.** The three hooks are now thin shims over
+> `codev gate check` (`57bde9c`), and the plan gate is risk-tiered rather than
+> keyed purely on a plan file existing -- see `docs/architecture.md`'s "The
+> plan gate is risk-tiered" for the rule as it now stands. The two-layer
+> rationale below still describes why the guardrail exists.
+
+
 This is the one genuinely new piece of behavior, not just a fifth copy of an existing pattern.
 Two layers, deliberately not one:
 

@@ -9,17 +9,21 @@ is not a review system.
 
 You start two of them. The rest are invoked for you.
 
-## The ones you start
+## The one you start
 
 | Agent | Phase | What it does |
 |---|---|---|
-| `planner` | Specify, Understand, Design, Plan | Everything upstream of a ready task. Never implements product code, never invokes the build agents |
-| `orchestrator` | Build, Review, Ship | Frames the change, delegates it, records evidence, opens the pull request. **Never edits product code itself** |
-| `outer-loop-runner` | Review → Ship | Takes a task with an open pull request through specialist review to a human-ready state |
+| `lead` | All of them | The only agent you talk to. Plans, dispatches the build, and drives review to a merged pull request. **Never edits product code itself** |
 
-`planner` and `orchestrator` are separate entry points on purpose. Handing a
-ready task from one to the other is your decision, not an automatic
-continuation.
+There is one entry point, and it is `lead`. Earlier versions asked you to start
+a `planner` session for upstream work and an `outer-loop-runner` session for
+review, then to know when to switch. A session boundary you have to notice is a
+command by another name, and CoDev's position is that you do not run commands
+([ADR-0040](https://github.com/urban233/CoDev/blob/main/docs/adr/0040-the-lead-agent-is-the-only-human-facing-agent.md)).
+
+`lead` opens every turn by telling you where the work stands, what it
+recommends, and why -- computed by the navigator, not remembered. When it is
+blocked it says so and offers the choices, rather than stopping at a wall.
 
 ## The inner loop
 
@@ -35,9 +39,15 @@ mechanical cleanup never spends any of the outer loop's round budget.
 
 ## The outer loop
 
-Five specialists review the exact diff in parallel once the pull request is
-open. You choose which to dispatch; skipping one is offered as a recorded
-waiver with a reason, never assumed.
+`lead` dispatches `outer-loop-runner` once a pull request is open. It fetches
+the pull request, gates on CI, dispatches the specialists, and drives
+human-triaged correction to a landed change. It used to be a session you
+started yourself; now it is a subagent, and the only thing that changed is who
+starts it.
+
+Five specialists review the exact diff in parallel. You choose which to
+dispatch — each spends a real model call, so each is permission-gated — and
+skipping one is offered as a recorded waiver with a reason, never assumed.
 
 | Specialist | Dimensions it owns |
 |---|---|
@@ -57,7 +67,7 @@ is neither the task's owner nor a bot.
 > An agent may write code, or it may review code. Never both, for the same
 > change.
 
-`builder` cannot review. Reviewers cannot edit. `orchestrator` never writes
+`builder` cannot review. Reviewers cannot edit. `lead` never writes
 product code. An agent may check its own work; it may never approve it.
 
 ## Next

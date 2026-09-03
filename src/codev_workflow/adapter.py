@@ -67,8 +67,11 @@ def _role_paths(directory: str, extension: str) -> dict[str, str]:
     # output is instead checked where it's actually produced, by the
     # installer's own per-platform agent-rendering tests.
     paths = {
-        "orchestrator": f"{directory}/orchestrator.{extension}",
-        "planner": f"{directory}/planner.{extension}",
+        # One human-facing role. `planner` is gone -- its routing is what
+        # `codev next` computes and its skills `lead` invokes directly -- and
+        # `outer-loop-runner` below is now dispatched by `lead` rather than
+        # started by a developer.
+        "lead": f"{directory}/lead.{extension}",
         "builder": f"{directory}/builder.{extension}",
         "reviewer": f"{directory}/reviewer.{extension}",
         "lightweight-reviewer": f"{directory}/lightweight-reviewer.{extension}",
@@ -82,7 +85,7 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
     "opencode": _role_paths(".opencode/agents", "md"),
     "claude": _role_paths(".claude/agents", "md"),
     # Junie and Antigravity are the narrow tier: a single bounded-edit
-    # `assistant` role, not the full orchestrator-driven workflow (see
+    # `assistant` role, not the full lead-driven workflow (see
     # ADR-0031) -- no outer-loop roles, no code-audit, no task-lifecycle
     # markers to require.
     "junie": {"assistant": ".junie/agents/assistant.md"},
@@ -90,15 +93,17 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
-    "orchestrator": (
-        "codev task start",
-        "codev task check",
-        "codev git open-pr",
-        "--github-issue",
-        "codev git issue-create",
-        "--no-github-issue",
+    "lead": (
+        # The composite verbs, not the steps they compose: a lead that still
+        # spelled out `codev git branch` then `codev task start` would be the
+        # procedure this role exists to stop carrying.
+        "codev next",
+        "codev slice begin",
+        "codev round close",
+        "codev slice publish",
+        "codev slice land",
+        "codev git mark-ready",
     ),
-    "planner": ("codev git issue-create",),
     "builder": ("codev task record",),
     "reviewer": ("codev task record",),
     "lightweight-reviewer": ("codev task record",),

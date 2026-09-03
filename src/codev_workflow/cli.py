@@ -34,6 +34,7 @@ import argparse
 import json
 import platform
 import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -45,7 +46,7 @@ from codev_workflow import gate as gate_module
 from codev_workflow import git_ops as git_ops_module
 from codev_workflow import health as health_module
 from codev_workflow import hook_log as hook_log_module
-from codev_workflow import oracle as oracle_module
+from codev_workflow import navigator as navigator_module
 from codev_workflow import task as task_module
 from codev_workflow.adapter import AdapterVerificationError, verify_adapter
 from codev_workflow.config import ConfigError
@@ -105,7 +106,9 @@ def _parser() -> argparse.ArgumentParser:
         prog="codev",
         description="Install and maintain human-guided AI delivery workflows.",
     )
-    parser.add_argument("--version", action="version", version=f"CoDev {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"CoDev {_reported_version()}"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     init = commands.add_parser("init", help="install CoDev into a repository")
@@ -422,6 +425,90 @@ def _parser() -> argparse.ArgumentParser:
     )
     next_parser.add_argument("--json", action="store_true")
     next_parser.add_argument("--target", type=_target, default=Path.cwd())
+
+    # ADR-0036 taken to its conclusion: an interface whose correct use needs a
+    # twenty-five-line protocol is a procedure, not an interface. Each verb
+    # below replaces one numbered step in a role file that issued several
+    # commands with conditional flags between them. They compose the existing
+    # `git`/`task` verbs and add no state semantics of their own -- those verbs
+    # stay, because recovery paths and mid-session agents still need them.
+    slice_parser = commands.add_parser(
+        "slice",
+        help="the slice lifecycle in whole steps, one command per intent",
+    )
+    slice_commands = slice_parser.add_subparsers(dest="slice_command", required=True)
+
+    s_begin = slice_commands.add_parser(
+        "begin",
+        help="branch, issue, and round state for a slice in one call",
+    )
+    s_begin.add_argument("--id", required=True)
+    s_begin.add_argument("--base", required=True, help="base git snapshot")
+    s_begin.add_argument("--title", default=None, help="issue title, when creating one")
+    s_begin.add_argument("--body", default=None, help="literal issue body text")
+    s_begin.add_argument("--body-file", type=Path, default=None)
+    s_begin.add_argument("--github-issue", type=int, default=None)
+    s_begin.add_argument("--no-github-issue", action="store_true")
+    s_begin.add_argument("--link", default=None)
+    s_begin.add_argument("--summary", default=None)
+    s_begin.add_argument("--description", default=None)
+    s_begin.add_argument("--owner", default=None)
+    s_begin.add_argument("--reviewer", default=None)
+    s_begin.add_argument("--entry", choices=("takeover", "direct-review"), default=None)
+    s_begin.add_argument("--max-rounds", type=int, default=None)
+    s_begin.add_argument(
+        "--slice",
+        dest="slices",
+        action="append",
+        default=None,
+        help="repeatable; the ordered slice list this task holds",
+    )
+    s_begin.add_argument(
+        "--pair-slice", dest="pair_slices", action="append", default=None
+    )
+    s_begin.add_argument("--assignee", dest="assignees", action="append", default=None)
+    s_begin.add_argument("--allow-dirty", action="store_true")
+    s_begin.add_argument("--json", action="store_true")
+    s_begin.add_argument("--target", type=_target, default=Path.cwd())
+
+    s_publish = slice_commands.add_parser(
+        "publish", help="push the slice's branch and open its pull request"
+    )
+    s_publish.add_argument("--id", required=True)
+    s_publish.add_argument("--title", required=True)
+    s_publish.add_argument("--base", default=None)
+    s_publish.add_argument("--json", action="store_true")
+    s_publish.add_argument("--target", type=_target, default=Path.cwd())
+
+    s_land = slice_commands.add_parser(
+        "land",
+        help="advance to the next slice, or close the task when this was the last",
+    )
+    s_land.add_argument("--id", required=True)
+    s_land.add_argument(
+        "--outcome",
+        default="approved",
+        choices=("approved", "abandoned", "escalated"),
+        help="used only when this was the final slice",
+    )
+    s_land.add_argument("--json", action="store_true")
+    s_land.add_argument("--target", type=_target, default=Path.cwd())
+
+    round_parser = commands.add_parser(
+        "round", help="the builder/reviewer rounds inside one slice"
+    )
+    round_commands = round_parser.add_subparsers(dest="round_command", required=True)
+    r_close = round_commands.add_parser(
+        "close",
+        help="commit the work and record the round against the resulting head",
+    )
+    r_close.add_argument("--id", required=True)
+    r_close.add_argument("--role", required=True, choices=("builder",))
+    r_close.add_argument("--evidence", type=Path, required=True)
+    r_close.add_argument("--message", default=None)
+    r_close.add_argument("--round", dest="round_number", type=int, default=None)
+    r_close.add_argument("--json", action="store_true")
+    r_close.add_argument("--target", type=_target, default=Path.cwd())
 
     self_parser = commands.add_parser("self", help="manage the installed codev tool")
     self_commands = self_parser.add_subparsers(dest="self_command", required=True)
@@ -1111,7 +1198,7 @@ def _run_status_command(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(payload))
     else:
-        print(f"CoDev {__version__} - {target}")
+        print(f"CoDev {_reported_version()} - {target}")
         if args.verbose:
             print(f"Python {platform.python_version()} ({platform.system()})")
         if result.ok:
@@ -1295,7 +1382,35 @@ def _run_config_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def _installed_from_source() -> Path | None:
+    """The working tree this CoDev runs from, when it is a source or editable
+    install rather than a released package.
+
+    A released wheel unpacks into `site-packages`; a source install imports
+    straight out of a checkout, which has a `pyproject.toml` beside the
+    package root. Distinguishing them matters because the upgrade advice is
+    opposite for each.
+    """
+    root = Path(__file__).resolve().parent.parent.parent
+    return root if (root / "pyproject.toml").is_file() else None
+
+
 def _self_update_hint() -> str:
+    source = _installed_from_source()
+    if source is not None:
+        # Telling a source install to `uv tool upgrade` sends it to PyPI,
+        # whose latest release can be *older* than the checkout it is running
+        # from -- advice that silently downgrades the tool, which is how a
+        # build three waves behind kept reporting itself healthy.
+        return (
+            f"This CoDev runs from a source checkout at {source}.\n"
+            "Upgrading means updating that checkout, not fetching a release:\n"
+            "  git -C "
+            f"{source} pull\n"
+            "If it is an editable install, that is all it takes. Otherwise "
+            "reinstall from it:\n"
+            f"  uv tool install --force --editable {source}"
+        )
     if shutil.which("pipx"):
         return "Run: pipx upgrade open-codev-workflow"
     if shutil.which("uv"):
@@ -1307,9 +1422,35 @@ def _self_update_hint() -> str:
     )
 
 
+def _reported_version() -> str:
+    """`__version__`, plus the commit when this is a source checkout.
+
+    Two different trees reporting the same version is how a tool installed
+    from source in August kept claiming 0.5.0 while `main` moved three waves
+    ahead of it -- and why 496 gate calls failed open unnoticed, since the
+    hooks called a `codev gate` subcommand the frozen build did not have.
+    A released install is unambiguous and reports the bare version.
+    """
+    source = _installed_from_source()
+    if source is None:
+        return __version__
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(source), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return f"{__version__}+source"
+    revision = commit.stdout.strip()
+    return f"{__version__}+source.{revision}" if revision else f"{__version__}+source"
+
+
 def _run_self_command(args: argparse.Namespace) -> int:
     if args.self_command == "version":
-        print(f"CoDev {__version__}")
+        print(f"CoDev {_reported_version()}")
         return 0
     if args.self_command == "update":
         print(_self_update_hint())
@@ -1340,7 +1481,7 @@ def _run_gate_command(args: argparse.Namespace) -> int:
 
 
 def _run_next_command(args: argparse.Namespace) -> int:
-    action = oracle_module.next_action(
+    action = navigator_module.next_action(
         target=args.target.resolve(),
         task_id=args.id,
         check_github=not args.no_github,
@@ -1355,29 +1496,216 @@ def _run_next_command(args: argparse.Namespace) -> int:
     return 1 if action.blocked else 0
 
 
+def _resolve_linkage(
+    *,
+    github_issue: int | None,
+    link: str | None,
+    summary: str | None,
+    no_github_issue: bool,
+    target: Path,
+) -> tuple[str | None, str | None]:
+    """The issue-linkage rule ADR-0004 and ADR-0020 settled, in one place.
+
+    Extracted so `slice begin` obeys it by calling it rather than by
+    restating it -- a second copy is how the two drift into disagreeing
+    about when a task may exist without an issue.
+    """
+    if github_issue is not None:
+        issue = git_ops_module.fetch_issue(github_issue, target=target)
+        if link is None:
+            link = issue["url"]
+        if summary is None:
+            summary = issue["title"]
+    if (
+        link is None
+        and not no_github_issue
+        and git_ops_module.has_github_remote(target=target)
+    ):
+        raise TaskError(
+            "this repository has a GitHub remote but no issue linkage was "
+            "given for this task -- run `codev git issue-create` "
+            "first and pass --github-issue N (or --link), or pass "
+            "--no-github-issue to acknowledge this item intentionally "
+            "has none"
+        )
+    return link, summary
+
+
+def _run_slice_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+
+    if args.slice_command == "begin":
+        # Branch first, then the issue. Both orders have a failure that leaves
+        # something behind; this one leaves a local branch with no round state,
+        # which `codev next` reports and a developer can delete. The other
+        # leaves an issue on GitHub that nothing points at.
+        branch = git_ops_module.create_branch(
+            args.id, args.base, target=target, allow_dirty=args.allow_dirty
+        )
+        issue_url: str | None = None
+        issue_number: int | None = args.github_issue
+        if args.github_issue is None and not args.no_github_issue and args.link is None:
+            if args.title is None:
+                raise TaskError(
+                    "--title is required to create this slice's issue; pass "
+                    "--github-issue N to reuse an existing one, or "
+                    "--no-github-issue when this repository tracks none"
+                )
+            if args.body_file is not None:
+                body = args.body_file.read_text(encoding="utf-8")
+            elif args.body is not None:
+                body = args.body
+            else:
+                raise TaskError("either --body or --body-file is required")
+            issue_url = git_ops_module.create_issue(
+                args.title, body, target=target, assignees=args.assignees
+            )
+            issue_number = _github_number(issue_url)
+
+        link_ref, summary = _resolve_linkage(
+            github_issue=issue_number if issue_url is None else None,
+            link=args.link or issue_url,
+            summary=args.summary,
+            no_github_issue=args.no_github_issue,
+            target=target,
+        )
+        owner = args.owner or git_ops_module.detect_identity(target=target)
+        task_module.start(
+            args.id,
+            args.base,
+            target=target,
+            max_rounds=args.max_rounds,
+            link_ref=link_ref,
+            summary=summary,
+            description=args.description,
+            owner=owner,
+            entry=args.entry,
+            slices=args.slices,
+            reviewer=args.reviewer,
+            pair_slices=args.pair_slices,
+        )
+        payload = {
+            "task_id": args.id,
+            "branch": branch,
+            "base_snapshot": args.base,
+            "slices": task_module.slice_ids(args.id, target=target),
+            "slice_id": task_module.current_slice(args.id, target=target),
+            "issue_url": link_ref,
+            "issue_number": issue_number,
+            "round": task_module.describe(args.id, target=target)["current_round"],
+            "owner": owner,
+        }
+        if args.json:
+            return _emit_json(payload)
+        print(f"Began {payload['slice_id']} on {branch}")
+        if link_ref:
+            print(f"Issue: {link_ref}")
+        return 0
+
+    if args.slice_command == "publish":
+        git_ops_module.push(args.id, target=target)
+        url = git_ops_module.open_pr(
+            args.id,
+            args.title,
+            task_module.pr_description(args.id, target=target),
+            target=target,
+            base=args.base,
+            use_template=True,
+        )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "slice_id": task_module.current_slice(args.id, target=target),
+                    "branch": _recorded_branch(args.id, target=target),
+                    "url": url,
+                    "number": _github_number(url),
+                    "draft": True,
+                    "size": _size_payload(args.id, target=target),
+                }
+            )
+        print(url)
+        _print_size_report(args.id, target=target)
+        return 0
+
+    if args.slice_command == "land":
+        head = git_ops_module.current_head(target)
+        slice_id = task_module.current_slice(args.id, target=target)
+        if task_module.is_final_slice(args.id, slice_id, target=target):
+            task_module.close(args.id, args.outcome, target=target)
+            payload = {
+                "task_id": args.id,
+                "slice_id": slice_id,
+                "final": True,
+                "outcome": args.outcome,
+                "next_slice": None,
+            }
+        else:
+            next_slice = task_module.advance_slice(args.id, head, target=target)
+            payload = {
+                "task_id": args.id,
+                "slice_id": slice_id,
+                "final": False,
+                "outcome": None,
+                "next_slice": next_slice,
+            }
+        if args.json:
+            return _emit_json(payload)
+        if payload["final"]:
+            print(f"Closed {args.id} as {args.outcome}; {slice_id} was its last slice")
+        else:
+            print(f"Advanced {args.id} from {slice_id} to {payload['next_slice']}")
+        return 0
+
+    return 2
+
+
+def _run_round_command(args: argparse.Namespace) -> int:
+    target = args.target.resolve()
+    if args.round_command == "close":
+        # The round number is derived, not asked for. Requiring it made the
+        # caller track state the state file already holds, and getting it
+        # wrong silently wrote a round into the wrong slot.
+        round_number = args.round_number
+        if round_number is None:
+            round_number = task_module.describe(args.id, target=target)["current_round"]
+        evidence = task_module.load_json_file(args.evidence)
+        message = args.message or f"{args.id}: {args.role} round {round_number}"
+        head = git_ops_module.commit(
+            args.id,
+            message,
+            target=target,
+            round_number=round_number,
+            evidence=evidence,
+        )
+        if args.json:
+            return _emit_json(
+                {
+                    "task_id": args.id,
+                    "slice_id": task_module.current_slice(args.id, target=target),
+                    "head": head,
+                    "round": round_number,
+                    "role": args.role,
+                    "branch": _recorded_branch(args.id, target=target),
+                    "size": _size_payload(args.id, target=target),
+                }
+            )
+        print(f"Closed {args.role} round {round_number} at {head}")
+        _print_size_report(args.id, target=target)
+        return 0
+    return 2
+
+
 def _run_task_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
     if args.task_command == "start":
-        link_ref = args.link
-        summary = args.summary
-        if args.github_issue is not None:
-            issue = git_ops_module.fetch_issue(args.github_issue, target=target)
-            if link_ref is None:
-                link_ref = issue["url"]
-            if summary is None:
-                summary = issue["title"]
-        if (
-            link_ref is None
-            and not args.no_github_issue
-            and git_ops_module.has_github_remote(target=target)
-        ):
-            raise TaskError(
-                "this repository has a GitHub remote but no issue linkage was "
-                "given for this task -- run `codev git issue-create` "
-                "first and pass --github-issue N (or --link), or pass "
-                "--no-github-issue to acknowledge this item intentionally "
-                "has none"
-            )
+        link_ref, summary = _resolve_linkage(
+            github_issue=args.github_issue,
+            link=args.link,
+            summary=args.summary,
+            no_github_issue=args.no_github_issue,
+            target=target,
+        )
         owner = args.owner
         if owner is None:
             owner = git_ops_module.detect_identity(target=target)
@@ -2172,6 +2500,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_gate_command(args)
         if args.command == "next":
             return _run_next_command(args)
+        if args.command == "slice":
+            return _run_slice_command(args)
+        if args.command == "round":
+            return _run_round_command(args)
         if args.command == "task":
             return _run_task_command(args)
         if args.command == "git":

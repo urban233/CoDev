@@ -1,6 +1,6 @@
 # ADR-0030: Claude Code adapter, and settings.json/hooks as a new bundled-content category
 
-**Status:** Proposed
+**Status:** Accepted 2026-09-03 (implemented; resolved rather than left indefinite while later ADRs built on it)
 **Date:** 2026-08-30
 **Owner:** CoDev maintainers
 **Related design:** [../features/claude-code/design.md](../features/claude-code/design.md)

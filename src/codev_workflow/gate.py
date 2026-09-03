@@ -46,8 +46,11 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
+
+from codev_workflow import git_ops, task
 
 GATES = ("plan", "wave-shape", "small-change")
 
@@ -77,6 +80,33 @@ _SPEC_GLOBS = (
     "docs/features/*/design.md",
     "docs/codev/features/*/design.md",
     "docs/codev/wave/*.md",
+    # A gate that cannot see the artifact it asks for teaches agents that the
+    # artifact is pointless. This one could not: `docs/plans/` is where this
+    # repository keeps every accepted plan, including the ones authorizing the
+    # work the gate was interrupting.
+    "docs/plans/*.md",
+)
+
+# Paths where a small diff does large damage, so size is the wrong question.
+# Deliberately a fixed list rather than a configuration key: CoDev's answer to
+# "more structure" is a better default, not another thing to configure.
+_ALWAYS_PLANNED = (
+    # Reproducibility. A one-line version bump can change what the code
+    # computes, and for research software that surfaces as an unreproducible
+    # result rather than an outage.
+    "pyproject.toml",
+    "uv.lock",
+    "requirements*.txt",
+    "package.json",
+    "package-lock.json",
+    "Cargo.toml",
+    "go.mod",
+    "environment*.yml",
+    # Whether anything is checked at all is not a small change.
+    ".github/workflows/*",
+    # Irreversible against real data.
+    "*/migrations/*",
+    "migrations/*",
 )
 
 _UNGATED_BRANCHES = {"main", "master", "HEAD"}
@@ -350,6 +380,63 @@ def _open_pr_task_id(payload: dict[str, Any]) -> str | None:
     return match.group(1) if match else None
 
 
+def _is_always_planned(relative: Path) -> bool:
+    """Whether this path is one the plan gate asks about regardless of size."""
+    text = relative.as_posix()
+    return any(
+        fnmatch(text, pattern) or fnmatch(relative.name, pattern)
+        for pattern in _ALWAYS_PLANNED
+    )
+
+
+def _within_size_budget(repo_root: Path, branch: str) -> bool | None:
+    """Whether the change accumulated on this branch still fits a focus card.
+
+    None when it cannot be measured, which the caller treats as "ask" rather
+    than "allow": this relaxes a guardrail, so an unmeasurable change must
+    keep the stricter answer.
+
+    The gate fires *before* an edit, so the only diff it can see is the one
+    already on the branch. That reads like a flaw and is the point: the old
+    gate interrupted before the work started, when a developer knows least
+    about what the change will need. This one interrupts when the change
+    grows past what a focus card can carry, which is when a written plan is
+    worth its cost.
+    """
+    if not branch.startswith(_TASK_BRANCH_PREFIX):
+        return None
+    task_id = branch[len(_TASK_BRANCH_PREFIX) :]
+    if not task_id:
+        return None
+    # `codev task size` answers with zeros and over_budget=false for a task it
+    # cannot actually measure -- one that does not exist, or whose state
+    # carries no base to diff against. That is a measurement of nothing, not a
+    # measurement of a small change, and trusting it would let any branch
+    # merely *named* `codev/...` skip the gate entirely. Require a base
+    # snapshot before believing the number.
+    task_dir = repo_root / ".codev" / "task" / task_id
+    try:
+        state = json.loads((task_dir / "round-state.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(state, dict) or not state.get("base_snapshot"):
+        return None
+    # And the branch must be one CoDev recorded. `_measure` returns
+    # TaskSize(0, 0, ...) when it cannot load `git-state.json`, which is
+    # indistinguishable from a genuinely small change -- so a branch merely
+    # *named* `codev/...` and given round state by hand, without
+    # `codev git branch` ever recording it, would measure as zero and skip
+    # the gate however large it grew. Found by the outer-loop review of the
+    # pull request that introduced this tier, and reproduced with a 500-line
+    # change scoring `within-budget-small-change`.
+    if not (task_dir / "git-state.json").is_file():
+        return None
+    size = _slice_size(task_id, repo_root=repo_root)
+    if size is None or "over_budget" not in size:
+        return None
+    return not bool(size["over_budget"])
+
+
 def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
     """Plan-first: pause before the first source edit, or the first
     repository-mutating git command, when no design or plan document exists
@@ -378,6 +465,22 @@ def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
         return _allow(gate, "precise-task-plan")
     if _has_matching_spec(repo_root, _branch_slug(branch)):
         return _allow(gate, "coarse-spec-match")
+
+    # Risk-tiered, and only for edits: a repository-mutating git command is
+    # not made safe by the change being small, and `--allow-dirty` style
+    # mistakes are exactly what the bash arm exists to catch.
+    if reason == "edit":
+        if file_path and _is_always_planned(_relative(Path(file_path), repo_root)):
+            return _ask(
+                gate,
+                f"{file_path} is a dependency manifest, CI definition, or "
+                "migration -- a small diff there changes what the code "
+                "computes, what gets checked, or what happens to real data, "
+                "so size is not the question. If this is an intentional, "
+                "already-discussed step, approve and continue.",
+            )
+        if _within_size_budget(repo_root, branch):
+            return _allow(gate, "within-budget-small-change")
 
     if reason == "bash":
         return _ask(
@@ -454,27 +557,27 @@ def _small_change_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision
 
 
 def _slice_size(task_id: str, *, repo_root: Path) -> dict[str, Any] | None:
-    """`codev task size --id <id> --json`, or None on any failure -- a
-    missing `codev` on PATH, a nonzero exit, a timeout, or unparseable
-    output all fail open."""
+    """The slice's running size, or None when it cannot be measured.
+
+    Measured in-process. This used to shell out to `codev task size`, which
+    dated from the hooks being standalone scripts outside the package; now
+    that the gates live in `codev_workflow`, spawning a second copy of
+    ourselves made both gates depend on a `codev` happening to be on PATH and
+    on it being the same build. A gate that silently stops checking because
+    an executable moved is exactly the failure this module's own degraded
+    reporting exists to surface.
+    """
     try:
-        completed = subprocess.run(
-            ["codev", "task", "size", "--id", task_id, "--json"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        size = git_ops.slice_size(task_id, target=repo_root)
+    except (git_ops.GitOpsError, task.TaskError, KeyError, OSError):
         return None
-    if completed.returncode != 0:
-        return None
-    try:
-        parsed = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
+    return {
+        "lines_changed": size.lines_changed,
+        "files_changed": size.files_changed,
+        "max_lines": size.max_lines,
+        "max_files": size.max_files,
+        "over_budget": size.over_budget,
+    }
 
 
 _GATES = {

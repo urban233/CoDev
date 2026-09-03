@@ -1,28 +1,27 @@
 {
-  "recorded_at": "90cf9f4",
+  "recorded_at": "package 3 of the developer-experience plan",
   "definition": "tests/test_navigator_coverage.py's module docstring. A baseline recorded under a different definition of a step is not comparable to this one.",
-  "walked_steps": 9,
-  "uncovered": [
-    "begin_slice",
-    "dispatch_builder",
-    "record_builder_round",
-    "open_pull_request",
-    "dispatch_specialists",
-    "request_human_review"
-  ],
-  "reasons": {
-    "begin_slice": "The navigator says 'codev git branch, then codev task start' -- two commands in one field, so it describes a procedure rather than naming the next action. Closed by `codev slice begin`.",
-    "dispatch_builder": "With round state open and no builder round recorded, check returns ok_waiting_on_reviewer and the navigator recommends dispatching the reviewer. The builder has not run yet, so it names the wrong actor. oracle.py's own comment on that entry admits the position cannot distinguish the two cases.",
-    "record_builder_round": "After the builder returns, the work advances by committing and recording the round, but the position is still ok_waiting_on_reviewer and the navigator names no command for it. Closed by `codev round close`.",
-    "open_pull_request": "The navigator says 'codev git push, then codev git open-pr' -- two commands in one field. Closed by `codev slice publish`.",
-    "dispatch_specialists": "At ok_ready_for_pr with a pull request already open, the navigator still recommends opening one; it names no specialist dispatch, so the entire outer loop's entry is unguided.",
-    "request_human_review": "Once a draft pull request is open, _github_position intercepts ok_machine_review_complete and reports the human-review gate, which shadows the 'codev git mark-ready' recommendation the check reason would otherwise produce. The draft is never marked ready by anything the navigator says."
+  "walked_steps": 8,
+  "previous": {
+    "recorded_at": "90cf9f4",
+    "walked_steps": 9,
+    "uncovered": [
+      "begin_slice",
+      "dispatch_builder",
+      "record_builder_round",
+      "open_pull_request",
+      "dispatch_specialists",
+      "request_human_review"
+    ],
+    "why_the_step_count_changed": "Nine became eight because `codev slice begin` collapsed `begin_slice` and `start_round_state` into one transition. That is the lifecycle getting shorter, not the walk skipping a step -- creating a branch and opening round state are now one action, so they are one step. Every other step name is unchanged, which is what makes the two counts comparable at all."
   },
-  "planning_positions_absent": [
-    "no product frame",
-    "brief accepted, no design",
-    "design accepted, no wave plan",
-    "plan accepted, no task",
-    "plan drafted, not accepted"
+  "uncovered": [],
+  "reasons": {},
+  "planning_positions": [
+    "no planning artifact",
+    "plan drafted, not accepted",
+    "accepted plan, no branch",
+    "brief accepted, nothing downstream",
+    "design accepted, nothing downstream"
   ]
 }

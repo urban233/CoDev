@@ -73,8 +73,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codev_workflow import git_ops, oracle, task
-from tests.integration_support import Sandbox
+from codev_workflow import git_ops, navigator, task
+from tests.integration_support import Sandbox, run_git
 
 _BASELINE = Path(__file__).with_name("navigator-coverage-baseline.json")
 
@@ -116,11 +116,20 @@ class NavigatorCoverageTests(unittest.TestCase):
         self.sandbox = Sandbox()
         self.addCleanup(self.sandbox.close)
         self.work = self.sandbox.work
+        # A real slice begins from an accepted plan. Committed rather than
+        # merely written, so the worktree is clean and an uncommitted plan is
+        # not mistaken for a builder's uncommitted work.
+        self.sandbox.write(
+            "docs/plans/the-plan.md", "# The plan\n\n**Status:** Accepted\n"
+        )
+        run_git(["add", "-A"], cwd=self.work)
+        run_git(["commit", "-qm", "the plan"], cwd=self.work)
+        self.base = self.sandbox.head()
 
     # -- the walk ---------------------------------------------------------
 
     def _next_command(self) -> str | None:
-        action = oracle.next_action(target=self.work, check_github=True)
+        action = navigator.next_action(target=self.work, check_github=True)
         return action.command
 
     def _steps(self) -> list[tuple[Step, Callable[[], Any]]]:
@@ -131,7 +140,7 @@ class NavigatorCoverageTests(unittest.TestCase):
         this one except `advance-slice`, so adding it before the measure has
         proved useful would be speculative.
         """
-        base = self.sandbox.base
+        base = self.base
 
         def begin() -> None:
             git_ops.create_branch(_TASK, base, target=self.work)
@@ -191,19 +200,24 @@ class NavigatorCoverageTests(unittest.TestCase):
         def close() -> None:
             task.close(_TASK, "approved", target=self.work)
 
+        def begin_slice() -> None:
+            # What `codev slice begin` composes. The walk drives the same
+            # functions the verb drives, matching the rest of this tier.
+            begin()
+            start()
+
         return [
-            (Step("begin_slice", "cli", "codev git branch"), begin),
-            (Step("start_round_state", "cli", "codev task start"), start),
+            (Step("begin_slice", "cli", "codev slice begin"), begin_slice),
             (Step("dispatch_builder", "dispatch", "builder"), build),
-            (Step("record_builder_round", "cli", "codev git commit"), record_build),
+            (Step("record_builder_round", "cli", "codev round close"), record_build),
             (Step("dispatch_reviewer", "dispatch", "reviewer"), review),
-            (Step("open_pull_request", "cli", "codev git push"), publish),
+            (Step("open_pull_request", "cli", "codev slice publish"), publish),
             (Step("dispatch_specialists", "dispatch", "specialist"), outer_review),
             (
                 Step("request_human_review", "cli", "codev git mark-ready"),
                 request_human_review,
             ),
-            (Step("close_task", "cli", "codev task close"), close),
+            (Step("close_task", "cli", "codev slice land"), close),
         ]
 
     def _walk(self) -> dict[str, Any]:
@@ -279,22 +293,25 @@ class NavigatorCoverageTests(unittest.TestCase):
         state = task.describe(_TASK, target=self.work)
         self.assertEqual("closed", state["status"])
 
-    def test_the_navigator_has_no_position_for_the_planning_phases(self) -> None:
-        """The gap package 3 of the successor plan exists to close.
+    def test_the_navigator_answers_for_the_planning_phases(self) -> None:
+        """The inverse of what this asserted at the 90cf9f4 baseline.
 
-        `oracle.next_action` collapses every state in which no task branch
-        exists into one recommendation, so the whole Understand/Design/Plan
-        half of the lifecycle -- where a developer spends the moment they
-        have the least guidance for -- scores as uncovered by construction.
-        This is asserted rather than walked, because there is no position to
-        walk to.
+        Every state before a task used to collapse into one recommendation to
+        start a task, so the whole Understand/Design/Plan half scored as
+        uncovered by construction. It now resolves from the artifacts the
+        repository actually holds.
         """
-        action = oracle.next_action(target=self.work, check_github=False)
-        self.assertEqual("no task on this branch", action.position)
+        action = navigator.next_action(target=self.work, check_github=False)
+        self.assertEqual("accepted plan, no branch", action.position)
+        self.assertEqual("codev slice begin", action.command)
 
-        baseline = json.loads(_BASELINE.read_text(encoding="utf-8"))
-        for name in baseline["planning_positions_absent"]:
-            self.assertNotIn(name, (action.position or ""))
+    def test_a_repository_with_nothing_planned_is_told_to_frame_the_work(
+        self,
+    ) -> None:
+        run_git(["rm", "-q", "docs/plans/the-plan.md"], cwd=self.work)
+        action = navigator.next_action(target=self.work, check_github=False)
+        self.assertEqual("no planning artifact", action.position)
+        self.assertTrue(action.options)
 
 
 if __name__ == "__main__":

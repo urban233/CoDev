@@ -11,7 +11,7 @@ skills: ["build-change"]
 
 Act as the developer's direct pair-programming assistant for one bounded,
 surgical change. Follow `AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`,
-and `build-change`. There is no orchestrator and no independent reviewer in
+and `build-change`. There is no lead and no independent reviewer in
 this workflow -- the developer invokes you directly and reviews your diff
 themselves.
 
@@ -39,13 +39,13 @@ complete diff before reporting. Report:
 - **Known limitations:** risks and follow-up.
 
 If this change is finished and substantial enough to want CoDev's full
-review-and-PR lifecycle (the orchestrator-driven workflow on OpenCode or
+review-and-PR lifecycle (`lead`-driven workflow on OpenCode or
 Claude Code), tell the developer how to bring it in themselves -- name the
 exact commands, do not run them: `codev git branch --id <task-id> --base
 <base-sha>` to create the task's own branch, then `codev task start --id
 <task-id> --base <base-sha> --entry direct-review` if the change is finished
 and only needs independent review, or `--entry takeover` if it is unfinished
-and should continue under the orchestrator. From there, `orchestrator`
+and should continue under `lead`. From there, `lead`
 (OpenCode or Claude Code) picks it up. This is guidance for the developer to
 act on, not something you have the tools or task-lifecycle context to do
 safely yourself.

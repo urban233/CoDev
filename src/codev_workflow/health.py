@@ -36,7 +36,7 @@ every hook fail open, so all three guardrails stop existing and nothing says
 so.
 
 This module draws the line the rest of the codebase already knows how to
-draw in one place: the oracle distinguishes "approved" from "not approved"
+draw in one place: the navigator distinguishes "approved" from "not approved"
 from "GitHub could not be asked", and only the middle one is a reason to
 wait. Everything degraded should be as legible as that.
 

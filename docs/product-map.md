@@ -36,8 +36,7 @@ rewritten.
 | The unit `codev task` tracks round-state for | **task**, `task_id` | work item, `work_item_id` (ADR-0023) |
 | Round-state's on-disk location | `.codev/task/` | `.codev/work/` (ADR-0023) |
 | GitHub's tracker artifact for a task | **issue** | ticket, bug |
-| Session entry point for Specify/Understand/Design/Plan | **`planner`** | — (new, ADR-0024) |
-| Session entry point for Build/Review/Ship | **`orchestrator`** | — |
+| The single agent a developer talks to, across every phase | **`lead`** | — (ADR-0040; replaces `lead` and `lead`) |
 | A durable, cross-cutting decision that outlives one design document | **ADR** (Architecture Decision Record), `design-solution`'s `assets/adr.template.md`, stored at `docs/adr/NNNN-slug.md` | decision, `assets/decision.template.md` (ADR-0025) |
 | The Plan-phase skill, and the planning unit it details one at a time | **`plan-wave`**, **wave** | plan-delivery, milestone (ADR-0032) |
 
@@ -99,11 +98,11 @@ no agent exists before the bundle is installed.
 
 | Skill | Phase | Invocation today |
 |---|---|---|
-| `specify-project` | Specify | Manual, or the human-started entry point for a `planner` session |
-| `define-product` | Understand | Manual, selected by `orchestrator` when a build surfaces an unresolved product question, or the entry point for a `planner` session |
-| `design-solution` | Design | Manual, selected by `orchestrator` when a build surfaces an architectural question, or the entry point for a `planner` session |
-| `plan-wave` | Plan | Manual, selected by `orchestrator` when a build surfaces a dependency/assignment problem, or the entry point for a `planner` session |
-| `build-change` | Build | Selected by `orchestrator` to frame every three-agent build, or manual standalone |
+| `specify-project` | Specify | Invoked by `lead` for a greenfield product, or manual |
+| `define-product` | Understand | Invoked by `lead` when framing an addition, or when a build surfaces an unresolved product question |
+| `design-solution` | Design | Invoked by `lead` when a shared contract or architectural question is at stake |
+| `plan-wave` | Plan | Invoked by `lead` when more than one developer is involved, or when a build surfaces a dependency or assignment problem |
+| `build-change` | Build | Invoked by `lead` to frame every delegated build, or manual standalone |
 | `review-change` | Review | Manual only — the zero-ceremony path for a diff with no task and no open PR |
 | `critique-review` | Review (downstream) | Manual only — consumes another review's findings, does not itself review |
 | `pr-review` | Review (existing PR) | Manual only as a guided skill; its fetch *script* is reused mechanically by `outer-loop-runner` step 1 |
@@ -113,7 +112,7 @@ no agent exists before the bundle is installed.
 | `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval task for an existing skill |
 | `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-wave`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
 | `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
-| `launch-product` | Launch | Manual — not referenced by `orchestrator` |
+| `launch-product` | Launch | Invoked by `lead` when a change approaches release |
 
 Per ADR-0005, the review family is now two clusters rather than an
 undifferentiated six: `review-change`, `pr-review`, and `critique-review`
@@ -135,14 +134,13 @@ the task lifecycle. Codex is dropped entirely (ADR-0031).
 
 | Agent | Phase | Invocation today |
 |---|---|---|
-| `orchestrator` | Build (session entry point) | Human-started; chains the rest of this table automatically within one session |
-| `planner` | Specify, Understand, Design, Plan (session entry point) | Human-started, separate entry point from `orchestrator`; wraps `specify-project`/`define-product`/`design-solution`/`plan-wave` in one session and never invokes `builder`/`reviewer`/`orchestrator` (ADR-0024). Can short-circuit straight to `codev git issue-create` once a task is ready, without a wave plan |
-| `builder` | Build | Auto-invoked by `orchestrator` |
-| `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `orchestrator`, fresh context each round |
-| `outer-loop-runner` | Review -> Ship (session entry point) | Human-started, separate entry point from `orchestrator`; does not run on a PR event |
+| `lead` | Every phase (the only entry point) | Human-started; invokes the planning skills directly and dispatches every other agent in this table (ADR-0040) |
+| `builder` | Build | Dispatched by `lead` |
+| `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `lead`, fresh context each round |
+| `outer-loop-runner` | Review -> Ship | Dispatched by `lead` once a pull request is open; does not run on a PR event (ADR-0040) |
 | `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005); `correctness-tests-specialist` judges `test_quality` against `testing-craft`'s references |
 | `code-audit` | Review / pre-Ship | Human-invoked only (ADR-0015): the full two-phase, human-approval-gated audit-and-fix workflow. No longer has an automatic pre-PR invocation mode — that responsibility moved entirely to `code-audit-gate` below, since Phase 1's audit-only pass never needed the approval gate that makes this agent `mode: primary` in the first place |
-| `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `orchestrator`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
+| `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `lead`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
 
 ## Directions and open questions
 
@@ -151,19 +149,16 @@ the task lifecycle. Codex is dropped entirely (ADR-0031).
 `clean-code-review` is retired, its catalog absorbed into
 `architecture-maintainability-specialist`; `review-change` stays as the
 explicit zero-ceremony path; `pr-review` and `critique-review` confirmed
-correctly on-demand, unchanged. `orchestrator`'s Build-only scope (never
-naming `specify-project`/`launch-product`) is confirmed deliberate, not a
-gap — neither phase has a build-and-review loop to orchestrate.
+correctly on-demand, unchanged.
 
-**Resolved and implemented (ADR-0024):** the Specify/Understand/Design/Plan
-phases gain their own human-started session entry point, `planner`, decoupled
-from `orchestrator`'s Build/Review/Ship scope above — the two are
-independent entry points a human chooses between, neither invoking the
-other. `planner` also gains an issue-only short circuit: given an accepted
-design or decision, draft a task and run `codev git issue-create` directly,
-skipping `plan-wave`'s wave/work-list machinery, and stop —
-`orchestrator`'s existing step-5 fallback (create the issue itself if still
-missing) is unchanged and still correct either way.
+**Superseded by ADR-0040.** ADR-0024 gave the Specify/Understand/Design/Plan
+phases their own human-started entry point, `planner`, decoupled from
+`orchestrator`'s Build/Review/Ship scope, and the two were independent entry
+points a human chose between. Both are now `lead`, which invokes every
+planning skill directly and dispatches every build and review agent. The
+issue-only short circuit ADR-0024 added is `codev git issue-create
+--body-file`, which `lead` runs when an accepted design needs nothing more
+than a well-formed issue.
 
 **Resolved and implemented (ADR-0025):** `design-solution`'s decision asset
 is formalized into an explicit ADR practice — renamed `assets/adr.template.md`
@@ -224,7 +219,7 @@ unchanged.
   entirely; Junie and Antigravity are narrowed to a single `assistant` role,
   decoupled from the task lifecycle.
 - Does not relax `code-audit`'s no-delegation guardrail — the guardrail is
-  about it calling other agents, not about being called by `orchestrator`,
+  about it calling other agents, not about being called by `lead`,
   and ADR-0005 left it textually unchanged.
 - Does not restructure the CLI's command tree (e.g. moving `codeowners`
   under `git`, splitting `task`'s subcommands) — surfaced in the inventory

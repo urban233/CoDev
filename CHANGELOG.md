@@ -3,6 +3,88 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.6.0] - 2026-09-03
+
+The developer-experience release. CoDev's claim has always been that a
+developer directs work in conversation rather than by typing commands; this is
+the release where that stops being aspirational, and the first where it is
+measured rather than asserted.
+
+### Added
+- **Navigator coverage, a measure of the claim.** `tests/test_navigator_coverage.py`
+  walks a complete lifecycle against a real repository and counts the steps
+  `codev next` cannot name. It was six of nine when the measure landed and is
+  zero of eight now. A regression fails the build, and so does an unrecorded
+  improvement, so every gain arrives as a reviewable baseline edit.
+- **Composite lifecycle verbs** ([ADR-0041](docs/adr/0041-composite-lifecycle-verbs.md)):
+  `codev slice begin`, `codev round close`, `codev slice publish`, and
+  `codev slice land`. Each replaces a role-file step that issued several
+  commands with conditional flags between them. The granular `codev git` and
+  `codev task` verbs they compose all still exist, for recovery and for an
+  agent that needs one step alone.
+- **The navigator answers for the planning phases**
+  ([ADR-0042](docs/adr/0042-the-navigator-answers-for-the-whole-lifecycle.md)).
+  Every state before a task existed used to collapse into one recommendation to
+  start a task, leaving the whole Understand/Design/Plan half unguided. It now
+  resolves brief, design, wave plan, and plan from the artifacts a repository
+  holds, reading the `Status:` line they already carry.
+- **A blocked position carries `options`** -- a label, a command, and what
+  choosing it means -- so a stop is a decision rather than a wall. No authority
+  moves: choosing is still a human's.
+
+### Changed
+- **`orchestrator` and `planner` become `lead`, the only agent you talk to**
+  ([ADR-0040](docs/adr/0040-the-lead-agent-is-the-only-human-facing-agent.md)).
+  Thirteen roles become eleven; three human-facing roles become one.
+  `outer-loop-runner` keeps its file and loses its trigger -- `lead` dispatches
+  it. There is no session to switch to, because a session boundary you have to
+  notice is a command by another name.
+- **The `oracle` module is the `navigator`**, after the half of a
+  driver/navigator pair without hands on the keyboard. `codev next` and every
+  field it returns are unchanged.
+- **The plan gate is risk-tiered**
+  ([ADR-0043](docs/adr/0043-the-plan-gate-is-risk-tiered.md)). A change within
+  the slice's size budget no longer demands a written plan; one that grows past
+  it asks again. Dependency manifests, CI definitions, and migrations ask
+  regardless of size. A repository-mutating git command is never tiered. This
+  is a changed default, not a new configuration key.
+- **`codev --version` reports the commit for a source install** (`0.6.0+source.abc1234`).
+  Two trees reporting the same version is how a build installed from source in
+  August kept claiming 0.5.0 while `main` moved three waves ahead of it.
+- **`codev self update` no longer tells a source install to fetch a release.**
+  `uv tool upgrade` resolves against the index, whose latest release can be
+  older than the checkout being run -- advice that silently downgrades.
+
+### Fixed
+- **Retired role files are deleted, not retained.** A file in an adapter's
+  agents directory is an invocable agent, so an update that kept
+  `orchestrator.md` beside `lead.md` would leave you with both. An untouched
+  retired role is removed; a locally edited one is a conflict you resolve.
+- **A retired OpenCode agent leaves the lock as well as the config.** The
+  reconciliation only iterated agents that still ship, so a removed one kept
+  its hash forever and `codev status` reported drift no update could resolve.
+- **The plan gate can see `docs/plans/*.md`**, where accepted plans actually
+  live. A guardrail that cannot see the artifact it asks for teaches agents
+  that the artifact is pointless.
+- **The gate measures slice size in-process.** Shelling out to `codev task
+  size` made it depend on an executable being on PATH and being the same
+  build -- the failure that let 496 guardrail decisions pass unchecked.
+- **A merged slice is no longer told to open its pull request.** GitHub is
+  consulted for any position where a pull request could exist.
+- **A draft pull request is not reported as awaiting human review.** Nobody can
+  review a draft; `mark-ready` is what requests it.
+- **A round with no builder receipt no longer recommends the reviewer.** It
+  names the builder, or `codev round close` when the work is uncommitted.
+- **The integration sandbox no longer races its own teardown**, which failed a
+  build on a passing test.
+
+### Upgrading
+
+`codev update` migrates an existing installation: it removes `orchestrator.md`
+and `planner.md`, adds `lead.md`, and points OpenCode's `default_agent` at
+`lead`. If you edited either retired role, the update stops and asks rather
+than discarding your changes.
+
 ## [Unreleased]
 
 ### Removed

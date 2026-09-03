@@ -147,7 +147,7 @@ with exactly one of: `READY FOR HUMAN APPROVAL`, `CHANGES REQUIRED`, or
 ## Three-agent Build execution
 
 Where the platform provides repository-local subagents, keep the human in one
-`orchestrator` conversation and automate the mechanical handoffs between
+`lead` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
 1. **Orchestrator** reads authority and repository evidence, confirms the

@@ -18,7 +18,7 @@ All four preflight the entire operation first. A locally modified managed file b
 visible conflict; CoDev never silently overwrites it.
 
 `--agent-platform` accepts `opencode`, `junie`, `antigravity`, `claude`, or `all` (the
-default). OpenCode and Claude Code get the full orchestrator-driven workflow; Junie and
+default). OpenCode and Claude Code get the full lead-driven workflow; Junie and
 Antigravity get a single narrower `assistant` agent for bounded, surgical edits — see
 [ADR-0031](adr/0031-drop-codex-narrow-junie-and-antigravity-to-an-edit-assistant.md) for
 why. Pass it more than once, or a comma-separated list, to select several platforms at
@@ -63,7 +63,7 @@ to opt out and require every task to stand alone instead.
 | Command | Purpose |
 |---|---|
 | `codev task start --id <id> --base <sha> [--entry takeover\|direct-review]` | Open a new task |
-| `codev task record ...` | Record one builder or reviewer round (normally done by the orchestrator, not typed by hand) |
+| `codev task record ...` | Record one builder or reviewer round (normally done by the lead, not typed by hand) |
 | `codev task check --id <id> --head <sha>` | Ask whether the task may proceed to a pull request |
 | `codev task status [--target <path>]` | List tasks in progress |
 | `codev task log --id <id>` | Show one task's full round history |
@@ -113,11 +113,25 @@ block into container isolation
 ([ADR-0027](adr/0027-opt-in-docker-sandbox-for-the-native-eval-harness.md)); worktree
 isolation on the host stays the default.
 
+## Slice lifecycle
+
+The verbs an agent reaches for by default. Each replaces a role-file step that
+used to issue several commands with conditional flags between them; the
+granular `codev git` and `codev task` verbs they compose all still exist, for
+recovery and for a mid-session agent that needs one step on its own.
+
+| Command | Purpose |
+|---|---|
+| `codev slice begin --id <id> --base <sha> [--title <t> --body-file <f>] [--github-issue <N>] [--slice <name>]... [--json]` | Branch, GitHub issue, and round state in one call. Replaces `codev git branch` + an issue-existence check + `codev git issue-create` + `codev task start` with three mutually exclusive linkage flags, plus the `codev task relink` recovery path when the issue arrived late |
+| `codev round close --id <id> --role builder --evidence <file> [--message <t>] [--json]` | Commit the work and record the round against the exact resulting head. The round number is derived from state, not passed. Named for its caller: only whoever holds commit permission can know that head, which is why a builder never records its own round |
+| `codev slice publish --id <id> --title <t> [--json]` | Push the branch and open the slice's draft pull request. The body is always the task's rendered evidence, so the old "never pass `--body`" caveat has no way to be violated |
+| `codev slice land --id <id> [--outcome <o>] [--json]` | Advance to the next slice, or close the task when this was the last. Which one applies is a fact about the slice list, not a decision for the caller |
+
 ## Other
 
 | Command | Purpose |
 |---|---|
-| `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it |
+| `codev next [--id <id>] [--no-github] [--json]` | Where the work stands and the one thing to do next (ADR-0036). An agent consults this at every phase boundary; a developer does not have to run it. It answers for the planning phases as well as the build ones, and a blocked position carries an `options` list -- each with a label, a command, and what choosing it means -- so a stop is a decision rather than a dead end |
 | `codev task advance-slice --id <id> --head <sha>` | Move a task on to its next slice and open a fresh round (ADR-0035) |
 | `codev gate check --gate <name>` | Decide one guardrail for a tool-use payload read from stdin (ADR-0036). Every platform's hook calls this, so the rules are CoDev's, not one adapter's |
 | `codev task style --id <id> [--set pair\|delegate]` | Read or change a slice's work style (ADR-0038) |
