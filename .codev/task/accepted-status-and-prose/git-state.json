@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "f5df9c7805ee3e89446313e0f0860bf78fbc7f32",
+  "branch": "codev/accepted-status-and-prose",
+  "slice_branches": {
+    "accepted-status-and-prose": {
+      "base_snapshot": "f5df9c7805ee3e89446313e0f0860bf78fbc7f32",
+      "branch": "codev/accepted-status-and-prose"
+    }
+  }
+}

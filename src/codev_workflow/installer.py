@@ -181,6 +181,13 @@ GITIGNORE_BLOCK = """# codev:start
 # rebuilt on demand. Without this, `codev git commit`'s `git add -A` sweeps
 # thousands of lines of API responses into the change under review.
 .codev/pr-review/
+# A task's tracked state is round-state.json and git-state.json. Everything
+# else an agent writes under a task's directory is a review payload it rebuilds
+# on demand -- findings, coverage, specialist selections, triage -- and a
+# `git add -A` would otherwise sweep it into the change under review.
+.codev/task/*/*
+!.codev/task/*/round-state.json
+!.codev/task/*/git-state.json
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")

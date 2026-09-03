@@ -213,14 +213,14 @@ do not work around it.
 its result feeds a later command, and that is the only supported way to carry
 a value forward. Never scrape an identifier out of a command's
 human-readable sentence, and never fall back to raw `git` for something a
-guarded command already returns — `codev git commit --json` reports the
-`head` the next `codev task check --head` needs, `codev git open-pr --json`
-reports the pull request's `url` and `number`, and `codev git restack --json`
+guarded command already returns — `codev round close --json` reports the
+`head` the next task check needs, `codev slice publish --json` reports the
+pull request's `url` and `number`, and `codev git restack --json`
 reports the new `head`. Human-readable output is for the developer reading
 along; it is not an interface and may be reworded.
 
 Most tasks start cold, and every numbered step below applies as
-written. Two other entry modes (`codev task start --entry <mode>`): a
+written. Two other entry modes (takeover and direct-review): a
 **takeover** item already has unfinished human commits beyond its base
 snapshot — follow every step below, but tell `builder` at step 3 to read
 that existing diff before changing anything and continue it rather than
@@ -229,7 +229,7 @@ needs only review — skip straight to step 5's `ok_ready_for_pr` handling;
 `codev task check` recognizes a fresh `direct-review` item as immediately
 ready, with no inner-loop round recorded at all.
 
-1. **Orchestrator** reads authority and repository evidence, confirms the
+1. **Lead** reads authority and repository evidence, confirms the
    task is ready, presents the focus card, and produces the
    implementation plan (using `.agents/skills/build-change/assets/
    implementation-plan.template.md` for delegated, multi-session, cross-
@@ -237,24 +237,9 @@ ready, with no inner-loop round recorded at all.
    Approach/Risks summary from that plan in mind for `--description` below
    when it was rendered, since the eventual pull request body renders that
    text and nothing else about the plan. It never edits product code itself.
-   It creates the task's own branch with `codev git branch`, then
-   resolves issue linkage before opening round state: if the item has no
-   linked GitHub issue yet and this repository tracks issues on GitHub, run
-   `codev git issue-create` now — per `plan-wave`'s Handoff, check
-   rather than assume an earlier session already did it; write the body to a
-   temp file and pass `--body-file` rather than inline `--body` whenever it
-   may contain a backtick, `$`, or double quote, since a shell corrupts
-   those before `codev` ever sees the text — then open round
-   state with `codev task start --github-issue <N>` (or `--link`;
-   `--no-github-issue` only when this repository does not track issues
-   there — `task start` refuses without one of the three) and
-   `--description <text>` when a plan was rendered. If linkage is only
-   resolved after round state already exists, correct it with `codev task
-   relink --github-issue <N>` rather than leaving the link only in the
-   plan's prose. Raw `git commit`/`git push`/
-   `gh pr create` stay denied to every agent; `codev git` is the only path
-   to mutating the repository or GitHub, and it enforces mechanically what
-   this document only used to ask for by convention.
+   It begins each slice with `codev slice begin`, which handles the branch,
+   issue linkage, and round state in one operation. Raw `git` and `gh` writes
+   stay denied to every agent.
 2. Before delegating, check whether the work needs a human decision first:
    any of the "Stop conditions" below, or the risk categories named in "Risk
    overrides size" — a cheap path/diff-shape check for the common case, not
@@ -268,11 +253,10 @@ ready, with no inner-loop round recorded at all.
    publish, deploy, migrate data, or expand rollout. It returns an evidence
    receipt with the exact base snapshot, validation, deviations, and
    limitations — not a head snapshot, since it never commits and so cannot
-   know one. `lead` commits the result and records the builder's
-   round in one call — `codev git commit --round <round> --evidence
-   <evidence.json>` — against the exact resulting head. The builder never
-   records its own evidence.
-4. Orchestrator verifies the evidence receipt is complete, then invokes
+   know one. `lead` closes the builder's round with `codev round close
+   --role builder --evidence <file>`, against the exact resulting head. The
+   builder never records its own evidence.
+4. Lead verifies the evidence receipt is complete, then invokes
    **lightweight-reviewer** in a *fresh* task with the exact snapshot and
    task. This pass is deliberately narrow: correctness and intent-match
    against the task, plus independent re-verification that the
@@ -280,7 +264,7 @@ ready, with no inner-loop round recorded at all.
    the outer loop's job, not this pass's. It records its round with
    `codev task record --role reviewer --decision
    READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
-5. Orchestrator runs `codev task check` and acts on its exit code instead of
+5. Lead runs `codev task check` and acts on its exit code instead of
    judging convergence itself.
    - On `ok_continue` (`CHANGES REQUIRED`, under the round cap), it routes
      actionable findings back to the builder without asking the human to
@@ -299,12 +283,10 @@ ready, with no inner-loop round recorded at all.
      phase transition, not after, matters mechanically: it means mechanical
      cleanup never opens the outer phase or spends any of its round cap —
      that stays reserved for the five specialists' actual review. A clean
-     or now-clean head pushes the branch with `codev git push` and opens a
-      draft pull request with `codev git open-pr` — the bridge into the
-      outer loop's specialist review. Omitting `--body` renders recorded task
-      evidence and coverage into the repository's PR template. This is automatic because opening a
-     pull request is fully reversible and has no effect on production; it
-     is not the same authority as merge.
+     or now-clean head is published with `codev slice publish`, which pushes
+     the branch and opens the draft pull request for outer-loop review.
+     Opening a pull request is fully reversible and has no effect on production;
+     it is not the same authority as merge.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
      round's first pass, or the snapshot drifted — it records the escalation
@@ -400,10 +382,9 @@ not produce that on a PR the five specialists have never reviewed, and
 6. On `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals`: if no pull request exists
    yet for this item (for example, it was recovered into the outer phase
    with `codev task reopen` and never went through the inner loop's own
-    bridge step), run `codev git open-pr` first -- never pass `--body`, it
-    renders the task's evidence into the repository PR template -- it
-   accepts this state too, not only the original `ok_ready_for_pr`
-   checkpoint. Then `codev git mark-ready` regenerates the pull request's
+    bridge step), publish the slice first; it accepts this state too, not only
+    the original `ok_ready_for_pr` checkpoint. Then `codev git mark-ready`
+    regenerates the pull request's
     body from current task evidence into that template and takes it out of
     draft. This is not merge
    authority.
@@ -446,8 +427,8 @@ evidence receipt.
 
 ## Recovering a stuck task
 
-`codev task start` refuses to reuse an id once its state file exists at all
-— closed or not — and `codev task check` treats a round cap or a snapshot
+A task start refuses to reuse an id once its state file exists at all — closed
+or not — and task checking treats a round cap or a snapshot
 mismatch (`stop_drift`) as a hard stop by design. Those guards protect the
 evidence trail; they are correct, not a bug to route around by hand-editing
 `.codev/task/<id>/round-state.json` or restarting under a new id and losing
@@ -467,12 +448,12 @@ merely looks stuck.
 
 A reopened item can land directly in the outer phase (when the round it
 reopened from had decided `READY_FOR_OUTER_LOOP`), skipping the inner
-loop's own bridge into a pull request. `codev git open-pr` accounts for
-this: it accepts any non-stop `codev task check` result once the item is in
-the outer phase, not only `ok_ready_for_pr`, provided the branch has no
-pull request yet — so if outer-loop review reaches `ok_machine_review_complete` with none
-open, run `codev git open-pr` once to create it before `codev git
-mark-ready`, which still requires that pull request to already exist.
+loop's own bridge into a pull request. Publishing accounts for this: it accepts
+any non-stop task-check result once the item is in the outer phase, not only
+`ok_ready_for_pr`, provided the branch has no pull request yet — so if
+outer-loop review reaches `ok_machine_review_complete` with none open, publish
+the slice once before `codev git mark-ready`, which still requires that pull
+request to already exist.
 
 ## Completion
 

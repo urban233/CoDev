@@ -507,6 +507,56 @@ def current_head(target: Path) -> str:
     return _run_git(["rev-parse", "HEAD"], cwd=target)
 
 
+def head_for_check(task_id: str, *, target: Path) -> str:
+    """The head `codev task check` should compare this task's round state
+    against.
+
+    Recording a round's outcome is itself a commit under this task's own
+    `.codev/task/<task_id>/` directory, and that commit moves HEAD. `check`'s
+    drift comparison is a pure function of two git heads (ADR-0001: task
+    lifecycle commands are read-only with respect to product source) -- it has
+    no way to know that the commit which just persisted a verdict was only
+    persisting that verdict, so a plain `current_head()` makes recording a
+    round's outcome retroactively read as drift against the round it just
+    recorded. Re-recording is refused (rounds are write-once) and every
+    recovery path is itself a further commit under the same directory, so
+    without this the loop has no exit.
+
+    A path-prefix heuristic alone is not enough: the round's own recorded
+    `head_snapshot` can itself be a bookkeeping commit's hash -- if a round was
+    recorded against a head that a *later* bookkeeping commit (say, a pause and
+    resume) had already moved past, then the round state's own expectation is
+    one bookkeeping commit removed from the true code snapshot, and walking
+    back on paths alone can overshoot it. So this walks back one commit at a
+    time and asks `task.check` itself at each candidate, stopping at the first
+    that does not report drift -- that candidate is, by construction, the exact
+    snapshot the recorded round refers to, whichever bookkeeping commit that
+    happens to be. It only ever walks over commits confined to this task's own
+    directory; `_refuse_if_mixed_dirty_paths` already keeps a commit that mixes
+    this task's bookkeeping with anything else off the guarded surface, so
+    encountering one here is genuine drift this function must not paper over,
+    and it falls back to the real current head unchanged.
+    """
+    prefix = _task_dir(target, task_id).relative_to(target).as_posix() + "/"
+    head = current_head(target)
+    candidate = head
+    while True:
+        if task.check(task_id, candidate, target=target).reason != "stop_drift":
+            return candidate
+        try:
+            parent = _run_git(["rev-parse", f"{candidate}~1"], cwd=target)
+        except GitOpsError:
+            return head
+        try:
+            changed = _run_git(["diff", "--name-only", parent, candidate], cwd=target)
+        except GitOpsError:
+            return head
+        paths = [path for path in changed.splitlines() if path]
+        if not paths or any(not path.startswith(prefix) for path in paths):
+            return head
+        candidate = parent
+
+
 def default_branch(target: Path) -> str:
     try:
         ref = _run_git(
@@ -1222,7 +1272,7 @@ def open_pr(
     use_template: bool = False,
 ) -> str:
     branch = _ensure_on_own_branch(task_id, target=target)
-    head = current_head(target)
+    head = head_for_check(task_id, target=target)
     result = task.check(task_id, head, target=target)
     description = task.describe(task_id, target=target)
     # ok_ready_for_pr is produced exactly once, at the inner-to-outer
@@ -1316,7 +1366,7 @@ def _resolve_reviewer(task_id: str, *, target: Path) -> str | None:
 
 def mark_ready(task_id: str, *, target: Path) -> None:
     branch = _ensure_on_own_branch(task_id, target=target)
-    head = current_head(target)
+    head = head_for_check(task_id, target=target)
     result = task.check(task_id, head, target=target)
     if result.reason not in _MARK_READY_REASONS:
         raise GitOpsError(

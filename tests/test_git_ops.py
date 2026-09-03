@@ -1296,6 +1296,165 @@ class SuggestOwnersTests(unittest.TestCase):
             )
 
 
+class HeadForCheckTests(unittest.TestCase):
+    """Recording a round's outcome is a commit under the task's own
+    `.codev/task/<task_id>/` directory, and that commit moves HEAD. Without
+    `head_for_check`, `codev task check` compares raw git heads and reports
+    the commit that persisted a verdict as drift against the verdict it just
+    persisted -- a loop with no exit, since re-recording a round is refused
+    and every recovery path is itself a further commit under the same
+    directory. These reproduce the exact shape of a deadlock hit live.
+    """
+
+    def _open(self, target: Path) -> str:
+        base = _init_repo(target)
+        task.start("probe", base, target=target, link_ref="local")
+        git_ops.create_branch("probe", base, target=target)
+        _run(["add", "-A"], cwd=target)
+        _run(["commit", "-qm", "open round state"], cwd=target)
+        return git_ops.current_head(target)
+
+    def _commit_round_state(self, target: Path, message: str) -> str:
+        """A commit touching only this task's round-state.json -- exactly
+        the shape `codev git commit`'s recording writes."""
+        _run(["add", ".codev/task/probe/round-state.json"], cwd=target)
+        _run(["commit", "-qm", message], cwd=target)
+        return git_ops.current_head(target)
+
+    def test_a_bookkeeping_commit_does_not_read_as_drift_against_its_own_round(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._open(target)
+            (target / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-qm", "code"], cwd=target)
+            code_head = git_ops.current_head(target)
+
+            task.record_builder(
+                "probe", 1, code_head, {"validation": "ran"}, target=target
+            )
+            recorded_head = self._commit_round_state(target, "record builder round")
+            self.assertNotEqual(code_head, recorded_head)
+
+            # The naive current head is the very commit that persisted the
+            # round -- exactly what used to report stop_drift.
+            self.assertEqual(
+                "stop_drift",
+                task.check("probe", recorded_head, target=target).reason,
+            )
+
+            resolved = git_ops.head_for_check("probe", target=target)
+            self.assertEqual(code_head, resolved)
+            self.assertNotEqual(
+                "stop_drift", task.check("probe", resolved, target=target).reason
+            )
+
+    def test_walks_back_through_more_than_one_trailing_bookkeeping_commit(
+        self,
+    ) -> None:
+        """The shape actually hit: the round's own recorded head_snapshot was
+        itself one bookkeeping commit away from the true code snapshot,
+        because a second bookkeeping commit (recording the round) landed
+        after the first (an unrelated note, like a pause/resume record)."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._open(target)
+            (target / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-qm", "code"], cwd=target)
+            code_head = git_ops.current_head(target)
+
+            # An unrelated bookkeeping commit lands first, before anything is
+            # recorded against it -- a work-style change, mid-slice
+            # (ADR-0038), the same shape as the pause/resume record that
+            # produced this live: a mutation to round-state.json unrelated to
+            # recording any round.
+            task.set_work_style("probe", None, "pair", target=target)
+            unrelated_note = self._commit_round_state(target, "an unrelated note")
+            self.assertNotEqual(code_head, unrelated_note)
+
+            # The round is recorded against whatever head was current when it
+            # ran -- the bookkeeping commit above, not the code commit -- which
+            # is exactly what happened live: a subagent computed `git
+            # rev-parse HEAD` only after an earlier bookkeeping commit had
+            # already landed, and recorded its round against that.
+            task.record_builder(
+                "probe", 1, unrelated_note, {"validation": "ran"}, target=target
+            )
+            recorded_head = self._commit_round_state(target, "record builder round")
+            self.assertNotEqual(unrelated_note, recorded_head)
+
+            resolved = git_ops.head_for_check("probe", target=target)
+            self.assertEqual(unrelated_note, resolved)
+            self.assertNotEqual(
+                "stop_drift", task.check("probe", resolved, target=target).reason
+            )
+
+    def test_a_commit_mixing_bookkeeping_with_product_code_is_genuine_drift(
+        self,
+    ) -> None:
+        """The heuristic must not walk past a commit that also touches
+        product code -- that is real drift, not recording overhead."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._open(target)
+            (target / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-qm", "code"], cwd=target)
+            code_head = git_ops.current_head(target)
+
+            task.record_builder(
+                "probe", 1, code_head, {"validation": "ran"}, target=target
+            )
+            self._commit_round_state(target, "record builder round")
+
+            (target / "surprise.py").write_text("value = 2\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-qm", "unrelated product edit"], cwd=target)
+            drifted_head = git_ops.current_head(target)
+
+            resolved = git_ops.head_for_check("probe", target=target)
+            self.assertEqual(drifted_head, resolved)
+            self.assertEqual(
+                "stop_drift", task.check("probe", resolved, target=target).reason
+            )
+
+    def test_open_pr_succeeds_immediately_after_recording_a_ready_round(
+        self,
+    ) -> None:
+        """The end-to-end path this was actually found through: publish a
+        slice whose reviewer round was recorded and then persisted by a
+        commit, with nothing else following it."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._open(target)
+            (target / "feature.py").write_text("value = 1\n", encoding="utf-8")
+            _run(["add", "-A"], cwd=target)
+            _run(["commit", "-qm", "code"], cwd=target)
+            code_head = git_ops.current_head(target)
+
+            task.record_reviewer(
+                "probe", 1, code_head, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            self._commit_round_state(target, "record reviewer round")
+
+            with patch.object(
+                git_ops, "_run_gh", side_effect=_gh_no_existing_pr()
+            ) as run_gh:
+                url = git_ops.open_pr(
+                    "probe",
+                    "title",
+                    "body",
+                    target=target,
+                    base="main",
+                    use_template=False,
+                )
+            self.assertTrue(url)
+            self.assertTrue(run_gh.called)
+
+
 class MarkReadyTests(unittest.TestCase):
     def _repo_ready_for_approval(self, target: Path) -> None:
         base = _init_repo(target)

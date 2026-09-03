@@ -332,7 +332,8 @@ def _is_accepted(path: Path) -> bool | None:
     for line in head.splitlines():
         stripped = line.strip().replace("*", "")
         if stripped.lower().startswith("status:"):
-            return "accepted" in stripped.lower()
+            status = stripped.split(":", 1)[1].strip().lower()
+            return bool(status.split() and status.split()[0] == "accepted")
     return None
 
 
@@ -461,7 +462,7 @@ def next_action(
             branch=branch,
         )
 
-    head = git_ops.current_head(target)
+    head = git_ops.head_for_check(resolved, target=target)
     result = task.check(resolved, head, target=target)
     slice_id = task.current_slice(resolved, target=target)
     final = task.is_final_slice(resolved, slice_id, target=target)

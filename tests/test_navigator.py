@@ -35,7 +35,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from codev_workflow import git_ops, task
-from codev_workflow.navigator import _BY_CHECK_REASON, NextAction, next_action
+from codev_workflow.navigator import (
+    _BY_CHECK_REASON,
+    NextAction,
+    next_action,
+)
 
 
 def _init_repo(target: Path) -> str:
@@ -153,6 +157,19 @@ class LocalPositionTests(unittest.TestCase):
             plans.mkdir(parents=True)
             (plans / "a-plan.md").write_text(
                 "# A plan\n\n**Status:** Draft, not yet approved\n", encoding="utf-8"
+            )
+            action = next_action(target=target, check_github=False)
+        self.assertEqual("plan drafted, not accepted", action.position)
+        self.assertIsNone(action.command)
+
+    def test_not_accepted_status_is_not_classified_as_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _init_repo(target)
+            plans = target / "docs" / "plans"
+            plans.mkdir(parents=True)
+            (plans / "a-plan.md").write_text(
+                "# Plan\n\n**Status:** Not Accepted\n", encoding="utf-8"
             )
             action = next_action(target=target, check_github=False)
         self.assertEqual("plan drafted, not accepted", action.position)
