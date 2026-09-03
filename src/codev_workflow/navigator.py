@@ -462,7 +462,7 @@ def next_action(
             branch=branch,
         )
 
-    head = git_ops.current_head(target)
+    head = git_ops.head_for_check(resolved, target=target)
     result = task.check(resolved, head, target=target)
     slice_id = task.current_slice(resolved, target=target)
     final = task.is_final_slice(resolved, slice_id, target=target)
