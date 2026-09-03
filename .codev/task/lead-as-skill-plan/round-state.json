@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "871af4852d5dec1f7b6ee8cf2109f624c73a6686",
+  "base_snapshot": "f6011459afde3827cd19601290ad058c5af84dc8",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -9,7 +9,7 @@
       "timestamp": "2026-09-03T20:47:51Z"
     }
   ],
-  "current_round": 5,
+  "current_round": 6,
   "current_slice": "lead-as-skill-plan",
   "description": null,
   "entry": null,
@@ -47,6 +47,20 @@
       "reason": "Round 4 was finalized (READY_FOR_HUMAN_APPROVAL) with only correctness/test_quality coverage recorded, before the security_privacy_data_compatibility gap was addressed. The owner explicitly authorized dispatching security-data-specialist for real coverage rather than a waiver; round 5 is needed to record its verdict since round 4's reviewer entry is write-once and already spent.",
       "timestamp": "2026-09-03T21:21:56Z",
       "to_round": 5
+    },
+    {
+      "by": "urban233",
+      "from_round": 5,
+      "head": "f6011459afde3827cd19601290ad058c5af84dc8",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED: security-data-specialist found and verified live that _prepare_opencode's deletion branch never clears opencode_default_agent_managed back to False, so the provenance flag permanently over-claims ownership after a default_agent key is removed -- risking exactly the silent-deletion regression rounds 3-4 just fixed, through a second uncovered path. Owner explicitly chose to fix this now in a bounded round rather than defer or accept as residual risk.",
+      "timestamp": "2026-09-03T21:30:15Z",
+      "to_round": 6
     }
   ],
   "reviewer": null,
@@ -333,6 +347,13 @@
         }
       },
       "round": 5,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 6,
       "slice_id": "lead-as-skill-plan"
     }
   ],
