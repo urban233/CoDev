@@ -45,15 +45,16 @@ to design a test strategy outside an open planning or build session, audit
 an existing test suite's health, or triage one specific flaky or brittle
 test.
 
-`lead` is the only agent a developer talks to. It invokes `specify-project`,
+There is no separate agent to become or dispatch for this. This document is
+what an ordinary session already follows: invoke `specify-project`,
 `define-product`, `design-solution`, and `plan-wave` directly for the
-`Understand` phases, and dispatches `builder`, `reviewer`,
-`lightweight-reviewer`, `code-audit-gate`, `outer-loop-runner`, and the five
-specialists for `Build`, `Review`, and `Ship`. Earlier versions split these
-across separate human-started sessions; they are phases now, not sessions, and
-`codev next` names which one the work is in. Never tell a developer to start a
-different session -- a session boundary they have to notice is a command by
-another name.
+`Understand` phases; dispatch `builder`, `reviewer`, `lightweight-reviewer`,
+and `code-audit-gate` for `Build`; load the `outer-loop-review` skill for
+`Review` once a pull request is open. Earlier versions split these across
+separate human-started sessions, then across a dispatched `lead` agent
+(ADR-0040); both were a session boundary the developer had to notice, which
+is a command by another name (ADR-0044). `codev next` names which phase the
+work is in -- consult it, never assume.
 
 ## Choose the path
 
@@ -193,11 +194,11 @@ talk directly to the builder, and you do not authorize merge. End every review
 with exactly one of: `READY FOR HUMAN APPROVAL`, `CHANGES REQUIRED`, or
 `BLOCKED BY MISSING EVIDENCE`, plus any residual risks.
 
-## Three-agent Build execution
+## Build execution
 
-Where the platform provides repository-local subagents, keep the human in one
-`lead` conversation and automate the mechanical handoffs between
-agents — but never the authority checkpoints.
+Where the platform provides repository-local subagents, keep the developer in
+one conversation and automate the mechanical handoffs between agents — but
+never the authority checkpoints.
 
 **Say where things stand, before you are asked.** Run `codev next --json` at
 the start of every turn and after every state change, and open every phase
@@ -229,17 +230,18 @@ needs only review — skip straight to step 5's `ok_ready_for_pr` handling;
 `codev task check` recognizes a fresh `direct-review` item as immediately
 ready, with no inner-loop round recorded at all.
 
-1. **Lead** reads authority and repository evidence, confirms the
-   task is ready, presents the focus card, and produces the
-   implementation plan (using `.agents/skills/build-change/assets/
-   implementation-plan.template.md` for delegated, multi-session, cross-
-   component, or normal/higher-risk work) — keeping a short 2-4 bullet
-   Approach/Risks summary from that plan in mind for `--description` below
-   when it was rendered, since the eventual pull request body renders that
-   text and nothing else about the plan. It never edits product code itself.
-   It begins each slice with `codev slice begin`, which handles the branch,
-   issue linkage, and round state in one operation. Raw `git` and `gh` writes
-   stay denied to every agent.
+1. Read authority and repository evidence, confirm the task is ready,
+   present the focus card, and produce the implementation plan (using
+   `.agents/skills/build-change/assets/implementation-plan.template.md`
+   for delegated, multi-session, cross-component, or normal/higher-risk
+   work) — keeping a short 2-4 bullet Approach/Risks summary from that plan
+   in mind for `--description` below when it was rendered, since the
+   eventual pull request body renders that text and nothing else about the
+   plan. Never edit product code yourself in this role — that is
+   `builder`'s job, delegated below, or your own hands only under an
+   explicitly recorded `pair` slice. Begin each slice with `codev slice
+   begin`, which handles the branch, issue linkage, and round state in one
+   operation. Raw `git` and `gh` writes stay denied.
 2. Before delegating, check whether the work needs a human decision first:
    any of the "Stop conditions" below, or the risk categories named in "Risk
    overrides size" — a cheap path/diff-shape check for the common case, not
@@ -253,10 +255,10 @@ ready, with no inner-loop round recorded at all.
    publish, deploy, migrate data, or expand rollout. It returns an evidence
    receipt with the exact base snapshot, validation, deviations, and
    limitations — not a head snapshot, since it never commits and so cannot
-   know one. `lead` closes the builder's round with `codev round close
+   know one. Close the builder's round yourself with `codev round close
    --role builder --evidence <file>`, against the exact resulting head. The
    builder never records its own evidence.
-4. Lead verifies the evidence receipt is complete, then invokes
+4. Verify the evidence receipt is complete, then invoke
    **lightweight-reviewer** in a *fresh* task with the exact snapshot and
    task. This pass is deliberately narrow: correctness and intent-match
    against the task, plus independent re-verification that the
@@ -264,44 +266,44 @@ ready, with no inner-loop round recorded at all.
    the outer loop's job, not this pass's. It records its round with
    `codev task record --role reviewer --decision
    READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
-5. Lead runs `codev task check` and acts on its exit code instead of
-   judging convergence itself.
-   - On `ok_continue` (`CHANGES REQUIRED`, under the round cap), it routes
+5. Run `codev task check` and act on its exit code instead of judging
+   convergence yourself.
+   - On `ok_continue` (`CHANGES REQUIRED`, under the round cap), route
      actionable findings back to the builder without asking the human to
-     relay them, then reinvokes the lightweight reviewer on the corrected
+     relay them, then reinvoke the lightweight reviewer on the corrected
      snapshot.
-   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), it dispatches
+   - On `ok_ready_for_pr` (`READY FOR OUTER LOOP`), dispatch
      `code-audit-gate` — a narrow, autonomous subagent scoped to style and
      documentation only, never logic or behavior — against the exact head
      snapshot, *before* recording the reviewer round that produced
      `ok_ready_for_pr`. It self-fixes anything it finds and reports back a
      short summary instead of stopping for approval, since nothing in its
-     scope needs one; `lead` commits again only if it changed
-     anything, then records the reviewer round exactly once, against
-     whichever head is now final, carrying `lightweight-reviewer`'s verdict
-     plus that summary as an evidence note. Resolving this before the
-     phase transition, not after, matters mechanically: it means mechanical
-     cleanup never opens the outer phase or spends any of its round cap —
-     that stays reserved for the five specialists' actual review. A clean
-     or now-clean head is published with `codev slice publish`, which pushes
-     the branch and opens the draft pull request for outer-loop review.
-     Opening a pull request is fully reversible and has no effect on production;
-     it is not the same authority as merge.
+     scope needs one; commit again only if it changed anything, then
+     record the reviewer round exactly once, against whichever head is now
+     final, carrying `lightweight-reviewer`'s verdict plus that summary as
+     an evidence note. Resolving this before the phase transition, not
+     after, matters mechanically: it means mechanical cleanup never opens
+     the outer phase or spends any of its round cap — that stays reserved
+     for the five specialists' actual review. A clean or now-clean head is
+     published with `codev slice publish`, which pushes the branch and
+     opens the draft pull request for outer-loop review. Opening a pull
+     request is fully reversible and has no effect on production; it is not
+     the same authority as merge.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
-     round's first pass, or the snapshot drifted — it records the escalation
-     with `codev task escalate` and hands the item to the human with the
+     round's first pass, or the snapshot drifted — record the escalation
+     with `codev task escalate` and hand the item to the human with the
      printed reason and a recommendation, the same as when the accepted plan
      must change materially, work collides, or safe validation is
      unavailable.
 6. Once a pull request opens, tell the human plainly that outer-loop review
-   continues via `outer-loop-runner`, which `lead` dispatches for this
-   task — not something `lead` performs itself or
-   continues on its own. Close the item with `codev task close` only once
-   that concludes and the human has acted. Return the final evidence
-   receipt, reviewer decision, and residual risks. Stop before merge,
-   publish, deploy, migration, or rollout expansion — never before opening
-   the pull request itself.
+   is next -- load the `outer-loop-review` skill for this task once they
+   authorize the specialist spend below; it is not something that continues
+   on its own. Close the item with `codev task close` only once that
+   concludes and the human has acted. Return the final evidence receipt,
+   reviewer decision, and residual risks. Stop before merge, publish,
+   deploy, migration, or rollout expansion — never before opening the pull
+   request itself.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders
@@ -311,83 +313,15 @@ approval before merge.
 
 ## Outer-loop execution
 
-Where the platform provides repository-local subagents, a separate,
-`outer-loop-runner`, dispatched by `lead`, takes a task with an open pull
-request from there to a human-ready review. It is a distinct entry point,
-a fresh subagent rather than a continuation of `lead`'s context — the
-human starts it deliberately, and every specialist invocation inside it
-spends a model call the human chose to authorize.
-
-A second, equally deliberate entry acts on the PR's existing review
-comments instead of dispatching the five specialists fresh: fetch
-`comments`/`reviews` alongside the usual metadata/diff/checks, draft a
-finding directly from each actionable comment — trusting its content, not
-independently re-verifying it, unless the comment itself names a
-specialist — record and auto-triage every drafted finding as `address` (the
-human's own request to fix these comments is the authorization), then
-correct and verify with the inner loop's fast `lightweight-reviewer`
-standard rather than a full specialist pass, recording coverage only for
-the dimension(s) actually re-verified — `codev task check` fills in every
-other dimension automatically from whichever round most recently
-established it, so nothing needs to be reconstructed by hand. `ok_machine_review_complete`
-still requires complete eight-dimension coverage; this entry alone does
-not produce that on a PR the five specialists have never reviewed, and
-`codev task check` says so by name when it isn't complete.
-
-1. State plainly, before running it, that this step fetches the pull
-   request's metadata, diff, and CI check status read-only via the
-   pr-review skill's fetch script — not a review, not a write to GitHub,
-   just grounding in the PR's real state. Then fetch it. On red
-   (not merely pending) checks, attempt one bounded repair: fetch the
-   failing job's diagnostic, dispatch `builder` once scoped only to that
-   failure, push, and re-check -- one attempt, never a second, falling
-   through to stop-and-report if checks are still not green. Before
-   dispatching any specialist, run `codev task check` and act on its exit
-   code: on `ok_outer_loop_needs_reopen` (this item already has a recorded
-   outer round and a further one cannot be recorded as-is), confirm with the
-   human that re-entering is actually intended -- not unexamined drift --
-   then run `codev task reopen` before continuing; on any `stop_*` outcome,
-   record the escalation and stop for the human.
-2. Present the five specialist reviewers as a numbered list, each with the
-   coverage dimension(s) it owns (correctness/error-handling/test-quality,
-   security/privacy/data/compatibility, concurrency, architecture/
-   maintainability, rollout), and ask which to dispatch this pass -- numbers
-   or `all`. Weigh a skipped one against the actual diff before accepting
-   the selection; the human's answer wins regardless. Immediately once
-   selection is final, offer a `codev task waive --dimension` for each
-   dimension whose specialist was not selected, with a reason -- never on
-   your own initiative. Dispatch only the selected specialists in parallel,
-   none of them recording state themselves.
-3. Merge their findings and coverage into one round and record it with
-   `codev task record --role reviewer --selection <selection.json>` (naming
-   which specialists actually ran, distinct from what was merely asked),
-   then act on `codev task check`'s exit code exactly as the inner loop
-   does.
-4. On `ok_waiting_on_triage`, present the blocking findings to the human
-   with one question — which should be addressed now — and record the
-   answer with `codev task triage` before anything else happens. Deferring
-   a blocking finding requires a stated reason. A blocking finding new to
-   this phase or repeating an earlier one (`stop_scope_expansion` /
-   `stop_repeated_finding`) reaches the human the same way, just escalated
-   first — triaging it (address or defer) resolves the stop, since the
-   guard exists to force one human look, not to survive one.
-5. If triage defers every blocking finding, nothing needs building:
-   `codev task check` reports `ok_machine_review_complete_with_deferrals` directly — record
-   `codev task escalate --trigger human_override_blocking_finding` and go
-   straight to landing. Otherwise the one permitted correction round fixes
-   only the findings the human selected, then re-verifies only those
-   findings with only the specialists that own them — not a fresh full
-   pass. Any other nonzero exit records an escalation with `codev task
-   escalate` and stops for the human.
-6. On `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals`: if no pull request exists
-   yet for this item (for example, it was recovered into the outer phase
-   with `codev task reopen` and never went through the inner loop's own
-    bridge step), publish the slice first; it accepts this state too, not only
-    the original `ok_ready_for_pr` checkpoint. Then `codev git mark-ready`
-    regenerates the pull request's
-    body from current task evidence into that template and takes it out of
-    draft. This is not merge
-   authority.
+Once a pull request is open, load the `outer-loop-review` skill for that
+task -- it holds the full protocol: CI gating, presenting the five
+specialists for an explicit per-run selection, merging their findings into
+one coverage manifest, human-triaged correction, and landing the result with
+`codev git mark-ready`. It is real, costed work: every specialist invocation
+spends a model call the developer authorizes explicitly this turn, never
+inferred or defaulted to "all". A second entry acts on a pull request's
+existing review comments instead of dispatching the five specialists fresh,
+also documented there.
 
 ## Artifact authority
 
@@ -460,9 +394,8 @@ request to already exist.
 **For a code change**, return: delivered behavior, files/components changed,
 exact validation actually run, acceptance evidence mapped to criteria, scope
 deviations (or none), known limitations, and review state. Stop before
-commit or merge — except the three-agent Build execution path above, which
-may open a draft pull request automatically; merge still stops for the
-human.
+commit or merge — except the Build execution path above, which may open a
+draft pull request automatically; merge still stops for the human.
 
 **For a release**, report: readiness, the exact artifact/configuration under
 consideration, current exposure, success/health evidence, rollback readiness,
