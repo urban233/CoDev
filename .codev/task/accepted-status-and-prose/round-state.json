@@ -1,6 +1,6 @@
 {
-  "base_snapshot": "7db75fb191fdbcdab22f9ce7afeebf6fb9a74a49",
-  "current_round": 3,
+  "base_snapshot": "99a9482f965ff0b5113be6e915af1239c07bd615",
+  "current_round": 4,
   "current_slice": "accepted-status-and-prose",
   "description": null,
   "entry": null,
@@ -38,6 +38,20 @@
       "reason": "Fixed task.check's drift comparison to look through a task's own trailing bookkeeping commits, with regression tests reproducing the exact deadlock this slice hit live -- pair work, not a builder round.",
       "timestamp": "2026-09-03T14:03:28Z",
       "to_round": 3
+    },
+    {
+      "by": "urban233",
+      "from_round": 3,
+      "head": "99a9482f965ff0b5113be6e915af1239c07bd615",
+      "max_rounds": {
+        "inner": 4,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round 3's reviewer entry was recorded with empty coverage on this task's first outer round, before the coverage manifest requirement was noticed. Reopening to give a correctness specialist a round it can actually record into.",
+      "timestamp": "2026-09-03T14:22:55Z",
+      "to_round": 4
     }
   ],
   "reviewer": null,
@@ -65,8 +79,20 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {},
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "99a9482f965ff0b5113be6e915af1239c07bd615"
+      },
       "round": 3,
+      "slice_id": "accepted-status-and-prose"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 4,
       "slice_id": "accepted-status-and-prose"
     }
   ],
