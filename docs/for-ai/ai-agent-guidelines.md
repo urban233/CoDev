@@ -150,29 +150,26 @@ Where the platform provides repository-local subagents, keep the human in one
 `lead` conversation and automate the mechanical handoffs between
 agents — but never the authority checkpoints.
 
-1. **Orchestrator** reads authority and repository evidence, confirms the
-   work item is ready, presents the focus card, and produces the
-   implementation plan (using `.agents/skills/build-change/assets/
-   implementation-plan.template.md` for delegated, multi-session, cross-
-   component, or normal/higher-risk work). It never edits product code
-   itself.
-2. The human approves the plan and grants permission to delegate.
-3. **Builder** executes only the accepted plan. It may edit and test, but it
-   cannot invoke other agents, alter accepted authority, commit, push, merge,
-   publish, deploy, migrate data, or expand rollout. It returns an evidence
-   receipt with exact base and head snapshots.
-4. Orchestrator verifies the evidence receipt is complete, then invokes
-   **reviewer** in a *fresh* task with the exact snapshot, work item,
-   accepted plan, authority, and evidence. The reviewer is read-only and never
-   fixes its own findings.
-5. Orchestrator routes actionable findings back to the builder without asking
-   the human to relay them, then reinvokes the reviewer on the corrected
-   snapshot. Stop after two correction attempts with the same root cause, or
-   whenever the accepted plan must change materially, work collides, or safe
-   validation is unavailable — hand it to the human with evidence and a
-   recommendation.
-6. Return the final evidence receipt, reviewer decision, and residual risks.
-   Stop before commit or merge.
+1. **Lead** reads authority and repository evidence, confirms the work item is
+   ready, presents the focus card, and produces any required implementation
+   plan. It never edits product code itself.
+2. Once the plan is accepted, `codev slice begin` creates the branch, issue,
+   and round state; `lead` dispatches **builder** with the plan, allowed scope,
+   validation, and stop conditions.
+3. The builder edits and tests but cannot invoke agents, alter authority,
+   commit, push, merge, publish, deploy, migrate data, or expand rollout. It
+   returns evidence; `lead` uses `codev round close` to commit and record it.
+4. `lead` dispatches **code-audit-gate**, commits only its style/documentation
+   fixes, and invokes **lightweight-reviewer** in a fresh task against the exact
+   snapshot. The reviewer is read-only and records its own verdict.
+5. `lead` runs `codev task check` and follows its result: route corrections to
+   the builder, publish with `codev slice publish` when ready, and dispatch the
+   needed specialists or `outer-loop-runner` for the outer pass. `codev git
+   mark-ready` requests human review; it is not approval.
+6. Stop after two correction attempts with the same root cause, or whenever the
+   accepted plan must change materially, work collides, or safe validation is
+   unavailable. Return evidence, the reviewer decision, and residual risks;
+   stop before merge.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders
