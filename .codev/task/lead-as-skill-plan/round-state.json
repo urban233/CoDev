@@ -297,7 +297,41 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist: data handling in _prepare_opencode verified by executing the migration against a config carrying unrelated keys (theme, an mcp block with an embedded credential) -- every non-default_agent, non-agent key round-trips byte-faithfully, file rewritten in place only, nothing copied/logged/emitted elsewhere. Unusual config shapes (non-string default_agent, non-object root/agent) handled without crash or partial write -- all mutation happens in memory, applied as one bytes payload. Role-file deletion path unchanged from main, still hash-gated against the lock, no path-matching false positive reachable. Privacy: grepped full diff for token/secret/credential patterns, only matches are pre-existing skill-card prose about gh auth and existing review-prompt text about spotting hardcoded secrets -- no new logging or persistence of credentials or personal data. Compatibility: lock schema_version unchanged at 2, migration idempotent on a second run. Two non-blocking findings recorded (PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED, PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE).",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED",
+            "location": "src/codev_workflow/installer.py:735-741,1192",
+            "rank": 1,
+            "summary": "opencode_default_agent_managed provenance flag is never cleared to False when _prepare_opencode deletes default_agent, so CoDev keeps claiming ownership of a key it no longer manages after the deletion runs."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE",
+            "location": "deleted src/codev_workflow/bundle/.opencode/agents/lead.md frontmatter; installer.py:81-88,721-741; docs/adr/0044-lead-is-not-an-agent.md:68-78",
+            "rank": 2,
+            "summary": "Removing lead as OpenCode's default_agent drops the restrictive permission block (edit: ask, git commit/push: deny, external_directory: deny, task: deny) that constrained the default session; nothing CoDev ships replaces it, and ADR-0044 only reasons about the narrower ADR-0021 specialist-dispatch gate becoming prose-only, not this broader loss."
+          }
+        ],
+        "head_snapshot": "935db5b9f2c24f4e9277226de2738574bbb0d5f1",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 5,
       "slice_id": "lead-as-skill-plan"
     }
