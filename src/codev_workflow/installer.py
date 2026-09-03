@@ -694,6 +694,7 @@ def _prepare_opencode(
     target: Path,
     managed_agents: dict[str, str] | None = None,
     *,
+    default_agent_managed: bool = False,
     schema_managed: bool = False,
     agent_container_managed: bool = False,
     config_file_managed: bool = False,
@@ -720,15 +721,21 @@ def _prepare_opencode(
     # ADR-0044: CoDev no longer sets or migrates default_agent at all.
     # OpenCode ships its own built-in Build/Plan primary agents, so a project
     # need not define one to have somewhere for a session to start. If an
-    # earlier version of this bundle set the key to one of its own retired
-    # values (`lead`, or `orchestrator` from before that), remove it -- a
-    # stale value naming a role that no longer exists is worse than no
-    # opinion at all. Any other value is the developer's own choice and is
-    # never touched. default_managed stays False either way: from this
-    # version forward, CoDev makes no claim over this key.
-    default_managed = False
+    # earlier version of this bundle previously claimed this key (the lock
+    # says `opencode_default_agent_managed`) and it still holds one of
+    # CoDev's own retired values (`lead`, or `orchestrator` from before
+    # that), remove it -- a stale value naming a role that no longer exists
+    # is worse than no opinion at all. A value CoDev never claimed is always
+    # the developer's own choice -- even one that happens to read "lead" or
+    # "orchestrator" -- and is never touched, no matter what it is.
+    # default_managed simply carries the incoming provenance flag through
+    # unchanged: from this version forward, CoDev never newly claims this
+    # key, so it can only ever go from managed to unmanaged (on removal),
+    # never the other way.
+    default_managed = default_agent_managed
     detail = "existing default agent preserved"
-    if config.get("default_agent") in ("lead", "orchestrator"):
+    retired_default_agent = config.get("default_agent") in ("lead", "orchestrator")
+    if default_agent_managed and retired_default_agent:
         del config["default_agent"]
         changed = True
         detail = "removed the now-retired default_agent value (ADR-0044)"
@@ -1172,6 +1179,7 @@ def plan_update(
             opencode = _prepare_opencode(
                 target,
                 managed_opencode_agents,
+                default_agent_managed=default_managed,
                 schema_managed=schema_managed,
                 agent_container_managed=agent_container_managed,
                 config_file_managed=config_file_managed,

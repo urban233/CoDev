@@ -420,6 +420,81 @@ class InstallerTests(unittest.TestCase):
             )
             self.assertIn("builder", config["agent"])
 
+    def test_updating_removes_a_managed_default_agent_value_of_lead(self) -> None:
+        """A lock that already claims `opencode_default_agent_managed` is
+        CoDev's own prior write; a leftover retired value under that claim
+        is safe to remove."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            config_path = target / ".opencode/opencode.json"
+            config = json.loads(config_path.read_text("utf-8"))
+            config["default_agent"] = "lead"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            lock_path = target / ".codev/lock.json"
+            lock = json.loads(lock_path.read_text("utf-8"))
+            lock["integrations"]["opencode_default_agent_managed"] = True
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            self.assertNotIn("default_agent", config)
+
+    def test_updating_removes_a_managed_default_agent_value_of_orchestrator(
+        self,
+    ) -> None:
+        """The pre-rename retired value is removed the same way."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            config_path = target / ".opencode/opencode.json"
+            config = json.loads(config_path.read_text("utf-8"))
+            config["default_agent"] = "orchestrator"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            lock_path = target / ".codev/lock.json"
+            lock = json.loads(lock_path.read_text("utf-8"))
+            lock["integrations"]["opencode_default_agent_managed"] = True
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            self.assertNotIn("default_agent", config)
+
+    def test_updating_preserves_an_unmanaged_default_agent_value_of_lead(
+        self,
+    ) -> None:
+        """`lead` is a completely plausible name for a developer's own
+        OpenCode primary agent -- it is what CoDev's own agent used to be
+        called. When the lock never recorded CoDev as having claimed
+        `default_agent`, its value must be left alone no matter what it
+        reads, not deleted just because it collides with a retired CoDev
+        value."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            config_path = target / ".opencode/opencode.json"
+            config = json.loads(config_path.read_text("utf-8"))
+            config["default_agent"] = "lead"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            lock_path = target / ".codev/lock.json"
+            lock = json.loads(lock_path.read_text("utf-8"))
+            self.assertNotEqual(
+                True, lock["integrations"].get("opencode_default_agent_managed")
+            )
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            self.assertEqual("lead", config["default_agent"])
+
     def test_bundle_filters_claude_adapter_files(self) -> None:
         claude_files = installer._bundle_files(("claude",))
         opencode_files = installer._bundle_files(("opencode",))
