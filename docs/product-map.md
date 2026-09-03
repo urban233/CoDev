@@ -10,7 +10,7 @@ model (how the bundle is built, installed, and updated); this document is
 the product itself — the skills, agents, and CLI surface a developer
 actually uses once CoDev is installed.
 
-Surface inventory current as of 2026-08-31.
+Surface inventory current as of 2026-09-03.
 
 ## Identity
 
@@ -36,7 +36,7 @@ rewritten.
 | The unit `codev task` tracks round-state for | **task**, `task_id` | work item, `work_item_id` (ADR-0023) |
 | Round-state's on-disk location | `.codev/task/` | `.codev/work/` (ADR-0023) |
 | GitHub's tracker artifact for a task | **issue** | ticket, bug |
-| The single agent a developer talks to, across every phase | **`lead`** | — (ADR-0040; replaces `lead` and `lead`) |
+| What coordinates every phase | `.codev/for-ai/ai-agent-guidelines.md`, read by every ordinary session (ADR-0044) | `lead`, the single dispatched agent (ADR-0040); before that, `orchestrator` and `planner` as two separate sessions (ADR-0024) |
 | A durable, cross-cutting decision that outlives one design document | **ADR** (Architecture Decision Record), `design-solution`'s `assets/adr.template.md`, stored at `docs/adr/NNNN-slug.md` | decision, `assets/decision.template.md` (ADR-0025) |
 | The Plan-phase skill, and the planning unit it details one at a time | **`plan-wave`**, **wave** | plan-delivery, milestone (ADR-0032) |
 
@@ -98,21 +98,21 @@ no agent exists before the bundle is installed.
 
 | Skill | Phase | Invocation today |
 |---|---|---|
-| `specify-project` | Specify | Invoked by `lead` for a greenfield product, or manual |
-| `define-product` | Understand | Invoked by `lead` when framing an addition, or when a build surfaces an unresolved product question |
-| `design-solution` | Design | Invoked by `lead` when a shared contract or architectural question is at stake |
-| `plan-wave` | Plan | Invoked by `lead` when more than one developer is involved, or when a build surfaces a dependency or assignment problem |
-| `build-change` | Build | Invoked by `lead` to frame every delegated build, or manual standalone |
+| `specify-project` | Specify | Invoked by your agent for a greenfield product, or manual |
+| `define-product` | Understand | Invoked by your agent when framing an addition, or when a build surfaces an unresolved product question |
+| `design-solution` | Design | Invoked by your agent when a shared contract or architectural question is at stake |
+| `plan-wave` | Plan | Invoked by your agent when more than one developer is involved, or when a build surfaces a dependency or assignment problem |
+| `build-change` | Build | Invoked by your agent to frame every delegated build, or manual standalone |
 | `review-change` | Review | Manual only — the zero-ceremony path for a diff with no task and no open PR |
 | `critique-review` | Review (downstream) | Manual only — consumes another review's findings, does not itself review |
-| `pr-review` | Review (existing PR) | Manual only as a guided skill; its fetch *script* is reused mechanically by `outer-loop-runner` step 1 |
+| `pr-review` | Review (existing PR) | Manual only as a guided skill; its fetch *script* is reused mechanically by `outer-loop-review`'s step 1 |
 | `audit-google-python-style` | Review / pre-Ship | Manual only, by explicit design ("invoke only when the user explicitly requests") |
 | `audit-google-typescript-style` | Review / pre-Ship | Manual only, by explicit design |
-| `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-runner` step 1 |
+| `github-actions-ci-results` | Ship | Manual only as a guided skill; reused mechanically by `outer-loop-review`'s step 1 |
 | `design-skill-eval` | Cross-cutting | Manual — scaffolds a new eval task for an existing skill |
 | `technical-writing-style` | Cross-cutting | Read automatically by `specify-project`, `define-product`, `design-solution`, `plan-wave`, and `launch-product` before they draft or revise prose; also manual, to audit or revise the writing quality of an existing document |
 | `testing-craft` | Cross-cutting | Read automatically by `specify-project` and `design-solution` before they decide test strategy and by `build-change` before it writes tests; `correctness-tests-specialist` uses its references as review criteria; also manual, to design a test strategy, audit an existing test suite's health, or triage a flaky test |
-| `launch-product` | Launch | Invoked by `lead` when a change approaches release |
+| `launch-product` | Launch | Invoked by your agent when a change approaches release |
 
 Per ADR-0005, the review family is now two clusters rather than an
 undifferentiated six: `review-change`, `pr-review`, and `critique-review`
@@ -132,15 +132,23 @@ Junie and Antigravity no longer carry this table's role set (ADR-0031): each
 ships a single `assistant` role for bounded, surgical edits, decoupled from
 the task lifecycle. Codex is dropped entirely (ADR-0031).
 
+No agent is a human-facing entry point (ADR-0044). Coordination is what
+`.codev/for-ai/ai-agent-guidelines.md` already tells an ordinary session to
+do; every row below is dispatched by that ordinary session, never started
+or selected on its own.
+
 | Agent | Phase | Invocation today |
 |---|---|---|
-| `lead` | Every phase (the only entry point) | Human-started; invokes the planning skills directly and dispatches every other agent in this table (ADR-0040) |
-| `builder` | Build | Dispatched by `lead` |
-| `lightweight-reviewer` | Review (inner loop) | Auto-invoked by `lead`, fresh context each round |
-| `outer-loop-runner` | Review -> Ship | Dispatched by `lead` once a pull request is open; does not run on a PR event (ADR-0040) |
-| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Auto-dispatched in parallel by `outer-loop-runner`. `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005); `correctness-tests-specialist` judges `test_quality` against `testing-craft`'s references |
+| `builder` | Build | Dispatched during Build execution |
+| `lightweight-reviewer` | Review (inner loop) | Auto-invoked, fresh context each round |
+| `correctness-tests-specialist`, `security-data-specialist`, `concurrency-specialist`, `architecture-maintainability-specialist`, `rollout-specialist` | Review (outer loop) | Dispatched in parallel by whoever is following the `outer-loop-review` skill, one specialist selection question at a time (ADR-0021). `architecture-maintainability-specialist` now carries the Clean Code/Gang-of-Four catalog absorbed from the retired `clean-code-review` skill (ADR-0005); `correctness-tests-specialist` judges `test_quality` against `testing-craft`'s references |
 | `code-audit` | Review / pre-Ship | Human-invoked only (ADR-0015): the full two-phase, human-approval-gated audit-and-fix workflow. No longer has an automatic pre-PR invocation mode — that responsibility moved entirely to `code-audit-gate` below, since Phase 1's audit-only pass never needed the approval gate that makes this agent `mode: primary` in the first place |
-| `code-audit-gate` | Build (pre-PR gate) | Auto-invoked by `lead`, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
+| `code-audit-gate` | Build (pre-PR gate) | Auto-invoked during Build execution, between the builder's round and `lightweight-reviewer`'s dispatch (ADR-0015). Always-autonomous subagent, style/documentation scope only, never logic — self-fixes and reports back rather than stopping for approval. Resolves before the reviewer round is recorded, so it never opens the outer phase or spends any of its round cap |
+
+The outer loop's protocol -- CI gating, presenting the five specialists,
+merging findings, human-triaged correction -- is the `outer-loop-review`
+skill, not an agent: it is loaded on demand once a pull request is open,
+rather than being resident for the whole of every session (ADR-0044).
 
 ## Directions and open questions
 
@@ -151,14 +159,18 @@ the task lifecycle. Codex is dropped entirely (ADR-0031).
 explicit zero-ceremony path; `pr-review` and `critique-review` confirmed
 correctly on-demand, unchanged.
 
-**Superseded by ADR-0040.** ADR-0024 gave the Specify/Understand/Design/Plan
-phases their own human-started entry point, `planner`, decoupled from
-`orchestrator`'s Build/Review/Ship scope, and the two were independent entry
-points a human chose between. Both are now `lead`, which invokes every
-planning skill directly and dispatches every build and review agent. The
-issue-only short circuit ADR-0024 added is `codev git issue-create
---body-file`, which `lead` runs when an accepted design needs nothing more
-than a well-formed issue.
+**Superseded by ADR-0040, then ADR-0044.** ADR-0024 gave the
+Specify/Understand/Design/Plan phases their own human-started entry point,
+`planner`, decoupled from `orchestrator`'s Build/Review/Ship scope, and the
+two were independent entry points a human chose between. ADR-0040 merged
+both into `lead`, one dispatched agent invoking every planning skill and
+dispatching every build and review agent. ADR-0044 went one step further:
+`lead` is not an agent either, on any platform -- coordination is what
+`.codev/for-ai/ai-agent-guidelines.md` already tells an ordinary session to
+do, with no identity left to dispatch into first. The issue-only short
+circuit ADR-0024 added is `codev git issue-create --body-file`, which any
+session runs directly when an accepted design needs nothing more than a
+well-formed issue.
 
 **Resolved and implemented (ADR-0025):** `design-solution`'s decision asset
 is formalized into an explicit ADR practice — renamed `assets/adr.template.md`
@@ -219,7 +231,7 @@ unchanged.
   entirely; Junie and Antigravity are narrowed to a single `assistant` role,
   decoupled from the task lifecycle.
 - Does not relax `code-audit`'s no-delegation guardrail — the guardrail is
-  about it calling other agents, not about being called by `lead`,
+  about it calling other agents, not about how it is invoked,
   and ADR-0005 left it textually unchanged.
 - Does not restructure the CLI's command tree (e.g. moving `codeowners`
   under `git`, splitting `task`'s subcommands) — surfaced in the inventory
