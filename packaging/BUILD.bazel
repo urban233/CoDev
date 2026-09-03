@@ -42,7 +42,7 @@ py_wheel(
     # for the human-run, credential-free-from-Claude usage.
     twine_binary = "@rules_python//tools/publish:twine",
     distribution = "open-codev-workflow",
-    version = "0.6.0",
+    version = "0.7.0",
     python_tag = "py3",
     python_requires = ">=3.11",
     author = "Martin Urban",
