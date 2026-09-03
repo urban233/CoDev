@@ -1,5 +1,42 @@
 {
   "base_snapshot": "99a9482f965ff0b5113be6e915af1239c07bd615",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "No security_privacy_data_compatibility surface in this change: a git-head drift-comparison fix, a substring-matching bug fix in status parsing, and gitignore/prose edits. Waived per explicit owner direction rather than a specialist finding nothing.",
+      "round": 4,
+      "timestamp": "2026-09-03T14:35:58Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrency surface in this change: a git-head drift-comparison fix, a substring-matching bug fix in status parsing, and gitignore/prose edits. Waived per explicit owner direction rather than a specialist finding nothing.",
+      "round": 4,
+      "timestamp": "2026-09-03T14:35:58Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "No architecture_scope surface in this change: a git-head drift-comparison fix, a substring-matching bug fix in status parsing, and gitignore/prose edits. Waived per explicit owner direction rather than a specialist finding nothing.",
+      "round": 4,
+      "timestamp": "2026-09-03T14:35:58Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "No maintainability surface in this change: a git-head drift-comparison fix, a substring-matching bug fix in status parsing, and gitignore/prose edits. Waived per explicit owner direction rather than a specialist finding nothing.",
+      "round": 4,
+      "timestamp": "2026-09-03T14:35:58Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No rollout surface in this change: a git-head drift-comparison fix, a substring-matching bug fix in status parsing, and gitignore/prose edits. Waived per explicit owner direction rather than a specialist finding nothing.",
+      "round": 4,
+      "timestamp": "2026-09-03T14:35:58Z"
+    }
+  ],
   "current_round": 4,
   "current_slice": "accepted-status-and-prose",
   "description": null,
@@ -91,7 +128,25 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Mutation-tested the fix by temporarily reverting head_for_check to a naive current_head() and re-running HeadForCheckTests: 2 of 4 tests failed on wrong SHA and 1 errored (GitOpsError from open_pr), confirming the tests are not vacuous and the walk-back is what makes the bug shape (recording a round moves HEAD past the commit it was recorded against) resolve correctly. With the real fix restored, all 4 pass. Traced the loop's fail-safe branches: empty diff (merge/empty commit), any path outside the task's own .codev/task/<id>/ prefix, or a missing parent all return the real unmodified current head rather than walking further -- verified the 'mixed bookkeeping + product code' test exercises exactly this and correctly reports stop_drift. Confirmed callers (navigator.next_action, open_pr, mark_ready) validate task existence before reaching head_for_check in the paths that matter, so no new TaskError surface was introduced. Also reviewed the unrelated _is_accepted fix in navigator.py (status.split()[0] == \"accepted\" instead of an \"accepted\" in stripped substring check) against its new test -- correctly stops 'Not Accepted' from false-matching 'accepted' as a substring.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "Walk termination is guaranteed: rev-parse candidate~1 raises GitOpsError at the root commit (no parent), which is caught and falls back to the real current head; the same catch covers a failed git diff. No explicit iteration cap exists, but each step is one task.check call plus two git subprocess calls, and the walk only continues over commits confined to the task's own directory, so an unbounded number of trailing bookkeeping commits is a theoretical concern rather than a realistic one for this workflow's commit shapes. task.check's TaskError is not caught inside head_for_check, but this matches pre-existing behavior (the same call happened one line later in the old code for open_pr/mark_ready, and after an explicit describe()-based TaskError catch in navigator.next_action), so it is not a regression.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "HeadForCheckTests (tests/test_git_ops.py) uses real git repos and real task.*/git_ops.* calls, mocking only _run_gh -- consistent with every other test class in this file. Full suite (GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m unittest discover -s tests): 814 tests, OK (skipped=1). ruff check and mypy both clean on src and tests. The four new tests each map to a distinct, real risk: single trailing bookkeeping commit, multi-hop walk-back (the exact live shape), a commit mixing bookkeeping with product code (must still report drift), and an end-to-end open_pr success -- verified via mutation testing that removing the fix breaks the first two and the end-to-end test, not just cosmetically. test_navigator.py adds a real regression test for the substring-matching status bug.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "fdb665f1a2ccdda7443f9e62749d0d18593abda5"
+      },
       "round": 4,
       "slice_id": "accepted-status-and-prose"
     }
