@@ -18,6 +18,7 @@
     "inner": 3,
     "outer": 2
   },
+  "outcome": "approved",
   "owner": "urban233",
   "reopens": [
     {
@@ -383,7 +384,7 @@
   "slices": [
     "lead-as-skill-plan"
   ],
-  "status": "in_progress",
+  "status": "closed",
   "summary": "Plan: lead becomes a skill, not an agent, on every platform",
   "task_id": "lead-as-skill-plan"
 }
