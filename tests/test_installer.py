@@ -744,6 +744,113 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("gitignore" in issue.lower() for issue in result.issues))
 
+    def test_init_creates_gitattributes_with_managed_block(self) -> None:
+        self.install(("opencode",))
+
+        gitattributes = (self.target / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn(installer.GITATTRIBUTES_START, gitattributes)
+        self.assertIn(installer.GITATTRIBUTES_END, gitattributes)
+        self.assertIn(".codev/task/**/*.json linguist-generated=true", gitattributes)
+        self.assertIn(".codev/lock.json linguist-generated=true", gitattributes)
+        lock = json.loads((self.target / ".codev" / "lock.json").read_text())
+        self.assertIn("gitattributes_block_hash", lock["integrations"])
+
+    def test_init_preserves_existing_gitattributes_content(self) -> None:
+        original = "*.png binary\n*.pdf binary\n"
+        (self.target / ".gitattributes").write_text(original, encoding="utf-8")
+
+        self.install(("opencode",))
+
+        merged = (self.target / ".gitattributes").read_text(encoding="utf-8")
+        self.assertTrue(merged.startswith(original.rstrip()))
+        self.assertIn("*.png binary", merged)
+        self.assertIn(installer.GITATTRIBUTES_START, merged)
+
+    def test_init_conflicts_on_different_gitattributes_block(self) -> None:
+        (self.target / ".gitattributes").write_text(
+            f"{installer.GITATTRIBUTES_START}\nsomething-else\n"
+            f"{installer.GITATTRIBUTES_END}\n",
+            encoding="utf-8",
+        )
+
+        plan = installer.plan_init(self.target, ("opencode",), "none")
+
+        self.assertTrue(any(item.path == ".gitattributes" for item in plan.conflicts))
+
+    def test_update_integrates_gitattributes_for_a_prior_install(self) -> None:
+        self.install(("opencode",))
+        # Simulate an install that predates the gitattributes integration: no
+        # block in the file, and no record of it in the lock file.
+        (self.target / ".gitattributes").write_text("*.png binary\n", encoding="utf-8")
+        lock_path = self.target / ".codev" / "lock.json"
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock["integrations"].pop("gitattributes_block_hash")
+        lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+        plan = installer.plan_update(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        gitattributes = (self.target / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.png binary", gitattributes)
+        self.assertIn(installer.GITATTRIBUTES_START, gitattributes)
+        updated_lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertIn("gitattributes_block_hash", updated_lock["integrations"])
+
+    def test_update_rejects_modified_gitattributes_block(self) -> None:
+        self.install(("opencode",))
+        gitattributes_path = self.target / ".gitattributes"
+        text = gitattributes_path.read_text(encoding="utf-8")
+        gitattributes_path.write_text(
+            text.replace("linguist-generated=true", "tampered"), encoding="utf-8"
+        )
+
+        plan = installer.plan_update(self.target)
+
+        self.assertTrue(any(item.path == ".gitattributes" for item in plan.conflicts))
+
+    def test_update_is_idempotent_for_gitattributes_block(self) -> None:
+        self.install(("opencode",))
+
+        first = installer.plan_update(self.target)
+        self.assertFalse(first.conflicts)
+        installer.apply_plan(self.target, first)
+
+        second = installer.plan_update(self.target)
+
+        self.assertFalse(second.conflicts)
+        self.assertFalse(any(item.path == ".gitattributes" for item in second.changed))
+
+    def test_remove_removes_managed_gitattributes_block_and_preserves_other_content(
+        self,
+    ) -> None:
+        (self.target / ".gitattributes").write_text("*.png binary\n", encoding="utf-8")
+        self.install(("opencode",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        gitattributes = (self.target / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("*.png binary", gitattributes)
+        self.assertNotIn(installer.GITATTRIBUTES_START, gitattributes)
+        self.assertNotIn("linguist-generated", gitattributes)
+
+    def test_remove_leaves_empty_gitattributes_when_block_was_the_only_content(
+        self,
+    ) -> None:
+        # Matches `.gitignore`'s own removal behavior in this exact
+        # situation: the file is left in place, empty, rather than deleted.
+        self.install(("opencode",))
+
+        plan = installer.plan_remove(self.target)
+
+        self.assertFalse(plan.conflicts)
+        installer.apply_plan(self.target, plan)
+        gitattributes_path = self.target / ".gitattributes"
+        self.assertTrue(gitattributes_path.exists())
+        self.assertEqual("", gitattributes_path.read_text(encoding="utf-8"))
+
     def test_init_preserves_existing_opencode_default(self) -> None:
         config_path = self.target / ".opencode" / "opencode.json"
         config_path.parent.mkdir(parents=True)
