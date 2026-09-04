@@ -6,16 +6,17 @@ description: Two prompts you'll type often — starting a task, and starting out
 This is the exact wording behind [Talking to Your Agent](/CoDev/working-with-your-agent/)'s
 "What you actually say" section — copy-paste it rather than reconstructing it from memory.
 Two prompts you'll type often: kicking off the next task, and starting
-outer-loop review on an open pull request. Both assume CoDev is installed and
-that you're talking to `lead` — the only agent you start (on OpenCode, `/agent
-lead`; other platforms select the agent their own way). `lead` dispatches the
-outer-loop review itself, so the second prompt asks it for one rather than
-sending you to a different session.
+outer-loop review on an open pull request. Both assume CoDev is installed --
+there is no agent to start or select first, just the conversation you're
+already having. The agent loads the `outer-loop-review` skill for the second
+prompt itself, so it asks you for a specialist selection rather than sending
+you to a different session.
 
 Fill in the bracketed parts. Everything else is meant to be typed as-is —
-these are deliberately short. `lead` grounds itself in the repository and asks
-you only for decisions that are actually yours to make; a longer prompt does
-not make it safer, and mostly just repeats what it already does by default.
+these are deliberately short. The agent grounds itself in the repository and
+asks you only for decisions that are actually yours to make; a longer prompt
+does not make it safer, and mostly just repeats what it already does by
+default.
 
 ## Starting the next task
 
@@ -32,7 +33,7 @@ after the fact.
 
 Why this is enough, and no more:
 
-- **You don't need to ask for a GitHub issue explicitly.** `lead`
+- **You don't need to ask for a GitHub issue explicitly.** `codev slice begin`
   checks for one itself before opening round state, creates it if this
   repository tracks issues on GitHub and none exists yet, and `codev task
   start` refuses to proceed silently without one — you'll be told directly
@@ -63,14 +64,13 @@ run a fresh five-specialist pass on your own judgment.
 ```
 
 Why the second sentence is there: this is a known, actively mitigated gap.
-`outer-loop-runner` is already instructed to present the menu, but nothing
-can force a model to render it before invoking a specialist, and doing
-exactly that — skipping straight to a full five-specialist pass — has been
-observed in real sessions. On OpenCode, each specialist dispatch also
-requires its own explicit permission confirmation as a mechanical backstop,
-independent of what gets narrated — you'll see one prompt per specialist
-regardless. Restating the expectation here costs one sentence and closes
-the gap the rest of the time, on every platform.
+The `outer-loop-review` skill already instructs the agent to present the
+menu, but nothing can force a model to render it before invoking a
+specialist, and doing exactly that — skipping straight to a full
+five-specialist pass — has been observed in real sessions. That menu
+question is the actual guarantee that five real model calls only happen
+after you've answered it, on every platform. Restating the expectation here
+costs one sentence and closes the gap the rest of the time.
 
 If you'd rather run every dimension without narrowing it down, say `all`
 when asked, or state it in the same message: "...run all five." Either way,

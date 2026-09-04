@@ -1,0 +1,389 @@
+{
+  "base_snapshot": "f6011459afde3827cd19601290ad058c5af84dc8",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrent or async code in this diff: role/skill file removal and cross-reference fixes, adapter/installer config-migration logic that runs once synchronously at install/update time, docs, and a version cut. Waived per explicit owner direction during outer-loop specialist selection.",
+      "round": 2,
+      "timestamp": "2026-09-03T20:47:51Z"
+    }
+  ],
+  "current_round": 6,
+  "current_slice": "lead-as-skill-plan",
+  "description": null,
+  "entry": null,
+  "link_ref": "https://github.com/urban233/CoDev/issues/40",
+  "max_rounds": {
+    "inner": 3,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reopens": [
+    {
+      "by": "urban233",
+      "from_round": 1,
+      "head": "ac53661c45fa7b44ec9a3100eb21da29d1de4883",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "A ~90-file architectural implementation across bundle source, both platforms' live installs, tests, docs, and a version cut -- not a scoped builder round.",
+      "timestamp": "2026-09-03T20:15:41Z",
+      "to_round": 2
+    },
+    {
+      "by": "urban233",
+      "from_round": 4,
+      "head": "871af4852d5dec1f7b6ee8cf2109f624c73a6686",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round 4 was finalized (READY_FOR_HUMAN_APPROVAL) with only correctness/test_quality coverage recorded, before the security_privacy_data_compatibility gap was addressed. The owner explicitly authorized dispatching security-data-specialist for real coverage rather than a waiver; round 5 is needed to record its verdict since round 4's reviewer entry is write-once and already spent.",
+      "timestamp": "2026-09-03T21:21:56Z",
+      "to_round": 5
+    },
+    {
+      "by": "urban233",
+      "from_round": 5,
+      "head": "f6011459afde3827cd19601290ad058c5af84dc8",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED: security-data-specialist found and verified live that _prepare_opencode's deletion branch never clears opencode_default_agent_managed back to False, so the provenance flag permanently over-claims ownership after a default_agent key is removed -- risking exactly the silent-deletion regression rounds 3-4 just fixed, through a second uncovered path. Owner explicitly chose to fix this now in a bounded round rather than defer or accept as residual risk.",
+      "timestamp": "2026-09-03T21:30:15Z",
+      "to_round": 6
+    }
+  ],
+  "review_waiver": {
+    "at": "2026-09-04T21:50:07Z",
+    "by": "urban233",
+    "reason": "Task owner (urban233) reviewed the full outer-loop evidence directly in conversation across rounds 3-6 (five specialist passes, one found-and-fixed regression, mutation-verified) and explicitly authorized merging without a second independent GitHub approval, after being told the gate could not be satisfied by the task owner's own approval and that collaborator kullik01 was available but not requested."
+  },
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Ruff check: All checks passed. Mypy check: Success (no issues in 50 source files). Unit tests: Passed. Release verification: 0.7.0 consistent across pyproject.toml, __init__.py, BUILD.bazel. No live references to removed lead/outer-loop-runner roles (7 grep hits all historical/intentional). lead.md and outer-loop-runner.md deleted from both .claude/agents/ and .opencode/agents/. outer-loop-review skill created (222 lines). AI guidelines properly integrated lead framing. Adapter verify claude and opencode both passed. Implementation plan Accepted 2026-09-03. ADR-0044 exists and Accepted. Diff plausibly implements plan: ~90 files, removes agents, creates skill, updates cross-references.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "14c665f9cb2fede690912d4aa759793f35031888"
+      },
+      "round": 2,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed_files": [
+            "src/codev_workflow/installer.py",
+            "tests/test_installer.py"
+          ],
+          "deviations": "none",
+          "limitations": "plan_update's pre-existing `default_managed = default_managed or opencode.default_agent_managed` line is now a functional no-op since the flag only ever passes through unchanged; left untouched as out of scope for this narrow fix",
+          "validation": "ruff check src tests, mypy src tests, full unittest discover -s tests -- all pass (818 tests); independently re-verified by reading the diff and re-running validation before this commit"
+        },
+        "head_snapshot": "9cf95e7419234cdb12b8963ac0254a23c45b3fae"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist confirmed no rejected alternative was reintroduced (no Agent(...) grant, pr-review untouched as a dependency not an absorber, no surviving mode: primary coordination agent) and code-audit's mode: primary genuinely untouched as the plan required. Two non-blocking findings recorded: the retired agents' broader permission bounds (edit: deny, bash allowlist, maxTurns) were never discussed in the ADR beyond the one ADR-0021 gate; and ADAPTER_ROLE_PATHS no longer scans skills, so the --body guard class has no mechanical backstop (verified the live risk is zero: codev slice publish has no --body parameter at all).",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist found PR41-DEFAULT-AGENT-VALUE-NOT-PROVENANCE: default_agent deletion keys off the string value alone (\"lead\"/\"orchestrator\") with no check of the opencode_default_agent_managed provenance flag, deleting a developer's own default_agent named 'lead' -- confirmed against main's prior preserving behavior by reading both versions directly.",
+            "passed": false
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist found one non-blocking finding (stale opencode_default_agent_managed lock flag can wedge codev remove with a CoDevError later) but no unhandled-exception or malformed-input gap; existing CoDevError paths for locally-edited managed agents remain intact and are still converted to conflicts by both callers.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist: the change deletes a duplicated ~80-line outer-loop protocol copy from ai-agent-guidelines.md and replaces it with a pointer, a net health improvement. Several non-blocking findings recorded (dead default_managed boolean, one genuinely redundant role-list pair vs. three that check different properties, a plan-doc self-contradiction, one pre-existing stale doc now the sole live holdout, a test that lost its original subject, a permission-marker regression test with no live subject, a stale skill-card version string) -- none blocking, all named for follow-up.",
+            "passed": true
+          },
+          "rollout": {
+            "evidence": "rollout-specialist traced the full migration path end to end: role-file removal is safe and generic (conflict-not-deletion for local edits, both platforms), default_agent cleanup confirmed in the diff, outer-loop-review skill present in the bundle, scripts/verify_release.py passes, and the CHANGELOG's Upgrading section is accurate against the actual code. One non-blocking finding: no documented rollback/downgrade path from 0.7.0 to 0.6.0.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist found PR41-DEFAULT-AGENT-UNTESTED: zero tests exercise the new default_agent deletion branch on the update path for a prior CoDev-set value, and none exercises the developer-owned-value boundary the regression violates -- confirmed via grep -rn default_agent tests/test_installer.py, four hits, none reaching the new branch.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "PR41-DEFAULT-AGENT-VALUE-NOT-PROVENANCE",
+            "location": "src/codev_workflow/installer.py:731-734 (_prepare_opencode)",
+            "rank": 1,
+            "summary": "default_agent removal keys off the string value alone, not the opencode_default_agent_managed provenance flag, so a developer's own default_agent named 'lead' or 'orchestrator' is now deleted -- a regression from main, which explicitly preserved default_agent == 'lead' as a no-op."
+          },
+          {
+            "blocking": true,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "PR41-DEFAULT-AGENT-UNTESTED",
+            "location": "tests/test_installer.py (no coverage of the update-path deletion branch)",
+            "rank": 2,
+            "summary": "No test exercises default_agent removal for a prior CoDev-set 'lead'/'orchestrator' value on update, and none exercises the developer-owned-value-must-survive boundary finding 1 violates; deleting the whole new if-block leaves all 815 tests green."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "PR41-SKILL-PERMISSION-BOUNDS-UNDOCUMENTED",
+            "location": "docs/adr/0044-lead-is-not-an-agent.md; deleted .claude/agents/outer-loop-runner.md, .opencode/agents/outer-loop-runner.md",
+            "rank": 3,
+            "summary": "The retired agents' frontmatter carried real execution bounds beyond the ADR-0021 permission.task gate the ADR discusses -- edit: deny, a bash allowlist denying raw git commit/push, external_directory: deny, maxTurns, permissionMode: manual. None of these moved anywhere; a skill inherits the ambient session's full permissions. The ADR reasons about the one gate it names and is silent on the rest."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "PR41-STALE-LOCK-FLAG-WEDGES-REMOVE",
+            "location": "src/codev_workflow/installer.py:1160,1184 (plan_update); ~1655 (check_project)",
+            "rank": 4,
+            "summary": "opencode_default_agent_managed is carried forward as True from a pre-0.7.0 lock and never cleared on update, contradicting the code's own comment that CoDev makes no claim over the key going forward. A developer who sets their own default_agent after updating can hit a CoDevError on codev adapter remove, which blocks all deletions."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-REQUIRED-MARKERS-COVERAGE-GAP",
+            "location": "src/codev_workflow/adapter.py (_REQUIRED_MARKERS); .agents/skills/outer-loop-review/SKILL.md",
+            "rank": 5,
+            "summary": "The mechanical markers that used to verify lead.md/outer-loop-runner.md named the composite verbs (codev slice publish, --selection, codev git mark-ready, etc.) are gone with the files, and nothing scans the new skill for the same invariant -- a future edit dropping one of those verbs from the skill would pass every check."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "PR41-BODY-GUARD-SCANNER-GAP",
+            "location": "src/codev_workflow/adapter.py (_HANDWRITTEN_PR_BODY_MARKERS); .agents/skills/outer-loop-review/SKILL.md:210-222",
+            "rank": 6,
+            "summary": "The 'never pass --body' guard from outer-loop-runner.md's step 6 was dropped when the step became codev slice publish, which structurally has no --body flag, so the live risk is zero -- but ADAPTER_ROLE_PATHS no longer scans skills at all, so this class of guard has no mechanical backstop for any future skill."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-DEAD-DEFAULT-MANAGED-BOOLEAN",
+            "location": "src/codev_workflow/installer.py:729 and its downstream consumers",
+            "rank": 7,
+            "summary": "default_managed is permanently False now, but still flows through plan_update's OR-with-old-lock logic and _new_lock, and the OpenCodePreparation field name still implies CoDev manages a key it explicitly does not any more. A producer that can only ever emit False is dead code wearing a name that overclaims."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-FOUR-ROLE-LISTS-ONLY-TWO-REDUNDANT",
+            "location": "Justfile:124; tests/test_installer.py (bundled-agent list)",
+            "rank": 8,
+            "summary": "Of the four places the role set is written down, only Justfile's verify-dist and the installer test assert the identical fact (the same sorted .opencode/agents filename list) -- ADAPTER_ROLE_PATHS and OPENCODE_AGENT_CONFIGS hold genuinely different data. The PR description's 'a fourth place' framing overstates the redundancy; only one pair is a true duplicate worth collapsing."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-PLAN-STATUS-SELF-CONTRADICTION",
+            "location": "docs/plans/lead-as-skill-not-agent.md:3 vs :238-240",
+            "rank": 9,
+            "summary": "The header says Status: Accepted, but the closing section still reads 'this document's Status line is still Draft. It becomes buildable once that line reads Accepted' -- commit dc5b1ce fixed the header and missed the trailer, leaving the authority document asserting two contradictory things about its own status."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-STALE-DOCS-FOR-AI-GUIDELINES",
+            "location": "docs/for-ai/ai-agent-guidelines.md (pre-existing, orphaned by an earlier docs relocation)",
+            "rank": 10,
+            "summary": "This file still describes lead dispatching builder/code-audit-gate and handing to outer-loop-runner. Pre-existing debt, out of ADR-0044's literal scope, but after this PR it is the only live document in the repository still asserting the removed model -- in tension with this PR's own commit message claiming every cross-reference was fixed."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "PR41-PRESERVE-TEST-LOST-ITS-SUBJECT",
+            "location": "tests/test_installer.py:630-655 (test_init_preserves_existing_opencode_agent)",
+            "rank": 11,
+            "summary": "Unchanged by this diff, but its meaning changed underneath it: it used to pin the managed-name-collision path for lead specifically; with lead no longer managed, it now only proves an unrelated key survives a merge that never inspects it."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-SPECIALIST-MARKER-NO-LIVE-SUBJECT",
+            "location": "src/codev_workflow/adapter.py (_SPECIALIST_ALLOW_MARKERS); tests/test_adapter.py",
+            "rank": 12,
+            "summary": "The scanner's own comment now says nothing currently in scope should match it; the regression test had to relocate onto builder, a role that would never carry this permission block, so the test proves the scanner works rather than that a real invariant holds. Worth one CHANGELOG sentence so a future reader does not 'restore' it by re-adding a permission block somewhere."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR41-SKILL-CARD-STALE-VERSION",
+            "location": "src/codev_workflow/bundle/.agents/skills/outer-loop-review/skill-card.md:21",
+            "rank": 13,
+            "summary": "Says 'currently 0.6.0' in the PR that cuts 0.7.0. Pre-existing pattern (all 15 other skill cards say 0.3.0), but the new card joined it already wrong."
+          }
+        ],
+        "head_snapshot": "84ac147cfea565271c7272b620fd6cec5264d374",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist",
+            "rollout-specialist"
+          ]
+        }
+      },
+      "round": 3,
+      "slice_id": "lead-as-skill-plan",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "PR41-DEFAULT-AGENT-UNTESTED": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "PR41-DEFAULT-AGENT-VALUE-NOT-PROVENANCE": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed_files": [
+            "src/codev_workflow/installer.py",
+            "tests/test_installer.py"
+          ],
+          "deviations": "none",
+          "limitations": "plan_update's pre-existing default_managed-or-flag line is now a functional no-op; left untouched as out of scope for this narrow fix",
+          "validation": "ruff check src tests, mypy src tests, full unittest discover -s tests -- all pass (818 tests, including 3 new tests characterizing the fix and the regression it corrects). Independently re-verified by the outer-loop coordinator, not just the builder's self-report."
+        },
+        "head_snapshot": "9cf95e7419234cdb12b8963ac0254a23c45b3fae"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist narrow re-verification: _prepare_opencode's deletion gate is a genuine 'default_agent_managed and retired_default_agent', not an or or a value-only check; plan_update threads the lock's real provenance flag through unmodified; plan_init correctly relies on the False default since a fresh install has no prior claim. Read the diff directly, not taken on the builder's word.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist mutation-tested the three new tests in a throwaway copy: reverting the provenance gate to pre-fix semantics makes test_updating_preserves_an_unmanaged_default_agent_value_of_lead fail with KeyError, confirming it genuinely encodes the regression; disabling deletion entirely fails both removal tests, confirming neither passes vacuously. Full suite green, 818 tests.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "871af4852d5dec1f7b6ee8cf2109f624c73a6686"
+      },
+      "round": 4,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist: data handling in _prepare_opencode verified by executing the migration against a config carrying unrelated keys (theme, an mcp block with an embedded credential) -- every non-default_agent, non-agent key round-trips byte-faithfully, file rewritten in place only, nothing copied/logged/emitted elsewhere. Unusual config shapes (non-string default_agent, non-object root/agent) handled without crash or partial write -- all mutation happens in memory, applied as one bytes payload. Role-file deletion path unchanged from main, still hash-gated against the lock, no path-matching false positive reachable. Privacy: grepped full diff for token/secret/credential patterns, only matches are pre-existing skill-card prose about gh auth and existing review-prompt text about spotting hardcoded secrets -- no new logging or persistence of credentials or personal data. Compatibility: lock schema_version unchanged at 2, migration idempotent on a second run. Two non-blocking findings recorded (PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED, PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE).",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED",
+            "location": "src/codev_workflow/installer.py:735-741,1192",
+            "rank": 1,
+            "summary": "opencode_default_agent_managed provenance flag is never cleared to False when _prepare_opencode deletes default_agent, so CoDev keeps claiming ownership of a key it no longer manages after the deletion runs."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE",
+            "location": "deleted src/codev_workflow/bundle/.opencode/agents/lead.md frontmatter; installer.py:81-88,721-741; docs/adr/0044-lead-is-not-an-agent.md:68-78",
+            "rank": 2,
+            "summary": "Removing lead as OpenCode's default_agent drops the restrictive permission block (edit: ask, git commit/push: deny, external_directory: deny, task: deny) that constrained the default session; nothing CoDev ships replaces it, and ADR-0044 only reasons about the narrower ADR-0021 specialist-dispatch gate becoming prose-only, not this broader loss."
+          }
+        ],
+        "head_snapshot": "935db5b9f2c24f4e9277226de2738574bbb0d5f1",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
+      "round": 5,
+      "slice_id": "lead-as-skill-plan"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist narrowly re-verified the round-6 builder fix for PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED: both changed lines in installer.py traced directly -- the new default_managed = False (line 741) fires only inside the same if-branch as the deletion itself, never on any other changed=True site; dropping the `or` at plan_update's default_managed assignment (line 1193) is necessary, not cosmetic, since the old `or` would have re-masked the fix by re-preserving the stale pre-call True. plan_init's call site confirmed unaffected (deletion branch unreachable there by construction). Regression test mutation-verified independently by the specialist: reverting either fix line, or making the clear unconditional, each fails the test with the correct symptom; full suite 819 tests OK (1 skipped), installer 80 OK, CLI 115 OK. Checked interaction with _prepare_opencode_removal, check_project (no longer inspects the flag), plan_remove, and apply_plan's write ordering (files before lock, atomic on error) -- no new destructive path, no lock-schema break, no partial-apply window. Zero new findings. PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE explicitly out of scope for this round, not re-examined.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "32c122d613232ef2de0a3a5b1651db446996bd6f",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
+      "round": 6,
+      "slice_id": "lead-as-skill-plan"
+    }
+  ],
+  "slice_styles": {
+    "lead-as-skill-plan": "pair"
+  },
+  "slices": [
+    "lead-as-skill-plan"
+  ],
+  "status": "in_progress",
+  "summary": "Plan: lead becomes a skill, not an agent, on every platform",
+  "task_id": "lead-as-skill-plan"
+}

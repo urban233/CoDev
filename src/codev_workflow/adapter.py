@@ -49,7 +49,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _OUTER_LOOP_ROLES = (
-    "outer-loop-runner",
     "correctness-tests-specialist",
     "security-data-specialist",
     "concurrency-specialist",
@@ -66,12 +65,14 @@ def _role_paths(directory: str, extension: str) -> dict[str, str]:
     # bundle-parity test runs directly against the raw bundle. Their rendered
     # output is instead checked where it's actually produced, by the
     # installer's own per-platform agent-rendering tests.
+    #
+    # `lead` and `outer-loop-runner` are deliberately absent too, and for the
+    # first time not because they render elsewhere but because neither is an
+    # agent any more (ADR-0044): coordination is what
+    # `.codev/for-ai/ai-agent-guidelines.md` already says to every ordinary
+    # session, and the outer loop's protocol is the `outer-loop-review`
+    # skill, loaded on demand rather than dispatched.
     paths = {
-        # One human-facing role. `planner` is gone -- its routing is what
-        # `codev next` computes and its skills `lead` invokes directly -- and
-        # `outer-loop-runner` below is now dispatched by `lead` rather than
-        # started by a developer.
-        "lead": f"{directory}/lead.{extension}",
         "builder": f"{directory}/builder.{extension}",
         "reviewer": f"{directory}/reviewer.{extension}",
         "lightweight-reviewer": f"{directory}/lightweight-reviewer.{extension}",
@@ -85,36 +86,16 @@ ADAPTER_ROLE_PATHS: dict[str, dict[str, str]] = {
     "opencode": _role_paths(".opencode/agents", "md"),
     "claude": _role_paths(".claude/agents", "md"),
     # Junie and Antigravity are the narrow tier: a single bounded-edit
-    # `assistant` role, not the full lead-driven workflow (see
-    # ADR-0031) -- no outer-loop roles, no code-audit, no task-lifecycle
-    # markers to require.
+    # `assistant` role, not the full workflow (see ADR-0031) -- no outer-loop
+    # roles, no code-audit, no task-lifecycle markers to require.
     "junie": {"assistant": ".junie/agents/assistant.md"},
     "antigravity": {"assistant": ".agents/agents/assistant.md"},
 }
 
 _REQUIRED_MARKERS: dict[str, tuple[str, ...]] = {
-    "lead": (
-        # The composite verbs, not the steps they compose: a lead that still
-        # spelled out `codev git branch` then `codev task start` would be the
-        # procedure this role exists to stop carrying.
-        "codev next",
-        "codev slice begin",
-        "codev round close",
-        "codev slice publish",
-        "codev slice land",
-        "codev git mark-ready",
-    ),
     "builder": ("codev task record",),
     "reviewer": ("codev task record",),
     "lightweight-reviewer": ("codev task record",),
-    "outer-loop-runner": (
-        "codev task record",
-        "codev task triage",
-        "codev task waive",
-        "codev task reopen",
-        "--selection",
-        "codev git mark-ready",
-    ),
     "correctness-tests-specialist": ("expansion_reason",),
     "security-data-specialist": ("expansion_reason",),
     "concurrency-specialist": ("expansion_reason",),
@@ -144,11 +125,12 @@ _RAW_MUTATION_MARKERS: tuple[str, ...] = (
 # placeholder would bypass that guarded rendering path.
 _HANDWRITTEN_PR_BODY_MARKERS: tuple[str, ...] = ("--body <body>",)
 
-# ADR-0021: OpenCode's per-subagent `task` permission block is the only
-# mechanical backstop against outer-loop-runner silently skipping the human
-# specialist-selection menu (ADR-0016/0018) -- these five must stay "ask",
-# never regress to "allow", or the one available guardrail disappears again
-# without anything noticing.
+# ADR-0021 / ADR-0044: nothing scanned here carries an OpenCode `task`
+# permission block for the five specialists any more -- that guarantee now
+# lives in the `outer-loop-review` skill's own explicit selection question,
+# not in agent frontmatter (ADR-0044). This stays as a general safety net: a
+# future role file that reintroduces one of these five as `allow` is still
+# worth catching, even though nothing currently in scope should ever match.
 _SPECIALIST_ALLOW_MARKERS: tuple[str, ...] = (
     "correctness-tests-specialist: allow",
     "security-data-specialist: allow",

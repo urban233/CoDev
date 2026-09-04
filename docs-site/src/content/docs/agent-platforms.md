@@ -12,7 +12,7 @@ than once, or a comma-separated list, to select several platforms at once instea
 codev init --target . --agent-platform opencode,claude
 ```
 
-OpenCode and Claude Code get the full lead-driven workflow described in
+OpenCode and Claude Code get the full workflow described in
 [Concepts](/CoDev/concepts/); Junie and Antigravity get a single narrower `assistant`
 agent for bounded, surgical edits instead — see
 [ADR-0031](https://github.com/urban233/CoDev/blob/main/docs/adr/0031-drop-codex-narrow-junie-and-antigravity-to-an-edit-assistant.md)
@@ -20,13 +20,13 @@ for why.
 
 ## OpenCode
 
-Full lead-driven workflow. `AGENTS.md` and `.opencode/opencode.json` are
+The full workflow. `AGENTS.md` and `.opencode/opencode.json` are
 integrations rather than copied files — CoDev owns one marked block in `AGENTS.md` and
 selected missing values in OpenCode configuration, preserving all project-owned content.
 
 ## Claude Code
 
-Full lead-driven workflow, using its official `.claude/agents/` location. Unlike
+The full workflow, using its official `.claude/agents/` location. Unlike
 Antigravity, Claude Code has no configurable skills path, so the shared skills are
 mirrored into `.claude/skills/` at install time instead of referenced in place. Claude
 Code additionally ships a `.claude/settings.json` and three guardrail hooks — a category

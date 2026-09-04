@@ -3,6 +3,60 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.7.0] - 2026-09-03
+
+Found the day 0.6.0 shipped: dispatching `outer-loop-runner` in a real
+review showed it had no way to invoke the five specialists it coordinates.
+Every role in the bundle, `lead` included, was missing the grant a Claude
+Code subagent needs to dispatch a further one -- ADR-0040's design was
+never exercised end to end. This release does not patch the grant; it
+removes the premise.
+
+### Changed
+- **`lead` is not an agent, on either platform**
+  ([ADR-0044](docs/adr/0044-lead-is-not-an-agent.md)). No file designates a
+  coordination-role identity a developer selects or is dispatched into.
+  `lead.md` is deleted from `.claude/agents/` and `.opencode/agents/`; its
+  framing folds into `.codev/for-ai/ai-agent-guidelines.md`, which every
+  platform already loads at the start of every session. There is nothing
+  left to start, on Claude Code, and nothing left to default OpenCode's
+  `default_agent` to -- OpenCode's own built-in `Build`/`Plan` primary
+  agents are the fallback CoDev never had to replace.
+- **`outer-loop-runner`'s 217-line protocol is `outer-loop-review`, a
+  skill**, not an agent. A skill loads only when invoked; the protocol's
+  real length stops being a cost paid on every turn the way a resident
+  agent body's is. `builder`, `reviewer`, `lightweight-reviewer`,
+  `code-audit-gate`, and the five specialists are unchanged -- their
+  isolation is ADR-0002's and ADR-0021's, not an artifact of the
+  primary-agent model this release removes.
+- **ADR-0021's specialist-dispatch guarantee does not move to a new
+  mechanism.** `outer-loop-runner`'s own protocol already asked which
+  specialists to run, in prose, independent of any platform permission
+  config. That prose carries into `outer-loop-review` unchanged and is the
+  guarantee; OpenCode's `permission.task` gate was defense-in-depth on top
+  of it, not the guarantee itself.
+- Role count falls from eleven to nine. Human-facing *agent* count falls to
+  zero.
+
+### Fixed
+- `.opencode/agents/outer-loop-runner.md` carried a stray `mode: primary`
+  ADR-0040 never removed, letting a developer select it directly and bypass
+  `lead` entirely. Deleting the file closes it.
+
+### Upgrading
+
+`codev update` migrates an existing installation: it removes `lead.md` and
+`outer-loop-runner.md`, adds the `outer-loop-review` skill, and removes
+`default_agent` from `.opencode/opencode.json` if CoDev set it. If you
+edited a retired role locally, the update stops and asks rather than
+discarding your changes -- the same protection ADR-0040's own migration
+established.
+
+Neither the outer-loop-protocol-as-skill design nor the permission-guarantee
+reasoning above has been validated against a real OpenCode installation --
+both are reasoned from OpenCode's public documentation and this
+repository's own files. See ADR-0044's Consequences.
+
 ## [0.6.0] - 2026-09-03
 
 The developer-experience release. CoDev's claim has always been that a

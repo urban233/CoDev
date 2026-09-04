@@ -69,7 +69,7 @@ class VerifyAdapterTests(unittest.TestCase):
             result = verify_adapter("opencode", target=Path(directory))
         self.assertFalse(result.ok)
         by_role = {finding.role: finding for finding in result.findings}
-        self.assertIn("missing file", by_role["lead"].problems)
+        self.assertIn("missing file", by_role["builder"].problems)
 
     def test_missing_task_reference_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -109,13 +109,15 @@ class VerifyAdapterTests(unittest.TestCase):
                 path = target / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 content = "codev task start codev task check codev task record"
-                if role == "lead":
+                if role == "builder":
                     content += '\nbash:\n  "*": allow\n'
                 path.write_text(content, encoding="utf-8")
             result = verify_adapter("opencode", target=target)
-        lead = {f.role: f for f in result.findings}["lead"]
-        self.assertFalse(lead.ok)
-        self.assertTrue(any("unrestricted shell execution" in p for p in lead.problems))
+        builder = {f.role: f for f in result.findings}["builder"]
+        self.assertFalse(builder.ok)
+        self.assertTrue(
+            any("unrestricted shell execution" in p for p in builder.problems)
+        )
 
     def test_raw_git_push_permission_is_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -127,13 +129,15 @@ class VerifyAdapterTests(unittest.TestCase):
                     "codev task start codev task check codev task record "
                     "codev git open-pr"
                 )
-                if role == "lead":
+                if role == "builder":
                     content += '\nbash:\n  "git push*": allow\n'
                 path.write_text(content, encoding="utf-8")
             result = verify_adapter("opencode", target=target)
-        lead = {f.role: f for f in result.findings}["lead"]
-        self.assertFalse(lead.ok)
-        self.assertTrue(any("guarded `codev git` surface" in p for p in lead.problems))
+        builder = {f.role: f for f in result.findings}["builder"]
+        self.assertFalse(builder.ok)
+        self.assertTrue(
+            any("guarded `codev git` surface" in p for p in builder.problems)
+        )
 
     def test_handwritten_pr_body_placeholder_is_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -145,15 +149,15 @@ class VerifyAdapterTests(unittest.TestCase):
                     "codev task start codev task check codev task record "
                     "codev git open-pr"
                 )
-                if role == "lead":
+                if role == "builder":
                     content += (
                         " -- open-pr --id <task-id> --title <title> --body <body>"
                     )
                 path.write_text(content, encoding="utf-8")
             result = verify_adapter("opencode", target=target)
-        lead = {f.role: f for f in result.findings}["lead"]
-        self.assertFalse(lead.ok)
-        self.assertTrue(any("PR body placeholder" in p for p in lead.problems))
+        builder = {f.role: f for f in result.findings}["builder"]
+        self.assertFalse(builder.ok)
+        self.assertTrue(any("PR body placeholder" in p for p in builder.problems))
 
     def test_specialist_permission_reverted_to_allow_is_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -165,7 +169,7 @@ class VerifyAdapterTests(unittest.TestCase):
                     "codev task start codev task check codev task record "
                     "codev git open-pr"
                 )
-                if role == "outer-loop-runner":
+                if role == "builder":
                     content += (
                         "\ntask:\n"
                         "  correctness-tests-specialist: allow\n"
@@ -173,11 +177,9 @@ class VerifyAdapterTests(unittest.TestCase):
                     )
                 path.write_text(content, encoding="utf-8")
             result = verify_adapter("opencode", target=target)
-        outer_loop_runner = {f.role: f for f in result.findings}["outer-loop-runner"]
-        self.assertFalse(outer_loop_runner.ok)
-        self.assertTrue(
-            any("ADR-0021 permission gate" in p for p in outer_loop_runner.problems)
-        )
+        builder = {f.role: f for f in result.findings}["builder"]
+        self.assertFalse(builder.ok)
+        self.assertTrue(any("ADR-0021 permission gate" in p for p in builder.problems))
 
     def test_specialist_permission_ask_is_not_flagged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -189,14 +191,12 @@ class VerifyAdapterTests(unittest.TestCase):
                     "codev task start codev task check codev task record "
                     "codev git open-pr"
                 )
-                if role == "outer-loop-runner":
+                if role == "builder":
                     content += "\ntask:\n  correctness-tests-specialist: ask\n"
                 path.write_text(content, encoding="utf-8")
             result = verify_adapter("opencode", target=target)
-        outer_loop_runner = {f.role: f for f in result.findings}["outer-loop-runner"]
-        self.assertFalse(
-            any("ADR-0021 permission gate" in p for p in outer_loop_runner.problems)
-        )
+        builder = {f.role: f for f in result.findings}["builder"]
+        self.assertFalse(any("ADR-0021 permission gate" in p for p in builder.problems))
 
     def test_lightweight_reviewer_role_is_verified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

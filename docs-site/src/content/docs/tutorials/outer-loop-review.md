@@ -4,9 +4,9 @@ description: Starting the outer loop, choosing specialists, triaging findings, a
 ---
 
 :::tip[Who actually types these commands]
-As in the earlier tutorials, the `codev ...` commands below are what `outer-loop-runner`
-runs on your behalf. Your part is entirely in plain language: which specialists to run, and
-what to do about each finding.
+As in the earlier tutorials, the `codev ...` commands below are what the agent runs on
+your behalf, following the `outer-loop-review` skill. Your part is entirely in plain
+language: which specialists to run, and what to do about each finding.
 :::
 
 Once a pull request is open, five specialist reviewers — correctness, security,
@@ -23,9 +23,11 @@ review beyond the automatic per-build checks.
 
 ## Starting the outer loop
 
-Switch to the `outer-loop-runner` agent (on OpenCode: `/agent outer-loop-runner`) and give
-it the PR number. [Starting Prompts](/CoDev/starting-prompts/) has the exact
-phrasing worth using every time:
+There is no separate agent to switch to. Tell the agent you're already talking to
+that a pull request is ready for outer-loop review, and name the PR number — it
+loads the `outer-loop-review` skill and continues in the same conversation.
+[Starting Prompts](/CoDev/starting-prompts/) has the exact phrasing worth using
+every time:
 
 ```text
 Start outer-loop review for PR #47. Present the five specialists as a
@@ -33,15 +35,14 @@ numbered menu and wait for my selection before dispatching anything — don't
 run a fresh five-specialist pass on your own judgment.
 ```
 
-That second sentence matters. `outer-loop-runner` is instructed to present the menu before
-dispatching anything
+That second sentence matters. `outer-loop-review` instructs the agent to present the menu
+before dispatching anything
 ([ADR-0016](https://github.com/urban233/CoDev/blob/main/docs/adr/0016-human-selectable-specialist-dispatch-with-authorized-coverage-waivers.md)),
 but nothing mechanically forces a model to render it first — restating the expectation
-closes that gap. On OpenCode, each specialist dispatch also requires its own explicit
-permission confirmation regardless of what gets narrated, as a mechanical backstop
-independent of the prompt
-([ADR-0021](https://github.com/urban233/CoDev/blob/main/docs/adr/0021-opencode-specialist-dispatch-permission-gate.md))
-— you'll see one confirmation prompt per specialist either way.
+closes that gap. The specialist-selection question itself is the guarantee
+([ADR-0021](https://github.com/urban233/CoDev/blob/main/docs/adr/0021-opencode-specialist-dispatch-permission-gate.md),
+[ADR-0044](https://github.com/urban233/CoDev/blob/main/docs/adr/0044-lead-is-not-an-agent.md))
+— five real model calls only happen after you've answered it, on either platform.
 
 It fetches the PR and CI state, then presents something like:
 

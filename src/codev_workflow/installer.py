@@ -78,14 +78,12 @@ PRE_PR_CLEANUP_AGENT_TEMPLATES = {
     ),
 }
 OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
-    "lead": {
-        "model": "openai/gpt-5.6-luna",
-        "description": (
-            "The single agent a developer talks to -- plans, dispatches the "
-            "build, and drives review to a merged pull request"
-        ),
-        "mode": "primary",
-    },
+    # No "lead", no "outer-loop-runner" (ADR-0044): neither is an agent any
+    # more. Coordination is what `.codev/for-ai/ai-agent-guidelines.md`
+    # already says to every ordinary session -- OpenCode's own built-in
+    # Build/Plan primary agents are the entry point, not a project-defined
+    # one -- and the outer loop's protocol is the `outer-loop-review` skill,
+    # loaded on demand.
     "code-audit": {
         "model": "openai/gpt-5.6-luna",
         "description": "Standalone primary code audit agent",
@@ -95,7 +93,7 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5.6-luna",
         "description": (
             "Autonomous pre-PR cleanup subagent -- fixes style and "
-            "documentation issues only, dispatched by lead"
+            "documentation issues only, dispatched during Build execution"
         ),
     },
     "builder": {
@@ -112,15 +110,6 @@ OPENCODE_AGENT_CONFIGS: dict[str, dict[str, str]] = {
             "Narrow, fast independent check that the inner loop's change "
             "matches the task and passes local QA"
         ),
-    },
-    "outer-loop-runner": {
-        "model": "openai/gpt-5.6-luna",
-        "description": (
-            "Human-triggered outer-loop coordinator -- fetches a PR, gates on "
-            "CI, dispatches five specialist reviewers, and drives "
-            "human-triaged correction to a landed pull request"
-        ),
-        "mode": "primary",
     },
     "correctness-tests-specialist": {
         "model": "openai/gpt-5.6-luna",
@@ -705,6 +694,7 @@ def _prepare_opencode(
     target: Path,
     managed_agents: dict[str, str] | None = None,
     *,
+    default_agent_managed: bool = False,
     schema_managed: bool = False,
     agent_container_managed: bool = False,
     config_file_managed: bool = False,
@@ -728,23 +718,28 @@ def _prepare_opencode(
         schema_managed = True
         changed = True
 
-    default_managed = False
+    # ADR-0044: CoDev no longer sets or migrates default_agent at all.
+    # OpenCode ships its own built-in Build/Plan primary agents, so a project
+    # need not define one to have somewhere for a session to start. If an
+    # earlier version of this bundle previously claimed this key (the lock
+    # says `opencode_default_agent_managed`) and it still holds one of
+    # CoDev's own retired values (`lead`, or `orchestrator` from before
+    # that), remove it -- a stale value naming a role that no longer exists
+    # is worse than no opinion at all. A value CoDev never claimed is always
+    # the developer's own choice -- even one that happens to read "lead" or
+    # "orchestrator" -- and is never touched, no matter what it is.
+    # default_managed simply carries the incoming provenance flag through
+    # unchanged: from this version forward, CoDev never newly claims this
+    # key, so it can only ever go from managed to unmanaged (on removal),
+    # never the other way.
+    default_managed = default_agent_managed
     detail = "existing default agent preserved"
-    if "default_agent" not in config:
-        config["default_agent"] = "lead"
-        default_managed = True
+    retired_default_agent = config.get("default_agent") in ("lead", "orchestrator")
+    if default_agent_managed and retired_default_agent:
+        del config["default_agent"]
         changed = True
-        detail = "set lead as the default agent"
-    elif config.get("default_agent") == "orchestrator":
-        # An installation made before `lead` existed points at a role this
-        # version no longer ships. Leaving it would name a missing agent, so
-        # the rename migrates rather than being preserved as a local change.
-        config["default_agent"] = "lead"
-        default_managed = True
-        changed = True
-        detail = "migrated the default agent from orchestrator to lead"
-    elif config.get("default_agent") == "lead":
-        detail = "lead already configured"
+        default_managed = False
+        detail = "removed the now-retired default_agent value (ADR-0044)"
 
     agents = config.get("agent")
     if agents is None:
@@ -1185,6 +1180,7 @@ def plan_update(
             opencode = _prepare_opencode(
                 target,
                 managed_opencode_agents,
+                default_agent_managed=default_managed,
                 schema_managed=schema_managed,
                 agent_container_managed=agent_container_managed,
                 config_file_managed=config_file_managed,
@@ -1194,7 +1190,7 @@ def plan_update(
                 Operation("conflict", ".opencode/opencode.json", str(error))
             )
         else:
-            default_managed = default_managed or opencode.default_agent_managed
+            default_managed = opencode.default_agent_managed
             managed_opencode_agents = opencode.managed_agents
             schema_managed = opencode.schema_managed
             agent_container_managed = opencode.agent_container_managed
@@ -1664,15 +1660,18 @@ def check_project(target: Path) -> CheckResult:
     ):
         issues.append("lock file has invalid OpenCode agent hashes")
         managed_opencode_agents = {}
-    if integrations.get("opencode_default_agent_managed") or managed_opencode_agents:
+    if managed_opencode_agents:
+        # No default_agent check here any more (ADR-0044): CoDev stopped
+        # claiming that key once `lead` retired, and never sets it again --
+        # opencode_default_agent_managed exists only for an installation
+        # that predates this and still needs the one-time removal, handled
+        # at update time, not verified as an ongoing invariant here.
         config_path = target / ".opencode" / "opencode.json"
         try:
             config = json.loads(config_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             issues.append(f"cannot read .opencode/opencode.json: {error}")
         else:
-            if config.get("default_agent") != "lead":
-                issues.append("managed OpenCode default_agent is not lead")
             agents = config.get("agent")
             if not isinstance(agents, dict):
                 issues.append("managed OpenCode agent configuration is missing")

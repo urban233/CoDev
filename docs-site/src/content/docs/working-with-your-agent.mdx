@@ -9,44 +9,36 @@ import Exchange from '../../components/Exchange.astro';
 ## The core idea
 
 In normal use, you never type a `codev` command. You describe what you want, in plain
-language, to `lead` — the one agent CoDev gives you. It inspects the actual repository,
-proposes a plan, and — once you approve it — runs `codev` on your behalf: opening the
-task, committing, recording review rounds, opening the pull request. The CLI is the
-agent's hands. It doesn't have to be yours.
+language, to the agent you're already talking to — there is no separate identity to
+select first. It inspects the actual repository, proposes a plan, and — once you approve
+it — runs `codev` on your behalf: opening the task, committing, recording review rounds,
+opening the pull request. The CLI is the agent's hands. It doesn't have to be yours.
 
 Everything else on this site that shows a `codev ...` command is showing you the
 *mechanism*, not a script to type. [CLI Reference](/CoDev/cli-reference/) and the
 [Manual CLI Walkthrough](/CoDev/workflow-checklist/) exist for the moments that genuinely
 call for it — CI, scripting, recovering a task by hand — not for everyday work.
 
-## The one agent you talk to
+## Nothing to select
 
-<table>
-  <thead>
-    <tr><th>Agent</th><th>For</th><th>Covers</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>lead</code></td>
-      <td>Everything</td>
-      <td>Specify → Understand → Design → Plan → Build → Review → Ship</td>
-    </tr>
-  </tbody>
-</table>
+There is one entry point, and it isn't an agent you dispatch -- it's the conversation you
+already have on Claude Code or OpenCode, guided by instructions every session already
+reads. Earlier versions of CoDev asked you to start a `planner` session for design work,
+an `orchestrator` session (later renamed `lead`) for building, and an `outer-loop-runner`
+session for review — and to know which one you needed. Later, `lead` became a single
+agent you dispatched instead of three, which was progress but was still a name to know
+and a thing to select. A session boundary you have to notice is a command by another
+name, and CoDev's whole position is that you don't run commands
+([ADR-0044](https://github.com/urban233/CoDev/blob/main/docs/adr/0044-lead-is-not-an-agent.md)).
 
-There is one entry point, and there is nothing to switch between. Earlier versions of
-CoDev asked you to start a `planner` session for design work, an `orchestrator` session
-for building, and an `outer-loop-runner` session for review — and to know which one you
-needed. A session boundary you have to notice is a command by another name, and CoDev's
-whole position is that you don't run commands.
+The separation still exists, but underneath: coordination never edits product code
+itself outside an explicitly recorded `pair` slice, and the agents it dispatches can't
+review their own work. That's a permission boundary now, not a thing you operate. See
+[Roles](/CoDev/roles/) for who does what.
 
-The separation still exists, but underneath: `lead` never edits product code itself, and
-the agents it dispatches can't review their own work. That's a permission boundary now,
-not a thing you operate. See [Roles](/CoDev/roles/) for who does what.
-
-`lead` opens every turn by telling you where the work stands, what it recommends next,
-and why — without you asking. When something blocks it, it says so and offers you the
-choices rather than stopping at a wall.
+Every turn opens with where the work stands, what it recommends next, and why — without
+you asking. When something blocks it, it says so and offers you the choices rather than
+stopping at a wall.
 
 ## What you actually say
 
@@ -85,8 +77,8 @@ what it already does by default.
 
 <Exchange>
   <Fragment slot="you">
-    Reply with the numbers you want ("1, 3, 4") or "all" when `outer-loop-runner` presents
-    the five-specialist menu.
+    Reply with the numbers you want ("1, 3, 4") or "all" when the outer-loop-review
+    skill presents the five-specialist menu.
   </Fragment>
   <Fragment slot="agent">
     Dispatches exactly the specialists you selected, and records which ones actually ran —
@@ -165,7 +157,7 @@ the [Manual CLI Walkthrough](/CoDev/workflow-checklist/) walks the exact sequenc
 goes through end to end. Both are genuinely useful — for understanding what your agent is
 actually doing under the hood, for wiring CoDev into CI, or for recovering a task by hand
 when no agent session is available — but neither is required reading before you start
-using CoDev. Talk to `lead` first; read those pages when you're
+using CoDev. Just talk to your agent first; read those pages when you're
 curious or when you actually need to run something yourself.
 
 ## Where to go next
