@@ -352,7 +352,22 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist narrowly re-verified the round-6 builder fix for PR41-DEFAULT-AGENT-FLAG-NOT-CLEARED: both changed lines in installer.py traced directly -- the new default_managed = False (line 741) fires only inside the same if-branch as the deletion itself, never on any other changed=True site; dropping the `or` at plan_update's default_managed assignment (line 1193) is necessary, not cosmetic, since the old `or` would have re-masked the fix by re-preserving the stale pre-call True. plan_init's call site confirmed unaffected (deletion branch unreachable there by construction). Regression test mutation-verified independently by the specialist: reverting either fix line, or making the clear unconditional, each fails the test with the correct symptom; full suite 819 tests OK (1 skipped), installer 80 OK, CLI 115 OK. Checked interaction with _prepare_opencode_removal, check_project (no longer inspects the flag), plan_remove, and apply_plan's write ordering (files before lock, atomic on error) -- no new destructive path, no lock-schema break, no partial-apply window. Zero new findings. PR41-PERMISSION-BLOCK-LOSS-ON-OPENCODE explicitly out of scope for this round, not re-examined.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "32c122d613232ef2de0a3a5b1651db446996bd6f",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 6,
       "slice_id": "lead-as-skill-plan"
     }
