@@ -49,6 +49,10 @@ DEFAULTS: dict[str, str] = {
     # is the explicit override, with no containment expectation. See
     # ADR-0033.
     "git.workflow": "trunk",
+    # ADR-0045: whether a mutating verb commits its own bookkeeping write.
+    "git.auto_commit": "true",
+    # ADR-0045: whether reaching ready-for-PR opens the draft PR itself.
+    "git.auto_open_pr": "true",
     # A prompt to reconsider slicing, not a hard limit -- see
     # docs/features/small-prs/design.md.
     #
@@ -168,6 +172,24 @@ def resolve(
         return ResolvedValue(DEFAULTS[key], "default")
 
     return None
+
+
+def resolve_bool(key: str, *, target: Path, override: str | None = None) -> bool:
+    """Resolve one config key as a strict two-value boolean.
+
+    Built on `resolve()` -- same precedence, same layers. Accepts only the
+    literal strings "true"/"false"; there is no coercion of other
+    truthy/falsy spellings like "1"/"yes"/"". Anything else, including a key
+    that resolves to nothing at all, raises `ConfigError` naming the key and
+    the bad value rather than silently picking either boolean.
+    """
+    result = resolve(key, target=target, override=override)
+    value = result.value if result is not None else None
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise ConfigError(f"{key} must be 'true' or 'false', got {value!r}")
 
 
 def set_value(

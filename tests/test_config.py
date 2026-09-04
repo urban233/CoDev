@@ -42,6 +42,7 @@ from codev_workflow.config import (
     _read_config,
     list_values,
     resolve,
+    resolve_bool,
     set_value,
 )
 
@@ -126,6 +127,110 @@ class ResolutionPrecedenceTests(unittest.TestCase):
             set_value("review.max_lines", "250", target=target)
             result = resolve("review.max_lines", target=target)
         self.assertEqual(ResolvedValue("250", "project"), result)
+
+
+class ResolveBoolTests(unittest.TestCase):
+    def test_override_resolves_true(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve_bool(
+                "some.flag", target=Path(directory), override="true"
+            )
+        self.assertTrue(result)
+
+    def test_override_resolves_false(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve_bool(
+                "some.flag", target=Path(directory), override="false"
+            )
+        self.assertFalse(result)
+
+    def test_env_resolves_true(self) -> None:
+        # resolve()'s env-key mapping replaces "-" with "_" but leaves "."
+        # untouched, so "some.flag" maps to "CODEV_SOME.FLAG", not
+        # "CODEV_SOME_FLAG".
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict("os.environ", {"CODEV_SOME.FLAG": "true"}, clear=False),
+        ):
+            result = resolve_bool("some.flag", target=Path(directory))
+        self.assertTrue(result)
+
+    def test_project_resolves_false(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            set_value("some.flag", "false", target=target)
+            result = resolve_bool("some.flag", target=target)
+        self.assertFalse(result)
+
+    def test_global_resolves_true(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            global_home = Path(directory) / "global-home"
+            with patch.dict(
+                "os.environ",
+                {"XDG_CONFIG_HOME": str(global_home), "APPDATA": str(global_home)},
+                clear=False,
+            ):
+                set_value("some.flag", "true", target=target, global_scope=True)
+                result = resolve_bool("some.flag", target=target)
+        self.assertTrue(result)
+
+    def test_git_auto_commit_defaults_to_true(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve_bool("git.auto_commit", target=Path(directory))
+        self.assertTrue(result)
+
+    def test_git_auto_open_pr_defaults_to_true(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = resolve_bool("git.auto_open_pr", target=Path(directory))
+        self.assertTrue(result)
+
+    def test_override_invalid_value_raises_config_error(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(ConfigError),
+        ):
+            resolve_bool("some.flag", target=Path(directory), override="yes")
+
+    def test_env_invalid_value_raises_config_error(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict("os.environ", {"CODEV_SOME.FLAG": "1"}, clear=False),
+            self.assertRaises(ConfigError),
+        ):
+            resolve_bool("some.flag", target=Path(directory))
+
+    def test_project_invalid_value_raises_config_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            set_value("git.auto_commit", "yes", target=target)
+            with self.assertRaises(ConfigError) as raised:
+                resolve_bool("git.auto_commit", target=target)
+        message = str(raised.exception)
+        self.assertIn("git.auto_commit", message)
+        self.assertIn("yes", message)
+
+    def test_global_invalid_value_raises_config_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            global_home = Path(directory) / "global-home"
+            with patch.dict(
+                "os.environ",
+                {"XDG_CONFIG_HOME": str(global_home), "APPDATA": str(global_home)},
+                clear=False,
+            ):
+                set_value("some.flag", "enabled", target=target, global_scope=True)
+                with self.assertRaises(ConfigError):
+                    resolve_bool("some.flag", target=target)
+
+    def test_unset_key_with_no_default_raises_config_error(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaises(ConfigError) as raised,
+        ):
+            resolve_bool("some.missing.flag", target=Path(directory))
+        message = str(raised.exception)
+        self.assertIn("some.missing.flag", message)
 
 
 class GlobalPathTests(unittest.TestCase):
@@ -224,6 +329,8 @@ class ListValuesTests(unittest.TestCase):
                 "model": ResolvedValue("global-model", "global"),
                 "adapter": ResolvedValue("opencode", "project"),
                 "git.workflow": ResolvedValue("trunk", "default"),
+                "git.auto_commit": ResolvedValue("true", "default"),
+                "git.auto_open_pr": ResolvedValue("true", "default"),
                 "review.max_lines": ResolvedValue("600", "default"),
                 "review.max_files": ResolvedValue("12", "default"),
                 "review.required_approvals": ResolvedValue("1", "default"),

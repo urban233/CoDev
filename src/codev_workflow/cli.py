@@ -1336,6 +1336,13 @@ def _run_adapter_command(args: argparse.Namespace) -> int:
     return 2
 
 
+# Keys whose values `resolve_bool` will later interpret as a strict
+# two-value boolean (ADR-0045) -- rejected here at write time, not only at
+# the next read, so `codev config set` never persists a value that would
+# only fail later.
+_BOOLEAN_CONFIG_KEYS = frozenset({"git.auto_commit", "git.auto_open_pr"})
+
+
 def _run_config_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
 
@@ -1354,6 +1361,10 @@ def _run_config_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.config_command == "set":
+        if args.key in _BOOLEAN_CONFIG_KEYS and args.value not in ("true", "false"):
+            raise ConfigError(
+                f"{args.key} must be 'true' or 'false', got {args.value!r}"
+            )
         path = config_module.set_value(
             args.key, args.value, target=target, global_scope=args.global_scope
         )

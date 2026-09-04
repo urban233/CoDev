@@ -1,0 +1,33 @@
+{
+  "base_snapshot": "main",
+  "current_round": 1,
+  "current_slice": "bookkeeping-automation-gates",
+  "description": null,
+  "entry": null,
+  "link_ref": "https://github.com/urban233/CoDev/issues/42",
+  "max_rounds": {
+    "inner": 2,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "bookkeeping-automation-gates"
+    }
+  ],
+  "slice_styles": {
+    "bookkeeping-automation-gates": "delegate"
+  },
+  "slices": [
+    "bookkeeping-automation-gates"
+  ],
+  "status": "in_progress",
+  "summary": "Background bookkeeping self-heals; commit/PR/merge become boolean-gated (ADR-0045)",
+  "task_id": "bookkeeping-automation-gates"
+}

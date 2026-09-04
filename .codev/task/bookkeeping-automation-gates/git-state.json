@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "5db58f64da279471c0e53f6067d5f1808dd8e325",
+  "branch": "codev/bookkeeping-automation-gates",
+  "slice_branches": {
+    "bookkeeping-automation-gates": {
+      "base_snapshot": "5db58f64da279471c0e53f6067d5f1808dd8e325",
+      "branch": "codev/bookkeeping-automation-gates"
+    }
+  }
+}

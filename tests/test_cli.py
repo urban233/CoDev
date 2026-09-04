@@ -44,6 +44,7 @@ from codev_workflow.cli import (
     _skill_name,
     main,
 )
+from codev_workflow.config import _project_config_path
 from codev_workflow.git_ops import GitOpsError, TaskSize
 from codev_workflow.installer import Resolution
 from codev_workflow.task import CheckResult
@@ -2728,6 +2729,8 @@ class CliTests(unittest.TestCase):
                 {
                     "model": {"value": "anthropic/claude", "source": "project"},
                     "git.workflow": {"value": "trunk", "source": "default"},
+                    "git.auto_commit": {"value": "true", "source": "default"},
+                    "git.auto_open_pr": {"value": "true", "source": "default"},
                     "review.max_lines": {"value": "600", "source": "default"},
                     "review.max_files": {"value": "12", "source": "default"},
                     "review.required_approvals": {"value": "1", "source": "default"},
@@ -2744,6 +2747,135 @@ class CliTests(unittest.TestCase):
                     ["config", "get", "missing", "--target", directory, "--json"]
                 )
             self.assertEqual(1, code)
+
+    def test_config_set_rejects_non_boolean_value_for_boolean_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            errors = StringIO()
+            with redirect_stdout(StringIO()), redirect_stderr(errors):
+                code = main(
+                    [
+                        "config",
+                        "set",
+                        "git.auto_commit",
+                        "yes",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertIn("git.auto_commit", errors.getvalue())
+            self.assertFalse(_project_config_path(target).exists())
+
+    def test_config_set_rejects_non_boolean_value_without_touching_existing_file(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "config",
+                            "set",
+                            "git.auto_open_pr",
+                            "false",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+            before = _project_config_path(target).read_text(encoding="utf-8")
+            with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                code = main(
+                    [
+                        "config",
+                        "set",
+                        "git.auto_open_pr",
+                        "maybe",
+                        "--target",
+                        str(target),
+                    ]
+                )
+            self.assertEqual(2, code)
+            self.assertEqual(
+                before, _project_config_path(target).read_text(encoding="utf-8")
+            )
+
+    def test_config_set_accepts_valid_boolean_and_reports_project_source(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "config",
+                            "set",
+                            "git.auto_commit",
+                            "false",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                get_output = StringIO()
+                with redirect_stdout(get_output):
+                    code = main(
+                        [
+                            "config",
+                            "get",
+                            "git.auto_commit",
+                            "--target",
+                            str(target),
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertEqual(
+                {"value": "false", "source": "project"},
+                json.loads(get_output.getvalue()),
+            )
+
+    def test_config_set_unregistered_key_still_accepts_arbitrary_strings(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "config",
+                            "set",
+                            "git.workflow",
+                            "not-a-boolean",
+                            "--target",
+                            str(target),
+                        ]
+                    ),
+                )
+                get_output = StringIO()
+                with redirect_stdout(get_output):
+                    code = main(
+                        [
+                            "config",
+                            "get",
+                            "git.workflow",
+                            "--target",
+                            str(target),
+                            "--json",
+                        ]
+                    )
+            self.assertEqual(0, code)
+            self.assertEqual(
+                {"value": "not-a-boolean", "source": "project"},
+                json.loads(get_output.getvalue()),
+            )
 
     def test_self_version_reports_the_commit_for_a_source_install(self) -> None:
         """Two trees reporting the same version is how an August build kept
