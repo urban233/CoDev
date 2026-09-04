@@ -63,6 +63,11 @@
       "to_round": 6
     }
   ],
+  "review_waiver": {
+    "at": "2026-09-04T21:50:07Z",
+    "by": "urban233",
+    "reason": "Task owner (urban233) reviewed the full outer-loop evidence directly in conversation across rounds 3-6 (five specialist passes, one found-and-fixed regression, mutation-verified) and explicitly authorized merging without a second independent GitHub approval, after being told the gate could not be satisfied by the task owner's own approval and that collaborator kullik01 was available but not requested."
+  },
   "reviewer": null,
   "round_schema_version": 4,
   "rounds": [
