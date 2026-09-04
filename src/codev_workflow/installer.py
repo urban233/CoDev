@@ -738,6 +738,7 @@ def _prepare_opencode(
     if default_agent_managed and retired_default_agent:
         del config["default_agent"]
         changed = True
+        default_managed = False
         detail = "removed the now-retired default_agent value (ADR-0044)"
 
     agents = config.get("agent")
@@ -1189,7 +1190,7 @@ def plan_update(
                 Operation("conflict", ".opencode/opencode.json", str(error))
             )
         else:
-            default_managed = default_managed or opencode.default_agent_managed
+            default_managed = opencode.default_agent_managed
             managed_opencode_agents = opencode.managed_agents
             schema_managed = opencode.schema_managed
             agent_container_managed = opencode.agent_container_managed

@@ -495,6 +495,65 @@ class InstallerTests(unittest.TestCase):
             config = json.loads(config_path.read_text("utf-8"))
             self.assertEqual("lead", config["default_agent"])
 
+    def test_updating_clears_the_managed_flag_after_removing_default_agent(
+        self,
+    ) -> None:
+        """Deleting a managed `default_agent` value must also clear the
+        lock's `opencode_default_agent_managed` flag -- otherwise a value
+        the developer sets afterwards, for their own reasons, still looks
+        like CoDev's own leftover to remove on the *next* update, silently
+        deleting a value CoDev never claimed."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            config_path = target / ".opencode/opencode.json"
+            config = json.loads(config_path.read_text("utf-8"))
+            config["default_agent"] = "lead"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            lock_path = target / ".codev/lock.json"
+            lock = json.loads(lock_path.read_text("utf-8"))
+            lock["integrations"]["opencode_default_agent_managed"] = True
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            self.assertNotIn("default_agent", config)
+            lock = json.loads(lock_path.read_text("utf-8"))
+            self.assertFalse(lock["integrations"]["opencode_default_agent_managed"])
+
+            # The developer now sets their own default_agent to "lead", for
+            # their own reasons, unrelated to CoDev. Because the lock no
+            # longer claims CoDev owns this key, a later update must
+            # preserve it rather than treat it as CoDev's stale leftover
+            # again.
+            config["default_agent"] = "lead"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            config = json.loads(config_path.read_text("utf-8"))
+            self.assertEqual("lead", config["default_agent"])
+
+            # The flag must only ever move from managed to unmanaged when
+            # this exact removal fires -- not unconditionally on every
+            # update. A run where the removal condition does not hold (no
+            # retired value present to delete) must leave an incoming
+            # `True` flag exactly as it was.
+            lock = json.loads(lock_path.read_text("utf-8"))
+            lock["integrations"]["opencode_default_agent_managed"] = True
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            config = json.loads(config_path.read_text("utf-8"))
+            del config["default_agent"]
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            installer.apply_plan(target, installer.plan_update(target))
+
+            lock = json.loads(lock_path.read_text("utf-8"))
+            self.assertTrue(lock["integrations"]["opencode_default_agent_managed"])
+
     def test_bundle_filters_claude_adapter_files(self) -> None:
         claude_files = installer._bundle_files(("claude",))
         opencode_files = installer._bundle_files(("opencode",))
