@@ -209,6 +209,14 @@ After triage, `codev task check` reports one of three outcomes:
 
 ## 6. Land it
 
+If any recording in steps 3-5 was made with `--defer-commit` (per
+`.codev/for-ai/ai-agent-guidelines.md`'s bookkeeping-commits rule -- only
+worth doing across a continuous stretch with no intervening human step, and
+most of this skill's own steps already have one), flush it now: the next
+mutating call with no `--defer-commit`, or a plain `codev git commit` if
+nothing else is pending, before anything below pushes or opens a pull
+request.
+
 On `ok_machine_review_complete` or `ok_machine_review_complete_with_deferrals`,
 run `codev git mark-ready --id <task-id>` -- it re-renders the task's current
 evidence into the repository PR template and converts the draft out of

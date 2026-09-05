@@ -1,0 +1,8 @@
+# codev:start
+# CoDev bookkeeping paths (ADR-0045) -- marking these generated makes
+# GitHub collapse their diff behind a "Load diff" control in the pull
+# request view and exclude them from the file list's visual weight,
+# instead of adding to a reviewer's load for every bookkeeping commit.
+.codev/task/**/*.json linguist-generated=true
+.codev/lock.json linguist-generated=true
+# codev:end

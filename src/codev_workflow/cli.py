@@ -627,6 +627,12 @@ def _parser() -> argparse.ArgumentParser:
         help="reviewer, outer phase: JSON specialist-selection audit file",
     )
     t_record.add_argument("--decision", choices=VALID_DECISIONS)
+    t_record.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
+    )
     t_record.add_argument("--target", type=_target, default=Path.cwd())
 
     t_check = task_commands.add_parser(
@@ -640,6 +646,12 @@ def _parser() -> argparse.ArgumentParser:
     t_close = task_commands.add_parser("close", help="close a task")
     t_close.add_argument("--id", required=True)
     t_close.add_argument("--outcome", choices=VALID_OUTCOMES, required=True)
+    t_close.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
+    )
     t_close.add_argument("--target", type=_target, default=Path.cwd())
 
     t_reopen = task_commands.add_parser(
@@ -665,6 +677,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     t_reopen.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
+    )
+    t_reopen.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
     )
     t_reopen.add_argument("--target", type=_target, default=Path.cwd())
 
@@ -733,6 +751,12 @@ def _parser() -> argparse.ArgumentParser:
     t_waive_review.add_argument("--id", required=True)
     t_waive_review.add_argument("--reason", required=True)
     t_waive_review.add_argument("--by", default=None)
+    t_waive_review.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
+    )
     t_waive_review.add_argument("--json", action="store_true")
     t_waive_review.add_argument("--target", type=_target, default=Path.cwd())
 
@@ -788,6 +812,12 @@ def _parser() -> argparse.ArgumentParser:
     t_triage.add_argument(
         "--by", default=None, help="defaults to the detected local/gh identity"
     )
+    t_triage.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
+    )
     t_triage.add_argument("--target", type=_target, default=Path.cwd())
 
     t_escalate = task_commands.add_parser(
@@ -799,6 +829,12 @@ def _parser() -> argparse.ArgumentParser:
     t_escalate.add_argument("--cause", required=True)
     t_escalate.add_argument("--phase", choices=("inner", "outer"))
     t_escalate.add_argument("--round", type=int, dest="round_number")
+    t_escalate.add_argument(
+        "--defer-commit",
+        action="store_true",
+        help="accumulate this write for a later flush instead of "
+        "auto-committing it now, even when git.auto_commit is true",
+    )
     t_escalate.add_argument("--target", type=_target, default=Path.cwd())
 
     t_escalations = task_commands.add_parser(
@@ -1336,6 +1372,13 @@ def _run_adapter_command(args: argparse.Namespace) -> int:
     return 2
 
 
+# Keys whose values `resolve_bool` will later interpret as a strict
+# two-value boolean (ADR-0045) -- rejected here at write time, not only at
+# the next read, so `codev config set` never persists a value that would
+# only fail later.
+_BOOLEAN_CONFIG_KEYS = frozenset({"git.auto_commit", "git.auto_open_pr"})
+
+
 def _run_config_command(args: argparse.Namespace) -> int:
     target = args.target.resolve()
 
@@ -1354,6 +1397,10 @@ def _run_config_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.config_command == "set":
+        if args.key in _BOOLEAN_CONFIG_KEYS and args.value not in ("true", "false"):
+            raise ConfigError(
+                f"{args.key} must be 'true' or 'false', got {args.value!r}"
+            )
         path = config_module.set_value(
             args.key, args.value, target=target, global_scope=args.global_scope
         )
@@ -1747,7 +1794,12 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 raise TaskError("--evidence is required when --role builder")
             evidence = task_module.load_json_file(args.evidence)
             task_module.record_builder(
-                args.id, args.round, args.head, evidence, target=target
+                args.id,
+                args.round,
+                args.head,
+                evidence,
+                target=target,
+                defer=args.defer_commit,
             )
         else:
             if args.findings is None or args.decision is None:
@@ -1770,6 +1822,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
                 args.decision,
                 target=target,
                 specialist_selection=selection,
+                defer=args.defer_commit,
             )
         if args.json:
             return _emit_json(
@@ -1808,7 +1861,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0 if result.ok else 1
 
     if args.task_command == "close":
-        task_module.close(args.id, args.outcome, target=target)
+        task_module.close(args.id, args.outcome, target=target, defer=args.defer_commit)
         if args.json:
             return _emit_json(
                 {"task_id": args.id, "outcome": args.outcome, "status": "closed"}
@@ -1827,6 +1880,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             max_rounds=args.max_rounds,
             by=by,
+            defer=args.defer_commit,
         )
         if args.json:
             return _emit_json(
@@ -1952,7 +2006,9 @@ def _run_task_command(args: argparse.Namespace) -> int:
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        path = task_module.waive_review(args.id, args.reason, target=target, by=by)
+        path = task_module.waive_review(
+            args.id, args.reason, target=target, by=by, defer=args.defer_commit
+        )
         if args.json:
             return _emit_json(
                 {
@@ -1993,7 +2049,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "status":
         if args.id:
-            summaries = [task_module.describe(args.id, target=target)]
+            summaries = [task_module.describe_with_live_status(args.id, target=target)]
         else:
             summaries = task_module.describe_all(target=target)
         if args.json:
@@ -2046,7 +2102,14 @@ def _run_task_command(args: argparse.Namespace) -> int:
         by = args.by
         if by is None:
             by = git_ops_module.detect_identity(target=target)
-        task_module.record_triage(args.id, args.round, triage, target=target, by=by)
+        task_module.record_triage(
+            args.id,
+            args.round,
+            triage,
+            target=target,
+            by=by,
+            defer=args.defer_commit,
+        )
         if args.json:
             return _emit_json({"task_id": args.id, "round": args.round, "by": by})
         print(f"Recorded triage for round {args.round} of {args.id}")
@@ -2060,6 +2123,7 @@ def _run_task_command(args: argparse.Namespace) -> int:
             target=target,
             phase=args.phase,
             round_number=args.round_number,
+            defer=args.defer_commit,
         )
         if args.json:
             return _emit_json(

@@ -51,7 +51,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from codev_workflow import git_ops, task
+from codev_workflow import config, git_ops, task
 
 
 @dataclass(frozen=True)
@@ -453,9 +453,18 @@ def next_action(
             branch=branch,
         )
 
-    if state["status"] != "in_progress":
+    # The raw recorded status, not `describe()`'s ADR-0045 derived one: a
+    # task whose final slice's pull request has merged but whose own
+    # `slice land` has not yet run reads as *derivable* to "closed" from
+    # anywhere -- correct for a standalone `codev task status`, wrong here,
+    # where reporting it early would skip straight past the one
+    # recommendation this position exists to give: run `slice land` itself.
+    # `_github_position` below already answers this case correctly by
+    # checking GitHub directly, once actually reached.
+    raw_status = task.log_records(resolved, target=target)["status"]
+    if raw_status != "in_progress":
         return NextAction(
-            position=f"task closed ({state['status']})",
+            position=f"task closed ({raw_status})",
             recommendation="start the next task",
             reason=f"task {resolved!r} is closed, nothing further is tracked",
             task_id=resolved,
@@ -483,6 +492,11 @@ def next_action(
         inner = _inner_loop_position(resolved, branch, slice_id, target=target)
         if inner is not None:
             return inner
+
+    if result.reason == "ok_ready_for_pr":
+        gated = _auto_open_pr_position(resolved, branch, slice_id, target=target)
+        if gated is not None:
+            return gated
 
     routing = _BY_CHECK_REASON[result.reason]
     return NextAction(
@@ -545,6 +559,30 @@ def _inner_loop_position(
         branch=branch,
         slice_id=slice_id,
         check_reason="ok_waiting_on_reviewer",
+    )
+
+
+def _auto_open_pr_position(
+    task_id: str, branch: str, slice_id: str, *, target: Path
+) -> NextAction | None:
+    """ADR-0045, Slice 6: `ok_ready_for_pr`'s routing-table recommendation
+    ("publish the slice", `codev slice publish`) is only correct when
+    `git.auto_open_pr` actually permits opening one -- the branch this
+    decision lives in per ADR-0036, not agent-side convention. Returns None
+    (falls through to the table entry) when the flag is true, so the
+    common case costs nothing beyond one config read."""
+    if config.resolve_bool("git.auto_open_pr", target=target):
+        return None
+    return NextAction(
+        position="inner loop satisfied, pull request not yet opened",
+        recommendation="ask before opening the pull request",
+        reason="git.auto_open_pr is false, so opening one is a decision for "
+        "a human, not something to do automatically",
+        command=None,
+        task_id=task_id,
+        branch=branch,
+        slice_id=slice_id,
+        check_reason="ok_ready_for_pr",
     )
 
 

@@ -56,6 +56,29 @@ class BundleParityTests(unittest.TestCase):
                 self.assertTrue(result.ok, "\n".join(problems))
 
 
+class MergeDenyConformanceTests(unittest.TestCase):
+    """ADR-0045, Slice 7: `builder` and the five outer-loop specialists deny
+    `git merge*` explicitly on OpenCode, the same standard `code-audit` and
+    `code-audit-gate` already hold themselves to -- neither should ever fall
+    through to the generic `bash "*": ask`."""
+
+    _ROLES = (
+        "builder",
+        "correctness-tests-specialist",
+        "security-data-specialist",
+        "concurrency-specialist",
+        "architecture-maintainability-specialist",
+        "rollout-specialist",
+    )
+
+    def test_every_role_denies_git_merge_on_opencode(self) -> None:
+        paths = ADAPTER_ROLE_PATHS["opencode"]
+        for role in self._ROLES:
+            with self.subTest(role=role):
+                content = (_BUNDLE_ROOT / paths[role]).read_text(encoding="utf-8")
+                self.assertIn('"git merge*": deny', content)
+
+
 class VerifyAdapterTests(unittest.TestCase):
     def test_unknown_platform_raises(self) -> None:
         with (

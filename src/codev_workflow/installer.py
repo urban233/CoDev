@@ -49,6 +49,8 @@ AGENTS_START = "<!-- codev:start -->"
 AGENTS_END = "<!-- codev:end -->"
 GITIGNORE_START = "# codev:start"
 GITIGNORE_END = "# codev:end"
+GITATTRIBUTES_START = "# codev:start"
+GITATTRIBUTES_END = "# codev:end"
 VALID_PLATFORMS = frozenset({"antigravity", "claude", "junie", "opencode"})
 VALID_PROGRAMMING_LANGUAGES = frozenset({"none", "python", "typescript", "all"})
 AUDIT_SKILL_PREFIXES = {
@@ -177,6 +179,15 @@ GITIGNORE_BLOCK = """# codev:start
 .codev/task/*/*
 !.codev/task/*/round-state.json
 !.codev/task/*/git-state.json
+# codev:end"""
+
+GITATTRIBUTES_BLOCK = """# codev:start
+# CoDev bookkeeping paths (ADR-0045) -- marking these generated makes
+# GitHub collapse their diff behind a "Load diff" control in the pull
+# request view and exclude them from the file list's visual weight,
+# instead of adding to a reviewer's load for every bookkeeping commit.
+.codev/task/**/*.json linguist-generated=true
+.codev/lock.json linguist-generated=true
 # codev:end"""
 
 CODEOWNERS_LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
@@ -535,8 +546,8 @@ def _atomic_write(path: Path, content: bytes) -> None:
 def codeowners_init(target: Path) -> Path:
     """Scaffold a starter `.github/CODEOWNERS`. Refuses if one already exists.
 
-    Unlike AGENTS.md and the .gitignore block, this is not a managed
-    integration: no lock.json entry, no hash tracked, and codev
+    Unlike AGENTS.md and the .gitignore/.gitattributes blocks, this is not
+    a managed integration: no lock.json entry, no hash tracked, and codev
     update/remove have no awareness of it once written. It is intended to
     be run directly by a human during repository setup, the same as
     `codev init` itself, not invoked by an agent mid-workflow.
@@ -690,6 +701,78 @@ def _sync_gitignore_block(target: Path, old_hash: str | None, plan: Plan) -> Non
         )
 
 
+def _gitattributes_block_from(text: str) -> str | None:
+    return _marked_block_from(
+        text, ".gitattributes", GITATTRIBUTES_START, GITATTRIBUTES_END
+    )
+
+
+def _with_gitattributes_block(text: str, block: str) -> str:
+    return _with_marked_block(
+        text, block, ".gitattributes", GITATTRIBUTES_START, GITATTRIBUTES_END
+    )
+
+
+def _without_gitattributes_block(text: str) -> str:
+    return _without_marked_block(
+        text, ".gitattributes", GITATTRIBUTES_START, GITATTRIBUTES_END
+    )
+
+
+def _sync_gitattributes_block(target: Path, old_hash: str | None, plan: Plan) -> None:
+    """Add, update, or leave alone the managed `.gitattributes` block.
+
+    Mirrors `_sync_gitignore_block` exactly. `old_hash` is the hash recorded
+    in the lock file, or None when this integration has never been recorded
+    for this install (a fresh `init`, or an `update` of an install that
+    predates this feature) -- in both cases an absent or matching block is
+    integrated fresh rather than treated as a conflict.
+    """
+    path = target / ".gitattributes"
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    try:
+        current = _gitattributes_block_from(existing)
+    except CoDevError as error:
+        plan.operations.append(Operation("conflict", ".gitattributes", str(error)))
+        return
+    new_hash = _block_hash(GITATTRIBUTES_BLOCK)
+    if current is None:
+        if old_hash is not None:
+            plan.operations.append(
+                Operation(
+                    "conflict",
+                    ".gitattributes",
+                    "managed attributes block is missing",
+                )
+            )
+            return
+        plan.writes[path] = _with_gitattributes_block(
+            existing, GITATTRIBUTES_BLOCK
+        ).encode("utf-8")
+        plan.operations.append(
+            Operation(
+                "integrate", ".gitattributes", "mark bookkeeping paths as generated"
+            )
+        )
+        return
+    current_hash = _block_hash(current)
+    if current_hash == new_hash:
+        plan.operations.append(
+            Operation("keep", ".gitattributes", "attributes block current")
+        )
+    elif old_hash is not None and current_hash == old_hash:
+        plan.operations.append(
+            Operation("update", ".gitattributes", "attributes block")
+        )
+        plan.writes[path] = _with_gitattributes_block(
+            existing, GITATTRIBUTES_BLOCK
+        ).encode("utf-8")
+    else:
+        plan.operations.append(
+            Operation("conflict", ".gitattributes", "different CoDev block exists")
+        )
+
+
 def _prepare_opencode(
     target: Path,
     managed_agents: dict[str, str] | None = None,
@@ -828,6 +911,7 @@ def _new_lock(
     opencode_schema_managed: bool,
     opencode_agent_container_managed: bool,
     opencode_config_file_managed: bool,
+    auto_commit_notice_shown: bool = True,
 ) -> dict[str, Any]:
     return {
         "schema_version": LOCK_SCHEMA_VERSION,
@@ -838,11 +922,13 @@ def _new_lock(
         "integrations": {
             "agents_block_hash": _block_hash(AGENTS_BLOCK),
             "gitignore_block_hash": _block_hash(GITIGNORE_BLOCK),
+            "gitattributes_block_hash": _block_hash(GITATTRIBUTES_BLOCK),
             "opencode_default_agent_managed": default_agent_managed,
             "opencode_agent_hashes": dict(sorted(managed_opencode_agents.items())),
             "opencode_schema_managed": opencode_schema_managed,
             "opencode_agent_container_managed": opencode_agent_container_managed,
             "opencode_config_file_managed": opencode_config_file_managed,
+            "auto_commit_notice_shown": auto_commit_notice_shown,
         },
     }
 
@@ -899,6 +985,7 @@ def plan_init(
             )
 
     _sync_gitignore_block(target, None, plan)
+    _sync_gitattributes_block(target, None, plan)
 
     default_agent_managed = False
     managed_opencode_agents: dict[str, str] = {}
@@ -1165,6 +1252,13 @@ def plan_update(
         raise CoDevError("lock file has an invalid gitignore block hash")
     _sync_gitignore_block(target, old_gitignore_hash, plan)
 
+    old_gitattributes_hash = integrations.get("gitattributes_block_hash")
+    if old_gitattributes_hash is not None and not isinstance(
+        old_gitattributes_hash, str
+    ):
+        raise CoDevError("lock file has an invalid gitattributes block hash")
+    _sync_gitattributes_block(target, old_gitattributes_hash, plan)
+
     default_managed = bool(integrations.get("opencode_default_agent_managed"))
     schema_managed = bool(integrations.get("opencode_schema_managed"))
     agent_container_managed = bool(integrations.get("opencode_agent_container_managed"))
@@ -1204,6 +1298,27 @@ def plan_update(
                 plan.operations.append(
                     Operation("keep", ".opencode/opencode.json", opencode.detail)
                 )
+    # ADR-0045: git.auto_commit defaults to true, a real behavior change for
+    # every existing installation. Say so once, loud, at the moment it
+    # actually starts applying -- not silently, and not on every subsequent
+    # `codev update` forever. `auto_commit_notice_shown` is the provenance
+    # flag that makes it fire exactly once per installation, the same shape
+    # `opencode_default_agent_managed` already uses for a one-time migration
+    # fact. A fresh `codev init` never needs this notice at all (there is no
+    # prior behavior to change), so only `plan_update` ever sets it False.
+    auto_commit_notice_shown = bool(integrations.get("auto_commit_notice_shown"))
+    if not auto_commit_notice_shown:
+        plan.operations.append(
+            Operation(
+                "notice",
+                "git.auto_commit",
+                "this version starts auto-committing task bookkeeping by "
+                "default; set git.auto_commit=false to keep committing "
+                "manually",
+            )
+        )
+        auto_commit_notice_shown = True
+
     conflicted_relatives = {
         item.path for item in plan.operations if item.kind == "conflict"
     }
@@ -1221,6 +1336,7 @@ def plan_update(
         opencode_schema_managed=schema_managed,
         opencode_agent_container_managed=agent_container_managed,
         opencode_config_file_managed=config_file_managed,
+        auto_commit_notice_shown=auto_commit_notice_shown,
     )
     # A conflict left unresolved (`--on-conflict skip`, or no resolution at
     # all) must not quietly stop being a known problem: `_new_lock` above
@@ -1394,6 +1510,39 @@ def plan_remove(target: Path) -> Plan:
                     plan.operations.append(
                         Operation(
                             "integrate", ".gitignore", "remove managed ignore block"
+                        )
+                    )
+
+    gitattributes_path = target / ".gitattributes"
+    if gitattributes_path.exists():
+        try:
+            gitattributes_block = _gitattributes_block_from(
+                gitattributes_path.read_text(encoding="utf-8")
+            )
+        except CoDevError as error:
+            plan.operations.append(Operation("conflict", ".gitattributes", str(error)))
+        else:
+            expected_gitattributes_hash = integrations.get("gitattributes_block_hash")
+            if gitattributes_block is not None and isinstance(
+                expected_gitattributes_hash, str
+            ):
+                if _block_hash(gitattributes_block) != expected_gitattributes_hash:
+                    plan.operations.append(
+                        Operation(
+                            "conflict",
+                            ".gitattributes",
+                            "managed attributes block was modified",
+                        )
+                    )
+                else:
+                    plan.writes[gitattributes_path] = _without_gitattributes_block(
+                        gitattributes_path.read_text(encoding="utf-8")
+                    ).encode("utf-8")
+                    plan.operations.append(
+                        Operation(
+                            "integrate",
+                            ".gitattributes",
+                            "remove managed attributes block",
                         )
                     )
 
