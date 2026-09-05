@@ -462,9 +462,7 @@ class TaskFunctionAutoCommitTests(unittest.TestCase):
                 ["show", f"{head}:.codev/task/item-1/round-state.json"], cwd=target
             )
             # The file write itself, same as today's test_task.py coverage.
-            self.assertEqual(
-                "closed", task.describe("item-1", target=target)["status"]
-            )
+            self.assertEqual("closed", task.describe("item-1", target=target)["status"])
         # Now also actually committed, under the mandatory prefix.
         self.assertNotEqual(base, head)
         self.assertTrue(message.startswith("chore(codev-bookkeeping): "))
@@ -506,14 +504,10 @@ class TaskFunctionAutoCommitTests(unittest.TestCase):
             second_base = _init_repo(target)
             task.start("item-1", second_base, target=target)
             git_ops.create_branch("item-1", second_base, target=target)
-            start_count = int(
-                _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
-            )
+            start_count = int(_run_capture(["rev-list", "--count", "HEAD"], cwd=target))
 
             # The same two writes, deferred except for the last -- one commit.
-            task.waive_review(
-                "item-1", "solo maintainer", target=target, defer=True
-            )
+            task.waive_review("item-1", "solo maintainer", target=target, defer=True)
             task.close("item-1", "approved", target=target, defer=False)
             deferred_count = int(
                 _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
@@ -565,9 +559,7 @@ class DeriveStatusTests(unittest.TestCase):
             base = _init_repo(target)
             task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
-            with patch.object(
-                git_ops, "pull_request_state"
-            ) as pull_request_state:
+            with patch.object(git_ops, "pull_request_state") as pull_request_state:
                 described = task.describe("item-1", target=target)
             pull_request_state.assert_not_called()
         self.assertEqual("in_progress", described["status"])
@@ -599,9 +591,7 @@ class DeriveStatusTests(unittest.TestCase):
             task.start("item-1", base, target=target)
             git_ops.create_branch("item-1", base, target=target)
             task.close("item-1", "approved", target=target)
-            with patch.object(
-                git_ops, "pull_request_state"
-            ) as pull_request_state:
+            with patch.object(git_ops, "pull_request_state") as pull_request_state:
                 described = task.describe_with_live_status("item-1", target=target)
             pull_request_state.assert_not_called()
         self.assertEqual("closed", described["status"])
@@ -1144,9 +1134,7 @@ class OpenPrTests(unittest.TestCase):
                 patch.object(git_ops, "_run_gh") as run_gh,
                 self.assertRaises(git_ops.GitOpsError),
             ):
-                git_ops.open_pr(
-                    "item-1", "title", "body", target=target, base="main"
-                )
+                git_ops.open_pr("item-1", "title", "body", target=target, base="main")
         run_gh.assert_not_called()
 
     def test_opens_a_draft_pr_with_no_force_flag_when_ready(self) -> None:

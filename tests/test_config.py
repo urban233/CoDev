@@ -132,16 +132,12 @@ class ResolutionPrecedenceTests(unittest.TestCase):
 class ResolveBoolTests(unittest.TestCase):
     def test_override_resolves_true(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            result = resolve_bool(
-                "some.flag", target=Path(directory), override="true"
-            )
+            result = resolve_bool("some.flag", target=Path(directory), override="true")
         self.assertTrue(result)
 
     def test_override_resolves_false(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            result = resolve_bool(
-                "some.flag", target=Path(directory), override="false"
-            )
+            result = resolve_bool("some.flag", target=Path(directory), override="false")
         self.assertFalse(result)
 
     def test_env_resolves_true(self) -> None:
