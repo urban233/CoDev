@@ -222,6 +222,29 @@ class BranchAndCommitTests(unittest.TestCase):
             self.assertTrue(result.ok)
             self.assertEqual("ok_waiting_on_reviewer", result.reason)
 
+    def test_round_and_evidence_does_not_fire_a_second_bookkeeping_commit(
+        self,
+    ) -> None:
+        """ADR-0045, Slice 3: `record_builder`'s round-state write here must
+        ride along on the commit `commit()` just made, not fire a second,
+        separate `chore(codev-bookkeeping)` commit right after it -- `commit`
+        hardcodes `defer=True` for this one internal call specifically
+        because of it."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            (target / "changed.txt").write_text("content\n", encoding="utf-8")
+            head = git_ops.commit(
+                "item-1",
+                "builder change",
+                target=target,
+                round_number=1,
+                evidence={"validation": "pytest passed"},
+            )
+            self.assertEqual(head, git_ops.current_head(target))
+
     def test_refuses_mixed_managed_and_product_changes_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
@@ -263,6 +286,190 @@ class BranchAndCommitTests(unittest.TestCase):
                 "item-1", "product only", target=target, paths=["product.py"]
             )
             self.assertIn("product.py", git_ops.changed_files("item-1", target=target))
+
+
+class MaybeCommitBookkeepingTests(unittest.TestCase):
+    """ADR-0045, Slice 3: the shared auto-commit primitive every
+    state-mutating `task.py` function routes through."""
+
+    def test_auto_commit_true_commits_everything_dirty_with_the_mandatory_prefix(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            head = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNotNone(head)
+            self.assertNotEqual(base, head)
+            self.assertEqual(head, git_ops.current_head(target))
+            message = _run_capture(["log", "-1", "--pretty=%B"], cwd=target)
+        self.assertTrue(message.startswith("chore(codev-bookkeeping): "))
+
+    def test_auto_commit_false_is_a_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            config.set_value("git.auto_commit", "false", target=target)
+            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+
+    def test_defer_true_never_commits_regardless_of_the_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            # auto_commit stays at its default (true): defer must win anyway.
+            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=True
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+
+    def test_dirty_path_outside_this_tasks_own_directory_is_a_no_op(self) -> None:
+        """Found live: an editable install picks up in-progress source edits
+        immediately, so a builder-round recording auto-fired mid-implementation
+        and swept real feature code into a commit labelled
+        chore(codev-bookkeeping) alongside the actual bookkeeping write. Only
+        ever commit when every dirty path is confined to this task's own
+        directory; anything else dirty means a human or agent is mid-edit."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            (target / "unrelated_feature.py").write_text(
+                "value = 1\n", encoding="utf-8"
+            )
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+            status = _run_capture(["status", "--porcelain", "-uall"], cwd=target)
+        self.assertIn("unrelated_feature.py", status)
+        self.assertIn("round-state.json", status)
+
+    def test_nothing_dirty_is_a_no_op(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+
+    def test_not_a_git_repository_is_a_no_op_not_an_error(self) -> None:
+        """`task.py`'s own bare-tempdir tests must keep passing unmodified --
+        this is a best-effort convenience on top of an already-durable write,
+        not a new hard requirement those callers must now satisfy."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            (target / "state.json").write_text("{}\n", encoding="utf-8")
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+        self.assertIsNone(result)
+
+    def test_mixed_managed_and_product_dirty_paths_is_a_no_op_not_a_raise(
+        self,
+    ) -> None:
+        """Neither path here is under this task's own directory at all, so
+        the task-directory scoping check above short-circuits first: this is
+        a no-op, the same as any other unrelated dirty content, not a raise.
+        `_refuse_if_mixed_dirty_paths` keeps its own teeth fully intact for
+        its original caller, `codev git commit` -- an explicit, human/agent-
+        invoked command that always attempts to stage and commit everything
+        dirty and so must surface this loudly. This automatic, best-effort
+        path never even attempts to stage in this situation, so there is
+        nothing here for it to raise about."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            _write_lock(target, [".codev/for-ai/ai-agent-guidelines.md"])
+            (target / ".codev" / "for-ai").mkdir(parents=True, exist_ok=True)
+            (target / ".codev" / "for-ai" / "ai-agent-guidelines.md").write_text(
+                "updated\n", encoding="utf-8"
+            )
+            (target / "product.py").write_text("code\n", encoding="utf-8")
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+
+
+class TaskFunctionAutoCommitTests(unittest.TestCase):
+    """ADR-0045, Slice 3, end-to-end: two of the seven now-wired `task.py`
+    functions, exercised against a real repository -- where the equivalent
+    tests in test_task.py only ever check the state file's own content,
+    against a bare, non-git temporary directory."""
+
+    def test_waive_review_auto_commits_the_state_write_when_auto_commit_is_true(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            path = task.waive_review(
+                "item-1", "solo maintainer", target=target, by="@alice"
+            )
+            head = git_ops.current_head(target)
+            message = _run_capture(["log", "-1", "--pretty=%B"], cwd=target)
+            committed = _run_capture(
+                ["show", f"{head}:.codev/task/item-1/round-state.json"], cwd=target
+            )
+            # The file write itself, same as today's test_task.py coverage.
+            self.assertIn("solo maintainer", path.read_text(encoding="utf-8"))
+        # Now also actually committed, under the mandatory prefix.
+        self.assertNotEqual(base, head)
+        self.assertTrue(message.startswith("chore(codev-bookkeeping): "))
+        self.assertIn("solo maintainer", committed)
+        self.assertIn("@alice", committed)
+
+    def test_close_auto_commits_the_state_write_when_auto_commit_is_true(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.close("item-1", "approved", target=target)
+            head = git_ops.current_head(target)
+            message = _run_capture(["log", "-1", "--pretty=%B"], cwd=target)
+            committed = _run_capture(
+                ["show", f"{head}:.codev/task/item-1/round-state.json"], cwd=target
+            )
+            # The file write itself, same as today's test_task.py coverage.
+            self.assertEqual(
+                "closed", task.describe("item-1", target=target)["status"]
+            )
+        # Now also actually committed, under the mandatory prefix.
+        self.assertNotEqual(base, head)
+        self.assertTrue(message.startswith("chore(codev-bookkeeping): "))
+        self.assertIn('"status": "closed"', committed)
+        self.assertIn('"outcome": "approved"', committed)
 
 
 class CreateBranchGuardTests(unittest.TestCase):
@@ -1085,7 +1292,14 @@ class OpenPrTests(unittest.TestCase):
             git_ops.create_branch("item-1", base, target=target)
             _write_pr_template(target)
             task.record_reviewer(
-                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+                "item-1",
+                1,
+                base,
+                [],
+                {},
+                "READY_FOR_OUTER_LOOP",
+                target=target,
+                defer=True,
             )
 
             with patch.object(
@@ -1332,8 +1546,18 @@ class HeadForCheckTests(unittest.TestCase):
             _run(["commit", "-qm", "code"], cwd=target)
             code_head = git_ops.current_head(target)
 
+            # defer=True: this test controls the commit itself via
+            # _commit_round_state below, to reproduce the exact two-step
+            # shape (write, then a later separate commit) that produced the
+            # deadlock live -- auto-commit firing inline would collapse that
+            # into one atomic step and test something else.
             task.record_builder(
-                "probe", 1, code_head, {"validation": "ran"}, target=target
+                "probe",
+                1,
+                code_head,
+                {"validation": "ran"},
+                target=target,
+                defer=True,
             )
             recorded_head = self._commit_round_state(target, "record builder round")
             self.assertNotEqual(code_head, recorded_head)
@@ -1381,7 +1605,12 @@ class HeadForCheckTests(unittest.TestCase):
             # rev-parse HEAD` only after an earlier bookkeeping commit had
             # already landed, and recorded its round against that.
             task.record_builder(
-                "probe", 1, unrelated_note, {"validation": "ran"}, target=target
+                "probe",
+                1,
+                unrelated_note,
+                {"validation": "ran"},
+                target=target,
+                defer=True,
             )
             recorded_head = self._commit_round_state(target, "record builder round")
             self.assertNotEqual(unrelated_note, recorded_head)
@@ -1406,7 +1635,12 @@ class HeadForCheckTests(unittest.TestCase):
             code_head = git_ops.current_head(target)
 
             task.record_builder(
-                "probe", 1, code_head, {"validation": "ran"}, target=target
+                "probe",
+                1,
+                code_head,
+                {"validation": "ran"},
+                target=target,
+                defer=True,
             )
             self._commit_round_state(target, "record builder round")
 
@@ -1436,7 +1670,14 @@ class HeadForCheckTests(unittest.TestCase):
             code_head = git_ops.current_head(target)
 
             task.record_reviewer(
-                "probe", 1, code_head, [], {}, "READY_FOR_OUTER_LOOP", target=target
+                "probe",
+                1,
+                code_head,
+                [],
+                {},
+                "READY_FOR_OUTER_LOOP",
+                target=target,
+                defer=True,
             )
             self._commit_round_state(target, "record reviewer round")
 

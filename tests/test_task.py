@@ -28,12 +28,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import annotations
 
+import inspect
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
+from codev_workflow import task as task_module
 from codev_workflow.task import (
     REQUIRED_COVERAGE_DIMENSIONS,
     ROUND_SCHEMA_VERSION,
@@ -2991,6 +2993,45 @@ class PrDescriptionTests(unittest.TestCase):
             start("item-1", "base-sha", target=target, summary="a small fix")
             body = pr_description("item-1", target=target)
         self.assertIn("a small fix", body)
+
+
+class BookkeepingCommitWiringTests(unittest.TestCase):
+    """ADR-0045, Slice 3: every state-mutating function that writes a
+    task's own bookkeeping must route through `_commit_bookkeeping` (which
+    itself calls `git_ops._maybe_commit_bookkeeping`), so a human or agent
+    never again has to follow up with a separate `codev git commit` by hand.
+
+    A future new state-mutating function added without this wiring should
+    fail this test rather than silently reintroducing that manual-commit-
+    only gap -- `test_a_stub_that_skips_the_helper_fails_the_same_check`
+    below proves the check itself is capable of catching that, not just
+    trivially passing every function it is pointed at.
+    """
+
+    _WIRED_FUNCTIONS = (
+        "record_builder",
+        "record_reviewer",
+        "waive_review",
+        "reopen",
+        "record_escalation",
+        "record_triage",
+        "close",
+    )
+
+    def test_every_state_mutating_function_calls_the_shared_helper(self) -> None:
+        for name in self._WIRED_FUNCTIONS:
+            with self.subTest(function=name):
+                source = inspect.getsource(getattr(task_module, name))
+                self.assertIn("_commit_bookkeeping(", source)
+
+    def test_a_stub_that_skips_the_helper_fails_the_same_check(self) -> None:
+        stub_source = (
+            "def stub_state_mutator(task_id, *, target, defer=False):\n"
+            "    state = _load(task_id, target=target)\n"
+            "    state['status'] = 'closed'\n"
+            "    _save(task_id, state, target=target)\n"
+        )
+        self.assertNotIn("_commit_bookkeeping(", stub_source)
 
     def test_prefers_description_over_summary_when_both_set(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

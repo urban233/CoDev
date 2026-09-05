@@ -253,6 +253,174 @@ class TaskJsonSurfaceTests(unittest.TestCase):
             self.assertEqual("stop_round_cap", escalated["trigger"])
             self.assertIsNone(escalated["phase"])
 
+    def test_defer_commit_flag_threads_defer_true_into_every_wired_function(
+        self,
+    ) -> None:
+        """ADR-0045, Slice 3: `--defer-commit` on each of the seven wired
+        functions' own CLI subcommand must reach the function as `defer=True`
+        -- omitting it must leave the default `defer=False` (today's
+        behavior) unchanged."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            evidence = target / "evidence.json"
+            evidence.write_text("{}", encoding="utf-8")
+            findings = target / "findings.json"
+            findings.write_text("[]", encoding="utf-8")
+            triage = target / "triage.json"
+            triage.write_text('{"dispositions": {}}', encoding="utf-8")
+            with (
+                patch("codev_workflow.cli.task_module.record_builder") as builder,
+                patch("codev_workflow.cli.task_module.record_reviewer") as reviewer,
+                patch("codev_workflow.cli.task_module.close") as close_fn,
+                patch(
+                    "codev_workflow.cli.task_module.reopen",
+                    return_value=target / "s.json",
+                ) as reopen_fn,
+                patch(
+                    "codev_workflow.cli.task_module.waive_review",
+                    return_value=target / "s.json",
+                ) as waive_review_fn,
+                patch("codev_workflow.cli.task_module.record_triage") as triage_fn,
+                patch(
+                    "codev_workflow.cli.task_module.record_escalation"
+                ) as escalate_fn,
+                patch(
+                    "codev_workflow.cli.git_ops_module.detect_identity",
+                    return_value="@alice",
+                ),
+            ):
+                self._run(
+                    [
+                        "task",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--head",
+                        "head-sha",
+                        "--role",
+                        "builder",
+                        "--evidence",
+                        str(evidence),
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "record",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--head",
+                        "head-sha",
+                        "--role",
+                        "reviewer",
+                        "--findings",
+                        str(findings),
+                        "--decision",
+                        "READY_FOR_HUMAN_APPROVAL",
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "close",
+                        "--id",
+                        "item-1",
+                        "--outcome",
+                        "approved",
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "reopen",
+                        "--id",
+                        "item-1",
+                        "--head",
+                        "head-sha",
+                        "--reason",
+                        "recovering",
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "waive-review",
+                        "--id",
+                        "item-1",
+                        "--reason",
+                        "solo maintainer",
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "triage",
+                        "--id",
+                        "item-1",
+                        "--round",
+                        "1",
+                        "--triage",
+                        str(triage),
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+                self._run(
+                    [
+                        "task",
+                        "escalate",
+                        "--id",
+                        "item-1",
+                        "--trigger",
+                        "stop_round_cap",
+                        "--cause",
+                        "cap reached",
+                        "--defer-commit",
+                    ],
+                    target,
+                )
+            self.assertTrue(builder.call_args.kwargs["defer"])
+            self.assertTrue(reviewer.call_args.kwargs["defer"])
+            self.assertTrue(close_fn.call_args.kwargs["defer"])
+            self.assertTrue(reopen_fn.call_args.kwargs["defer"])
+            self.assertTrue(waive_review_fn.call_args.kwargs["defer"])
+            self.assertTrue(triage_fn.call_args.kwargs["defer"])
+            self.assertTrue(escalate_fn.call_args.kwargs["defer"])
+
+    def test_omitting_defer_commit_keeps_the_default_false(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            with patch(
+                "codev_workflow.cli.task_module.waive_review",
+                return_value=target / "s.json",
+            ) as waive_review_fn:
+                self._run(
+                    [
+                        "task",
+                        "waive-review",
+                        "--id",
+                        "item-1",
+                        "--reason",
+                        "solo maintainer",
+                    ],
+                    target,
+                )
+            self.assertFalse(waive_review_fn.call_args.kwargs["defer"])
+
     def test_log_json_returns_the_recorded_state_not_rendered_text(self) -> None:
         state = {"task_id": "item-1", "status": "in_progress", "rounds": [{"round": 1}]}
         with tempfile.TemporaryDirectory() as directory:
@@ -1769,6 +1937,7 @@ class CliTests(unittest.TestCase):
                 {"dispositions": {}},
                 target=target.resolve(),
                 by="octocat",
+                defer=False,
             )
 
     def test_task_triage_explicit_by_skips_detection(self) -> None:
@@ -1806,6 +1975,7 @@ class CliTests(unittest.TestCase):
                 {"dispositions": {}},
                 target=target.resolve(),
                 by="explicit-triager",
+                defer=False,
             )
 
     def test_task_check_prints_triage_note(self) -> None:

@@ -1,20 +1,42 @@
 {
-  "base_snapshot": "main",
-  "current_round": 1,
+  "base_snapshot": "b1da214a819618213aefe97fe14da1d995d5961d",
+  "current_round": 2,
   "current_slice": "bookkeeping-automation-gates",
   "description": null,
   "entry": null,
   "link_ref": "https://github.com/urban233/CoDev/issues/42",
   "max_rounds": {
-    "inner": 2,
+    "inner": 3,
     "outer": 2
   },
   "owner": "urban233",
+  "reopens": [
+    {
+      "by": null,
+      "from_round": 1,
+      "head": "b1da214a819618213aefe97fe14da1d995d5961d",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Continuing to build the remaining plan slices as further bounded rounds on this single-PR task, absorbing slice 2's already-landed code (gitattributes block) and the round 1 auto-commit scoping bug found and fixed along the way (a real bookkeeping-commit mislabeling issue, not part of the original plan).",
+      "timestamp": "2026-09-05T11:15:50Z",
+      "to_round": 2
+    }
+  ],
   "reviewer": null,
   "round_schema_version": 4,
   "rounds": [
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "resolve_bool() built on resolve(), strict true/false only. DEFAULTS gains git.auto_commit=true, git.auto_open_pr=true (git.auto_merge deliberately deferred). codev config set rejects non-boolean values for these keys at write time. Independently re-verified: ruff/mypy/full suite all clean at the time (835 tests, OK).",
+          "summary": "Backfilled: round 1's builder entry was never actually recorded at the time (codev git commit --round 1 --evidence ... was run, but the round-state.json content at that commit and the next show builder: null -- root cause not determined, likely a missed verification step rather than a code defect, since record_builder's logic is straightforward and worked correctly for every later round). Backfilling now with the same evidence that was originally intended, since the round's work (typed boolean config keys, slice 1) is real, already independently verified, and already has a recorded READY_FOR_OUTER_LOOP reviewer verdict against this exact commit."
+        },
+        "head_snapshot": "3b37a137719b8a0864bed35c9c5e7bf5e1c4de2f"
+      },
       "phase": "inner",
       "reviewer": {
         "coverage": {
@@ -29,10 +51,17 @@
       },
       "round": 1,
       "slice_id": "bookkeeping-automation-gates"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 2,
+      "slice_id": "bookkeeping-automation-gates"
     }
   ],
   "slice_styles": {
-    "bookkeeping-automation-gates": "delegate"
+    "bookkeeping-automation-gates": "pair"
   },
   "slices": [
     "bookkeeping-automation-gates"

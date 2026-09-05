@@ -247,6 +247,22 @@ def _save(task_id: str, state: dict[str, Any], *, target: Path) -> None:
     _atomic_write(path, content)
 
 
+def _commit_bookkeeping(task_id: str, *, target: Path, defer: bool) -> None:
+    """Best-effort auto-commit for a state-mutating write this module just
+    made (ADR-0045), routed through `git_ops._maybe_commit_bookkeeping`.
+
+    Imported lazily: `git_ops` already imports this module at load time
+    (it calls back into several read-only `task` functions), so importing
+    it back here at module scope would be a real circular import. By the
+    time any of the functions below actually run, both modules have long
+    since finished loading -- the same precedent `eval.py`'s own lazy
+    import of `eval_checks` already uses in this codebase.
+    """
+    from codev_workflow import git_ops
+
+    git_ops._maybe_commit_bookkeeping(task_id, target=target, defer=defer)
+
+
 def _ensure_in_progress(state: dict[str, Any]) -> None:
     if state["status"] != "in_progress":
         raise TaskError(f"task is {state['status']!r}, not in_progress")
@@ -545,6 +561,7 @@ def record_builder(
     evidence: Any,
     *,
     target: Path,
+    defer: bool = False,
 ) -> None:
     state = _load(task_id, target=target)
     _ensure_in_progress(state)
@@ -560,6 +577,7 @@ def record_builder(
         )
     round_entry["builder"] = {"head_snapshot": head_snapshot, "evidence": evidence}
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
 
 
 def record_reviewer(
@@ -572,6 +590,7 @@ def record_reviewer(
     *,
     target: Path,
     specialist_selection: Any = None,
+    defer: bool = False,
 ) -> None:
     if decision not in VALID_DECISIONS:
         raise TaskError(
@@ -616,6 +635,7 @@ def record_reviewer(
         )
     round_entry["reviewer"] = reviewer_entry
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
 
 
 def _validate_triage(raw: Any, findings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -670,6 +690,7 @@ def record_triage(
     *,
     target: Path,
     by: str | None = None,
+    defer: bool = False,
 ) -> None:
     _validate_optional_text("by", by)
     state = _load(task_id, target=target)
@@ -692,6 +713,7 @@ def record_triage(
     validated["by"] = by
     round_entry["triage"] = validated
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
 
 
 def _triage_owner_note(owner: str | None, triage: dict[str, Any] | None) -> str | None:
@@ -1011,7 +1033,7 @@ def check(task_id: str, head: str, *, target: Path) -> CheckResult:
     return CheckResult(True, "ok_blocked_missing_evidence", decision)
 
 
-def close(task_id: str, outcome: str, *, target: Path) -> None:
+def close(task_id: str, outcome: str, *, target: Path, defer: bool = False) -> None:
     if outcome not in VALID_OUTCOMES:
         raise TaskError(
             f"invalid outcome {outcome!r}; expected one of {VALID_OUTCOMES}"
@@ -1021,6 +1043,7 @@ def close(task_id: str, outcome: str, *, target: Path) -> None:
     state["status"] = "closed"
     state["outcome"] = outcome
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
 
 
 def reopen(
@@ -1031,6 +1054,7 @@ def reopen(
     target: Path,
     max_rounds: int | dict[str, int] | None = None,
     by: str | None = None,
+    defer: bool = False,
 ) -> Path:
     """Human-authorized recovery for a task `check` reports as stuck.
 
@@ -1109,6 +1133,7 @@ def reopen(
     )
     path = _task_path(target, task_id)
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
     return path
 
 
@@ -1202,7 +1227,12 @@ def waive(
 
 
 def waive_review(
-    task_id: str, reason: str, *, target: Path, by: str | None = None
+    task_id: str,
+    reason: str,
+    *,
+    target: Path,
+    by: str | None = None,
+    defer: bool = False,
 ) -> Path:
     """Human-authorized: this task lands without the independent human
     approval ADR-0037 requires.
@@ -1231,6 +1261,7 @@ def waive_review(
         "at": _utc_now_iso(),
     }
     _save(task_id, state, target=target)
+    _commit_bookkeeping(task_id, target=target, defer=defer)
     return _task_path(target, task_id)
 
 
@@ -1633,11 +1664,22 @@ def record_escalation(
     target: Path,
     phase: str | None = None,
     round_number: int | None = None,
+    defer: bool = False,
 ) -> None:
     """Append one local, gitignored escalation record. Never called by `check`,
     which stays read-only; the caller records an escalation explicitly after
     observing a `stop_*` result, a pre-build critical interrupt, or a human
-    override of a blocking finding during triage."""
+    override of a blocking finding during triage.
+
+    The record itself never becomes part of a commit -- `escalations.jsonl`
+    is gitignored by design, so `_commit_bookkeeping` below stages nothing
+    for it. Called anyway, for two reasons: uniformity with the other six
+    state-mutating functions (the conformance test below treats all seven
+    alike), and because escalating is itself a natural flush point --
+    handing a stopped round to a human for a decision is exactly the
+    boundary ADR-0045 says to flush any other bookkeeping accumulated so
+    far, not just leave it pending.
+    """
     _validate_id(task_id)
     if trigger not in VALID_ESCALATION_TRIGGERS:
         raise TaskError(
@@ -1659,6 +1701,7 @@ def record_escalation(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, sort_keys=True) + "\n")
+    _commit_bookkeeping(task_id, target=target, defer=defer)
 
 
 def read_escalations(

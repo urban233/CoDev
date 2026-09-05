@@ -1062,6 +1062,14 @@ def _refuse_if_mixed_dirty_paths(task_id: str, *, target: Path) -> None:
         )
 
 
+def _stage_everything_or_refuse(task_id: str, *, target: Path) -> None:
+    """The path-less `git add -A` `commit()` applies when given neither
+    `--paths` nor `--staged`, plus its mixed-dirty-paths guard -- shared with
+    `_maybe_commit_bookkeeping` (ADR-0045) so this is defined once."""
+    _refuse_if_mixed_dirty_paths(task_id, target=target)
+    _run_git(["add", "-A"], cwd=target)
+
+
 def commit(
     task_id: str,
     message: str,
@@ -1084,13 +1092,103 @@ def commit(
     elif paths:
         _run_git(["add", "--", *paths], cwd=target)
     else:
-        _refuse_if_mixed_dirty_paths(task_id, target=target)
-        _run_git(["add", "-A"], cwd=target)
+        _stage_everything_or_refuse(task_id, target=target)
     _run_git(["commit", "-m", message], cwd=target)
     head = current_head(target)
     if round_number is not None:
-        task.record_builder(task_id, round_number, head, evidence, target=target)
+        # defer=True, hardcoded: this call always runs immediately after the
+        # `git commit` two lines up, so the round-state write it makes must
+        # ride along uncommitted (today's behavior) rather than firing a
+        # second, separate bookkeeping commit right after the first --
+        # exactly the noise ADR-0045 exists to avoid. `record_builder`'s own
+        # `defer` parameter still defaults to False for its other caller, the
+        # direct `codev task record --role builder` CLI path, where nothing
+        # else is about to commit and auto-commit firing immediately is
+        # correct.
+        task.record_builder(
+            task_id, round_number, head, evidence, target=target, defer=True
+        )
     return head
+
+
+_BOOKKEEPING_COMMIT_PREFIX = "chore(codev-bookkeeping): "
+
+
+def _bookkeeping_commit_message(task_id: str, *, target: Path) -> str:
+    """The mandatory-prefix subject/body for one bookkeeping commit.
+
+    A round/phase detail in the body is a nice-to-have for a human skimming
+    `git log`, not something this function's caller can fail by omitting --
+    unreadable or nonexistent round state (`record_escalation` can run
+    against a task id with no round-state.json at all) falls back to a bare
+    subject line instead of raising.
+    """
+    subject = f"{_BOOKKEEPING_COMMIT_PREFIX}{task_id}"
+    try:
+        described = task.describe(task_id, target=target)
+    except (task.TaskError, KeyError):
+        return subject
+    return (
+        f"{subject}\n\n"
+        f"Round {described['current_round']} ({described['current_phase']} phase)."
+    )
+
+
+def _maybe_commit_bookkeeping(task_id: str, *, target: Path, defer: bool) -> str | None:
+    """Best-effort auto-commit for one task's own bookkeeping write
+    (ADR-0045). Called by every `task.py` state-mutating function right
+    after it saves to disk, so a human or agent no longer has to follow up
+    with a separate `codev git commit` for that write alone.
+
+    `defer=True` always no-ops regardless of `git.auto_commit`: the caller
+    is explicitly accumulating state for a later flush (Slice 4 wires this
+    for the composite verbs; `git_ops.commit()`'s own internal call to
+    `record_builder` is the one existing caller that already needs it, since
+    its round-state write must ride along on the commit `commit()` just
+    made rather than firing a second one).
+
+    Checking `defer` before resolving `git.auto_commit` is deliberate: a
+    deferred call has no need to know the flag's value at all, so a
+    malformed configured value (`ConfigError`) only ever surfaces on a call
+    that would actually have committed.
+
+    Never raises for "target is not a git repository" -- `task.py`'s own
+    test suite exercises these functions against plain, non-git temporary
+    directories, and a bookkeeping commit is a best-effort convenience
+    layered on top of `_save`'s already-durable write, not a new hard
+    requirement those callers must now satisfy. The mixed-managed-paths
+    guard (`_refuse_if_mixed_dirty_paths`, via `_stage_everything_or_refuse`)
+    still raises once we know there is real, dirty content in a real repo:
+    that guard is a deliberate, actionable signal, not a degenerate case to
+    swallow.
+
+    Only ever commits when *every* dirty path is confined to this task's own
+    `.codev/task/<task_id>/` directory. Found live: an editable install picks
+    up in-progress source edits immediately, and a naive `git add -A` here
+    would sweep real product code up alongside a bookkeeping write and label
+    the whole thing `chore(codev-bookkeeping)` -- mislabeling substantial
+    work as trivial is worse than the extra commit this mechanism exists to
+    avoid. Anything dirty outside that prefix means a human or agent is
+    mid-edit; no-op and leave it all for their own deliberate commit, exactly
+    today's pre-existing behavior.
+    """
+    if defer:
+        return None
+    if not config.resolve_bool("git.auto_commit", target=target):
+        return None
+    try:
+        dirty = _dirty_paths(target)
+    except GitOpsError:
+        return None
+    if not dirty:
+        return None
+    prefix = _task_dir(target, task_id).relative_to(target).as_posix() + "/"
+    if any(not path.startswith(prefix) for path in dirty):
+        return None
+    _stage_everything_or_refuse(task_id, target=target)
+    message = _bookkeeping_commit_message(task_id, target=target)
+    _run_git(["commit", "-m", message], cwd=target)
+    return current_head(target)
 
 
 def push(task_id: str, *, target: Path) -> None:
