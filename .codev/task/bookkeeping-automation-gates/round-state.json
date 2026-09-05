@@ -9,6 +9,7 @@
     "inner": 3,
     "outer": 5
   },
+  "outcome": "approved",
   "owner": "urban233",
   "reopens": [
     {
@@ -363,7 +364,7 @@
   "slices": [
     "bookkeeping-automation-gates"
   ],
-  "status": "in_progress",
+  "status": "closed",
   "summary": "Background bookkeeping self-heals; commit/PR/merge become boolean-gated (ADR-0045)",
   "task_id": "bookkeeping-automation-gates"
 }
