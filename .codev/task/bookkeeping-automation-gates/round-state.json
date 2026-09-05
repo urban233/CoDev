@@ -125,7 +125,127 @@
         "head_snapshot": "7dcf805bbcd501693ac2e9eefd815b3cec115126"
       },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist could not converge within its turn budget on two dispatch attempts (same tool limitation as correctness). Covered by author's own direct assessment: diff matches the accepted plan's 7 slices with no scope creep (git.auto_merge/codev git merge correctly absent, deliberately deferred); defer-parameter wiring is consistent across all 7 task.py functions with one well-documented, justified exception. One real architectural tension named: this PR's own build needed two pause/resume cycles to reconcile a multi-slice single-PR task against CoDev's round-state model, which assumes one bounded cycle per round (PR43-ROUND-MODEL-DOES-NOT-FIT-MULTI-SLICE-SINGLE-PR, non-blocking, worth CoDev's own future design attention).",
+            "passed": true
+          },
+          "concurrency": {
+            "evidence": "concurrency-specialist ran a full pass with two reproduced findings (index-lock contention mishandling, silent unobservable flush) plus the TOCTOU scoping window, all non-blocking. No in-process concurrency surface exists in this codebase; the real surface is inter-process git operations, fully covered.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist could not converge within its turn budget on two dispatch attempts (partial-output tool limitation this session, not a diff issue). Covered instead by author's own direct verification throughout implementation (every slice independently diffed, ruff/mypy/full-suite re-run at each step) plus concurrency-specialist's and security-data-specialist's findings, which independently surfaced and the author independently reproduced the one blocking correctness-adjacent defect (PR43-BOOKKEEPING-COMMIT-NO-BRANCH-CHECK) and one test-coverage gap (PR43-NO-TEST-EXERCISES-WRONG-BRANCH).",
+            "passed": false
+          },
+          "error_handling": {
+            "evidence": "concurrency-specialist: _maybe_commit_bookkeeping catches GitOpsError from its own dirty-path check but not from the add/commit calls, an inconsistency with its own stated best-effort contract (PR43-INDEX-LOCK-CONTENTION-MISHANDLED, non-blocking).",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "Same specialist-convergence gap as architecture_scope; covered by author's own assessment. One non-blocking finding: describe() vs describe_with_live_status()'s naming doesn't signal the cost asymmetry between them, inviting a future caller to pick the wrong one (PR43-DESCRIBE-NAMING-INVITES-FUTURE-MISUSE).",
+            "passed": true
+          },
+          "rollout": {
+            "evidence": "rollout-specialist confirmed (before hitting its own turn limit) that the accepted plan's stated mitigation for git.auto_commit defaulting to true -- a one-time upgrade notice printed by codev update, recorded as a provenance flag -- was never implemented anywhere in this diff, with no test coverage for it either. Independently confirmed by the author via direct grep of installer.py before the specialist's own confirmation arrived.",
+            "passed": false
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist ran a full, reproduction-based pass. One blocking finding: _maybe_commit_bookkeeping has no branch-discipline check, unlike every other commit path in git_ops.py -- reproduced landing a commit directly on main, and (by the specialist) a detached-HEAD case where a human-authorized reopen is silently lost on branch switch. Three non-blocking findings assessed and found non-credible-risk or acceptable-tradeoff (TOCTOU has no credential angle; .gitattributes collapse is presentation-only; describe_with_live_status's GitHub read is clean). Compatibility: both new defaults preserve existing behavior for every installed repo; derived status is never persisted so no stored data shape changed.",
+            "passed": false
+          },
+          "test_quality": {
+            "evidence": "867 tests, all passing, including new regression coverage for the two bugs found and fixed live during this task's own development (the double-commit fix, the dirty-path-scoping fix). One real gap found: no test exercises a wired function while checked out on a different branch (PR43-NO-TEST-EXERCISES-WRONG-BRANCH, non-blocking on its own, but directly explains why the blocking finding was never caught locally).",
+            "passed": true
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "PR43-BOOKKEEPING-COMMIT-NO-BRANCH-CHECK",
+            "location": "src/codev_workflow/git_ops.py:1137 (_maybe_commit_bookkeeping)",
+            "rank": 1,
+            "summary": "_maybe_commit_bookkeeping never calls _ensure_on_own_branch, unlike every other commit-producing function in this file (commit, push, open_pr, mark_ready) -- a bookkeeping commit can land directly on main, on a wrong task's branch, or on a detached HEAD."
+          },
+          {
+            "blocking": false,
+            "category": "concurrency",
+            "expansion_reason": null,
+            "id": "PR43-DEFER-RETURN-VALUE-UNOBSERVABLE",
+            "location": "src/codev_workflow/git_ops.py:1137 (_maybe_commit_bookkeeping); src/codev_workflow/task.py (_commit_bookkeeping)",
+            "rank": 2,
+            "summary": "_maybe_commit_bookkeeping's return value (the new head, or None) is discarded by task._commit_bookkeeping, so an agent following the documented defer/flush guidance cannot distinguish 'nothing to flush', 'auto_commit is false', and 'a concurrent writer's file blocked the flush' -- and could push without the accumulated state with no signal that anything went wrong."
+          },
+          {
+            "blocking": false,
+            "category": "concurrency",
+            "expansion_reason": null,
+            "id": "PR43-INDEX-LOCK-CONTENTION-MISHANDLED",
+            "location": "src/codev_workflow/git_ops.py:1137 (_maybe_commit_bookkeeping)",
+            "rank": 3,
+            "summary": "The function catches GitOpsError from the dirty-path check but not from the add/commit calls themselves, despite documenting itself as best-effort throughout; a concurrent git process (index.lock contention) turns an already-durable state write into a misleading hard failure, and the natural retry is wrong per-verb (record_builder refuses 'already recorded', close refuses 'not in_progress', record_escalation double-appends)."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "PR43-TOCTOU-SCOPING-SNAPSHOT-VS-LIVE-GLOB",
+            "location": "src/codev_workflow/git_ops.py:1137 (_maybe_commit_bookkeeping)",
+            "rank": 4,
+            "summary": "The dirty-path containment check runs against a snapshot, but the subsequent git add -A re-globs the live worktree -- a file written in the window between the two could still be swept into a commit mislabeled chore(codev-bookkeeping), reopening a narrower version of the exact bug this scoping check was added to fix. Both concurrency and security specialists independently confirmed the mechanism; security assessed no credential-exposure angle (gitignored files are unstageable regardless) but confirmed the scoping guarantee is advisory, not structural."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "PR43-NO-TEST-EXERCISES-WRONG-BRANCH",
+            "location": "tests/test_git_ops.py (MaybeCommitBookkeepingTests, TaskFunctionAutoCommitTests)",
+            "rank": 5,
+            "summary": "Every test for the auto-commit mechanism runs on the task's own branch (via git_ops.create_branch in setup), so PR43-BOOKKEEPING-COMMIT-NO-BRANCH-CHECK's exact scenario -- calling a wired function while checked out on a different branch -- was structurally never exercised by this PR's own 867-test suite."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "PR43-DESCRIBE-NAMING-INVITES-FUTURE-MISUSE",
+            "location": "src/codev_workflow/task.py (describe, describe_with_live_status)",
+            "rank": 6,
+            "summary": "describe_with_live_status sounds strictly more correct than describe, with no naming or type-level signal that it carries a real GitHub-network cost describe() was specifically kept free of. Nothing stops a future caller from defaulting to the 'more complete-sounding' function in a hot path, quietly reintroducing the exact per-commit network dependency Slice 5 was written to avoid."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "PR43-ROUND-MODEL-DOES-NOT-FIT-MULTI-SLICE-SINGLE-PR",
+            "location": "task-level: this PR's own build history (git log, .codev/task/bookkeeping-automation-gates/round-state.json's reopens/paused history)",
+            "rank": 7,
+            "summary": "Building all 7 plan slices as one task/one PR required two separate pause/resume cycles and one backfilled builder receipt to reconcile plain multi-slice commits against CoDev's round-state model, which assumes one bounded builder+reviewer cycle per round. A single-PR task built across many independent, code-additive slices does not fit that model without this kind of manual massaging today."
+          },
+          {
+            "blocking": false,
+            "category": "rollout",
+            "expansion_reason": null,
+            "id": "PR43-UPGRADE-NOTICE-MITIGATION-DROPPED",
+            "location": "src/codev_workflow/installer.py (plan_update)",
+            "rank": 8,
+            "summary": "The accepted plan's stated mitigation for git.auto_commit defaulting to true -- a one-time upgrade notice printed by codev update the first time the default takes effect, recorded as a provenance flag so it never repeats -- was never implemented anywhere in this diff. No code, no test, no mention in the CHANGELOG."
+          }
+        ],
+        "head_snapshot": "9b08d54cdc2e6d3687b6898f7a2510dc0099b2a2",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "security-data-specialist",
+            "concurrency-specialist",
+            "architecture-maintainability-specialist",
+            "rollout-specialist"
+          ]
+        }
+      },
       "round": 4,
       "slice_id": "bookkeeping-automation-gates"
     }
