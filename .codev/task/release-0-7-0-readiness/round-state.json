@@ -1,0 +1,40 @@
+{
+  "base_snapshot": "main",
+  "current_round": 1,
+  "current_slice": "release-0-7-0-readiness",
+  "description": null,
+  "entry": null,
+  "link_ref": "https://github.com/urban233/CoDev/issues/44",
+  "max_rounds": {
+    "inner": 2,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "scripts/verify_release.py --tag v0.7.0 (run with .venv/bin/python3 -- bare `python3` on this machine resolves to an unrelated, stale, globally-installed codev_workflow 0.1.3 that would have silently validated the wrong package): 'Release readiness checks passed.' Independently re-ran the full suite myself too: 872 tests, OK (1 skipped, pre-existing). ruff check . and ruff format --check . both clean. mypy src tests clean, 50 files. Full dist build and verification (just's underlying commands run directly, since `just` itself isn't installed on this machine): bazel build //packaging:wheel succeeds at version 0.7.0; wheel-parity check against `python -m build`'s setuptools output matches exactly; twine check passes on both the wheel and the sdist; a real install of the wheel into a fresh venv reports 'CoDev 0.7.0' and the bundled OpenCode agents smoke-test assertion passes.",
+          "passed": true,
+          "summary": "Added ADR-0045's coverage to CHANGELOG's existing 0.7.0 entry (PR #43 shipped under the same untagged version as PR #41, which the CHANGELOG previously covered alone). Then ran the actual 0.7.0 release-readiness verification end to end."
+        },
+        "head_snapshot": "b51089281d873396f1beb3484be48d8873bd5cfc"
+      },
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "release-0-7-0-readiness"
+    }
+  ],
+  "slice_styles": {
+    "release-0-7-0-readiness": "delegate"
+  },
+  "slices": [
+    "release-0-7-0-readiness"
+  ],
+  "status": "in_progress",
+  "summary": "Prepare and verify the 0.7.0 release",
+  "task_id": "release-0-7-0-readiness"
+}
