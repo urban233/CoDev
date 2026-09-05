@@ -1309,7 +1309,53 @@ def relink(
     return path
 
 
+def _derive_status(task_id: str, state: dict[str, Any], *, target: Path) -> str:
+    """ADR-0045, Slice 5: a task's own recorded `status` can go stale without
+    ever being wrong about anything a human decided -- `slice land` writes
+    `"closed"` only after its slice's pull request has already merged, so
+    that commit necessarily lands on a branch already past the point anyone
+    routinely commits further, and reaching `main` needs a second, separate
+    action nobody is obliged to take. This is not a class of drift a repair
+    needs to persist to be honest about: whether the task is done is exactly
+    as checkable from here as it was from the branch that recorded it.
+
+    Only ever checks GitHub -- a real network call -- for the one case where
+    the answer could actually be stale: locally `"in_progress"`, and the
+    current slice is the task's last one, so nothing further is expected
+    before completion. Every other status (`closed`, or `in_progress` with
+    slices still remaining) is trusted as recorded, at zero extra cost.
+
+    Never raises for "no branch recorded yet" -- `describe` is called for a
+    task freshly started with `task.start` alone, before `create_branch` has
+    ever run (this module's own test suite exercises exactly that), and a
+    derived status is a best-effort convenience layered on top of the
+    already-durable recorded one, not a new hard requirement callers must
+    satisfy.
+    """
+    raw_status: str = state["status"]
+    if raw_status != "in_progress":
+        return raw_status
+    slice_id: str = state["current_slice"]
+    if not is_final_slice(task_id, slice_id, target=target):
+        return raw_status
+    from codev_workflow import git_ops
+
+    try:
+        branch = git_ops.branch_for_slice(task_id, slice_id, target=target)
+    except git_ops.GitOpsError:
+        return raw_status
+    if branch is None:
+        return raw_status
+    if git_ops.pull_request_state(branch, target=target) == "MERGED":
+        return "closed"
+    return raw_status
+
+
 def describe(task_id: str, *, target: Path) -> dict[str, Any]:
+    """Cheap and local: never touches GitHub. Used pervasively, including by
+    `git_ops`'s own bookkeeping-commit-message builder -- `status` here is
+    exactly the recorded value, not `describe_with_live_status`'s derived
+    one, so every one of those existing callers stays a local-only read."""
     state = _load(task_id, target=target)
     latest = state["rounds"][-1]
     reviewer = latest["reviewer"]
@@ -1329,14 +1375,32 @@ def describe(task_id: str, *, target: Path) -> dict[str, Any]:
     }
 
 
+def describe_with_live_status(task_id: str, *, target: Path) -> dict[str, Any]:
+    """`describe`, with `status` derived against GitHub when the recorded
+    value could actually be stale (ADR-0045, Slice 5) -- for the callers
+    that exist specifically to answer "is this task actually done": a
+    human or agent checking one task by id, or listing every task. Not for
+    internal, high-frequency reads that never asked this question -- see
+    `describe`'s own docstring for why those stay local-only."""
+    described = describe(task_id, target=target)
+    state = _load(task_id, target=target)
+    described["status"] = _derive_status(task_id, state, target=target)
+    return described
+
+
 def describe_all(*, target: Path) -> list[dict[str, Any]]:
+    """Every task's status report -- with a live-derived `status`
+    (ADR-0045, Slice 5), since this function's only callers are `codev
+    status` and `codev task status`'s list form, both human/agent-facing
+    overviews where a stale `in_progress` count is exactly the failure mode
+    worth the extra GitHub reads."""
     root = target / Path(TASK_DIR_RELATIVE.as_posix())
     if not root.exists():
         return []
     results = []
     for entry in sorted(root.iterdir()):
         if (entry / "round-state.json").exists():
-            results.append(describe(entry.name, target=target))
+            results.append(describe_with_live_status(entry.name, target=target))
     return results
 
 

@@ -2049,7 +2049,9 @@ def _run_task_command(args: argparse.Namespace) -> int:
 
     if args.task_command == "status":
         if args.id:
-            summaries = [task_module.describe(args.id, target=target)]
+            summaries = [
+                task_module.describe_with_live_status(args.id, target=target)
+            ]
         else:
             summaries = task_module.describe_all(target=target)
         if args.json:

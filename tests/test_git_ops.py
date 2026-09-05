@@ -530,6 +530,83 @@ class TaskFunctionAutoCommitTests(unittest.TestCase):
         self.assertIn('"status": "closed"', committed)
 
 
+class DeriveStatusTests(unittest.TestCase):
+    """ADR-0045, Slice 5: a task whose final slice merged, but whose own
+    `slice land` never ran (the stranded-commit class this whole ADR started
+    from), reads as closed from `task.describe` the moment it is checked --
+    no write, no commit, nothing to self-heal ahead of time."""
+
+    def test_merged_final_slice_reports_closed_without_writing_anything(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            before = _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+
+            with patch.object(git_ops, "pull_request_state", return_value="MERGED"):
+                described = task.describe_with_live_status("item-1", target=target)
+
+            after = _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+            raw_status = task.log_records("item-1", target=target)["status"]
+
+        self.assertEqual("closed", described["status"])
+        self.assertEqual("in_progress", raw_status)
+        self.assertEqual(before, after)
+
+    def test_plain_describe_never_derives_and_never_calls_github(self) -> None:
+        """`describe` stays local-only -- it is called from high-frequency
+        internal paths (the bookkeeping-commit-message builder among them)
+        that never asked whether a task is *actually* done."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            with patch.object(
+                git_ops, "pull_request_state"
+            ) as pull_request_state:
+                described = task.describe("item-1", target=target)
+            pull_request_state.assert_not_called()
+        self.assertEqual("in_progress", described["status"])
+
+    def test_open_pull_request_does_not_derive_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            with patch.object(git_ops, "pull_request_state", return_value="OPEN"):
+                described = task.describe_with_live_status("item-1", target=target)
+        self.assertEqual("in_progress", described["status"])
+
+    def test_a_non_final_slice_does_not_derive_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target, slices=["a", "b"])
+            git_ops.create_branch("item-1", base, target=target)
+            with patch.object(git_ops, "pull_request_state", return_value="MERGED"):
+                described = task.describe_with_live_status("item-1", target=target)
+        self.assertEqual("in_progress", described["status"])
+
+    def test_an_already_closed_task_never_calls_github(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.close("item-1", "approved", target=target)
+            with patch.object(
+                git_ops, "pull_request_state"
+            ) as pull_request_state:
+                described = task.describe_with_live_status("item-1", target=target)
+            pull_request_state.assert_not_called()
+        self.assertEqual("closed", described["status"])
+
+
 class CreateBranchGuardTests(unittest.TestCase):
     def test_dirty_worktree_is_refused_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

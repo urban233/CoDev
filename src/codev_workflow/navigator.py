@@ -453,9 +453,18 @@ def next_action(
             branch=branch,
         )
 
-    if state["status"] != "in_progress":
+    # The raw recorded status, not `describe()`'s ADR-0045 derived one: a
+    # task whose final slice's pull request has merged but whose own
+    # `slice land` has not yet run reads as *derivable* to "closed" from
+    # anywhere -- correct for a standalone `codev task status`, wrong here,
+    # where reporting it early would skip straight past the one
+    # recommendation this position exists to give: run `slice land` itself.
+    # `_github_position` below already answers this case correctly by
+    # checking GitHub directly, once actually reached.
+    raw_status = task.log_records(resolved, target=target)["status"]
+    if raw_status != "in_progress":
         return NextAction(
-            position=f"task closed ({state['status']})",
+            position=f"task closed ({raw_status})",
             recommendation="start the next task",
             reason=f"task {resolved!r} is closed, nothing further is tracked",
             task_id=resolved,
