@@ -61,6 +61,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "review_waiver": {
+    "at": "2026-09-05T17:55:41Z",
+    "by": "urban233",
+    "reason": "Docs-only diff (CHANGELOG addition) already independently verified twice by the task owner; same resolution as PR #41 and #43. Explicitly authorized merging without a second independent GitHub approval."
+  },
   "reviewer": null,
   "round_schema_version": 4,
   "rounds": [
