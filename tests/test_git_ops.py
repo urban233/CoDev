@@ -471,6 +471,64 @@ class TaskFunctionAutoCommitTests(unittest.TestCase):
         self.assertIn('"status": "closed"', committed)
         self.assertIn('"outcome": "approved"', committed)
 
+    def test_defer_commit_collapses_a_multi_step_sequence_into_one_commit(
+        self,
+    ) -> None:
+        """Slice 4: the exact mechanism `.codev/for-ai/ai-agent-guidelines.md`'s
+        bookkeeping-commits rule documents. Two state-mutating writes with no
+        human decision between them -- `--defer-commit` on all but the last --
+        produce one commit, not two."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            task.start("item-1", base, target=target)
+            git_ops.create_branch("item-1", base, target=target)
+
+            # Without defer: each write is its own commit -- the baseline this
+            # test's own deferred sequence below is measured against.
+            task.waive_review("item-1", "solo maintainer", target=target)
+            undeferred_commit_count = int(
+                _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+            )
+
+            task.close("item-1", "approved", target=target)
+            baseline_count = int(
+                _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+            )
+            self.assertEqual(
+                undeferred_commit_count + 1,
+                baseline_count,
+                "each undeferred write must be its own commit",
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            second_base = _init_repo(target)
+            task.start("item-1", second_base, target=target)
+            git_ops.create_branch("item-1", second_base, target=target)
+            start_count = int(
+                _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+            )
+
+            # The same two writes, deferred except for the last -- one commit.
+            task.waive_review(
+                "item-1", "solo maintainer", target=target, defer=True
+            )
+            task.close("item-1", "approved", target=target, defer=False)
+            deferred_count = int(
+                _run_capture(["rev-list", "--count", "HEAD"], cwd=target)
+            )
+            message = _run_capture(["log", "-1", "--pretty=%B"], cwd=target)
+            committed = _run_capture(
+                ["show", "HEAD:.codev/task/item-1/round-state.json"], cwd=target
+            )
+
+        self.assertEqual(start_count + 1, deferred_count)
+        self.assertTrue(message.startswith("chore(codev-bookkeeping): "))
+        # Both writes landed in the one flush commit, not just the last.
+        self.assertIn("solo maintainer", committed)
+        self.assertIn('"status": "closed"', committed)
+
 
 class CreateBranchGuardTests(unittest.TestCase):
     def test_dirty_worktree_is_refused_by_default(self) -> None:

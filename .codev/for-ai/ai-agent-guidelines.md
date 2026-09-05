@@ -389,6 +389,30 @@ outer-loop review reaches `ok_machine_review_complete` with none open, publish
 the slice once before `codev git mark-ready`, which still requires that pull
 request to already exist.
 
+## Bookkeeping commits
+
+Most `codev task`/`codev round`/`codev slice` state-mutating commands commit
+their own write automatically (`git.auto_commit`, default true) — there is
+no separate `codev git commit` step to remember for a pure bookkeeping
+write. Within one continuous automated stretch of several such commands with
+no human decision in between, pass `--defer-commit` to every call except the
+last: the deferred writes accumulate uncommitted, and the final call's own
+commit sweeps them all up together, producing one commit instead of several.
+Flush — omit `--defer-commit` — immediately before yielding to a human for a
+decision, and always before a push: a push needs everything relevant
+committed, and a question put to a human is exactly the point where what has
+happened so far should be durable, not sitting in an uncommitted working
+tree.
+
+Concretely, from this project's own history: reopening a task, recording a
+round's outcome against it, and closing the task used to take three separate
+commands — `codev task reopen`, `codev task record`, `codev task close` (or
+`codev slice land`) — each committing on its own, four bookkeeping commits
+in total once a review waiver was involved too. The same sequence today is
+`codev task reopen --defer-commit`, `codev task record --defer-commit`
+(twice, if a waiver is also needed), then a final `codev slice land` with no
+flag — one commit, not four.
+
 ## Completion
 
 **For a code change**, return: delivered behavior, files/components changed,
