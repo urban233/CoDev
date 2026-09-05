@@ -188,6 +188,7 @@
     },
     "opencode_schema_managed": true,
     "opencode_agent_container_managed": true,
-    "opencode_config_file_managed": true
+    "opencode_config_file_managed": true,
+    "auto_commit_notice_shown": true
   }
 }
