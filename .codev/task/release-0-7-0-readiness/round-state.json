@@ -60,6 +60,7 @@
     "inner": 2,
     "outer": 2
   },
+  "outcome": "approved",
   "owner": "urban233",
   "review_waiver": {
     "at": "2026-09-05T17:55:41Z",
@@ -120,7 +121,7 @@
   "slices": [
     "release-0-7-0-readiness"
   ],
-  "status": "in_progress",
+  "status": "closed",
   "summary": "Prepare and verify the 0.7.0 release",
   "task_id": "release-0-7-0-readiness"
 }
