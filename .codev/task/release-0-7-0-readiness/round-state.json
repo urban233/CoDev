@@ -1,5 +1,56 @@
 {
   "base_snapshot": "main",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:44Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:44Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "error_handling",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:45Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "test_quality",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:45Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:45Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:46Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Docs-only diff (a CHANGELOG addition) with no code changes; already independently verified for factual accuracy and release-readiness. This dimension has no applicable risk surface for a text-only change.",
+      "round": 1,
+      "timestamp": "2026-09-05T17:47:46Z"
+    }
+  ],
   "current_round": 1,
   "current_slice": "release-0-7-0-readiness",
   "description": null,
@@ -23,7 +74,17 @@
         "head_snapshot": "b51089281d873396f1beb3484be48d8873bd5cfc"
       },
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independently re-verified directly (a dispatched lightweight-reviewer hit its turn limit twice with no output, could not be resumed -- SendMessage unavailable this session). CHANGELOG diff re-checked against docs/adr/0045-background-bookkeeping-and-boolean-automation-gates.md and PR #43's actual merged content: accurately describes what shipped, mentions git.auto_merge/codev git merge exactly once, in the Upgrading section, explicitly as deferred (not claimed as shipped). scripts/verify_release.py --tag v0.7.0 run with the correct interpreter (.venv/bin/python3 -- bare python3 on this machine resolves to an unrelated stale global install and would silently validate the wrong package): 'Release readiness checks passed.' Full suite independently re-run: 872 tests, OK. Full dist build and verification chain (wheel, wheel-parity, twine check, real venv install, smoke-test) all passed, run directly since `just` itself isn't installed on this machine.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "2654d0cb1f2d46ce989edb52452923cbb128a81f"
+      },
       "round": 1,
       "slice_id": "release-0-7-0-readiness"
     }
