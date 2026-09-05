@@ -1135,6 +1135,20 @@ class OpenPrTests(unittest.TestCase):
                 git_ops.open_pr("item-1", "title", "body", target=target)
         run_gh.assert_not_called()
 
+    def test_refuses_when_auto_open_pr_is_false_even_when_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._repo_ready_for_pr(target)
+            config.set_value("git.auto_open_pr", "false", target=target)
+            with (
+                patch.object(git_ops, "_run_gh") as run_gh,
+                self.assertRaises(git_ops.GitOpsError),
+            ):
+                git_ops.open_pr(
+                    "item-1", "title", "body", target=target, base="main"
+                )
+        run_gh.assert_not_called()
+
     def test_opens_a_draft_pr_with_no_force_flag_when_ready(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)

@@ -34,7 +34,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from codev_workflow import git_ops, task
+from codev_workflow import config, git_ops, task
 from codev_workflow.navigator import (
     _BY_CHECK_REASON,
     NextAction,
@@ -305,6 +305,38 @@ class GitHubPositionTests(unittest.TestCase):
         self.assertEqual("ok_human_review_waived", action.check_reason)
         self.assertIn("solo maintainer", action.reason)
         self.assertNotEqual("ok_human_approved", action.check_reason)
+
+    def test_auto_open_pr_false_asks_a_human_instead_of_publishing(self) -> None:
+        """ADR-0045, Slice 6: `ok_ready_for_pr`'s recommendation lives in the
+        oracle's own computed output, not agent-side convention."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.start("item-1", base, target=target, link_ref="x")
+            task.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            config.set_value("git.auto_open_pr", "false", target=target)
+            with patch.object(git_ops, "pull_request_state", return_value=None):
+                action = next_action(target=target)
+        self.assertEqual("ask before opening the pull request", action.recommendation)
+        self.assertEqual("ok_ready_for_pr", action.check_reason)
+        self.assertIsNone(action.command)
+
+    def test_auto_open_pr_true_still_recommends_publishing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.start("item-1", base, target=target, link_ref="x")
+            task.record_reviewer(
+                "item-1", 1, base, [], {}, "READY_FOR_OUTER_LOOP", target=target
+            )
+            with patch.object(git_ops, "pull_request_state", return_value=None):
+                action = next_action(target=target)
+        self.assertEqual("publish the slice", action.recommendation)
+        self.assertEqual("codev slice publish", action.command)
 
     def test_a_merged_final_slice_recommends_closing_the_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

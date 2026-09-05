@@ -1369,6 +1369,12 @@ def open_pr(
     base: str | None = None,
     use_template: bool = False,
 ) -> str:
+    if not config.resolve_bool("git.auto_open_pr", target=target):
+        raise GitOpsError(
+            "refusing to open a pull request: git.auto_open_pr is false -- "
+            "ask a human before opening one, or set the flag true to restore "
+            "the default"
+        )
     branch = _ensure_on_own_branch(task_id, target=target)
     head = head_for_check(task_id, target=target)
     result = task.check(task_id, head, target=target)
