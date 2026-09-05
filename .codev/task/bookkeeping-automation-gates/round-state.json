@@ -1,13 +1,13 @@
 {
-  "base_snapshot": "aae4848514453362fedba62f609cfaf29203dd63",
-  "current_round": 3,
+  "base_snapshot": "7dcf805bbcd501693ac2e9eefd815b3cec115126",
+  "current_round": 4,
   "current_slice": "bookkeeping-automation-gates",
   "description": null,
   "entry": null,
   "link_ref": "https://github.com/urban233/CoDev/issues/42",
   "max_rounds": {
     "inner": 3,
-    "outer": 3
+    "outer": 4
   },
   "owner": "urban233",
   "reopens": [
@@ -38,6 +38,20 @@
       "reason": "Absorbing slices 3-7 as continued single-PR build work; ready for a real outer-loop specialist pass over the full cumulative diff.",
       "timestamp": "2026-09-05T13:06:02Z",
       "to_round": 3
+    },
+    {
+      "by": null,
+      "from_round": 3,
+      "head": "7dcf805bbcd501693ac2e9eefd815b3cec115126",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 4
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Absorbing the CI formatting-fix commit; ready to re-check.",
+      "timestamp": "2026-09-05T13:18:59Z",
+      "to_round": 4
     }
   ],
   "reviewer": null,
@@ -100,6 +114,19 @@
       "phase": "outer",
       "reviewer": null,
       "round": 3,
+      "slice_id": "bookkeeping-automation-gates"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "ruff format --check . -- 220 files already formatted (clean after fix). ruff check . -- All checks passed. mypy src tests -- Success, 50 files. Full suite: 867 tests, OK (skipped=3). Re-ran full CI on GitHub after push: all 13 checks pass (quality, release-integrity, and all 9 test-matrix jobs).",
+          "summary": "One bounded CI-repair commit: ruff format --check . failed in CI (quality, release-integrity) though ruff check . had passed locally throughout development. Fixed with ruff format . across 3 files, no behavior change."
+        },
+        "head_snapshot": "7dcf805bbcd501693ac2e9eefd815b3cec115126"
+      },
+      "phase": "outer",
+      "reviewer": null,
+      "round": 4,
       "slice_id": "bookkeeping-automation-gates"
     }
   ],
