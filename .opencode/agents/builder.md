@@ -13,6 +13,7 @@ permission:
     "git rev-parse*": allow
     "git commit*": deny
     "git push*": deny
+    "git merge*": deny
     "codev task *": allow
   external_directory: deny
 ---
