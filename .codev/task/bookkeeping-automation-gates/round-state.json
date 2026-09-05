@@ -82,6 +82,11 @@
       "to_round": 7
     }
   ],
+  "review_waiver": {
+    "at": "2026-09-05T16:50:25Z",
+    "by": "urban233",
+    "reason": "Task owner (urban233) reviewed the full outer-loop evidence directly in conversation: 1 blocking finding found (branch-discipline gap in the new auto-commit mechanism), fixed and mutation-verified; 1 non-blocking finding (dropped upgrade-notice mitigation) addressed on explicit request; remaining non-blocking findings left on record per the outer-loop protocol. Explicitly authorized merging without a second independent GitHub approval, same resolution as PR #41."
+  },
   "reviewer": null,
   "round_schema_version": 4,
   "rounds": [
