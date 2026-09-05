@@ -1171,10 +1171,26 @@ def _maybe_commit_bookkeeping(task_id: str, *, target: Path, defer: bool) -> str
     avoid. Anything dirty outside that prefix means a human or agent is
     mid-edit; no-op and leave it all for their own deliberate commit, exactly
     today's pre-existing behavior.
+
+    Only ever commits on the task's own branch. Found live during this
+    change's own outer-loop review: every other commit-producing function in
+    this module (`commit`, `push`, `open_pr`, `mark_ready`) calls
+    `_ensure_on_own_branch` first, and this one did not -- reproduced landing
+    a commit directly on `main` from a plain `task.close()` call made while
+    checked out there, and (more seriously) a human-authorized `reopen`
+    committed to a dangling commit on a detached HEAD, then silently
+    reverted with no error on the next `git checkout`. No-op rather than
+    raise, matching every other guard above: a wrong-branch checkout is a
+    human or agent doing something else entirely, not a broken repository.
     """
     if defer:
         return None
     if not config.resolve_bool("git.auto_commit", target=target):
+        return None
+    try:
+        if current_branch(target) != own_branch(task_id, target=target):
+            return None
+    except GitOpsError:
         return None
     try:
         dirty = _dirty_paths(target)

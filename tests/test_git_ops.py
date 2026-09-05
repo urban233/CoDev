@@ -292,13 +292,22 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
     """ADR-0045, Slice 3: the shared auto-commit primitive every
     state-mutating `task.py` function routes through."""
 
+    def _on_own_branch(self, target: Path) -> str:
+        """Every scenario below except the explicit wrong-branch/no-git ones
+        runs on the task's own branch -- the normal case for every real
+        caller -- so the new branch-discipline check (below) never masks
+        what each test actually means to exercise."""
+        base = _init_repo(target)
+        task.start("item-1", base, target=target)
+        git_ops.create_branch("item-1", base, target=target)
+        return base
+
     def test_auto_commit_true_commits_everything_dirty_with_the_mandatory_prefix(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            base = _init_repo(target)
-            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            base = self._on_own_branch(target)
             (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
                 "{}\n", encoding="utf-8"
             )
@@ -314,9 +323,8 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
     def test_auto_commit_false_is_a_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            base = _init_repo(target)
+            base = self._on_own_branch(target)
             config.set_value("git.auto_commit", "false", target=target)
-            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
             (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
                 "{}\n", encoding="utf-8"
             )
@@ -329,9 +337,8 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
     def test_defer_true_never_commits_regardless_of_the_flag(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            base = _init_repo(target)
+            base = self._on_own_branch(target)
             # auto_commit stays at its default (true): defer must win anyway.
-            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
             (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
                 "{}\n", encoding="utf-8"
             )
@@ -350,8 +357,7 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
         directory; anything else dirty means a human or agent is mid-edit."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            base = _init_repo(target)
-            (target / ".codev" / "task" / "item-1").mkdir(parents=True)
+            base = self._on_own_branch(target)
             (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
                 "{}\n", encoding="utf-8"
             )
@@ -366,6 +372,48 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
             status = _run_capture(["status", "--porcelain", "-uall"], cwd=target)
         self.assertIn("unrelated_feature.py", status)
         self.assertIn("round-state.json", status)
+
+    def test_checked_out_on_a_different_branch_is_a_no_op(self) -> None:
+        """PR43-BOOKKEEPING-COMMIT-NO-BRANCH-CHECK: reproduced live during
+        this change's own outer-loop review -- a plain task.close() call
+        while checked out on main committed directly to main, bypassing the
+        branch discipline every other commit-producing function in this
+        module enforces via _ensure_on_own_branch. Fixed; this is the
+        regression test."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = self._on_own_branch(target)
+            _run(["checkout", base], cwd=target)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(base, git_ops.current_head(target))
+            status = _run_capture(["status", "--porcelain", "-uall"], cwd=target)
+        self.assertIn("round-state.json", status)
+
+    def test_detached_head_is_a_no_op(self) -> None:
+        """The more severe half of PR43-BOOKKEEPING-COMMIT-NO-BRANCH-CHECK:
+        a commit made on a detached HEAD is silently lost on the next
+        checkout, with no error -- reachable through reopen(), which
+        encodes explicit human authorization. Fixed; this is the
+        regression test for the primitive underneath it."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self._on_own_branch(target)
+            _run(["checkout", "--detach", "HEAD"], cwd=target)
+            detached_head = git_ops.current_head(target)
+            (target / ".codev" / "task" / "item-1" / "round-state.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            result = git_ops._maybe_commit_bookkeeping(
+                "item-1", target=target, defer=False
+            )
+            self.assertIsNone(result)
+            self.assertEqual(detached_head, git_ops.current_head(target))
 
     def test_nothing_dirty_is_a_no_op(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -403,7 +451,7 @@ class MaybeCommitBookkeepingTests(unittest.TestCase):
         nothing here for it to raise about."""
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            base = _init_repo(target)
+            base = self._on_own_branch(target)
             _write_lock(target, [".codev/for-ai/ai-agent-guidelines.md"])
             (target / ".codev" / "for-ai").mkdir(parents=True, exist_ok=True)
             (target / ".codev" / "for-ai" / "ai-agent-guidelines.md").write_text(
