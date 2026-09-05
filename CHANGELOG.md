@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [0.7.0] - 2026-09-03
+## [0.7.0] - 2026-09-05
 
 Found the day 0.6.0 shipped: dispatching `outer-loop-runner` in a real
 review showed it had no way to invoke the five specialists it coordinates.
@@ -11,6 +11,54 @@ Every role in the bundle, `lead` included, was missing the grant a Claude
 Code subagent needs to dispatch a further one -- ADR-0040's design was
 never exercised end to end. This release does not patch the grant; it
 removes the premise.
+
+A second change landed under this same version before either was tagged:
+routine task bookkeeping was too visible in normal use -- a stranded
+`slice land` commit meant `codev task status` could report a merged task
+as still open, and a round's evidence took a separate, narrated
+`codev git commit` every time it changed. Neither is a decision worth a
+human's attention; both now happen quietly.
+
+### Added
+- **Background bookkeeping self-heals; commit and PR-open become
+  boolean-gated**
+  ([ADR-0045](docs/adr/0045-background-bookkeeping-and-boolean-automation-gates.md)).
+  Every `codev task`/`codev round`/`codev slice` state-mutating command now
+  commits its own write automatically (`git.auto_commit`, default `true`) --
+  no separate `codev git commit` step to remember for a pure bookkeeping
+  write. A `--defer-commit` flag on the underlying verbs collapses a
+  multi-step sequence with no human decision in between into one commit
+  instead of several.
+- **A task's status is checked live, not trusted stale.** `codev task
+  status` and `codev status` now report a task whose final slice's pull
+  request has merged as `closed` immediately, even when its own
+  `slice land` commit never reached the default branch -- no write needed;
+  GitHub's own merge record is the authority, and the stored copy is only
+  ever a cache of it.
+- **`codev git open-pr`/`codev slice publish` gain a `git.auto_open_pr`
+  gate** (default `true`, preserving today's behavior), with the
+  navigator's own recommendation branching on it: "publish the slice" when
+  true, "ask before opening the pull request" when false.
+- **A `.gitattributes` managed block** marks `.codev/task/**/*.json` and
+  `.codev/lock.json` as `linguist-generated=true`, so GitHub collapses
+  their diffs in pull request review by default.
+
+### Fixed
+- **OpenCode's `builder` and the five outer-loop specialists deny
+  `git merge*` explicitly**, matching `code-audit`/`code-audit-gate`, which
+  already did. Both previously fell through to the generic `ask`.
+
+### Upgrading
+
+`git.auto_commit` now defaults to `true`. `codev update` shows a one-time
+notice the first time this takes effect for an existing installation, then
+never shows it again. Set `git.auto_commit=false` in `.codev/config.toml`
+(or globally) to keep committing task bookkeeping by hand, exactly as
+before.
+
+`git.auto_merge` and a `codev git merge` command were considered and
+deliberately deferred -- merge stays a human action outside the guarded
+surface, unchanged.
 
 ### Changed
 - **`lead` is not an agent, on either platform**
