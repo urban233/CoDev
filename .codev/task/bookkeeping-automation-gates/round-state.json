@@ -53,9 +53,25 @@
       "slice_id": "bookkeeping-automation-gates"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "ruff check . -- All checks passed. mypy src tests (whole tree) -- Success, no issues found in 50 source files. Full suite: GIT_CONFIG_GLOBAL=/dev/null .venv/bin/python -m unittest discover -s tests -- Ran 857 tests, OK (skipped=3, all pre-existing/environmental). Regression test added (test_dirty_path_outside_this_tasks_own_directory_is_a_no_op) proving the scoping fix; existing test_mixed_managed_and_product_dirty_paths test updated to reflect the new, correct no-op behavior (the pre-existing mixed-managed-paths guard keeps its own teeth for its original caller, codev git commit, unaffected). test_composite_verbs.py's existing assertions pass unmodified -- record_builder's hardcoded defer=True at its one internal caller confirmed not to introduce a second commit.",
+          "summary": "Slice 3: auto-commit primitive (_maybe_commit_bookkeeping in git_ops.py) wired into all 7 state-mutating task.py functions (record_builder, record_reviewer, close, reopen, waive_review, record_triage, record_escalation) via a --defer-commit CLI flag on each. git_ops.commit()'s own internal call to record_builder hardcodes defer=True to avoid a second commit immediately after the code commit it just made. A live bug found and fixed during dogfooding: the first version swept ANY dirty content into the auto-commit and labeled it chore(codev-bookkeeping) regardless of content, which (via this repo's own editable install picking up in-progress source edits) mislabeled slice 3's own real feature code as bookkeeping in an early attempt. Fixed: _maybe_commit_bookkeeping now only fires when every dirty path is confined to the task's own .codev/task/<id>/ directory; anything else dirty is a no-op, leaving it for a deliberate commit -- exactly what this commit now is."
+        },
+        "head_snapshot": "9b8015b267136dcbbfaa585b5042e7bb63235dfa"
+      },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independently re-verified directly (a dispatched lightweight-reviewer hit its turn limit and could not be resumed -- SendMessage was unavailable this session due to a rate-limit condition -- so this verification was done directly instead of delegated). Confirmed: _maybe_commit_bookkeeping only commits when every dirty path is confined to .codev/task/<task_id>/, verified by reading the fix directly and by its own regression test (test_dirty_path_outside_this_tasks_own_directory_is_a_no_op). All 7 task.py functions gained defer parameters and call the shared helper. git_ops.commit()'s internal record_builder call hardcodes defer=True, confirmed by reading the exact line. All 7 CLI subcommands gained --defer-commit, confirmed by reading cli.py's diff directly. Full suite re-run: 857 tests, OK (3 skipped, pre-existing/environmental). ruff check . and mypy src tests both clean. tests.test_composite_verbs run specifically and confirmed passing unmodified, including test_round_close_commits_and_records_against_the_resulting_head -- the exact regression this design guards against.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "9b8015b267136dcbbfaa585b5042e7bb63235dfa"
+      },
       "round": 2,
       "slice_id": "bookkeeping-automation-gates"
     }
