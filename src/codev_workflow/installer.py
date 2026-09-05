@@ -911,6 +911,7 @@ def _new_lock(
     opencode_schema_managed: bool,
     opencode_agent_container_managed: bool,
     opencode_config_file_managed: bool,
+    auto_commit_notice_shown: bool = True,
 ) -> dict[str, Any]:
     return {
         "schema_version": LOCK_SCHEMA_VERSION,
@@ -927,6 +928,7 @@ def _new_lock(
             "opencode_schema_managed": opencode_schema_managed,
             "opencode_agent_container_managed": opencode_agent_container_managed,
             "opencode_config_file_managed": opencode_config_file_managed,
+            "auto_commit_notice_shown": auto_commit_notice_shown,
         },
     }
 
@@ -1296,6 +1298,27 @@ def plan_update(
                 plan.operations.append(
                     Operation("keep", ".opencode/opencode.json", opencode.detail)
                 )
+    # ADR-0045: git.auto_commit defaults to true, a real behavior change for
+    # every existing installation. Say so once, loud, at the moment it
+    # actually starts applying -- not silently, and not on every subsequent
+    # `codev update` forever. `auto_commit_notice_shown` is the provenance
+    # flag that makes it fire exactly once per installation, the same shape
+    # `opencode_default_agent_managed` already uses for a one-time migration
+    # fact. A fresh `codev init` never needs this notice at all (there is no
+    # prior behavior to change), so only `plan_update` ever sets it False.
+    auto_commit_notice_shown = bool(integrations.get("auto_commit_notice_shown"))
+    if not auto_commit_notice_shown:
+        plan.operations.append(
+            Operation(
+                "notice",
+                "git.auto_commit",
+                "this version starts auto-committing task bookkeeping by "
+                "default; set git.auto_commit=false to keep committing "
+                "manually",
+            )
+        )
+        auto_commit_notice_shown = True
+
     conflicted_relatives = {
         item.path for item in plan.operations if item.kind == "conflict"
     }
@@ -1313,6 +1336,7 @@ def plan_update(
         opencode_schema_managed=schema_managed,
         opencode_agent_container_managed=agent_container_managed,
         opencode_config_file_managed=config_file_managed,
+        auto_commit_notice_shown=auto_commit_notice_shown,
     )
     # A conflict left unresolved (`--on-conflict skip`, or no resolution at
     # all) must not quietly stop being a known problem: `_new_lock` above

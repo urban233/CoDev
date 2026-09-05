@@ -1681,5 +1681,65 @@ class AdapterRemoveTests(unittest.TestCase):
         self.assertTrue((self.target / ".opencode" / "agents" / "builder.md").is_file())
 
 
+class AutoCommitNoticeTests(unittest.TestCase):
+    """ADR-0045: git.auto_commit defaults to true, a real behavior change for
+    every existing installation. codev update must say so exactly once, via
+    the auto_commit_notice_shown provenance flag -- the same shape
+    opencode_default_agent_managed already uses for a one-time migration
+    fact."""
+
+    def _lock_path(self, target: Path) -> Path:
+        return target / ".codev" / "lock.json"
+
+    def test_fresh_init_never_shows_the_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            plan = installer.plan_init(target, ("opencode",), "none")
+            self.assertFalse(
+                any(op.kind == "notice" for op in plan.operations),
+                "a fresh install has no prior behavior to change",
+            )
+            installer.apply_plan(target, plan)
+            lock = json.loads(self._lock_path(target).read_text(encoding="utf-8"))
+        self.assertTrue(lock["integrations"]["auto_commit_notice_shown"])
+
+    def test_update_shows_the_notice_once_for_a_prior_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            lock_path = self._lock_path(target)
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            del lock["integrations"]["auto_commit_notice_shown"]
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+
+            plan = installer.plan_update(target)
+            notices = [op for op in plan.operations if op.kind == "notice"]
+            self.assertEqual(1, len(notices))
+            self.assertIn("git.auto_commit", notices[0].detail)
+            self.assertIn("default", notices[0].detail)
+
+            installer.apply_plan(target, plan)
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertTrue(lock["integrations"]["auto_commit_notice_shown"])
+
+    def test_update_does_not_repeat_the_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            installer.apply_plan(
+                target, installer.plan_init(target, ("opencode",), "none")
+            )
+            lock_path = self._lock_path(target)
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            del lock["integrations"]["auto_commit_notice_shown"]
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            installer.apply_plan(target, installer.plan_update(target))
+
+            second_plan = installer.plan_update(target)
+
+        self.assertFalse(any(op.kind == "notice" for op in second_plan.operations))
+
+
 if __name__ == "__main__":
     unittest.main()
