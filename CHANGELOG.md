@@ -19,9 +19,20 @@ Semantic Versioning.
   straight to `Design doc:`. The template's own row-ID convention moves
   from a leading token (`"W-01: ..."`) to a trailing parenthetical so a
   title reads as a title first. This is round two of
-  [ADR-0014](docs/adr/0014-pr-description-separated-from-the-evidence-log.md);
-  the generated PR-body wording it did not touch is tracked separately in
-  `docs/features/human-readable-artifacts/generated-pr-body-wording.md`.
+  [ADR-0014](docs/adr/0014-pr-description-separated-from-the-evidence-log.md).
+- **The generated pull request body reads as prose, not a checklist
+  printout** (`docs/features/human-readable-artifacts/generated-pr-body-wording.md`).
+  `task.pr_description()`'s full-coverage Validation line no longer reads
+  "All N review dimensions pass" but "All N required review dimensions
+  came back clean, with nothing outstanding"; `git_ops._OWNERSHIP_STATEMENT`
+  keeps its exact ADR-0037 meaning in a plainer register ("that makes me
+  its author, not its reviewer" instead of "this is an ownership
+  statement, not an approval"); and `pull_request_template.md` gains a
+  horizontal rule before the tracking footer so it reads as a distinct
+  block instead of running into the review prose above it. Every field,
+  fact, and condition the previous code rendered is unchanged — only the
+  wording and, for the tracking footer, the surrounding template
+  formatting.
 
 ## [0.7.0] - 2026-09-05
 

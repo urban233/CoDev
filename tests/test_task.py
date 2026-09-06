@@ -3071,7 +3071,10 @@ class BookkeepingCommitWiringTests(unittest.TestCase):
                 target=target,
             )
             body = pr_description("item-1", target=target)
-        expected = f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} review dimensions pass"
+        expected = (
+            f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} required review "
+            "dimensions came back clean"
+        )
         self.assertIn(expected, body)
 
     def test_names_missing_dimensions_individually_when_incomplete(self) -> None:

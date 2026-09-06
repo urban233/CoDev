@@ -1456,9 +1456,9 @@ _MARK_READY_REASONS = (
 
 
 _OWNERSHIP_STATEMENT = (
-    "I directed this change and I own it. This is an ownership statement, "
-    "not an approval -- ADR-0037 requires a separate approving review from "
-    "someone who is neither this task's owner nor a bot."
+    "I directed this change and I own it -- that makes me its author, not "
+    "its reviewer. ADR-0037 still requires a separate approving review "
+    "from someone who is neither this task's owner nor a bot."
 )
 
 

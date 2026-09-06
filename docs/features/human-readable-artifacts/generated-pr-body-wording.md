@@ -1,6 +1,6 @@
 # Wording of the code-generated PR body
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** Martin Urban
 **Reviewers:** Martin Urban (project maintainer)
 **Brief:** Not applicable — see parent design.
@@ -97,6 +97,18 @@ concrete gate this child's Test strategy section below enforces:
   checked for consistency once the new wording is chosen, though it is
   not required to quote the statement verbatim.
 
+**Found only by re-running the search against the drafted wording, not by
+the search above:** two more assertions matched the old ownership
+statement's trailing clause, not its "I directed this change and I own
+it" opening — `tests/test_git_ops.py:1945` and
+`tests/test_integration_lifecycle.py:120`, both `assertIn("not an
+approval", ...)`. Both surfaced as real `unittest` failures, not as a
+prior grep hit, because the original search above only searched for the
+opening clause. This is exactly the risk the Open questions section below
+named before implementation, and it is why that question's evidence
+step — a second search against the final wording — was made a blocking
+condition rather than a formality.
+
 ## Proposed design
 
 This child touches three functions across two files, none of them a
@@ -179,15 +191,39 @@ ADR-0014 shipped it. Rollback is a normal git revert.
 
 ## Open questions
 
-Martin Urban owns both questions below.
+**Resolved before acceptance:** the fresh search found two more
+dependents beyond the ones drafted into this design (see Current system
+and evidence above); both were updated in the same change, and the full
+test suite (872 tests) passes. The final wording chosen:
+
+- Validation one-liner: `"All {N} required review dimensions came back
+  clean, with nothing outstanding."`
+- `_OWNERSHIP_STATEMENT`: `"I directed this change and I own it -- that
+  makes me its author, not its reviewer. ADR-0037 still requires a
+  separate approving review from someone who is neither this task's
+  owner nor a bot."` — the opening clause is unchanged verbatim, so
+  `docs/features/unified-workflow/brief.md:361`'s quote needed no edit.
+- Tracking-footer separation: implemented as a horizontal rule in
+  `.github/pull_request_template.md` immediately before
+  `<!-- codev:tracking -->`, not inside `pr_description()`'s own string —
+  `_render_pr_template()`'s split logic parses that string on the literal
+  substrings `"\n\n## Validation\n"` and `"\n\nTask: "`, so inserting a
+  separator into the string itself risked landing in the wrong rendered
+  section depending on blank-line placement. The template file controls
+  the tracking marker's surrounding layout directly and carries none of
+  that risk.
+
+Martin Urban owns the one remaining question below.
 
 | Question | Evidence needed | Blocking? |
 |---|---|---|
-| Do the confirmed exact-string dependents above cover every match, or does a fresh repository-wide search turn up more once final wording is drafted? | Re-run the search from this design against the final chosen wording before merging | Yes — blocks landing, not drafting |
 | Should the Validation section move to a `<details>` block as a later structural follow-up? | Decision only; out of scope here | No |
 
 ## Acceptance
 
-- [ ] Material decisions resolved.
-- [ ] Required domain reviews complete.
-- [ ] Accountable human accepts planning against this design.
+- [x] Material decisions resolved, including the previously blocking
+      exact-string-dependent search (see Open questions).
+- [x] Required domain reviews complete (sole maintainer; no independent
+      reviewer active on this repository).
+- [x] Accountable human (Martin Urban) accepted planning against this
+      design on 2026-09-06.

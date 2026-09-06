@@ -1684,7 +1684,8 @@ def pr_description(task_id: str, *, target: Path) -> str:
         )
         if all_passed:
             lines.append(
-                f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} review dimensions pass."
+                f"All {len(REQUIRED_COVERAGE_DIMENSIONS)} required review "
+                "dimensions came back clean, with nothing outstanding."
             )
         else:
             for dimension in REQUIRED_COVERAGE_DIMENSIONS:

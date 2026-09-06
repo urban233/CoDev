@@ -117,7 +117,7 @@ class LifecycleIntegrationTests(unittest.TestCase):
         record = self.sandbox.gh.read()["prs"]["codev/feat"]
         self.assertFalse(record["draft"])
         self.assertIn("I directed this change and I own it", record["body"])
-        self.assertIn("not an approval", record["body"])
+        self.assertIn("not its reviewer", record["body"])
 
     def test_only_the_final_slice_closes_the_issue(self) -> None:
         self._start(slices=["a", "b"])

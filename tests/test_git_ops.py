@@ -1942,7 +1942,7 @@ class MarkReadyTests(unittest.TestCase):
                 body.startswith(task.pr_description("item-1", target=target))
             )
             self.assertIn("I directed this change and I own it", body)
-            self.assertIn("not an approval", body)
+            self.assertIn("not its reviewer", body)
             self.assertNotEqual(task.log_text("item-1", target=target), body)
         self.assertNotIn("round 1:", body)
 

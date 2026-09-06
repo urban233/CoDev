@@ -207,5 +207,5 @@ Martin Urban owns both questions below.
 - [x] Required domain reviews complete (sole maintainer; no independent
       reviewer active on this repository).
 - [x] Accountable human (Martin Urban) accepted planning against this
-      design on 2026-09-06. Child B remains `Draft` and unscheduled;
-      implementation proceeds on Child A only.
+      design on 2026-09-06. Both children are now `Accepted` and
+      implemented.
