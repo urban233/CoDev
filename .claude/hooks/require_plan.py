@@ -162,4 +162,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    print("Claude Code's require_plan.py hook is disabled for now!")

@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "be85bbeca6baf1efb2e87e4aa3daab6d2dac6c2a",
+  "branch": "codev/release-0-7-0-readiness",
+  "slice_branches": {
+    "release-0-7-0-readiness": {
+      "base_snapshot": "be85bbeca6baf1efb2e87e4aa3daab6d2dac6c2a",
+      "branch": "codev/release-0-7-0-readiness"
+    }
+  }
+}
