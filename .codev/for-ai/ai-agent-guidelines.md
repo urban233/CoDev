@@ -285,10 +285,15 @@ ready, with no inner-loop round recorded at all.
      after, matters mechanically: it means mechanical cleanup never opens
      the outer phase or spends any of its round cap — that stays reserved
      for the five specialists' actual review. A clean or now-clean head is
-     published with `codev slice publish`, which pushes the branch and
-     opens the draft pull request for outer-loop review. Opening a pull
-     request is fully reversible and has no effect on production; it is not
-     the same authority as merge.
+     published with `codev slice publish --title <title>`. Read
+     `.agents/skills/technical-writing-style/references/short-form-voice.md`
+     before choosing `<title>`: state the change's user-visible effect in
+     plain English, imperative mood, with no internal vocabulary (`slice`,
+     `round`, a task or wave-row ID) — that traceability information
+     already lives in the pull request body's tracking line. Publishing
+     pushes the branch and opens the draft pull request for outer-loop
+     review; it is fully reversible and has no effect on production, and
+     it is not the same authority as merge.
    - On any other nonzero exit — the round cap is reached, a blocking
      finding repeats a prior round's, scope quietly expanded past the
      round's first pass, or the snapshot drifted — record the escalation

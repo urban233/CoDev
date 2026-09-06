@@ -5,12 +5,18 @@ title: ""
 labels: task
 ---
 
+<!-- One or two plain-English sentences: what will exist when this is
+     done that does not exist now, in terms the reader already
+     understands -- not the internal component name. Not why, and not
+     how -- the design doc or brief owns those. This is the one sentence
+     most readers, including a teammate returning after a gap, will
+     actually read before skimming the rest. Read
+     .agents/skills/technical-writing-style/references/short-form-voice.md
+     before writing it. -->
+
 <!-- Design doc / brief / wave-plan link. Required if one exists for
      this project. -->
 **Design doc:**
-
-<!-- One or two sentences: what will exist when this is done that does not
-     exist now. Not why, and not how -- the design doc or brief owns those. -->
 
 <!-- How this task stays safe to merge before the wave it belongs to is
      complete: a flag, config toggle, or other guard. Leave as N/A when
@@ -50,10 +56,12 @@ labels: task
 
 <!-- ─────────────────────────────────────────────────────────────────────
      If this project tracks a wave plan, the title may keep that plan's
-     row ID (e.g. "W-01: ...") so the two stay traceable to each other --
-     optional, since not every task has one. Only push this issue if the
-     task belongs to the plan's *current* wave; a later-wave task stays a
-     plan row until its wave becomes current.
+     row ID as a trailing parenthetical (e.g. "Fix stale cache on logout
+     (W-01)") so the two stay traceable to each other without the row ID
+     reading as the first word of the title -- optional, since not every
+     task has one. Only push this issue if the task belongs to the plan's
+     *current* wave; a later-wave task stays a plan row until its wave
+     becomes current.
 
      Set as labels: risk:low|normal|high|critical (matches
      implementation-plan.template.md's Focus card scale)

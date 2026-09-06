@@ -224,7 +224,12 @@ draft. If no pull request exists yet for this item (for example, it was
 recovered into the outer phase with `codev task reopen` and never went
 through the inner loop's own bridge step), run `codev slice publish --id
 <task-id> --title <title>` first -- it accepts this state too, not only the
-original `ok_ready_for_pr` checkpoint -- then `mark-ready`. This is not
-merge authority; it only makes the PR visibly ready for the human's own
-holistic review. Report the PR link, the final evidence, and any residual
-risks. Never approve or merge it yourself.
+original `ok_ready_for_pr` checkpoint -- then `mark-ready`. Choosing
+`<title>` here follows the same rule as the inner loop's own publish step:
+read
+`.agents/skills/technical-writing-style/references/short-form-voice.md`
+and state the change's user-visible effect in plain English, with no
+internal vocabulary. This is not merge authority; it only makes the PR
+visibly ready for the human's own holistic review. Report the PR link,
+the final evidence, and any residual risks. Never approve or merge it
+yourself.

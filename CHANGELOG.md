@@ -3,6 +3,26 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+- **Pull request titles, issue bodies, and wave-plan prose read as
+  human-written text, not machine output**
+  (`docs/features/human-readable-artifacts/{design,agent-authored-guidance}.md`).
+  A new `technical-writing-style` short-form-voice reference gives
+  concrete good/bad example pairs for one-line text; `ai-agent-guidelines.md`
+  and `outer-loop-review` now point to it before choosing a pull request
+  title (plain English, no internal vocabulary like `slice`/`round`/a
+  task ID), `plan-wave` warns against echoing its own worked example
+  verbatim into a real wave plan, and the issue template's `task.md`
+  opens on a required plain-English framing sentence instead of jumping
+  straight to `Design doc:`. The template's own row-ID convention moves
+  from a leading token (`"W-01: ..."`) to a trailing parenthetical so a
+  title reads as a title first. This is round two of
+  [ADR-0014](docs/adr/0014-pr-description-separated-from-the-evidence-log.md);
+  the generated PR-body wording it did not touch is tracked separately in
+  `docs/features/human-readable-artifacts/generated-pr-body-wording.md`.
+
 ## [0.7.0] - 2026-09-05
 
 Found the day 0.6.0 shipped: dispatching `outer-loop-runner` in a real

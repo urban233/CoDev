@@ -105,7 +105,13 @@ single remaining input before producing assignments.
 
 Each wave must demonstrate observable value or retire a named risk, such as
 "internal user completes the primary workflow." Avoid component-completion
-waves such as "backend done."
+waves such as "backend done." That quoted example illustrates the *shape*
+of a good outcome statement, not a sentence to reuse -- read
+`.agents/skills/technical-writing-style/references/short-form-voice.md`
+and write this wave's actual outcome, task, and later-wave sentences
+naming its specific user, action, and object. A drafted sentence that
+would read identically to the example above with only the feature's name
+swapped in is too generic to keep.
 
 For a requested first **useful product** wave, name the target user, the
 observable action, and the durable result. A foundation-only wave is valid

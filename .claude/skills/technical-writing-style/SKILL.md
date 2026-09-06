@@ -1,6 +1,6 @@
 ---
 name: technical-writing-style
-description: Provides the Google-derived technical writing style reference and revision method for any reviewer-facing technical document -- a specification, brief, design, wave plan, or launch plan. The planning skills (`specify-project`, `define-product`, `design-solution`, `plan-wave`, `launch-product`) read this skill's reference before drafting or revising prose. Invoke directly to audit or revise the writing quality of an existing document without changing its technical meaning.
+description: Provides the Google-derived technical writing style reference and revision method for any reviewer-facing technical document -- a specification, brief, design, wave plan, or launch plan -- plus a short-form voice reference for the one-line and one-sentence text an agent writes into a pull request title, an issue's opening sentence, or a wave-plan row. The planning skills (`specify-project`, `define-product`, `design-solution`, `plan-wave`, `launch-product`) read the long-form reference before drafting or revising prose; `build-change`, `outer-loop-review`, and `plan-wave` read the short-form reference before writing a title or opening sentence. Invoke directly to audit or revise the writing quality of an existing document without changing its technical meaning.
 license: BSD-3-Clause
 ---
 
@@ -9,29 +9,44 @@ license: BSD-3-Clause
 Reference and revision method for making a technical document clear,
 correctly scoped, and readable by its actual audience -- without changing
 what it means. This skill has no template of its own; it makes the prose
-in another skill's artifact readable.
+in another skill's artifact readable. A second, much shorter reference
+covers a different kind of text: the one-line and one-sentence strings an
+agent writes into a title or opening sentence, where the long-form
+reference's document-level guidance does not apply.
 
 ## Invocation boundary
 
-Use this skill in two situations:
+Use this skill in three situations:
 
-- **As a prerequisite.** `specify-project`, `define-product`,
+- **As a long-form prerequisite.** `specify-project`, `define-product`,
   `design-solution`, `plan-wave`, and `launch-product` each instruct,
   in their own `SKILL.md`, reading
   `.agents/skills/technical-writing-style/references/writing-style.md`
   before drafting or revising a document's prose. That is a read, not a
   full invocation of this skill -- continue in the calling skill's own
   workflow and template.
+- **As a short-form prerequisite.** `.codev/for-ai/ai-agent-guidelines.md`,
+  `outer-loop-review`, and `plan-wave` each instruct reading
+  `.agents/skills/technical-writing-style/references/short-form-voice.md`
+  before writing a pull request title, an issue's opening sentence, or a
+  wave-plan outcome or task-row sentence. Also a read, not a full
+  invocation.
 - **Directly**, when the developer asks to improve, simplify, or audit the
   writing quality of an existing technical document, or invokes
   `$technical-writing-style`.
 
 ## Apply the reference
 
-Read `references/writing-style.md` completely before touching any prose.
-It covers reader-first framing, document opening and structure, headings,
-paragraphs, lists and tables, sentence-level language, terminology,
-global/inclusive writing, formatting, and diagrams, plus a self-check.
+For a long-form document, read `references/writing-style.md` completely
+before touching any prose. It covers reader-first framing, document
+opening and structure, headings, paragraphs, lists and tables,
+sentence-level language, terminology, global/inclusive writing,
+formatting, and diagrams, plus a self-check.
+
+For a title or one-sentence artifact string, read
+`references/short-form-voice.md` instead -- it is short enough to read in
+full each time and covers pull request titles, issue opening sentences,
+and wave-plan prose separately, each with example pairs.
 
 ## Run the structural check
 
