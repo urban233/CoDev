@@ -193,12 +193,13 @@ is a normal git revert of the skill, template, or source-file commit.
 
 ## Open questions
 
-Martin Urban owns both questions below.
+**Resolved (2026-09-06):** `bug-report.yml` is not worth a follow-up —
+Martin Urban decided its dropdown-based issue form is inherently
+structured and lower-value than the free-text surfaces already fixed.
 
 | Question | Evidence needed | Blocking? |
 |---|---|---|
-| Is "sounds human" testable beyond example review, or does it stay a human-judgment gate on skill-content changes? | A trial batch of real CoDev-generated issues/PRs/wave-plans after the change, judged manually | No — doesn't block landing either child, blocks claiming the problem is fully solved |
-| Is `bug-report.yml`'s issue-form wording worth a follow-up? | Decision only | No |
+| Is "sounds human" testable beyond example review, or does it stay a human-judgment gate on skill-content changes? | A trial batch, judged manually (chosen over accepting it as an ongoing judgment call) | No — doesn't block landing either child, blocks claiming the problem is fully solved |
 
 ## Acceptance
 

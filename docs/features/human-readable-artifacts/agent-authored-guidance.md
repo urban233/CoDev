@@ -187,11 +187,15 @@ matches are `require_wave_shape.py`'s own tests, which match `W-01`
 against the wave-plan table's row-ID column, not an issue title. The
 row-ID placement change is unblocked.
 
-Martin Urban owns both remaining questions below.
+**Resolved (2026-09-06):** the template-echo detector stays deferred —
+Martin Urban decided the false-positive risk on legitimate short-phrase
+reuse and the missing test coverage for a new heuristic outweigh building
+it now, on top of guidance-only changes already having landed without it.
+
+Martin Urban owns the one remaining question below.
 
 | Question | Evidence needed | Blocking? |
 |---|---|---|
-| Should `check_structure.py`'s template-echo detector be built now or deferred? | Cost/benefit of a heuristic word-overlap check against false-positive risk on legitimate short-phrase reuse | No — guidance-only changes can land first; the detector is additive |
 | Should the same short-form reference also cover git commit-message subject lines? | Decision only | No |
 
 ## Acceptance
