@@ -193,13 +193,37 @@ is a normal git revert of the skill, template, or source-file commit.
 
 ## Open questions
 
+Both questions this design opened are now resolved; none remain.
+
 **Resolved (2026-09-06):** `bug-report.yml` is not worth a follow-up —
 Martin Urban decided its dropdown-based issue form is inherently
 structured and lower-value than the free-text surfaces already fixed.
 
-| Question | Evidence needed | Blocking? |
-|---|---|---|
-| Is "sounds human" testable beyond example review, or does it stay a human-judgment gate on skill-content changes? | A trial batch, judged manually (chosen over accepting it as an ongoing judgment call) | No — doesn't block landing either child, blocks claiming the problem is fully solved |
+**Resolved (2026-09-06):** "sounds human" stays a human-judgment gate,
+closed for this design by one trial batch rather than left as an ongoing
+open question. Applying `short-form-voice.md` fresh to real material from
+this session produced:
+
+- PR title for commit `5fb045d`: "Give PR titles, issue text, and wave
+  plans a human voice."
+- PR title for commit `9537f90`: "Stop the generated PR body reading
+  like a checklist."
+- A hypothetical issue opening sentence, for the one remaining open
+  question in
+  [agent-authored-guidance.md](agent-authored-guidance.md#open-questions)
+  (whether this guidance should also cover commit-message subjects):
+  "Commit subject lines will get the same plain-English guidance PR
+  titles already have, instead of being left to each session's own
+  habits."
+- A hypothetical wave-plan outcome and task sentence, for a possible next
+  wave continuing this same initiative: "A developer reviewing a batch of
+  AI-generated PR titles can no longer pick out which ones a machine
+  wrote"; "`short-form-voice.md` ships with example pairs a reviewer can
+  spot-check against real PR titles, not just synthetic ones."
+
+Martin Urban's verdict: "Looks good to me." No further trial is planned;
+the ordinary bar going forward is the same as ADR-0014's own acceptance
+bar -- a human reads the artifact and judges it, not a script.
 
 ## Acceptance
 
