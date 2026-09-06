@@ -3,7 +3,7 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
-## [Unreleased]
+## [0.7.1] - 2026-09-07
 
 ### Changed
 - **Pull request titles, issue bodies, and wave-plan prose read as
