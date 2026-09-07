@@ -47,6 +47,7 @@ is someone else's job.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -319,22 +320,46 @@ _NEXT_AFTER: dict[str, tuple[str, str]] = {
     "wave plan": ("plan-wave", "the wave's tasks each need a plan with slices"),
 }
 
-_STATUS_SCAN_BYTES = 600
+# One definition of "accepted", shared with the plan gate. It lived here as a
+# private helper while this was the only module asking; `gate` asks the same
+# question now, and two copies is how they come to answer it differently.
+_is_accepted = task.acceptance_of
+
+# The two shapes a plan actually states its slice count in, both taken from
+# plans this repository has already accepted: numbered `### Slice N` sections
+# (seven of them in the background-bookkeeping plan), and the one-line
+# `**Slices:**` field the task issue template defines. Prose beyond these two
+# is left unread rather than guessed at -- `None` means "say nothing", which
+# is always safe, and a wrong count stated confidently is not.
+_SLICE_HEADING = re.compile(r"^#{2,4}\s+Slice\s+\d+\b", re.MULTILINE)
+_SLICE_FIELD = re.compile(r"^\s*\**Slices:\**\s*(.+?)\s*$", re.MULTILINE)
 
 
-def _is_accepted(path: Path) -> bool | None:
-    """Whether a planning artifact declares itself accepted, or None when it
-    carries no `Status:` line at all and so makes no claim either way."""
+def plan_slice_count(path: Path) -> int | None:
+    """How many slices a plan says it holds, or None when it does not say.
+
+    ADR-0035's own diagnosis was that the slice list "is prose, it is the
+    plan's central output, and the state machine cannot read it". This is the
+    smallest thing that makes it readable, so `codev slice begin --slice` can
+    be recommended with the right number in it rather than in general.
+    """
     try:
-        head = path.read_text(encoding="utf-8", errors="replace")[:_STATUS_SCAN_BYTES]
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    for line in head.splitlines():
-        stripped = line.strip().replace("*", "")
-        if stripped.lower().startswith("status:"):
-            status = stripped.split(":", 1)[1].strip().lower()
-            return bool(status.split() and status.split()[0] == "accepted")
-    return None
+    headings = len(_SLICE_HEADING.findall(text))
+    if headings:
+        return headings
+    field = _SLICE_FIELD.search(text)
+    if field is None:
+        return None
+    value = field.group(1).strip().replace("*", "")
+    leading = re.match(r"\d+", value)
+    if leading:
+        return int(leading.group())
+    # "One PR" is what the issue template ships as its own default, and it
+    # means exactly one slice -- not an unreadable answer.
+    return 1 if value.lower().startswith("one ") else None
 
 
 def _planning_position(branch: str, *, target: Path) -> NextAction:
@@ -359,6 +384,26 @@ def _planning_position(branch: str, *, target: Path) -> NextAction:
         drafted = [path for path in found if _is_accepted(path) is False]
         if stage == "plan" and accepted:
             names = ", ".join(sorted(path.name for path in accepted[:3]))
+            # Omitting --slice silently produces a task holding one slice
+            # named for itself, which is how a plan's slice list stops
+            # existing the moment work starts on it. Naming the count here is
+            # what makes that omission a visible choice rather than a default.
+            counts = [count for count in map(plan_slice_count, accepted) if count]
+            most = max(counts, default=0)
+            if most > 1:
+                return NextAction(
+                    position="accepted plan, no branch",
+                    recommendation="begin the plan's first slice",
+                    reason=(
+                        f"{names} declare themselves accepted and name "
+                        f"{most} slices, and no task branch is tracking one "
+                        "of them; pass all of them to --slice, or the task "
+                        "holds a single slice named for itself and every "
+                        "later slice lands in the first one's pull request"
+                    ),
+                    command="codev slice begin --slice <first> --slice <second> ...",
+                    branch=branch,
+                )
             return NextAction(
                 position="accepted plan, no branch",
                 recommendation="begin a slice from an accepted plan",
@@ -415,8 +460,12 @@ def _planning_position(branch: str, *, target: Path) -> NextAction:
 
 
 def _task_id_for_branch(branch: str) -> str | None:
-    prefix = git_ops.branch_name_for("")
-    return branch[len(prefix) :] if branch.startswith(prefix) else None
+    """The task a branch belongs to, slice branches included. Stripping the
+    prefix by hand read `codev/auth--schema` as a task called `auth--schema`,
+    so every slice branch past the first reported "branch exists, no round
+    state" instead of the position it was actually in."""
+    parts = git_ops.slice_branch_parts(branch)
+    return parts[0] if parts is not None else None
 
 
 def next_action(
@@ -513,6 +562,61 @@ def next_action(
     )
 
 
+def _slice_plan_position(
+    task_id: str, branch: str, slice_id: str, position: str, *, target: Path
+) -> NextAction | None:
+    """The step between beginning a slice and building it: the slice's own
+    implementation plan, accepted by a human.
+
+    Nothing named this before. `codev slice begin` opened a branch and round
+    state, and the very next thing the navigator said was "dispatch builder
+    against this slice's plan" -- naming a document it had never asked anyone
+    to write. Where a plan did exist it covered the whole task, which is the
+    document the slice list came out of rather than a plan for the slice
+    being built.
+
+    Acceptance is read from the plan's own `Status:` line, the same signal
+    every other planning artifact in this workflow carries, so "a human
+    reviewed this" stays a thing a human writes rather than a thing an agent
+    can record about itself. Returns None once an accepted plan is in place,
+    so the ordinary build position is reached unchanged.
+    """
+    relative = task.slice_plan_path(task_id, slice_id)
+    path = target / Path(relative.as_posix())
+    accepted = task.acceptance_of(path) if path.is_file() else None
+    if accepted is True:
+        return None
+    if accepted is False:
+        return NextAction(
+            position=position,
+            recommendation="get a decision on this slice's plan",
+            reason=(
+                f"{relative} exists but declares no accepted status, and a "
+                "plan the developer has not accepted is not authority to "
+                "build against"
+            ),
+            command=None,
+            task_id=task_id,
+            branch=branch,
+            slice_id=slice_id,
+            check_reason="ok_waiting_on_reviewer",
+        )
+    return NextAction(
+        position=position,
+        recommendation="plan this slice, then have the developer accept it",
+        reason=(
+            f"slice {slice_id!r} has a branch and an open round but no plan "
+            f"at {relative}, and the builder executes an accepted plan rather "
+            "than deciding the approach itself"
+        ),
+        command="write the slice plan with build-change, then ask for a decision",
+        task_id=task_id,
+        branch=branch,
+        slice_id=slice_id,
+        check_reason="ok_waiting_on_reviewer",
+    )
+
+
 def _inner_loop_position(
     task_id: str, branch: str, slice_id: str, *, target: Path
 ) -> NextAction | None:
@@ -549,6 +653,9 @@ def _inner_loop_position(
             slice_id=slice_id,
             check_reason="ok_waiting_on_reviewer",
         )
+    unplanned = _slice_plan_position(task_id, branch, slice_id, position, target=target)
+    if unplanned is not None:
+        return unplanned
     return NextAction(
         position=position,
         recommendation="build the slice",

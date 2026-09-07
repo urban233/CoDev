@@ -140,6 +140,10 @@ class NavigatorCoverageTests(unittest.TestCase):
         this one except `advance-slice`, so adding it before the measure has
         proved useful would be speculative.
         """
+        # `plan_slice` is the ninth step, and it is a step the lifecycle
+        # gained rather than one the walk had been skipping: the navigator
+        # went straight from beginning a slice to "dispatch builder against
+        # this slice's plan", naming a document nothing had asked for.
         base = self.base
 
         def begin() -> None:
@@ -206,8 +210,23 @@ class NavigatorCoverageTests(unittest.TestCase):
             begin()
             start()
 
+        def plan_slice() -> None:
+            # The developer's acceptance, which is what the navigator is
+            # waiting for here. Writing `Status: Accepted` is a human act in a
+            # real session; the walk performs it directly because there is no
+            # command that records it -- deliberately, since a command an
+            # agent can run is not a human's decision.
+            self.sandbox.write(
+                f"docs/codev/task/{_TASK}/implementation-plan.md",
+                "# measure\n\n**Status:** Accepted\n\n## Proposed change\n\n1. it\n",
+            )
+
         return [
             (Step("begin_slice", "cli", "codev slice begin"), begin_slice),
+            # "dispatch" because the command names a skill rather than a
+            # `codev` verb: planning is the lead session's own work with
+            # build-change, and no command can stand in for the acceptance.
+            (Step("plan_slice", "dispatch", "build-change"), plan_slice),
             (Step("dispatch_builder", "dispatch", "builder"), build),
             (Step("record_builder_round", "cli", "codev round close"), record_build),
             (Step("dispatch_reviewer", "dispatch", "reviewer"), review),

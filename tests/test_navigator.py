@@ -39,6 +39,7 @@ from codev_workflow.navigator import (
     _BY_CHECK_REASON,
     NextAction,
     next_action,
+    plan_slice_count,
 )
 
 
@@ -55,6 +56,15 @@ def _init_repo(target: Path) -> str:
     run("add", "-A")
     run("commit", "-m", "seed")
     return run("rev-parse", "HEAD")
+
+
+def _write_slice_plan(
+    target: Path, task_id: str, slice_id: str, *, status: str
+) -> Path:
+    path = target / Path(task.slice_plan_path(task_id, slice_id).as_posix())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"# {slice_id}\n\n**Status:** {status}\n", encoding="utf-8")
+    return path
 
 
 class RoutingTableTests(unittest.TestCase):
@@ -185,7 +195,13 @@ class LocalPositionTests(unittest.TestCase):
         self.assertEqual("item-1", action.task_id)
         self.assertEqual("codev task start", action.command)
 
-    def test_a_fresh_task_waits_on_the_reviewer(self) -> None:
+    def test_a_fresh_task_is_told_to_plan_the_slice_first(self) -> None:
+        """The step between beginning a slice and building it.
+
+        This asserted "build the slice" directly, which is how the navigator
+        came to name "this slice's plan" as the builder's authority without
+        anything ever having asked for one.
+        """
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             base = _init_repo(target)
@@ -193,11 +209,58 @@ class LocalPositionTests(unittest.TestCase):
             task.start("item-1", base, target=target, link_ref="x")
             action = next_action(target=target, check_github=False)
         self.assertEqual("ok_waiting_on_reviewer", action.check_reason)
+        self.assertEqual(
+            "plan this slice, then have the developer accept it",
+            action.recommendation,
+        )
+        self.assertIn("docs/codev/task/item-1/implementation-plan.md", action.reason)
+        self.assertEqual("item-1", action.slice_id)
+        self.assertFalse(action.blocked)
+
+    def test_a_drafted_slice_plan_is_not_authority_to_build(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.start("item-1", base, target=target, link_ref="x")
+            _write_slice_plan(target, "item-1", "item-1", status="Draft")
+            action = next_action(target=target, check_github=False)
+        self.assertEqual("get a decision on this slice's plan", action.recommendation)
+        self.assertIsNone(action.command)
+
+    def test_an_accepted_slice_plan_reaches_the_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.start("item-1", base, target=target, link_ref="x")
+            _write_slice_plan(target, "item-1", "item-1", status="Accepted")
+            action = next_action(target=target, check_github=False)
         # Not "review the round": no builder has run, so recommending the
         # reviewer names the wrong actor and reviews an empty diff.
         self.assertEqual("build the slice", action.recommendation)
-        self.assertEqual("item-1", action.slice_id)
-        self.assertFalse(action.blocked)
+        self.assertIn("builder", action.command or "")
+
+    def test_a_named_slice_reads_its_own_plan_not_the_tasks(self) -> None:
+        """A task-level plan is the document a slice list came out of, not a
+        plan for the slice being built (ADR-0035)."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            base = _init_repo(target)
+            git_ops.create_branch("item-1", base, target=target)
+            task.start(
+                "item-1", base, target=target, link_ref="x", slices=["schema", "api"]
+            )
+            _write_slice_plan(target, "item-1", "item-1", status="Accepted")
+            action = next_action(target=target, check_github=False)
+        self.assertEqual("schema", action.slice_id)
+        self.assertEqual(
+            "plan this slice, then have the developer accept it",
+            action.recommendation,
+        )
+        self.assertIn(
+            "docs/codev/task/item-1/schema-implementation-plan.md", action.reason
+        )
 
     def test_a_stop_outcome_reports_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -218,6 +281,59 @@ class LocalPositionTests(unittest.TestCase):
             task.close("item-1", "approved", target=target)
             action = next_action(target=target, check_github=False)
         self.assertIn("task closed", action.position)
+
+
+class PlanSliceCountTests(unittest.TestCase):
+    """ADR-0035's diagnosis was that a plan's slice list is prose the state
+    machine cannot read. These are the two shapes it can now read, taken from
+    plans this repository has actually accepted."""
+
+    def _count(self, text: str) -> int | None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "plan.md"
+            path.write_text(text, encoding="utf-8")
+            return plan_slice_count(path)
+
+    def test_numbered_slice_sections_are_counted(self) -> None:
+        body = "\n".join(f"### Slice {n} -- thing {n}\n\nprose\n" for n in range(1, 8))
+        self.assertEqual(7, self._count(f"# Plan\n\n{body}"))
+
+    def test_the_slices_field_is_read_when_there_are_no_sections(self) -> None:
+        self.assertEqual(3, self._count("# Plan\n\n**Slices:** 3\n"))
+
+    def test_the_issue_templates_default_reads_as_one_slice(self) -> None:
+        self.assertEqual(1, self._count("# Plan\n\n**Slices:** One PR\n"))
+
+    def test_prose_it_cannot_read_says_nothing_rather_than_guessing(self) -> None:
+        self.assertIsNone(self._count("# Plan\n\n**Slices:** as many as it takes\n"))
+        self.assertIsNone(self._count("# Plan\n\nno slice field at all\n"))
+
+
+class SliceBranchParsingTests(unittest.TestCase):
+    """Stripping the `codev/` prefix by hand read a slice branch's whole tail
+    as a task id, so every slice past the first resolved to a task that does
+    not exist."""
+
+    def test_a_slice_branch_resolves_to_its_task(self) -> None:
+        self.assertEqual(
+            ("auth", "schema"), git_ops.slice_branch_parts("codev/auth--schema")
+        )
+
+    def test_a_single_slice_branch_names_the_task_as_its_slice(self) -> None:
+        self.assertEqual(("auth", "auth"), git_ops.slice_branch_parts("codev/auth"))
+
+    def test_a_branch_outside_the_prefix_names_no_task(self) -> None:
+        self.assertIsNone(git_ops.slice_branch_parts("main"))
+        self.assertIsNone(git_ops.slice_branch_parts("codev/"))
+
+    def test_the_inverse_round_trips_every_branch_name_for_slice(self) -> None:
+        for task_id, slice_id in (
+            ("auth", "auth"),
+            ("auth", "schema"),
+            ("a.b-c", "d_e"),
+        ):
+            branch = git_ops.branch_name_for_slice(task_id, slice_id)
+            self.assertEqual((task_id, slice_id), git_ops.slice_branch_parts(branch))
 
 
 class GitHubPositionTests(unittest.TestCase):

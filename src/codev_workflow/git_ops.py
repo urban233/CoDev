@@ -93,6 +93,26 @@ def branch_name_for(task_id: str) -> str:
 _SLICE_BRANCH_SEPARATOR = "--"
 
 
+def slice_branch_parts(branch: str) -> tuple[str, str] | None:
+    """The (task id, slice id) a task branch names, or None if it names none.
+
+    The inverse of `branch_name_for_slice`, including its degenerate case: a
+    branch with no separator is a task holding one slice named for itself.
+    Callers that reconstructed this by hand read the whole tail as a task id,
+    so `codev/auth--schema` resolved to a task called `auth--schema` and every
+    per-task lookup silently missed.
+    """
+    if not branch.startswith(_TASK_BRANCH_PREFIX):
+        return None
+    tail = branch[len(_TASK_BRANCH_PREFIX) :]
+    if not tail:
+        return None
+    task_id, separator, slice_id = tail.partition(_SLICE_BRANCH_SEPARATOR)
+    if not task_id or (separator and not slice_id):
+        return None
+    return task_id, (slice_id if separator else task_id)
+
+
 def branch_name_for_slice(task_id: str, slice_id: str) -> str:
     """The branch a slice's work lives on.
 
@@ -633,7 +653,20 @@ def create_branch(
     *,
     target: Path,
     allow_dirty: bool = False,
+    slice_id: str | None = None,
 ) -> str:
+    """Create the branch a task's first slice lives on.
+
+    `slice_id` names that first slice. It exists because `codev slice begin`
+    creates the branch *before* `task.start` records the slice list, so the
+    fallback below -- read the current slice from round state -- found none
+    and recorded the branch under the task id. For a task holding one slice
+    named for itself that is the same string and nothing showed; for a task
+    holding several it meant slice one's branch was filed under a slice that
+    did not exist, and `start_slice_branch` then refused every later slice
+    with "no earlier slice has a branch to stack it on". Callers that already
+    have round state may keep omitting it.
+    """
     state_path = _git_state_path(target, task_id)
     if state_path.exists():
         raise GitOpsError(f"task {task_id!r} already has a branch recorded")
@@ -678,10 +711,11 @@ def create_branch(
     # branch is created.
     pinned_base = _run_git(["rev-parse", resolved_base], cwd=target)
 
-    try:
-        slice_id = task.current_slice(task_id, target=target)
-    except (task.TaskError, KeyError):
-        slice_id = task_id
+    if slice_id is None:
+        try:
+            slice_id = task.current_slice(task_id, target=target)
+        except (task.TaskError, KeyError):
+            slice_id = task_id
     branch = branch_name_for_slice(task_id, slice_id)
     _run_git(["checkout", "-b", branch, pinned_base], cwd=target)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1032,13 +1066,21 @@ def _dirty_paths(target: Path) -> list[str]:
 
 def _dirty_product_paths(target: Path) -> list[str]:
     """_dirty_paths, excluding a task's own not-yet-committed
-    .codev/task/<id>/ bookkeeping. create_branch writes git-state.json to
-    disk before any commit exists to carry it, so that file alone must
-    never register as a reason to refuse creating a further branch."""
-    task_dir_prefix = task.TASK_DIR_RELATIVE.as_posix() + "/"
-    return [
-        path for path in _dirty_paths(target) if not path.startswith(task_dir_prefix)
-    ]
+    .codev/task/<id>/ bookkeeping and docs/codev/task/<id>/ plans.
+
+    create_branch writes git-state.json to disk before any commit exists to
+    carry it, so that file alone must never register as a reason to refuse
+    creating a further branch. A slice's implementation plan has exactly the
+    same property for exactly the same reason: it is written after the slice
+    begins and before the builder runs, so counting it as product work makes
+    a slice that has only been planned report as one with uncommitted builder
+    work waiting.
+    """
+    excluded = (
+        task.TASK_DIR_RELATIVE.as_posix() + "/",
+        task.PLAN_DIR_RELATIVE.as_posix() + "/",
+    )
+    return [path for path in _dirty_paths(target) if not path.startswith(excluded)]
 
 
 def _refuse_if_mixed_dirty_paths(task_id: str, *, target: Path) -> None:

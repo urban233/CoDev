@@ -7,20 +7,26 @@ license: BSD-3-Clause
 # Build Change
 
 Work as an interactive pair engineer. The human owns intent and acceptance; the
-AI investigates, proposes, edits, validates, and explains. Use
-`assets/implementation-plan.template.md` only when work spans sessions, affects
-several components, or needs a reviewed written plan. When an orchestrating
-session provided a task id (via `codev task start --id`), persist the plan at
-`docs/codev/task/<task-id>/implementation-plan.md`, keyed by that same id,
-unless the project already has an established equivalent location. Its
-Approach and risk points are also what that orchestrating session carries
-into `codev task start --description` — the eventual pull request body
-renders that text verbatim and nothing else about the plan, so keep those
-sections readable on their own. When invoked directly by a developer with no
-orchestrating session and no task id (e.g. a single bounded edit), skip the
-task-lifecycle step entirely: write the plan file, if one is warranted, at
-whatever location the developer names, or keep it inline per the next
-section.
+AI investigates, proposes, edits, validates, and explains.
+
+**Inside a task, a plan covers one slice, and the developer accepts it before
+the builder runs.** Use `assets/implementation-plan.template.md` and persist it
+at `docs/codev/task/<task-id>/<slice-id>-implementation-plan.md` — or
+`docs/codev/task/<task-id>/implementation-plan.md` when the task holds a single
+slice named for itself, which is the same file this skill has always written.
+One plan per slice, not one per task: a task-level plan is the document the
+slice list came out of, and the slice being built needs its own. Acceptance is
+the developer writing `Status: Accepted` into that file; never record it for
+them. Its Approach and risk points are also what the orchestrating session
+carries into `--description` — the eventual pull request body renders that text
+verbatim and nothing else about the plan, so keep those sections readable on
+their own.
+
+When invoked directly by a developer with no orchestrating session and no task
+id (e.g. a single bounded edit), skip the task-lifecycle step entirely: use the
+template only when work spans sessions, affects several components, or needs a
+reviewed written plan, and write it at whatever location the developer names —
+or keep it inline per the next section.
 
 ## 1. Frame the change
 

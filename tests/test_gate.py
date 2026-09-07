@@ -156,6 +156,72 @@ class RiskTieredPlanGateTests(unittest.TestCase):
         self.assertEqual("allow", self._edit("src/foo.py"))
 
 
+class SlicePlanGateTests(unittest.TestCase):
+    """The plan gate reads the branch's own slice, and reads acceptance.
+
+    Both were silent failures: a slice branch resolved to a task that does not
+    exist, so the precise check never matched past the first slice; and a plan
+    file satisfied the gate whether or not anyone had accepted it, which is
+    the one thing the gate exists to establish.
+    """
+
+    def setUp(self) -> None:
+        self._temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temporary.cleanup)
+        self.target = Path(self._temporary.name)
+        _repo(self.target)
+        subprocess.run(
+            ["git", "commit", "-q", "--allow-empty", "-m", "seed"],
+            cwd=self.target,
+            check=True,
+        )
+
+    def _on(self, branch: str) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", branch], cwd=self.target, check=True
+        )
+
+    def _plan(self, relative: str, status: str) -> None:
+        path = self.target / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# plan\n\n**Status:** {status}\n", encoding="utf-8")
+
+    def _edit_decision(self) -> str:
+        # A dependency manifest: always-planned, so the size tier cannot
+        # allow it and the answer is the plan lookup alone.
+        return check(
+            "plan",
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "pyproject.toml"},
+                "cwd": str(self.target),
+            },
+            target=self.target,
+        ).decision
+
+    def test_a_slice_branch_finds_its_own_accepted_plan(self) -> None:
+        self._on("codev/auth--schema")
+        self._plan("docs/codev/task/auth/schema-implementation-plan.md", "Accepted")
+        self.assertEqual("allow", self._edit_decision())
+
+    def test_a_slice_branch_is_not_satisfied_by_the_tasks_own_plan(self) -> None:
+        """A task-level plan is the document the slice list came out of, not
+        a plan for the slice being built (ADR-0035)."""
+        self._on("codev/auth--schema")
+        self._plan("docs/codev/task/auth/implementation-plan.md", "Accepted")
+        self.assertEqual("ask", self._edit_decision())
+
+    def test_a_drafted_plan_does_not_satisfy_the_gate(self) -> None:
+        self._on("codev/auth")
+        self._plan("docs/codev/task/auth/implementation-plan.md", "Draft")
+        self.assertEqual("ask", self._edit_decision())
+
+    def test_a_single_slice_task_keeps_the_filename_it_always_had(self) -> None:
+        self._on("codev/auth")
+        self._plan("docs/codev/task/auth/implementation-plan.md", "Accepted")
+        self.assertEqual("allow", self._edit_decision())
+
+
 class GateDispatchTests(unittest.TestCase):
     def test_every_named_gate_is_callable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

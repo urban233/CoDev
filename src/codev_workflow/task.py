@@ -61,6 +61,7 @@ from codev_workflow.installer import _atomic_write
 ROUND_SCHEMA_VERSION = 4
 SUPPORTED_ROUND_SCHEMA_VERSIONS = (3, 4)
 TASK_DIR_RELATIVE = PurePosixPath(".codev/task")
+PLAN_DIR_RELATIVE = PurePosixPath("docs/codev/task")
 ESCALATIONS_FILENAME = "escalations.jsonl"
 DEFAULT_INNER_MAX_ROUNDS = 2
 DEFAULT_OUTER_MAX_ROUNDS = 2
@@ -174,6 +175,51 @@ def _validate_id(task_id: str) -> None:
         raise TaskError(
             f"invalid task id {task_id!r}; use letters, digits, '.', '_', '-'"
         )
+
+
+def slice_plan_path(task_id: str, slice_id: str) -> PurePosixPath:
+    """Where one slice's implementation plan lives.
+
+    Mirrors `git_ops.branch_name_for_slice` deliberately: a task holding
+    exactly one slice named for itself keeps the single filename it had
+    before slices existed, so nothing about a one-pull-request task changes,
+    and a named slice gets a file of its own beside it. ADR-0035 makes the
+    slice the unit of execution, and a plan covering the whole task is not a
+    plan for the slice being built -- it is the document the slice list came
+    out of.
+    """
+    directory = PLAN_DIR_RELATIVE / task_id
+    if slice_id == task_id:
+        return directory / "implementation-plan.md"
+    return directory / f"{slice_id}-implementation-plan.md"
+
+
+_STATUS_SCAN_BYTES = 600
+
+
+def acceptance_of(path: Path) -> bool | None:
+    """Whether a planning artifact declares itself accepted.
+
+    Returns None when it carries no `Status:` line at all and so makes no
+    claim either way -- a distinction the caller needs, because "not
+    accepted" and "says nothing" warrant different sentences.
+
+    The `Status:` line is the acceptance signal every planning artifact in
+    this workflow already carries, so this introduces no new metadata format.
+    It lives here rather than in `navigator` or `gate` because both of those
+    ask the question and a second copy is how the two come to disagree about
+    what "accepted" means.
+    """
+    try:
+        head = path.read_text(encoding="utf-8", errors="replace")[:_STATUS_SCAN_BYTES]
+    except OSError:
+        return None
+    for line in head.splitlines():
+        stripped = line.strip().replace("*", "")
+        if stripped.lower().startswith("status:"):
+            status = stripped.split(":", 1)[1].strip().lower()
+            return bool(status.split() and status.split()[0] == "accepted")
+    return None
 
 
 def _task_dir(target: Path, task_id: str) -> Path:

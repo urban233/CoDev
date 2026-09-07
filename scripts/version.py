@@ -42,7 +42,11 @@ BUMP_MINOR = False
 BUMP_PATCH = True
 
 VERSION_RE = re.compile(r"^version\s*=\s*[\"']([^\"']+)[\"']$", re.MULTILINE)
-UNRELEASED_RE = re.compile(r"^## \[Unreleased\]$", re.MULTILINE)
+# Every release section heading, in file order, so the bump can check that
+# `[Unreleased]` is the topmost one rather than merely present somewhere.
+# This replaced a regex matching `## [Unreleased]` alone, which could say the
+# heading existed but never where it sat relative to the releases below it.
+RELEASE_HEADING_RE = re.compile(r"^## \[([^\]]+)\].*$", re.MULTILINE)
 VERSION_FILES = (
     Path("CHANGELOG.md"),
     Path("pyproject.toml"),
@@ -89,11 +93,48 @@ def bumped_version(version: str, bump: str) -> str:
 
 
 def update_changelog(content: str, new: str, release_date: str) -> str:
+    """Rename the `[Unreleased]` heading to the release being cut.
+
+    Only ever the *topmost* section heading, and this is the whole point of
+    the check below. This used to rename the first `## [Unreleased]` found
+    anywhere in the file, which is the same thing only while the changelog is
+    well formed. When 0.7.2 was cut this repository's only such heading was a
+    stale one stranded between 0.6.0 and 0.5.0, so the bump produced a 0.7.2
+    section sitting below 0.6.0 and holding another release's entries, while
+    the release actually being cut got none. Nothing failed; the changelog was
+    simply wrong afterwards, which is the kind of error a release script must
+    not make quietly.
+
+    Both anomalies stop the bump rather than being repaired here. Renaming a
+    misplaced heading is not a fix -- the entries under it belong to some
+    other release, and deciding which is a judgment about release history.
+    A missing heading means the release has no changelog entry at all, and
+    inserting an empty section would ship exactly that.
+    """
+    headings = list(RELEASE_HEADING_RE.finditer(content))
+    if not headings:
+        raise ValueError("CHANGELOG.md has no '## [...]' section headings")
+    first = headings[0]
+    if first.group(1) != "Unreleased":
+        misplaced = next(
+            (match for match in headings if match.group(1) == "Unreleased"), None
+        )
+        if misplaced is None:
+            raise ValueError(
+                "could not find ## [Unreleased] in CHANGELOG.md; write the "
+                "release's entries under a new '## [Unreleased]' heading "
+                f"above '## [{first.group(1)}]' before bumping"
+            )
+        line = content.count("\n", 0, misplaced.start()) + 1
+        raise ValueError(
+            "## [Unreleased] is not the topmost section in CHANGELOG.md: it "
+            f"is at line {line}, below '## [{first.group(1)}]'. Renaming it "
+            "would file this release's number against another release's "
+            "entries. Move the section to the top, or fold its entries into "
+            "the release they belong to, then bump again"
+        )
     replacement = f"## [{new}] - {release_date}"
-    updated, count = UNRELEASED_RE.subn(replacement, content, count=1)
-    if count == 0:
-        raise ValueError("could not find ## [Unreleased] in CHANGELOG.md")
-    return updated
+    return content[: first.start()] + replacement + content[first.end() :]
 
 
 def replace_in_repository(

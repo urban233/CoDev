@@ -201,7 +201,12 @@ class RequirePlanHookTests(unittest.TestCase):
         )
         plan_dir = self.repo / "docs/codev/task/some-task-id"
         plan_dir.mkdir(parents=True)
-        (plan_dir / "implementation-plan.md").write_text("# plan\n", encoding="utf-8")
+        (plan_dir / "implementation-plan.md").write_text(
+            # Accepted, not merely present: the gate exists to establish that
+            # a human read this, and a draft nobody decided on does not.
+            "# plan\n\n**Status:** Accepted\n",
+            encoding="utf-8",
+        )
         result = _run_hook_json(
             self.repo,
             {
@@ -320,7 +325,12 @@ class RequirePlanHookTests(unittest.TestCase):
         )
         plan_dir = self.repo / "docs/codev/task/some-task-id"
         plan_dir.mkdir(parents=True)
-        (plan_dir / "implementation-plan.md").write_text("# plan\n", encoding="utf-8")
+        (plan_dir / "implementation-plan.md").write_text(
+            # Accepted, not merely present: the gate exists to establish that
+            # a human read this, and a draft nobody decided on does not.
+            "# plan\n\n**Status:** Accepted\n",
+            encoding="utf-8",
+        )
         result = _run_hook_json(
             self.repo,
             {

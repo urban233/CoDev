@@ -81,8 +81,57 @@ class VersionScriptTests(unittest.TestCase):
         self.assertIn("## [0.1.1] - 2026-08-02", changelog)
 
     def test_changelog_requires_unreleased_heading(self) -> None:
-        with self.assertRaisesRegex(ValueError, r"\[Unreleased\]"):
+        with self.assertRaisesRegex(ValueError, r"no '## \[\.\.\.\]' section"):
             version.update_changelog("# Changelog\n", "0.1.2", "2026-08-05")
+
+    def test_a_changelog_with_releases_but_no_unreleased_refuses(self) -> None:
+        with self.assertRaisesRegex(ValueError, r"could not find ## \[Unreleased\]"):
+            version.update_changelog(
+                "# Changelog\n\n## [0.1.1] - 2026-08-02\n\n- shipped\n",
+                "0.1.2",
+                "2026-08-05",
+            )
+
+    def test_a_stranded_unreleased_section_refuses_rather_than_renaming(self) -> None:
+        """The 0.7.2 bug: the only `[Unreleased]` heading sat between two
+        older releases, so renaming "the first one found" filed the new
+        release's number against another release's entries and left the
+        release being cut with no entry at all. Nothing failed at the time.
+        """
+        changelog = (
+            "# Changelog\n\n"
+            "## [0.1.1] - 2026-08-02\n\n- shipped\n\n"
+            "## [Unreleased]\n\n- stranded\n\n"
+            "## [0.1.0] - 2026-08-01\n\n- older\n"
+        )
+        with self.assertRaisesRegex(ValueError, "not the topmost section") as caught:
+            version.update_changelog(changelog, "0.1.2", "2026-08-05")
+        # The line number is what makes the message actionable in a 900-line
+        # changelog, and naming the heading it sits under is what tells a
+        # developer which release the stranded entries probably belong to.
+        self.assertIn("line 7", str(caught.exception))
+        self.assertIn("[0.1.1]", str(caught.exception))
+
+    def test_a_dated_release_heading_is_recognised_as_a_section(self) -> None:
+        """The heading regex must match `## [0.1.1] - 2026-08-02`, not only a
+        bare `## [Unreleased]`, or every dated release is invisible to the
+        topmost check and the guard never fires."""
+        with self.assertRaisesRegex(ValueError, "not the topmost section"):
+            version.update_changelog(
+                "# Changelog\n\n## [0.1.1] - 2026-08-02\n\n## [Unreleased]\n",
+                "0.1.2",
+                "2026-08-05",
+            )
+
+    def test_a_topmost_unreleased_section_is_renamed_in_place(self) -> None:
+        updated = version.update_changelog(
+            "# Changelog\n\n## [Unreleased]\n\n- new\n\n## [0.1.1] - 2026-08-02\n",
+            "0.1.2",
+            "2026-08-05",
+        )
+        self.assertIn("## [0.1.2] - 2026-08-05\n\n- new\n", updated)
+        self.assertNotIn("[Unreleased]", updated)
+        self.assertIn("## [0.1.1] - 2026-08-02", updated)
 
     def test_dry_run_does_not_write(self) -> None:
         changed = version.replace_in_repository(self.root, "0.1.1", "0.1.2", True)

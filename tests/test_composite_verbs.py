@@ -44,8 +44,8 @@ import unittest
 from contextlib import redirect_stdout
 from typing import Any
 
-from codev_workflow import cli, task
-from tests.integration_support import Sandbox
+from codev_workflow import cli, git_ops, task
+from tests.integration_support import Sandbox, run_git
 
 _GH_BODY_UNSUPPORTED = os.name == "nt"
 
@@ -118,6 +118,71 @@ class SliceBeginTests(unittest.TestCase):
         )
         self.assertEqual(["one", "two"], payload["slices"])
         self.assertEqual("one", payload["slice_id"])
+
+    def _begin_from_plan(self, body: str, *slices: str) -> dict[str, Any]:
+        """Begin a slice from a committed plan, based on the commit that
+        carries it.
+
+        Committed rather than merely written, and used as the base: the branch
+        is cut from `--base`, so a plan committed after that snapshot is not on
+        the branch that is supposed to be built against it.
+        """
+        self.sandbox.write("docs/plans/the-plan.md", f"# Plan\n\n{body}")
+        run_git(["add", "-A"], cwd=self.sandbox.work)
+        run_git(["commit", "-qm", "the plan"], cwd=self.sandbox.work)
+        argv = ["slice", "begin", "--id", "feat", "--base", self.sandbox.head()]
+        for name in slices:
+            argv += ["--slice", name]
+        _, payload = run(*argv, "--title", "t", "--body", "b", "--target", self.work)
+        return payload
+
+    def test_begin_warns_when_an_accepted_plan_names_more_slices(self) -> None:
+        """Every task in this repository's own history recorded exactly one
+        slice, including one whose accepted plan named seven -- whose seven
+        slices then landed in a single pull request. `--slice` is optional and
+        stays optional, because a one-slice task is real; forgetting it is
+        what needed to stop being silent.
+        """
+        payload = self._begin_from_plan(
+            "**Status:** Accepted\n\n"
+            + "\n".join(f"### Slice {n} -- thing\n" for n in range(1, 8))
+        )
+        self.assertEqual(["feat"], payload["slices"])
+        self.assertIn("names 7 slices", payload["slice_warning"])
+
+    def test_begin_is_quiet_when_the_slice_list_matches_the_plan(self) -> None:
+        payload = self._begin_from_plan(
+            "**Status:** Accepted\n\n### Slice 1 -- a\n\n### Slice 2 -- b\n",
+            "one",
+            "two",
+        )
+        self.assertIsNone(payload["slice_warning"])
+
+    def test_begin_is_quiet_for_a_genuinely_single_slice_plan(self) -> None:
+        payload = self._begin_from_plan("**Status:** Accepted\n\n**Slices:** One PR\n")
+        self.assertIsNone(payload["slice_warning"])
+
+    def test_begin_does_not_read_a_plan_nobody_accepted(self) -> None:
+        payload = self._begin_from_plan(
+            "**Status:** Draft\n\n### Slice 1 -- a\n\n### Slice 2 -- b\n"
+        )
+        self.assertIsNone(payload["slice_warning"])
+
+    def test_begin_puts_the_first_slice_on_its_own_branch(self) -> None:
+        """`create_branch` runs before round state exists, so it fell back to
+        the task id and filed slice one's branch under a slice that does not
+        exist -- which is why `start_slice_branch` then refused every later
+        slice with "no earlier slice has a branch to stack it on"."""
+        payload = self._begin_from_plan(
+            "**Status:** Accepted\n\n### Slice 1 -- a\n\n### Slice 2 -- b\n",
+            "one",
+            "two",
+        )
+        self.assertEqual("codev/feat--one", payload["branch"])
+        self.assertEqual(
+            "codev/feat--one",
+            git_ops.branch_for_slice("feat", "one", target=self.sandbox.work),
+        )
 
     def test_begin_refuses_to_invent_an_issue_it_was_not_told_how_to_write(
         self,
@@ -295,6 +360,40 @@ class SliceLandTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertFalse(payload["final"])
         self.assertEqual("two", payload["next_slice"])
+
+    def test_land_puts_the_next_slice_on_its_own_branch(self) -> None:
+        """ADR-0035: a slice is one pull request, so advancing is not
+        complete until the next slice has somewhere of its own to live.
+
+        `land` moved the round state and left the branch alone, so the work
+        stayed on the previous slice's branch -- where `open_pr` then refused
+        to open a second pull request and every later slice accumulated into
+        the first one's. `codev task advance-slice` had always branched; the
+        composite verb the navigator actually recommends did not.
+        """
+        self._begin("one", "two")
+        code, payload = run("slice", "land", "--id", "feat", "--target", self.work)
+        self.assertEqual(0, code)
+        self.assertIsNone(payload["branch_error"])
+        self.assertEqual("codev/feat--two", payload["branch"])
+        self.assertEqual("codev/feat--two", git_ops.current_branch(self.sandbox.work))
+        self.assertEqual(
+            "codev/feat--two",
+            git_ops.branch_for_slice("feat", "two", target=self.sandbox.work),
+        )
+
+    def test_land_reports_a_branch_it_could_not_create_rather_than_failing(
+        self,
+    ) -> None:
+        """Best-effort by design: the round state has already moved by the
+        time the branch is attempted, so a failure must be visible rather
+        than either silent or fatal."""
+        self._begin("one", "two")
+        self.sandbox.write("product.py", "value = 1\n")
+        code, payload = run("slice", "land", "--id", "feat", "--target", self.work)
+        self.assertEqual(0, code)
+        self.assertIsNone(payload["branch"])
+        self.assertIn("uncommitted", payload["branch_error"])
 
     def test_land_closes_the_task_on_the_final_slice(self) -> None:
         """One command for both, because which one applies is a fact about

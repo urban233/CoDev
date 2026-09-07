@@ -1,11 +1,19 @@
-# [Work item] Implementation Plan
+# [Slice] Implementation Plan
 
+<!-- Status is the acceptance signal, and only the developer sets it to
+     Accepted. Until they do, `codev next` keeps naming this step and the
+     builder has no authority to run. -->
 **Status:** Draft
 **Owner:** [developer]
 **Reviewer:** [independent reviewer]
 **Risk:** [low/normal/high/critical]
 **Containment:** [flag/config guard this part relies on, or N/A]
+<!-- Read by `codev next` and `codev slice begin`, so keep it either a bare
+     count ("3"), "One PR", or a "### Slice N -- name" section per slice
+     below. Every slice named here must be passed to `codev slice begin
+     --slice`, in order; there is no command that adds one afterwards. -->
 **Slices:** [One PR with an estimated size, or an ordered list of 2-4 slices, each naming its decomposition strategy: preparatory refactor, contract-first, behavior-vertical, or wiring-behind-a-guard]
+**Slice:** [which of them this plan covers, or the task id for a single-slice task]
 **Base commit:** [Git commit]
 **Issue/work item:** [link or ID]
 **Brief/design/API:** [links or Not needed]
