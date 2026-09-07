@@ -10,6 +10,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-07T23:45:04Z",
+    "head": "39bccfab6d496ac6b4317635d528777b49fb9f1d",
+    "reason": "pair slice: reviewer turn-cap fix landed"
+  },
   "reopens": [
     {
       "by": null,
@@ -37,7 +42,14 @@
       "slice_id": "repo-root-resolution"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Base 355529c, head ab557b8. Changed gate.py (new _repo_root() asks git for the working-tree root, falls back to the supplied path; _relative() resolves both sides; check() uses the resolved root), tests/test_gate.py (+4 tests, SubdirectoryCwdTests), .gitignore (**/.codev/hooks/decisions.jsonl), CHANGELOG.md. VALIDATION: `just ci` green end to end -- Bazel build, 31/31 tests, ruff check, ruff format --check, mypy strict 50 files, catalog validation, evaluator self-test, sdist+Bazel wheel built, twine-clean, installed and smoke-tested. Original reproduction re-run by hand via `codev gate check --gate <g> --json` with synthetic PreToolUse payloads: plan/edit/subdir was degraded, now allow (same as root); wave-shape/edit/subdir was degraded, now same as root; plan/git-commit/subdir was ask and remains ask. SCOPE DEVIATIONS (2, both material, both evidence-driven): (1) the accepted plan's point 2 -- report 'could not find a repo root' as its own degraded reason -- was implemented and broke test_wave_shape_hook with 4 errors, because those tests use a non-git temp directory and the wave-shape gate needs no git; degrading there removed enforcement that previously worked, which is the plan's own stop-if. Changed to fall back to the supplied path; the distinct reason no longer exists. (2) Not in the plan: on macOS `git rev-parse --show-toplevel` returns the physical path while payloads carry the symlinked one, so resolving the root correctly broke every path under a temp directory; _relative() now resolves both sides. Also used a direct subprocess.run matching _current_branch's existing pattern rather than git_ops._run_git as the plan said. KNOWN LIMITATIONS: adds one git subprocess spawn per gated tool call (not a new class of cost -- the gates already spawn git -- but it is on the hot path of every edit; cache per invocation if noticeable). A file edited genuinely outside the repository still yields degraded via _relative raising; arguably should be not-applicable, left as out of scope, fails open either way. uv.lock was modified by `just ci` (stale 0.7.1 -> 0.7.2, pre-existing drift from 7b6ef82) and was reverted rather than shipped, since uv.lock is an _ALWAYS_PLANNED path. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "pair slice (ADR-0038, no builder dispatched): resolve the real repository root before deciding a gate, so the plan and wave-shape gates stop failing open for any session running from a subdirectory."
+        },
+        "head_snapshot": "77491f2cd0c5032fde531580c2df310ba6cc777f"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 2,
