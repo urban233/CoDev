@@ -65,9 +65,26 @@
       "slice_id": "repo-root-resolution"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Base 355529c, head ab557b8. Changed gate.py (new _repo_root() asks git for the working-tree root, falls back to the supplied path; _relative() resolves both sides; check() uses the resolved root), tests/test_gate.py (+4 tests, SubdirectoryCwdTests), .gitignore (**/.codev/hooks/decisions.jsonl), CHANGELOG.md. VALIDATION: `just ci` green end to end -- Bazel build, 31/31 tests, ruff check, ruff format --check, mypy strict 50 files, catalog validation, evaluator self-test, sdist+Bazel wheel built, twine-clean, installed and smoke-tested. Original reproduction re-run by hand via `codev gate check --gate <g> --json` with synthetic PreToolUse payloads: plan/edit/subdir was degraded, now allow (same as root); wave-shape/edit/subdir was degraded, now same as root; plan/git-commit/subdir was ask and remains ask. SCOPE DEVIATIONS (2, both material, both evidence-driven): (1) the accepted plan's point 2 -- report 'could not find a repo root' as its own degraded reason -- was implemented and broke test_wave_shape_hook with 4 errors, because those tests use a non-git temp directory and the wave-shape gate needs no git; degrading there removed enforcement that previously worked, which is the plan's own stop-if. Changed to fall back to the supplied path; the distinct reason no longer exists. (2) Not in the plan: on macOS `git rev-parse --show-toplevel` returns the physical path while payloads carry the symlinked one, so resolving the root correctly broke every path under a temp directory; _relative() now resolves both sides. Also used a direct subprocess.run matching _current_branch's existing pattern rather than git_ops._run_git as the plan said. KNOWN LIMITATIONS: adds one git subprocess spawn per gated tool call (not a new class of cost -- the gates already spawn git -- but it is on the hot path of every edit; cache per invocation if noticeable). A file edited genuinely outside the repository still yields degraded via _relative raising; arguably should be not-applicable, left as out of scope, fails open either way. uv.lock was modified by `just ci` (stale 0.7.1 -> 0.7.2, pre-existing drift from 7b6ef82) and was reverted rather than shipped, since uv.lock is an _ALWAYS_PLANNED path. Review state: AWAITING INDEPENDENT REVIEW. ADDENDUM: also raised lightweight-reviewer's maxTurns from 20 to 40 in both .claude/agents/lightweight-reviewer.md and the bundle copy (commit 39bccfa). Authorized scope expansion: three consecutive reviewer dispatches died at the 20-turn cap at the recording step, reproducing issue #39, which blocked this very review.  re-run after that change: 31/31 pass.",
+          "passed": true,
+          "summary": "pair slice (ADR-0038, no builder dispatched): resolve the real repository root before deciding a gate, so the plan and wave-shape gates stop failing open for any session running from a subdirectory."
+        },
+        "head_snapshot": "4466adf41b2ee21d0e6efa0c3c084a1027a3eea9"
+      },
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Ran `.tools/just test` (31/31 pass), `.tools/just lint` (all checks passed), `.tools/just typecheck` (no issues found in 50 source files). Verified gate check returns \"allow\" from both repo root and subdirectory, decisions match and are not \"degraded\". All four new tests correctly test the fix: test_the_plan_gate_decides_an_edit_the_same_from_a_subdirectory and test_the_wave_shape_gate_decides_an_edit_the_same_from_a_subdirectory would fail on pre-change code (path comparisons would raise ValueError). test_a_repository_mutating_bash_command_is_still_gated pins existing correct behavior. test_a_directory_that_is_not_a_repository_still_decides tests fallback behavior. _repo_root() correctly handles OSError, TimeoutExpired, and nonzero returncode by falling back. Scope deviations: (1) Used direct subprocess.run instead of git_ops._run_git -- correct choice because _run_git raises exceptions instead of allowing fallback. (2) Dropped distinct \"could not find a repo root\" degraded reason -- justified because reporting it would degrade wave-shape gate on non-repo directories, breaking test_wave_shape_hook and removing previously-working enforcement. (3) Physical path resolution in _relative() -- necessary for macOS symlink/physical path mismatch. (4) maxTurns 20\u219240 for lightweight-reviewer -- authorized scope expansion to fix three previous reviewer dispatches hitting 20-turn cap. All completion evidence items satisfied: reproduction re-run confirmed, correct behaviors pinned, just ci green, changes within allowed scope, CHANGELOG updated.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "4466adf41b2ee21d0e6efa0c3c084a1027a3eea9"
+      },
       "round": 3,
       "slice_id": "repo-root-resolution"
     }
