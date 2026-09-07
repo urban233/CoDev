@@ -3,6 +3,58 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [0.7.2] - 2026-09-07
+
+### Fixed
+- **Every slice now gets its own branch, so a task's slices stop landing in
+  one pull request.** `codev slice land` advanced the round state without
+  creating the next slice's branch, so work stayed on the previous slice's
+  branch -- where `codev git open-pr` refused to open a second pull request
+  and later slices accumulated into the first one's. `codev task
+  advance-slice` had always created it; the composite verb the navigator
+  recommends had not. Both now share one path, and `codev slice land --json`
+  reports the new `branch` (and `branch_error` when it could not be created).
+  This is ADR-0035's "a slice is one pull request" finally holding in
+  practice: every task recorded before this release holds exactly one slice,
+  including one whose accepted plan named seven.
+- **`codev slice begin` records the first slice's branch under that slice**,
+  not under the task. It creates the branch before round state exists, so its
+  fallback found no current slice and filed the branch under the task id --
+  after which no later slice could stack on it (`no earlier slice of task
+  ... has a branch to stack it on`). A task holding one slice named for
+  itself is unaffected; its branch name does not change.
+- **The plan gate reads the branch's own slice, and reads acceptance.** It
+  treated a slice branch's whole tail as a task id, so `codev/auth--schema`
+  looked for a plan belonging to a task called `auth--schema`; and it asked
+  only whether a plan file existed, never whether anyone had accepted it.
+  Both are now shared with the navigator, so the hook and `codev next` cannot
+  disagree about whether a slice is ready to build.
+
+### Added
+- **An accepted per-slice implementation plan is now a step `codev next`
+  names**, between beginning a slice and building it. It reads
+  `docs/codev/task/<task-id>/<slice-id>-implementation-plan.md` -- or
+  `implementation-plan.md` for a task holding one slice named for itself --
+  and distinguishes a missing plan, a drafted one, and an accepted one.
+  Acceptance is the developer's own `Status: Accepted` line; there is
+  deliberately no command that records it. Previously the navigator went
+  straight to "dispatch builder against this slice's plan", naming a document
+  nothing had asked anyone to write, and any plan that did exist covered the
+  whole task rather than the slice being built.
+- **A plan's slice count is now something the tooling reads** rather than
+  prose it cannot -- the gap ADR-0035 named and left open. `codev next`
+  reports how many slices an accepted plan holds before a task starts, and
+  `codev slice begin` warns when a plan names more than were recorded.
+  `--slice` stays optional, because a one-slice task is real; forgetting it
+  is what stopped being silent. Both read numbered `### Slice N` sections or
+  the `**Slices:**` field, and say nothing when a plan states neither.
+
+### Changed
+- The agent guidance restructures the build loop: a task opens with its full
+  slice list, planning one slice and stopping for its acceptance is its own
+  step, and a merged slice advances to the next one. The implementation-plan
+  template and `build-change` now describe a plan as covering one slice.
+
 ## [0.7.1] - 2026-09-07
 
 ### Changed
