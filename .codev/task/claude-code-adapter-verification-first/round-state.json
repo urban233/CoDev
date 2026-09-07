@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-07T22:50:32Z",
-    "head": "54cf0d6c6587b3bc531e186021f511ee5ab33fc1",
-    "reason": "task setup moved head off the recorded base before round 1 opened"
-  },
   "reopens": [
     {
       "by": null,
