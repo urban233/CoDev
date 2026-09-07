@@ -230,26 +230,39 @@ needs only review — skip straight to step 5's `ok_ready_for_pr` handling;
 `codev task check` recognizes a fresh `direct-review` item as immediately
 ready, with no inner-loop round recorded at all.
 
-1. Read authority and repository evidence, confirm the task is ready,
-   present the focus card, and produce the implementation plan (using
-   `.agents/skills/build-change/assets/implementation-plan.template.md`
-   for delegated, multi-session, cross-component, or normal/higher-risk
-   work) — keeping a short 2-4 bullet Approach/Risks summary from that plan
-   in mind for `--description` below when it was rendered, since the
-   eventual pull request body renders that text and nothing else about the
-   plan. Never edit product code yourself in this role — that is
-   `builder`'s job, delegated below, or your own hands only under an
-   explicitly recorded `pair` slice. Begin each slice with `codev slice
-   begin`, which handles the branch, issue linkage, and round state in one
-   operation. Raw `git` and `gh` writes stay denied.
-2. Before delegating, check whether the work needs a human decision first:
-   any of the "Stop conditions" below, or the risk categories named in "Risk
-   overrides size" — a cheap path/diff-shape check for the common case, not
-   a full judgment call every time. If so, present the focus card with a
-   proposed plan and a proposed answer, and wait for the human's one
-   decision. Otherwise proceed directly to delegation. Approval before every
-   delegated build is not the default; it is reserved for work that is
-   actually material or risky.
+1. Read authority and repository evidence, confirm the task is ready, and
+   present the focus card. Open the task with `codev slice begin`, which
+   handles the branch, issue linkage, and round state in one operation —
+   **passing every slice the accepted plan names to `--slice`, in order.**
+   Omitting `--slice` records a task holding exactly one slice named for
+   itself, which is a real case only when the plan really is one pull
+   request; otherwise it is how a plan's slice list stops existing the
+   moment work starts on it, and every later slice lands in the first
+   slice's pull request. There is no command that adds a slice afterwards.
+   `codev slice begin` warns when an accepted plan names more slices than
+   you recorded; `codev next` names the count before you start. Raw `git`
+   and `gh` writes stay denied.
+2. **Plan the slice you are about to build, and get the developer to accept
+   it.** Write it to `docs/codev/task/<task-id>/<slice-id>-implementation-plan.md`
+   (for a task holding one slice named for itself, `implementation-plan.md`
+   in that same directory) using
+   `.agents/skills/build-change/assets/implementation-plan.template.md`, and
+   keep a short 2-4 bullet Approach/Risks summary from it in mind for
+   `--description`, since the eventual pull request body renders that text
+   and nothing else about the plan. A plan covering the whole task is the
+   document the slice list came out of, not a plan for the slice being
+   built.
+
+   Then stop and ask. Acceptance is the developer writing `Status:
+   Accepted` into that file — you never record it on their behalf, and
+   `codev next` will keep naming this step until they do. This is the one
+   approval that is not risk-tiered: it applies to every slice, however
+   small, because the builder executes an accepted plan rather than
+   deciding the approach itself. Raise the "Stop conditions" below and the
+   risk categories in "Risk overrides size" as part of the same single
+   decision rather than as a second interruption. Never edit product code
+   yourself in this role — that is `builder`'s job, delegated below, or your
+   own hands only under an explicitly recorded `pair` slice.
 3. **Builder** executes only the accepted plan. It may edit and test, but it
    cannot invoke other agents, alter accepted authority, commit, push, merge,
    publish, deploy, migrate data, or expand rollout. It returns an evidence
@@ -309,6 +322,13 @@ ready, with no inner-loop round recorded at all.
    reviewer decision, and residual risks. Stop before merge, publish,
    deploy, migration, or rollout expansion — never before opening the pull
    request itself.
+7. When that slice's pull request merges and the task holds a later slice,
+   `codev slice land` advances to it and puts it on its own branch, stacked
+   on the slice it follows. Then start again from step 2: the new slice
+   needs its own plan and its own acceptance before its own builder runs.
+   One slice is one branch is one pull request (ADR-0035) — if you find
+   yourself adding a second slice's work to a pull request that is already
+   open, the advance did not happen and the state is wrong, not the rule.
 
 Pass task-local facts and evidence between agents — never private reasoning or
 a raw chat transcript. Never spawn unrelated agents or run parallel builders
@@ -337,7 +357,7 @@ also documented there.
 | Design / API document | Architecture, ownership, contracts, trade-offs, risk controls |
 | ADR | One durable cross-cutting decision that outlives the design document it came from — append-only once `Accepted` |
 | Delivery plan / tracker | Milestones, tasks, assignments, dependencies, status |
-| Implementation plan | Repository-grounded approach for one bounded task |
+| Implementation plan | Repository-grounded approach for **one slice** — one branch, one pull request. A task holding several slices has one of these per slice, each accepted on its own |
 | Code / tests | Implemented behavior and executable evidence |
 | Launch plan / observability | Release decision, exposure, health, learning |
 

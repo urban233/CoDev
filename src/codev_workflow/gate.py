@@ -74,8 +74,6 @@ _DESTRUCTIVE_BASH_PREFIXES = (
 
 _TASK_BRANCH_PREFIX = "codev/"  # must match git_ops.branch_name_for()
 
-_TASK_PLAN_TEMPLATE = "docs/codev/task/{task_id}/implementation-plan.md"
-
 _SPEC_GLOBS = (
     "docs/features/*/design.md",
     "docs/codev/features/*/design.md",
@@ -205,13 +203,21 @@ def _current_branch(repo_root: Path) -> str | None:
 
 
 def _has_precise_task_plan(repo_root: Path, branch: str) -> bool:
-    if not branch.startswith(_TASK_BRANCH_PREFIX):
+    """Whether this branch's own slice has a plan its developer accepted.
+
+    Two things this used to get wrong, both silently. It read the branch's
+    whole tail as a task id, so a slice branch (`codev/auth--schema`) looked
+    for a plan under a task called `auth--schema` and never found one. And it
+    asked only whether the file existed, so a draft nobody had read satisfied
+    the gate that exists to establish somebody had. Acceptance now comes from
+    the same `Status:` line the navigator reads, so the hook and the
+    navigator cannot disagree about whether this slice is ready to build.
+    """
+    parts = git_ops.slice_branch_parts(branch)
+    if parts is None:
         return False
-    task_id = branch[len(_TASK_BRANCH_PREFIX) :]
-    if not task_id:
-        return False
-    plan = repo_root / _TASK_PLAN_TEMPLATE.format(task_id=task_id)
-    return plan.is_file()
+    plan = repo_root / Path(task.slice_plan_path(*parts).as_posix())
+    return plan.is_file() and task.acceptance_of(plan) is True
 
 
 def _branch_slug(branch: str) -> str:

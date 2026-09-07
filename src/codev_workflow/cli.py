@@ -1543,6 +1543,69 @@ def _run_next_command(args: argparse.Namespace) -> int:
     return 1 if action.blocked else 0
 
 
+def _collapsed_slice_warning(recorded: int, *, target: Path) -> str | None:
+    """Say so when an accepted plan names more slices than the task just
+    recorded, which is almost always a forgotten `--slice`.
+
+    `--slice` is optional and omitting it yields a task holding exactly one
+    slice named for itself. That is a real case -- ADR-0035's degenerate one
+    -- so this warns rather than refuses. But it is also what silently
+    happened to every task in this repository's own history, including one
+    whose accepted plan named seven slices and whose seven slices then landed
+    in a single pull request. A warning at the moment of the omission is the
+    cheapest place to catch it: after `task.start` there is no command that
+    adds a slice.
+    """
+    if recorded > 1:
+        return None
+    plans = sorted((target / "docs" / "plans").glob("*.md"))
+    plans += sorted(target.glob("docs/codev/task/*/implementation-plan.md"))
+    counts = [
+        count
+        for plan in plans
+        if task_module.acceptance_of(plan) is True
+        for count in (navigator_module.plan_slice_count(plan),)
+        if count is not None
+    ]
+    most = max(counts, default=1)
+    if most <= 1:
+        return None
+    return (
+        f"an accepted plan names {most} slices but this task records 1; "
+        "pass each one to --slice, or every later slice lands in this "
+        "slice's pull request"
+    )
+
+
+def _advance_to_next_slice(
+    task_id: str, head: str, *, target: Path
+) -> tuple[str, str | None, str | None]:
+    """Move a task to its next slice and put that slice on its own branch.
+
+    ADR-0035: a slice is one pull request, so advancing is not complete until
+    the next slice has somewhere of its own to live. `codev task advance-slice`
+    did this and `codev slice land` did not, which meant the composite verb the
+    navigator actually recommends advanced the round state while leaving the
+    work on the previous slice's branch -- where `open_pr` then refused to open
+    a second pull request, and the slices accumulated into one. Both callers go
+    through here now so the two cannot disagree again.
+
+    Branch creation is best-effort and reported rather than raised: the round
+    state has already moved by the time it runs, and a task whose branch was
+    never created through `codev git` (or a dirty worktree) must not leave the
+    two silently disagreeing.
+    """
+    next_slice = task_module.advance_slice(task_id, head, target=target)
+    try:
+        return (
+            next_slice,
+            git_ops_module.start_slice_branch(task_id, next_slice, target=target),
+            None,
+        )
+    except git_ops_module.GitOpsError as error:
+        return next_slice, None, str(error)
+
+
 def _resolve_linkage(
     *,
     github_issue: int | None,
@@ -1587,7 +1650,14 @@ def _run_slice_command(args: argparse.Namespace) -> int:
         # which `codev next` reports and a developer can delete. The other
         # leaves an issue on GitHub that nothing points at.
         branch = git_ops_module.create_branch(
-            args.id, args.base, target=target, allow_dirty=args.allow_dirty
+            args.id,
+            args.base,
+            target=target,
+            allow_dirty=args.allow_dirty,
+            # The first slice's own id, not the task's. Round state does not
+            # exist yet at this point, so without it the branch is filed under
+            # the task and every later slice fails to stack on it.
+            slice_id=args.slices[0] if args.slices else None,
         )
         issue_url: str | None = None
         issue_number: int | None = args.github_issue
@@ -1631,22 +1701,26 @@ def _run_slice_command(args: argparse.Namespace) -> int:
             reviewer=args.reviewer,
             pair_slices=args.pair_slices,
         )
+        slices = task_module.slice_ids(args.id, target=target)
         payload = {
             "task_id": args.id,
             "branch": branch,
             "base_snapshot": args.base,
-            "slices": task_module.slice_ids(args.id, target=target),
+            "slices": slices,
             "slice_id": task_module.current_slice(args.id, target=target),
             "issue_url": link_ref,
             "issue_number": issue_number,
             "round": task_module.describe(args.id, target=target)["current_round"],
             "owner": owner,
+            "slice_warning": _collapsed_slice_warning(len(slices), target=target),
         }
         if args.json:
             return _emit_json(payload)
         print(f"Began {payload['slice_id']} on {branch}")
         if link_ref:
             print(f"Issue: {link_ref}")
+        if payload["slice_warning"]:
+            print(f"warning: {payload['slice_warning']}", file=sys.stderr)
         return 0
 
     if args.slice_command == "publish":
@@ -1688,20 +1762,29 @@ def _run_slice_command(args: argparse.Namespace) -> int:
                 "next_slice": None,
             }
         else:
-            next_slice = task_module.advance_slice(args.id, head, target=target)
+            next_slice, slice_branch, branch_error = _advance_to_next_slice(
+                args.id, head, target=target
+            )
             payload = {
                 "task_id": args.id,
                 "slice_id": slice_id,
                 "final": False,
                 "outcome": None,
                 "next_slice": next_slice,
+                "branch": slice_branch,
+                "branch_error": branch_error,
             }
         if args.json:
             return _emit_json(payload)
         if payload["final"]:
             print(f"Closed {args.id} as {args.outcome}; {slice_id} was its last slice")
         else:
-            print(f"Advanced {args.id} from {slice_id} to {payload['next_slice']}")
+            moved = f"Advanced {args.id} from {slice_id} to {payload['next_slice']}"
+            if payload["branch"] is not None:
+                print(f"{moved} on {payload['branch']}")
+            else:
+                print(moved)
+                print(f"note: no branch was created -- {payload['branch_error']}")
         return 0
 
     return 2
@@ -1969,19 +2052,9 @@ def _run_task_command(args: argparse.Namespace) -> int:
         return 0
 
     if args.task_command == "advance-slice":
-        next_slice = task_module.advance_slice(args.id, args.head, target=target)
-        # ADR-0035: a slice is one pull request, so advancing creates and
-        # checks out its branch. Best-effort -- round state has already moved,
-        # and a task whose branch was never created through codev git (or a
-        # dirty worktree) must not leave the two disagreeing silently.
-        slice_branch: str | None = None
-        branch_error: str | None = None
-        try:
-            slice_branch = git_ops_module.start_slice_branch(
-                args.id, next_slice, target=target
-            )
-        except git_ops_module.GitOpsError as error:
-            branch_error = str(error)
+        next_slice, slice_branch, branch_error = _advance_to_next_slice(
+            args.id, args.head, target=target
+        )
         if args.json:
             return _emit_json(
                 {
