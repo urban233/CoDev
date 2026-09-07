@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
+  "branch": "codev/gate-root-resolution--repo-root-resolution",
+  "slice_branches": {
+    "repo-root-resolution": {
+      "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
+      "branch": "codev/gate-root-resolution--repo-root-resolution"
+    }
+  }
+}

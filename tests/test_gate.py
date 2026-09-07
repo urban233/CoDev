@@ -312,3 +312,99 @@ class GateDispatchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubdirectoryCwdTests(unittest.TestCase):
+    """A session's working directory is wherever the developer happens to be.
+
+    The gates took it verbatim as the repository root, so every path
+    comparison against it failed and the plan and wave-shape gates returned
+    `degraded` -- which every hook shim allows. A repository whose gates all
+    fail open looks exactly like one with no guardrails configured, so this
+    is the case that must not regress.
+    """
+
+    def setUp(self) -> None:
+        self._temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temporary.cleanup)
+        self.target = Path(self._temporary.name)
+        _repo(self.target)
+        self._git("commit", "-q", "--allow-empty", "-m", "seed")
+        self._git("checkout", "-q", "-b", "codev/a-task")
+        self.subdirectory = self.target / "src" / "nested"
+        self.subdirectory.mkdir(parents=True)
+
+    def _git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=self.target, check=True)
+
+    def _edit_from(self, cwd: Path, gate: str = "plan") -> str:
+        return check(
+            gate,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": str(self.target / "src" / "foo.py")},
+                "cwd": str(cwd),
+            },
+            target=cwd,
+        ).decision
+
+    def _bash_from(self, cwd: Path) -> str:
+        return check(
+            "plan",
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "git commit -m x"},
+                "cwd": str(cwd),
+            },
+            target=cwd,
+        ).decision
+
+    def test_the_plan_gate_decides_an_edit_the_same_from_a_subdirectory(self) -> None:
+        from_root = self._edit_from(self.target)
+        self.assertNotEqual("degraded", from_root)
+        self.assertEqual(from_root, self._edit_from(self.subdirectory))
+
+    def test_the_wave_shape_gate_decides_an_edit_the_same_from_a_subdirectory(
+        self,
+    ) -> None:
+        from_root = self._edit_from(self.target, gate="wave-shape")
+        self.assertNotEqual("degraded", from_root)
+        self.assertEqual(
+            from_root, self._edit_from(self.subdirectory, gate="wave-shape")
+        )
+
+    def test_a_repository_mutating_bash_command_is_still_gated(self) -> None:
+        """Already correct before the root fix, because the Bash path never
+        compares paths. Pinned so restoring the edit path cannot quietly
+        break the half that was working."""
+        self.assertEqual("ask", self._bash_from(self.target))
+        self.assertEqual("ask", self._bash_from(self.subdirectory))
+
+    def test_a_directory_that_is_not_a_repository_still_decides(self) -> None:
+        """Root resolution falls back to the supplied path when git cannot
+        answer. The wave-shape gate reads wave plans straight off the
+        filesystem and needs no git, so a non-repository directory is a
+        supported case -- degrading here would remove enforcement that
+        worked before this change.
+        """
+        with tempfile.TemporaryDirectory() as outside:
+            plans = Path(outside) / "docs" / "codev" / "wave"
+            plans.mkdir(parents=True)
+            (plans / "w.md").write_text(
+                "## Later waves\n\n| Task | Owner |\n| --- | --- |\n| a | b |\n",
+                encoding="utf-8",
+            )
+            decision = check(
+                "wave-shape",
+                {
+                    "tool_name": "Write",
+                    "tool_input": {
+                        "file_path": str(plans / "w.md"),
+                        "content": "## Later waves\n\n| Task | Owner |\n"
+                        "| --- | --- |\n| a | b |\n",
+                    },
+                    "cwd": outside,
+                },
+                target=Path(outside),
+            )
+        self.assertEqual("ask", decision.decision)
