@@ -3,6 +3,8 @@
 All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and
 Semantic Versioning.
 
+## [Unreleased]
+
 ## [0.7.2] - 2026-09-07
 
 ### Fixed
