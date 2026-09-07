@@ -196,6 +196,7 @@ the release where that stops being aspirational, and the first where it is
 measured rather than asserted.
 
 ### Added
+
 - **Navigator coverage, a measure of the claim.** `tests/test_navigator_coverage.py`
   walks a complete lifecycle against a real repository and counts the steps
   `codev next` cannot name. It was six of nine when the measure landed and is
@@ -216,8 +217,17 @@ measured rather than asserted.
 - **A blocked position carries `options`** -- a label, a command, and what
   choosing it means -- so a stop is a decision rather than a wall. No authority
   moves: choosing is still a human's.
+- `codev git` and the remaining `codev task` verbs accept `--json`, so an agent
+  reads the values a following command consumes rather than parsing prose
+  (ADR-0036). `codev git commit --json` reports the `head` that `codev task
+  check --head` needs.
+- `codev task check` reads round-schema v4 while still writing v3 (ADR-0035),
+  the first step toward the slice becoming the unit of execution. A task
+  recorded before v4 reads as a task holding exactly one slice named for
+  itself; no file on disk is rewritten.
 
 ### Changed
+
 - **`orchestrator` and `planner` become `lead`, the only agent you talk to**
   ([ADR-0040](docs/adr/0040-the-lead-agent-is-the-only-human-facing-agent.md)).
   Thirteen roles become eleven; three human-facing roles become one.
@@ -239,8 +249,52 @@ measured rather than asserted.
 - **`codev self update` no longer tells a source install to fetch a release.**
   `uv tool upgrade` resolves against the index, whose latest release can be
   older than the checkout being run -- advice that silently downgrades.
+- **`review.max_lines` now defaults to 600, up from 400.** The original figure
+  came from Google's published median change-list guidance and proved too
+  strict as a gate: it fired on changes that were genuinely one coherent
+  purpose, largely because a real change carries its tests with it. Size is one
+  input into whether a change is reviewable, not the input -- a 500-line change
+  doing one thing reviews more easily than a 300-line change spanning four
+  subsystems, and a line count cannot tell those apart. Set it back with
+  `codev config set review.max_lines 400` if the old threshold suited your
+  team.
+- **`review.max_files` now defaults to 12, up from 8**, raised alongside
+  `review.max_lines` and for the same reason: eight files tripped on changes
+  with one purpose whose tests and fixtures live beside the code they cover.
+  It stays deliberately tighter than the line budget rather than scaled with
+  it, because breadth is its own review cost -- twelve files across twelve
+  subsystems is harder to review than 600 lines in two.
+- **`codev task check` renames two reasons** (ADR-0037): `ok_approve` becomes
+  `ok_machine_review_complete`, and `ok_approve_with_deferrals` becomes
+  `ok_machine_review_complete_with_deferrals`. Neither ever meant a human had
+  approved anything -- both mean the machine gates are satisfied -- and in a
+  tool whose pitch is that generated code is not merged as slop, the old name
+  invited exactly that conflation. A returned reason is part of the machine
+  contract (ADR-0036), so this is an observable change for anything reading
+  `codev task check --json`.
+- `codev git mark-ready` accepts the two new reasons in place of the old ones.
+
+### Deprecated
+
+- For this release only, `codev task check` also reports a renamed reason's
+  former name: `--json` adds a `deprecated_reason` field, and the
+  human-readable form prints a one-line note. Both are removed in the next
+  release. Update any script matching on `ok_approve` or
+  `ok_approve_with_deferrals` now.
+
+### Removed
+
+- **`codev git branch --stack-on` is removed** (ADR-0039). Sibling-task
+  stacking and slice stacking answered the same question twice, and the
+  sibling form spread one reviewable outcome across several tasks -- several
+  issues, owners, and reviewers -- which is the coupling ADR-0035's task/slice
+  split exists to remove. A stack is now one task, an ordered slice list, and
+  one branch and pull request per slice. Existing branches and pull requests
+  are untouched; an open sibling stack must be finished by hand or
+  re-expressed as one task's slices.
 
 ### Fixed
+
 - **Retired role files are deleted, not retained.** A file in an adapter's
   agents directory is an invocable agent, so an update that kept
   `orchestrator.md` beside `lead.md` would leave you with both. An untouched
@@ -269,61 +323,6 @@ measured rather than asserted.
 and `planner.md`, adds `lead.md`, and points OpenCode's `default_agent` at
 `lead`. If you edited either retired role, the update stops and asks rather
 than discarding your changes.
-
-## [Unreleased]
-
-### Removed
-- **`codev git branch --stack-on` is removed** (ADR-0039). Sibling-task
-  stacking and slice stacking answered the same question twice, and the
-  sibling form spread one reviewable outcome across several tasks -- several
-  issues, owners, and reviewers -- which is the coupling ADR-0035's task/slice
-  split exists to remove. A stack is now one task, an ordered slice list, and
-  one branch and pull request per slice. Existing branches and pull requests
-  are untouched; an open sibling stack must be finished by hand or
-  re-expressed as one task's slices.
-
-### Changed
-- **`review.max_lines` now defaults to 600, up from 400.** The original figure
-  came from Google's published median change-list guidance and proved too
-  strict as a gate: it fired on changes that were genuinely one coherent
-  purpose, largely because a real change carries its tests with it. Size is one
-  input into whether a change is reviewable, not the input -- a 500-line change
-  doing one thing reviews more easily than a 300-line change spanning four
-  subsystems, and a line count cannot tell those apart. Set it back with
-  `codev config set review.max_lines 400` if the old threshold suited your
-  team.
-- **`review.max_files` now defaults to 12, up from 8**, raised alongside
-  `review.max_lines` and for the same reason: eight files tripped on changes
-  with one purpose whose tests and fixtures live beside the code they cover.
-  It stays deliberately tighter than the line budget rather than scaled with
-  it, because breadth is its own review cost -- twelve files across twelve
-  subsystems is harder to review than 600 lines in two.
-- **`codev task check` renames two reasons** (ADR-0037): `ok_approve` becomes
-  `ok_machine_review_complete`, and `ok_approve_with_deferrals` becomes
-  `ok_machine_review_complete_with_deferrals`. Neither ever meant a human had
-  approved anything -- both mean the machine gates are satisfied -- and in a
-  tool whose pitch is that generated code is not merged as slop, the old name
-  invited exactly that conflation. A returned reason is part of the machine
-  contract (ADR-0036), so this is an observable change for anything reading
-  `codev task check --json`.
-- `codev git mark-ready` accepts the two new reasons in place of the old ones.
-
-### Deprecated
-- For this release only, `codev task check` also reports a renamed reason's
-  former name: `--json` adds a `deprecated_reason` field, and the
-  human-readable form prints a one-line note. Both are removed in the next
-  release. Update any script matching on `ok_approve` or
-  `ok_approve_with_deferrals` now.
-
-### Added
-- `codev git` and the remaining `codev task` verbs accept `--json`, so an agent
-  reads the values a following command consumes rather than parsing prose
-  (ADR-0036). `codev git commit --json` reports the `head` that `codev task
-  check --head` needs.
-- `codev task check` reads round-schema v4 while still writing v3 (ADR-0035),
-  the first step toward the slice becoming the unit of execution. A task
-  recorded before v4 reads as a task holding exactly one slice named for
-  itself; no file on disk is rewritten.
 
 ## [0.5.0] - 2026-08-31
 
