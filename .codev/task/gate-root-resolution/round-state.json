@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-07T23:45:04Z",
-    "head": "39bccfab6d496ac6b4317635d528777b49fb9f1d",
-    "reason": "pair slice: reviewer turn-cap fix landed"
-  },
   "reopens": [
     {
       "by": null,
