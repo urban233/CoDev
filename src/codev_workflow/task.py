@@ -903,10 +903,34 @@ def _effective_coverage(state: dict[str, Any]) -> dict[str, Any]:
     verdict wins over a waiver for that same dimension, on the assumption
     that real verification is always more authoritative than a waiver
     recorded in passing at that round's start.
+
+    Everything above happens *within one slice*. A slice is the unit of
+    execution (ADR-0035) and is its own pull request, so the coverage manifest
+    that renders into that pull request must describe that slice's diff and no
+    other. Rounds and waivers belonging to an earlier slice are excluded
+    entirely, rather than carried forward: a waiver a human granted for a
+    documentation-only slice must not silently vouch for the next slice's
+    executable code, and a verdict earned against one diff is not evidence
+    about a different one.
     """
-    rounds: list[dict[str, Any]] = state["rounds"]
+    current_slice = state.get("current_slice")
+    rounds: list[dict[str, Any]] = [
+        round_entry
+        for round_entry in state["rounds"]
+        if round_entry.get("slice_id") == current_slice
+    ]
+    slice_of_round = {
+        round_entry["round"]: round_entry.get("slice_id")
+        for round_entry in state["rounds"]
+    }
     waivers_by_round: dict[int, list[dict[str, Any]]] = {}
     for waiver in state.get("coverage_waivers", []):
+        # Waivers recorded before waivers carried a slice are scoped by the
+        # slice that owned the round they were granted at -- the same slice a
+        # human was looking at when they granted it.
+        waiver_slice = waiver.get("slice_id", slice_of_round.get(waiver["round"]))
+        if waiver_slice != current_slice:
+            continue
         waivers_by_round.setdefault(waiver["round"], []).append(waiver)
 
     round_numbers = sorted(
@@ -1262,6 +1286,7 @@ def waive(
         {
             "timestamp": _utc_now_iso(),
             "round": state["current_round"],
+            "slice_id": state.get("current_slice"),
             "dimension": dimension,
             "reason": reason,
             "by": by,
