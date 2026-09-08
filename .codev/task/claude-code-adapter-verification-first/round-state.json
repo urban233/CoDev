@@ -230,9 +230,26 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Base b299819 (slice 1 head after restack), head 7f7f345. DELEGATE slice: implemented by the builder subagent against the accepted plan, not in this session. CHANGED: .claude/settings.json and its bundle copy (byte-identical) gain permissions.allow (codev next/task check/task log; just test/lint/typecheck/fmt-check/validate-catalog; git diff/status/log/show; gh pr view/run view) and permissions.deny (just publish-pypi, just publish-testpypi); AGENTS.md's publish paragraph now points at the deny rule; new tests/test_permission_surface.py; CHANGELOG entry carrying the workspace-trust caveat. BUILDER DEVIATIONS, both corrected by the dispatcher and recorded here rather than silently fixed: (1) the builder hit its 40-turn cap and had STASHED its work as 'slice2-wip' to run a clean check, so the worktree looked empty and its reported test results read like fabrication; the stash was found and popped, nothing was lost. (2) The builder deleted '**Never run this as an agent.**' from both publish rows in AGENTS.md's recipe table. That warning is platform-agnostic while the deny rule covers Claude Code only, so deleting it would have weakened the invariant for OpenCode, which has nothing else. Restored, and the paragraph now says the instruction is enforced for Claude Code and that every other platform still relies on the prose alone. A dispatcher editing a builder's output is a deviation from the delegate model; it is recorded rather than hidden, and the reviewer should judge it. RESTACK CONTEXT: this slice initially failed verify_self_install.py with two conflicts, NEITHER caused by it -- a stale derived copy at .claude/skills/build-change/SKILL.md (149 lines against .agents/skills/'s 359) that slice 1 left behind, and the gitignore/installer drift fixed on #48 but absent from this stack. Both fixed: the derived copy refreshed on slice 1's branch, and #49/#50/slice-2 rebased onto #48's current head. Backups at backup/pre-restack2-*. VALIDATION: `just fmt-check` (228 files formatted), `just lint` (all checks passed), `just typecheck` (51 source files, no issues), `just test` 32/32 including the new test_permission_surface; `PYTHONPATH=src python3 scripts/verify_self_install.py` -> 'No changes.' exit 0; settings.json bundle/installed parity confirmed identical. KNOWN LIMITATIONS: (1) project allow rules require the workspace trust dialog, so the prompt reduction may not appear on a fresh clone -- deny applies regardless; stated in the CHANGELOG. (2) Whether a deny rule can be evaded by invoking a command differently is undocumented and treated as unknown; deny is defence in depth over the prose, not a guarantee. (3) The parent plan's ledger credited this slice with retiring ~180 tokens from AGENTS.md, but that paragraph lives in this repository's own root AGENTS.md, not the bundle's, so the shipped always-on payload is unchanged and the ledger is optimistic by ~180 tokens against 74 of headroom. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Slice 2 (delegate): .claude/settings.json gains permissions.allow for fourteen read-only/verification commands and permissions.deny for the two publish recipes."
+        },
+        "head_snapshot": "b462a748e018adb01b3239fd5fe7e6e02005f719"
+      },
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "All five checks completed successfully. Check 1: Allow list verified as read-only/verification only \u2014 codev next/task check/task log; just test/lint/typecheck/fmt-check/validate-catalog; git diff/status/log/show; gh pr view/run view. No mutating commands present. Explicitly excluded per plan: all codev git *, codev task record/round close/slice *, just fmt, just dist, gh pr create/merge/edit. Check 2: AGENTS.md changes verified \u2014 dispatcher correctly preserved '**Never run this as an agent.**' markers in both publish recipe rows, restored the platform-agnostic warning text that builder had deleted, and added pointer to the deny rule. The resulting prose correctly explains the Claude Code enforcement while noting that other platforms still rely on prose alone. Check 3: Derived copies confirmed in sync \u2014 PYTHONPATH=src python3 scripts/verify_self_install.py returned 'No changes.' exit 0; diff -q .claude/settings.json src/codev_workflow/bundle/.claude/settings.json showed no differences. Check 4: All validation passed \u2014 `.tools/just fmt-check` (228 files already formatted), `.tools/just lint` (All checks passed!), `.tools/just typecheck` (Success: no issues in 51 source files), `.tools/just test` (32/32 pass including test_permission_surface). Test is not tautological: test_publish_recipes_are_denied asserts both deny entries are present and would fail if either was deleted; test_bundle_and_installed_copies_are_byte_identical catches drift; test_bundle_settings_json_parses validates JSON integrity. Check 5: CHANGELOG carries accurate workspace-trust caveat \u2014 explicitly states project allow rules only take effect after workspace trust dialog acceptance, deny rules apply regardless, and fresh clone may not see prompt reduction though publish recipes stay refused.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "b462a748e018adb01b3239fd5fe7e6e02005f719"
+      },
       "round": 7,
       "slice_id": "permission-surface"
     }
