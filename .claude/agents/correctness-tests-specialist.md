@@ -3,7 +3,7 @@ name: correctness-tests-specialist
 description: Outer-loop specialist for correctness, error handling, and test quality — one of five parallel specialist reviewers
 tools: Read, Grep, Glob, Bash
 model: opus
-maxTurns: 20
+maxTurns: 40
 permissionMode: manual
 ---
 
