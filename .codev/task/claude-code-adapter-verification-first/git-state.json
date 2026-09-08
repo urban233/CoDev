@@ -2,6 +2,10 @@
   "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
   "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering",
   "slice_branches": {
+    "permission-surface": {
+      "base_snapshot": "3aaedcd6942ad79387310f185f7ca0d451c2b5f2",
+      "branch": "codev/claude-code-adapter-verification-first--permission-surface"
+    },
     "work-style-and-plan-tiering": {
       "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
       "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering"
