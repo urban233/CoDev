@@ -1,0 +1,38 @@
+{
+  "base_snapshot": "b2998190a82f05406be72c6882f0a33a88938711",
+  "current_round": 1,
+  "current_slice": "slice-scoped-coverage",
+  "description": "Coverage waivers and reviewer verdicts merge task-wide, so a waiver granted for one slice silently applies to every later slice and renders its reason on their pull requests.",
+  "entry": null,
+  "link_ref": null,
+  "max_rounds": {
+    "inner": 2,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "paused": {
+    "at": "2026-09-08T14:05:55Z",
+    "head": "fe8827c8f3432f0d6b46fb923a81fecdd2ab64ed",
+    "reason": "pair slice implemented in the developer's own session"
+  },
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "slice-scoped-coverage"
+    }
+  ],
+  "slice_styles": {
+    "slice-scoped-coverage": "pair"
+  },
+  "slices": [
+    "slice-scoped-coverage"
+  ],
+  "status": "in_progress",
+  "summary": "Scope coverage waivers and verdicts to the slice that earned them",
+  "task_id": "waivers-are-slice-scoped"
+}

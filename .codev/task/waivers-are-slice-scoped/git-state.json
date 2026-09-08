@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "b2998190a82f05406be72c6882f0a33a88938711",
+  "branch": "codev/waivers-are-slice-scoped--slice-scoped-coverage",
+  "slice_branches": {
+    "slice-scoped-coverage": {
+      "base_snapshot": "b2998190a82f05406be72c6882f0a33a88938711",
+      "branch": "codev/waivers-are-slice-scoped--slice-scoped-coverage"
+    }
+  }
+}
