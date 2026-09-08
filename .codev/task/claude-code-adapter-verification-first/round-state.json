@@ -268,9 +268,72 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Rebased --onto codev/waivers-are-slice-scoped--slice-scoped-coverage. One conflict, in CHANGELOG.md, where slice 2's '### Added' entry and the waiver fix's '### Fixed' entry both landed under [Unreleased]; resolved by keeping BOTH in full, Added before Fixed per Keep a Changelog ordering. No other file conflicted and slice 2's own content is unchanged. END-TO-END PROOF of the waiver fix: slice 2's effective coverage now reports exactly ['correctness'] with zero waived dimensions, where before the fix it inherited all seven of slice 1's waivers. VALIDATION on the restacked base: `just lint` all checks passed; `just fmt-check` 229 files already formatted; `just typecheck` 51 source files no issues; `just test` 32/32; `scripts/verify_self_install.py` -> 'No changes.' exit 0. KNOWN LIMITATION: the re-baseline moved slice 2 into the outer phase, where the full coverage manifest is required. It now holds only its own `correctness` verdict and can no longer inherit slice 1's waivers -- so the gate will ask for slice 2's own seven dimensions. That is the fix working, not a regression, and it is a human decision to waive or to run specialists. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Slice 2 restacked onto the waiver-scoping fix. No content change; one CHANGELOG conflict resolved by keeping both entries."
+        },
+        "head_snapshot": "444d37164f59216dda0a26aa9292f4ca7b751cc7"
+      },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "All five checks completed successfully. Check 1: Allow list verified as read-only/verification only \u2014 codev next/task check/task log; just test/lint/typecheck/fmt-check/validate-catalog; git diff/status/log/show; gh pr view/run view. No mutating commands present. Explicitly excluded per plan: all codev git *, codev task record/round close/slice *, just fmt, just dist, gh pr create/merge/edit. Check 2: AGENTS.md changes verified \u2014 dispatcher correctly preserved '**Never run this as an agent.**' markers in both publish recipe rows, restored the platform-agnostic warning text that builder had deleted, and added pointer to the deny rule. The resulting prose correctly explains the Claude Code enforcement while noting that other platforms still rely on prose alone. Check 3: Derived copies confirmed in sync \u2014 PYTHONPATH=src python3 scripts/verify_self_install.py returned 'No changes.' exit 0; diff -q .claude/settings.json src/codev_workflow/bundle/.claude/settings.json showed no differences. Check 4: All validation passed \u2014 `.tools/just fmt-check` (228 files already formatted), `.tools/just lint` (All checks passed!), `.tools/just typecheck` (Success: no issues in 51 source files), `.tools/just test` (32/32 pass including test_permission_surface). Test is not tautological: test_publish_recipes_are_denied asserts both deny entries are present and would fail if either was deleted; test_bundle_and_installed_copies_are_byte_identical catches drift; test_bundle_settings_json_parses validates JSON integrity. Check 5: CHANGELOG carries accurate workspace-trust caveat \u2014 explicitly states project allow rules only take effect after workspace trust dialog acceptance, deny rules apply regardless, and fresh clone may not see prompt reduction though publish recipes stay refused.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "Full pass over base 565d310..head 444d371 for security, privacy, data-loss and compatibility only. (1) Allow-rule capability, checked against the real recipes in Justfile and AGENTS.md's recipe table rather than names: codev next/task check/task log confirmed read-only in cli.py (_run_next_command prints navigator output; task_command=='check' and =='log' only read and print; no writes, no auto-commit path); just lint/typecheck/fmt-check/validate-catalog are single non-variadic bazel invocations and cannot be widened (note `just fmt`, which mutates, is correctly NOT matched by the fmt-check pattern); git status/log read-only; gh pr view / gh run view read-only. (2) Escape analysis: the plan's central assumption -- Claude Code splits compound commands so an allow cannot be chained -- holds for the shell operators, but is bypassed for `just test:*` because just interpolates `*args` into the recipe's shell line unquoted. Verified empirically with the repo's own .tools/just 1.58.0 against a scratch justfile: `just test '; echo INJECTED_COMMAND_RAN'` executed the injected command. The trailing wildcard also matches test-3-12/test-3-11, which take args too; args additionally pass through to `bazel test`, where --run_under wraps execution in an arbitrary command. Recorded as f1, blocking: this is a standing, unprompted arbitrary-code-execution grant, and the same allow list unprompts `gh pr view`/`gh run view`, i.e. ingestion of attacker-controllable text into the session that would issue it. (3) Wildcard breadth: enumerated every Justfile recipe matching each allowed prefix (test/test-all/test-3-12/test-3-11; lint; typecheck; fmt-check; validate-catalog) -- no mutating recipe is caught by prefix. git diff/show accept --output=<file>, a low-severity unprompted write primitive (f4). (4) Deny coverage: incomplete. `.tools/just publish-pypi` -- the invocation form AGENTS.md itself mandates and which this task's own agents used -- does not match `Bash(just publish-pypi:*)`, nor do `just -f Justfile publish-pypi`, the recipe body `bazel run //packaging:wheel.publish -- --repository pypi`, or a direct `uv run twine upload dist/*`. AGENTS.md's new 'now enforced rather than merely stated' overstates this (f2, non-blocking: those spellings still prompt, and the platform-agnostic 'Never run this as an agent' markers were correctly preserved). (5) Compatibility: permissions.allow/deny are long-standing Claude Code keys added alongside the existing defaultMode; no schema break, no other adapter reads .claude/settings.json, bundle and installed copies stay byte-identical (tested) and verify_self_install is clean per the recorded evidence. The one real compatibility consideration is that the bundle copy installs these grants into every consumer repo where `just <recipe>` means whatever that project decides (f3, non-blocking). (6) Credentials/PII: nothing in the diff reads, prints, or stores TWINE_USERNAME/TWINE_PASSWORD, and the publish recipes are unchanged; the only new reachability is indirect, via f1's execution surface exposing the caller's environment without a prompt. No secrets, tokens, or personal data appear in the diff. (7) Data loss: no destructive or irreversible operation is introduced; every rule is reversible by editing one JSON file, and deny is additive. Verdict: not passed on f1 alone; f1's fix is to make the argument-taking recipes exact matches (Bash(just test), Bash(just test-all), Bash(just test-3-12), Bash(just test-3-11)), which preserves the slice's prompt-reduction benefit.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": ".claude/settings.json:11 and src/codev_workflow/bundle/.claude/settings.json:11 -- \"Bash(just test:*)\"",
+            "rank": 1,
+            "summary": "The allow rule Bash(just test:*) grants unprompted arbitrary shell execution, because just interpolates a recipe's variadic parameters into the shell line unquoted. Justfile's `test *args:` body is `bazel test //tests/... {{args}}`. Verified empirically with the repo's own just 1.58.0 in a scratch justfile: `just test '; echo INJECTED_COMMAND_RAN'` expands to `echo running tests ; echo INJECTED_COMMAND_RAN` and both commands ran (exit 0). Claude Code's compound-command split -- the property the plan names as 'the property that makes an allow list safe to add at all' -- inspects the command string the tool is asked to run; there the `;` sits inside a quoted argument of a single command whose prefix is `just test`, so the rule matches and no prompt is raised. just then re-expands it into the shell. The same applies to `just test-3-12`/`just test-3-11`, which the trailing wildcard also matches by prefix and which also take *args. A second, quieter route exists even without the quoting bug: extra args pass straight through to `bazel test`, and flags like --run_under wrap test execution in an arbitrary command. Blast radius is arbitrary code with the developer's shell privileges and environment -- which is also the answer to the credentials question: TWINE_USERNAME/TWINE_PASSWORD or GH_TOKEN present in the caller's shell become readable and exfiltratable with no human prompt, whereas before this diff every bash invocation required one. This is credible rather than theoretical in this repository's workflow, where the same allow list also grants unprompted `gh pr view` and `gh run view`, i.e. unprompted ingestion of attacker-controllable text (PR bodies, review comments, CI logs) into the session that would issue the command. Fix is small and keeps the slice's benefit: make the argument-taking recipes exact matches -- Bash(just test), Bash(just test-all), Bash(just test-3-12), Bash(just test-3-11) -- since a bare recipe with no arguments has nothing to interpolate. The non-variadic recipes (lint, typecheck, fmt-check, validate-catalog) do not have this problem and can keep their form."
+          },
+          {
+            "blocking": false,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": "AGENTS.md:171-175 and .claude/settings.json:26-29 (deny list)",
+            "rank": 2,
+            "summary": "The deny list does not cover the invocation form this repository's own documentation mandates, while AGENTS.md now claims it does. AGENTS.md's build-system section states just 'is not installed system-wide: run it as `.tools/just`', and agents in this very task did exactly that (the inner-loop reviewer's recorded evidence reads `.tools/just fmt-check`, `.tools/just lint`, `.tools/just test`). `Bash(just publish-pypi:*)` is a prefix pattern over the command string, so `.tools/just publish-pypi` does not match it. Two further routes to the identical irreversible upload also miss: `just -f Justfile publish-pypi` (prefix is `just -f`), and the recipe body itself, `bazel run //packaging:wheel.publish -- --repository pypi`, plus a direct `uv run twine upload dist/*`. None of this makes the repository less safe than before -- those spellings still raise a permission prompt, and AGENTS.md keeps the platform-agnostic '**Never run this as an agent.**' markers -- so I do not treat it as blocking. But the new sentence 'For Claude Code that instruction is now enforced rather than merely stated' and the matching CHANGELOG claim are false for the documented `.tools/just` path, and an agent that reads them may reasonably rely on a guard that will not fire. Either add the `.tools/just` spellings to deny (two more entries, plus optionally `Bash(bazel run //packaging:wheel.publish:*)`), or soften the prose to say the deny rule covers the bare `just` spelling only. The plan's own 'deny evasion is unverified / defence in depth, never a guarantee' framing is the honest one; AGENTS.md is stronger than the plan."
+          },
+          {
+            "blocking": false,
+            "category": "compatibility",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": "src/codev_workflow/bundle/.claude/settings.json:10-25 (installed into every consumer repo, installer.py:487-492)",
+            "rank": 3,
+            "summary": "This allow list is not repo-local: the bundle copy is installed verbatim into every downstream project that selects the claude platform, so the standing grants apply to justfiles CoDev does not control. `git diff/status/log/show`, `gh pr view`, `gh run view` and the three `codev` reads are safe anywhere. `just test|lint|typecheck|fmt-check|validate-catalog`, by contrast, name project-defined scripts: a consumer's `just test` may spin containers, regenerate lockfiles, or hit the network, and it now runs with no prompt on a repo where nobody reviewed those recipes. f1's unquoted-variadic escape travels with it, since it is a property of just itself rather than of this Justfile. Conversely the deny half is inert downstream (few consumers have publish-pypi recipes), so the shipped default is all grant and no guard. Not a defect in the rules chosen for CoDev's own repo, and not a break of any existing install (permissions.allow/deny are long-standing Claude Code keys, additive alongside the existing defaultMode, ignored by no adapter that reads other files; verify_self_install parity is kept and tested). Worth an explicit decision though: either narrow the bundle copy to the platform-neutral git/gh/codev reads and keep the `just` grants in this repository's own .claude/settings.json, or state in the CHANGELOG that consumers inherit standing permission for their own just recipes."
+          },
+          {
+            "blocking": false,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": ".claude/settings.json:19,22 -- \"Bash(git diff:*)\", \"Bash(git show:*)\"",
+            "rank": 4,
+            "summary": "Minor, noted for completeness against the 'is every allow rule genuinely read-only' question: git's diff-generation options include --output=<file>, accepted by both `git diff` and `git show`, so these two rules carry an unprompted write primitive that can create or clobber an arbitrary path (e.g. `git diff --output=$HOME/.zshrc`). Content is diff text rather than attacker-chosen bytes, and it requires deliberate misuse, so the practical severity is low -- I would not hold the slice for it. `git log` and `git status` have no equivalent. The other classic git escape, executing a configured pager/textconv/external-diff, needs write access to the repo's own config first and so is not a credible route here; it would matter only if the agent ran these rules inside a freshly cloned untrusted repository."
+          }
+        ],
+        "head_snapshot": "444d37164f59216dda0a26aa9292f4ca7b751cc7",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 8,
       "slice_id": "permission-surface"
     }
