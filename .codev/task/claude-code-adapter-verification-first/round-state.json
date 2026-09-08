@@ -1,12 +1,12 @@
 {
-  "base_snapshot": "bca1830de2fb27fa66e30e4c57451674850d0986",
-  "current_round": 4,
+  "base_snapshot": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
+  "current_round": 5,
   "current_slice": "work-style-and-plan-tiering",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 5,
+    "inner": 6,
     "outer": 2
   },
   "owner": "urban233",
@@ -57,6 +57,20 @@
       "reason": "re-baselining onto the restacked head before independent review",
       "timestamp": "2026-09-08T12:48:34Z",
       "to_round": 4
+    },
+    {
+      "by": null,
+      "from_round": 4,
+      "head": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "re-baselining onto the head that carries the changelog entry",
+      "timestamp": "2026-09-08T13:01:40Z",
+      "to_round": 5
     }
   ],
   "reviewer": null,
@@ -122,6 +136,13 @@
         "head_snapshot": "cf7b5dfa5b1945bbbcc2845d86eb340651b7bf6b"
       },
       "round": 4,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 5,
       "slice_id": "work-style-and-plan-tiering"
     }
   ],
