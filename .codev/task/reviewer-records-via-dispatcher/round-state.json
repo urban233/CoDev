@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-08T09:58:52Z",
-    "head": "ce83c79dc2b8eb7e1b2d3d3cb0d335a4de1ee2d2",
-    "reason": "pair slice: implemented in the developer's own session"
-  },
   "reopens": [
     {
       "by": null,
