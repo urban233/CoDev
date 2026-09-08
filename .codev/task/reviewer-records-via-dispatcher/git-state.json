@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "19a2829f8dd09eb6dddd4b9a556d258e9b295726",
+  "branch": "codev/reviewer-records-via-dispatcher--reviewer-handoff",
+  "slice_branches": {
+    "reviewer-handoff": {
+      "base_snapshot": "19a2829f8dd09eb6dddd4b9a556d258e9b295726",
+      "branch": "codev/reviewer-records-via-dispatcher--reviewer-handoff"
+    }
+  }
+}
