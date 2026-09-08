@@ -1,6 +1,26 @@
 {
   "permissions": {
-    "defaultMode": "plan"
+    "defaultMode": "plan",
+    "allow": [
+      "Bash(codev next:*)",
+      "Bash(codev task check:*)",
+      "Bash(codev task log:*)",
+      "Bash(just test:*)",
+      "Bash(just lint:*)",
+      "Bash(just typecheck:*)",
+      "Bash(just fmt-check:*)",
+      "Bash(just validate-catalog:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh run view:*)"
+    ],
+    "deny": [
+      "Bash(just publish-pypi:*)",
+      "Bash(just publish-testpypi:*)"
+    ]
   },
   "hooks": {
     "PreToolUse": [

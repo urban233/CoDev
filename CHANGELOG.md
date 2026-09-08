@@ -5,6 +5,23 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- **`.claude/settings.json` now ships a `permissions.allow`/`permissions.deny`
+  surface.** `allow` covers the read-only and verification commands CoDev's
+  own workflow runs constantly (`codev next`, `codev task check`, `codev task
+  log`, `just test`/`lint`/`typecheck`/`fmt-check`/`validate-catalog`, `git
+  diff`/`status`/`log`/`show`, `gh pr view`, `gh run view`), so a routine loop
+  turn stops raising a permission prompt for each one. `deny` covers `just
+  publish-pypi` and `just publish-testpypi`, turning AGENTS.md's existing
+  prose warning against running them as an agent into an enforced rule —
+  `deny` applies to nested subcommands, so it also catches the indirect
+  phrasing the warning already called out (`just ci && just publish-pypi`).
+  **Caveat:** project `allow` rules only take effect once the workspace trust
+  dialog has been accepted for this repository; `deny` rules apply
+  regardless. On a fresh clone that has not accepted the trust dialog, the
+  prompt reduction from `allow` will not appear, though the publish recipes
+  stay refused either way.
+
 ### Fixed
 - **Coverage waivers and verdicts no longer leak from one slice to the next.**
   They merged across the whole task, so a waiver a human granted for one
