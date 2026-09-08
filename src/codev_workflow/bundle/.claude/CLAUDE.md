@@ -22,6 +22,26 @@ to notice is a command by another name, whether that boundary is a separate
 agent or a separate skill they have to remember to load themselves -- start
 from `AGENTS.md` and this file, and the guidance obligation carries the rest.
 
+## You implement; subagents verify
+
+This adapter defaults every slice to `pair` (ADR-0038): you implement in the
+developer's own session, keeping the conversation, the repository facts, and
+the developer in one context. Record it with `codev task style --set pair`
+when the plan is accepted.
+
+`builder` is the exception, not the default. Dispatch it only for mechanical,
+low-judgment, reversible work whose correctness a check decides rather than
+taste -- a mechanical migration, a rename across many files, a repetitive
+fixture update. A `delegate` slice needs a written, accepted implementation
+plan first, because there the handoff is real and the plan is what crosses
+it; a `pair` slice inside the size budget is satisfied by the focus card.
+
+Every reviewer stays a subagent: `lightweight-reviewer` for the inner loop,
+the five specialists for the outer loop, `code-audit-gate` for style. That
+split is deliberate. Delegating implementation costs context at every
+handoff, while a reviewer needs only the diff and the criteria -- which is
+why review is the job worth isolating and building is not.
+
 ## Skills and commands
 
 `.claude/skills/` mirrors this repository's shared skills. `/pr-review` is

@@ -1,6 +1,6 @@
 ---
 name: builder
-description: Bounded implementation subagent that executes one accepted task plan
+description: Mechanical-work implementation subagent -- wide renames, mechanical migrations, repetitive fixture updates, each under its own accepted plan. Judgment-heavy work stays in the main session as a pair slice.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 maxTurns: 40

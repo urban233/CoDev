@@ -1,6 +1,7 @@
 # Slice 1: Work Style and Plan Tiering - Implementation Plan
 
-**Status:** Draft
+**Status:** Accepted 2026-09-08 by Martin Urban (instructed in session;
+transcribed by Claude Opus 5, who does not hold acceptance authority)
 **Owner:** urban233
 **Reviewer:** independent reviewer, to be named before the pull request is marked ready
 **Risk:** normal. Prose and frontmatter only; no executable code path changes.
