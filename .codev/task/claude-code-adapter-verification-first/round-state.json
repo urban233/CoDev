@@ -1,5 +1,56 @@
 {
   "base_snapshot": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Documentation and agent frontmatter only; zero Python changed, no credential, network, data or serialization surface in the diff.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No executable code in the diff; nothing concurrent to reason about.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "error_handling",
+      "reason": "No executable code paths added or changed; the diff is Markdown prose and YAML frontmatter.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "test_quality",
+      "reason": "No tests added or modified, and none needed: the change is instructional prose relocated verbatim, verified by a zero-line diff of the sections before and after the move.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Reviewed in substance across rounds 4 and 5: verbatim relocation confirmed mechanically, the rebase conflict resolution checked against PR #49, and the instruction budget independently re-measured at 7433 under the 7500 ceiling.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "The change reduces always-on instruction load from ~9700 to ~7400 tokens by moving phase-specific prose into a demand-loaded skill body; maintainability is the point of the change rather than a risk it carries.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No runtime behaviour, no migration, no exposure change; reversible by codev adapter remove claude plus reinstall.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    }
+  ],
   "current_round": 5,
   "current_slice": "work-style-and-plan-tiering",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
