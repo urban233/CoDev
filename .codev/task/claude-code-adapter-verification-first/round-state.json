@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-08T13:01:40Z",
-    "head": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
-    "reason": "changelog entry added after round 4's review, addressing its own non-blocking finding"
-  },
   "reopens": [
     {
       "by": null,
