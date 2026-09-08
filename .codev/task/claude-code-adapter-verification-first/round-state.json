@@ -134,9 +134,26 @@
       "slice_id": "work-style-and-plan-tiering"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Previously-reviewed head cf7b5df, new head 98ffc03. The ONLY delta is CHANGELOG.md, +29 lines under [Unreleased]/### Changed: three entries covering pair-as-default with builder narrowed to mechanical work, the plan mandate adopting ADR-0043's tiering, and the Build protocol moving into the build-change skill body with the 9700 -> 7400 token effect stated. Everything else in the slice is unchanged from the snapshot round 4 reviewed and approved READY_FOR_OUTER_LOOP. This addresses finding f1 from that round, which was non-blocking. VALIDATION: `just validate-catalog` passes (12 skills, 2 guides, 8 behavioral scenarios); `just test` 31/31 (cached, no source changed). No Python touched. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Round 5: adds the CHANGELOG entry that round 4's review flagged as missing from the accepted plan's completion evidence. No other change."
+        },
+        "head_snapshot": "f0af1c7b6cabe03e1cf3a20fb44d1b83cc7a27f4"
+      },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "DELTA REVIEW: Round 4 identified one non-blocking finding: CHANGELOG.md entry was listed in the plan's completion evidence but not added to the diff. This round (5) resolves it. VERIFICATION: (1) Delta is minimal: 2 files changed (CHANGELOG.md and round-state.json bookkeeping only), matching the brief's expectation. (2) CHANGELOG entry accuracy confirmed against actual tree: `pair` is now default (verified in CLAUDE.md 'You implement; subagents verify' section), plan mandate follows ADR-0043 tiering (verified in 'Before you edit: the focus card'), Build protocol moved to build-change skill (confirmed in SKILL.md with Bookkeeping commits and Recovering a stuck task sections present verbatim), token reduction from ~9,700 to 7,400 is accurate (builder measured 7426, reviewer measured 7433, which rounds to 7,400). (3) Validation passed: `.tools/just validate-catalog` output shows 'Workflow validation passed: 12 skills, 2 guides, plus 8 behavioral scenarios'. (4) Round-state.json updated correctly: current_round incremented to 5, base_snapshot and max_rounds updated, new re-baseline entry added with reason 're-baselining onto the head that carries the changelog entry'. No scope drift: no Python files changed, no other platform bundles affected. Round 4's finding is fully resolved; no new correctness issues found in this delta.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "f0af1c7b6cabe03e1cf3a20fb44d1b83cc7a27f4"
+      },
       "round": 5,
       "slice_id": "work-style-and-plan-tiering"
     }
