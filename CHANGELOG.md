@@ -5,6 +5,35 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- **Claude Code sessions now implement the work themselves, and dispatch
+  subagents to check it.** The adapter defaulted every slice to `delegate`,
+  which turned the session into a dispatcher and handed implementation to a
+  subagent with no conversation history. Anthropic's own guidance names that
+  shape — separate agents for planning, execution, review and iteration — as
+  the common failure mode for coding work, because information degrades at
+  each handoff, while singling out verification subagents as the case that
+  works, since a reviewer needs only the diff and the criteria. So `pair`
+  (ADR-0038) is now the default, every reviewer stays a subagent, and
+  `builder` survives for mechanical work — wide renames, mechanical
+  migrations, repetitive fixture updates — under its own accepted plan.
+- **A written implementation plan is no longer required for every slice.** It
+  existed to feed a delegated builder. With the session implementing, the plan
+  mandate follows the tiering ADR-0043 already gave the plan gate: the focus
+  card satisfies a slice inside the size budget, and a written accepted plan is
+  required past it, on a dependency manifest, CI definition or migration, or
+  whenever `builder` is dispatched — where the handoff is real and the plan is
+  what crosses it. The gate and the written guidance now ask the same question
+  instead of contradicting each other.
+- **The Build protocol moved out of the always-on instructions.** Build
+  execution, Bookkeeping commits, and Recovering a stuck task now live in the
+  `build-change` skill body, loaded when Build starts rather than taxing every
+  Understand, Review and Ship turn. Nothing was rewritten in the move. This
+  cuts what a fresh Claude Code session carries before any work begins from
+  roughly 9,700 tokens to 7,400 — instruction budget being a quality lever,
+  not housekeeping, since instructions that lose the competition for attention
+  are not followed.
+
 ### Fixed
 - **The plan and wave-shape gates stopped enforcing anything when a session
   ran from a subdirectory.** Both took the tool call's working directory
