@@ -23,6 +23,12 @@ Semantic Versioning.
   If you have been running CoDev from a subdirectory, expect the gates to
   start asking again. Those prompts were being suppressed, not passed.
 
+- **The gate-decision log is ignored wherever a hook writes it.** Its
+  `.gitignore` entry was root-anchored, so a log written from a subdirectory —
+  the same condition as the bug above — showed up as untracked noise in the
+  change under review. Now globbed, in both the installed file and the
+  `GITIGNORE_BLOCK` the installer writes, which had drifted apart.
+
 ## [0.7.2] - 2026-09-07
 
 ### Fixed
