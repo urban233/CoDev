@@ -37,7 +37,14 @@
       "slice_id": "slice-scoped-coverage"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Base b299819, head fe8827c. CHANGED: src/codev_workflow/task.py (_effective_coverage filters rounds and waivers to state['current_slice']; waive() records slice_id), tests/test_task.py (+4 tests, SliceScopedCoverageTests), CHANGELOG.md. SCOPE WIDER THAN REPORTED: the original defect report covered waivers only. Reading the code showed _effective_coverage merges state['rounds'] as well, and rounds span every slice, so reviewer VERDICTS leaked the same way -- a dimension a later slice never re-verified inherited a pass earned against a different diff. That is the larger half and is fixed here too; a test pins it. MIGRATION: no data rewrite. A pre-existing waiver carries a `round`, and rounds carry a `slice_id`, so its slice is derivable. Verified against the real leaked state: the seven waivers granted at round 5 retro-scope to slice work-style-and-plan-tiering, which still shows all 8 of its dimensions. TEST QUALITY: three of the four new tests were confirmed to FAIL against the pre-change code by stashing the fix and re-running (2 failures + 1 error). The fourth (test_carry_forward_within_one_slice_still_works) is a deliberate pin that passes either way -- it guards the over-correction, since scoping the boundary must not become 'every round re-verifies everything'. reopen's surviving prior rounds are covered by that same behaviour. VALIDATION: `just lint` all checks passed; `just fmt-check` 227 files already formatted; `just typecheck` 50 source files no issues; `just test` 31/31; `PYTHONPATH=src python3 -m unittest tests.test_task` 180/180 OK; `PYTHONPATH=src python3 -m unittest discover -s tests` shows 7 failures + 10 errors, the identical pre-existing set caused by a stale `codev` on this machine's PATH that the hook-shim subprocess tests invoke (CI's ubuntu 3.11/3.12 raw legs pass); `scripts/verify_self_install.py` -> 'No changes.' exit 0; `just validate-catalog` passes. KNOWN LIMITATIONS: (1) This TIGHTENS a gate. Any later slice relying on inherited coverage now reports stop_incomplete_coverage and needs its own verdicts or waivers -- stated in the CHANGELOG so it is not debugged as a regression. (2) Withdrawing a waiver granted in error on the CURRENT slice is still impossible; scoping stops the leak forward but adds no way back. Deliberately out of scope as a new CLI surface. (3) The fix is verified against slice 1's state on this branch; the end-to-end proof is slice 2 republishing with an honest coverage block, which happens after the restack. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "pair slice: coverage waivers and reviewer verdicts are now scoped to the slice that earned them, instead of merging across the whole task."
+        },
+        "head_snapshot": "ea186d23973f67a73e2b845194228c083861af7b"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 2,
