@@ -502,9 +502,7 @@ def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
         file_path = str(tool_input.get("file_path") or tool_input.get("path") or "")
     if file_path:
         candidate = Path(file_path)
-        relative = (
-            candidate.relative_to(repo_root) if candidate.is_absolute() else candidate
-        )
+        relative = _relative(candidate, repo_root)
         if relative.parts and relative.parts[0] == "docs":
             return _allow(gate, "docs")
 
