@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "3aaedcd6942ad79387310f185f7ca0d451c2b5f2",
+  "base_snapshot": "7f7f34590931f5180b4e824d61861e201747371b",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -51,13 +51,13 @@
       "timestamp": "2026-09-08T13:12:07Z"
     }
   ],
-  "current_round": 6,
+  "current_round": 7,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 6,
+    "inner": 7,
     "outer": 2
   },
   "owner": "urban233",
@@ -122,6 +122,20 @@
       "reason": "re-baselining onto the head that carries the changelog entry",
       "timestamp": "2026-09-08T13:01:40Z",
       "to_round": 5
+    },
+    {
+      "by": null,
+      "from_round": 6,
+      "head": "7f7f34590931f5180b4e824d61861e201747371b",
+      "max_rounds": {
+        "inner": 7,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "absorbing slice 2's implementation into the record",
+      "timestamp": "2026-09-08T13:41:32Z",
+      "to_round": 7
     }
   ],
   "reviewer": null,
@@ -218,6 +232,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 6,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 7,
       "slice_id": "permission-surface"
     }
   ],
