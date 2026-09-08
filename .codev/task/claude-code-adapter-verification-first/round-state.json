@@ -58,7 +58,14 @@
       "slice_id": "work-style-and-plan-tiering"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Base 3834e94, head 438394f. Documentation and frontmatter only -- ZERO Python files changed. CHANGED: .claude/CLAUDE.md gains a 'You implement; subagents verify' section recording pair as the adapter default (ADR-0038) and builder as the mechanical-work exception; .claude/agents/builder.md description narrowed to mechanical work; .codev/for-ai/ai-agent-guidelines.md replaces the Build execution section with a short pointer plus the five phase-independent rules, and drops Bookkeeping commits and Recovering a stuck task; .agents/skills/build-change/SKILL.md receives all three sections VERBATIM. Every file changed in both the bundle and the installed copy; parity verified by diff (silent). INSTRUCTION BUDGET (the plan's ratcheted 7500 ceiling): 9696 -> 7426 tokens, 74 headroom. guidelines 6411->4316, CLAUDE.md 602->878, agent descriptions 258->303. NOTE the first pass measured 7881, over by 381; the plan's named reserve (Recovering a stuck task, 427 tokens) was drawn and the builder description trimmed, because the replacement pointer and the work-style prose cost more than the ledger estimated. The reserve is now spent -- slices 2-5 have 74 tokens. VALIDATION: `just test` 31/31 pass; `just validate-catalog` passes (12 skills, 2 guides, 8 behavioral scenarios); bundle/installed parity silent; both relocated sections confirmed present verbatim by grepping a mid-section line from each. KNOWN LIMITATIONS: (1) 1017 lines across 9 files, over_budget true against the 600-line budget -- almost entirely the verbatim relocation counting as both deletion and insertion, but a reviewer must still confirm the move was verbatim rather than take that on trust. (2) The raw `python -m unittest discover` runner shows 7 failures and 10 errors on this machine, identical to the set present before this slice and traceable to a stale `codev 0.7.2+source.87c55c2` on PATH that the hook-shim subprocess tests invoke; this slice changes no Python so it cannot be the cause, and CI's ubuntu 3.11/3.12 raw legs pass. (3) This branch is off main and does not carry PR #49's +188 always-on tokens; when that merges the ledger must absorb it against the 74 headroom, which will not fit -- more retirement will be needed. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Slice 1 of the verification-first rebalance: pair becomes the Claude Code adapter's default work style, the per-slice plan mandate follows ADR-0043's tiering, and three phase-specific sections move out of the always-on guidelines into the build-change skill body."
+        },
+        "head_snapshot": "c54943b53cf3b4eaf004ab6b142d73626fdbf891"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 3,
