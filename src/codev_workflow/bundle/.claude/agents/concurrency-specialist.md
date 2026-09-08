@@ -3,7 +3,7 @@ name: concurrency-specialist
 description: Outer-loop specialist for concurrency and race-condition risk — one of five parallel specialist reviewers
 tools: Read, Grep, Glob, Bash
 model: opus
-maxTurns: 20
+maxTurns: 40
 permissionMode: manual
 ---
 

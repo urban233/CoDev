@@ -3,7 +3,7 @@ name: code-audit-gate
 description: Autonomous pre-PR cleanup subagent -- fixes style and documentation issues only, dispatched during Build execution; never a human-facing entry point
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: haiku
-maxTurns: 30
+maxTurns: 40
 permissionMode: acceptEdits
 skills: {{JUNIE_SKILLS}}
 ---

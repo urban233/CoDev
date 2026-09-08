@@ -276,9 +276,20 @@ ready, with no inner-loop round recorded at all.
    task. This pass is deliberately narrow: correctness and intent-match
    against the task, plus independent re-verification that the
    builder's reported validation actually passes — the full dimension set is
-   the outer loop's job, not this pass's. It records its round with
-   `codev task record --role reviewer --decision
-   READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`.
+   the outer loop's job, not this pass's.
+
+   **Dispatch it cheaply, and record its round yourself.** Re-verification is
+   the most turn-expensive job in the loop, not the cheapest: the reviewer
+   re-runs everything the builder ran and reads the whole diff. So write the
+   diff to a file and name it in the dispatch rather than making the reviewer
+   reconstruct it, and tell it to batch validation into one command — every
+   tool call spends a turn. The reviewer writes `findings.json` and
+   `coverage.json` and states its decision; **you** then run `codev task
+   record --role reviewer --head <head> --findings <f> --coverage <c>
+   --decision READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE`,
+   the same way you close `builder`'s round from its evidence receipt. No
+   subagent records its own round. The reviewer still owns the verdict — you
+   pass its files through unchanged, you do not author or edit them.
 5. Run `codev task check` and act on its exit code instead of judging
    convergence yourself.
    - On `ok_continue` (`CHANGES REQUIRED`, under the round cap), route
