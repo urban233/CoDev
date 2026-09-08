@@ -81,10 +81,13 @@ publishing is exactly the kind of action this project's own policy
 requires "human authorization for releases" for (see the invariants at
 the top of this file), so an agent must never invoke them, even if asked
 indirectly (e.g. "run the full ci suite including publishing"). For Claude
-Code that instruction is now enforced rather than merely stated: a
-`permissions.deny` rule in `.claude/settings.json` refuses both recipes, and
-because deny applies to nested subcommands it catches the indirect phrasing
-too. Every other platform still relies on this paragraph alone.
+Code a `permissions.deny` rule in `.claude/settings.json` refuses both
+recipes, in both the bare and `.tools/just` spellings, and because deny
+applies to nested subcommands it catches the indirect phrasing too. Treat
+that as defence in depth rather than a guarantee: it cannot cover every route
+to the same irreversible action -- `bazel run //packaging:wheel.publish` and
+a direct `twine upload` both reach PyPI without matching it. This paragraph,
+not the deny rule, is what every platform relies on.
 `packaging/BUILD.bazel` carries a third, hand-kept copy of the package
 version alongside `pyproject.toml`/`src/codev_workflow/__init__.py`;
 `scripts/version.py`'s bump command and `scripts/verify_release.py`'s

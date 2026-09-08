@@ -87,3 +87,54 @@ class PermissionSurfaceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoWildcardOnArgumentTakingRecipeTests(unittest.TestCase):
+    """A trailing wildcard on a `just` recipe is an arbitrary-command grant.
+
+    `just` interpolates a variadic recipe's `*args` into its shell line
+    **unquoted**, so `just test '; rm -rf /'` runs the injected command.
+    Claude Code's compound-command split does not help: it inspects the
+    command string it is asked to run, where the `;` sits inside a quoted
+    argument of a single command whose prefix matches `Bash(just test:*)`.
+    The rule matches, no prompt is raised, and `just` re-expands it into the
+    shell.
+
+    Verified empirically against this repository's own `.tools/just`:
+
+        $ just test '; echo INJECTED_COMMAND_RAN'
+        echo running tests ; echo INJECTED_COMMAND_RAN
+        INJECTED_COMMAND_RAN
+
+    So every `just` rule must be an exact match. This is the regression
+    guard: the first version of this permission surface shipped
+    `Bash(just test:*)` and an outer-loop specialist caught it.
+    """
+
+    def test_no_just_allow_rule_uses_a_wildcard(self) -> None:
+        settings = json.loads(
+            (_REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
+        offenders = [
+            rule
+            for rule in settings["permissions"]["allow"]
+            if "just " in rule and rule.rstrip(")").endswith(":*")
+        ]
+        self.assertEqual(
+            [],
+            offenders,
+            "a wildcard on a just recipe grants arbitrary commands; use an exact match",
+        )
+
+    def test_both_just_spellings_are_denied_for_the_publish_recipes(self) -> None:
+        """AGENTS.md mandates `.tools/just`, which `Bash(just ...)` never
+        matches -- the deny rules must cover the spelling the document
+        actually tells people to use."""
+        settings = json.loads(
+            (_REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
+        deny = settings["permissions"]["deny"]
+        for spelling in ("just", ".tools/just"):
+            for recipe in ("publish-pypi", "publish-testpypi"):
+                with self.subTest(spelling=spelling, recipe=recipe):
+                    self.assertIn(f"Bash({spelling} {recipe}:*)", deny)

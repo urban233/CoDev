@@ -2,14 +2,25 @@
   "permissions": {
     "defaultMode": "plan",
     "allow": [
+      "Bash(just test)",
+      "Bash(just test-all)",
+      "Bash(just test-3-12)",
+      "Bash(just test-3-11)",
+      "Bash(just lint)",
+      "Bash(just typecheck)",
+      "Bash(just fmt-check)",
+      "Bash(just validate-catalog)",
+      "Bash(.tools/just test)",
+      "Bash(.tools/just test-all)",
+      "Bash(.tools/just test-3-12)",
+      "Bash(.tools/just test-3-11)",
+      "Bash(.tools/just lint)",
+      "Bash(.tools/just typecheck)",
+      "Bash(.tools/just fmt-check)",
+      "Bash(.tools/just validate-catalog)",
       "Bash(codev next:*)",
       "Bash(codev task check:*)",
       "Bash(codev task log:*)",
-      "Bash(just test:*)",
-      "Bash(just lint:*)",
-      "Bash(just typecheck:*)",
-      "Bash(just fmt-check:*)",
-      "Bash(just validate-catalog:*)",
       "Bash(git diff:*)",
       "Bash(git status:*)",
       "Bash(git log:*)",
@@ -19,7 +30,9 @@
     ],
     "deny": [
       "Bash(just publish-pypi:*)",
-      "Bash(just publish-testpypi:*)"
+      "Bash(just publish-testpypi:*)",
+      "Bash(.tools/just publish-pypi:*)",
+      "Bash(.tools/just publish-testpypi:*)"
     ]
   },
   "hooks": {

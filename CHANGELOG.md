@@ -16,6 +16,19 @@ Semantic Versioning.
   prose warning against running them as an agent into an enforced rule —
   `deny` applies to nested subcommands, so it also catches the indirect
   phrasing the warning already called out (`just ci && just publish-pypi`).
+  Every `just` rule is an **exact match**, never a trailing wildcard: `just`
+  interpolates a variadic recipe's arguments into its shell line unquoted, so
+  `Bash(just test:*)` would have matched `just test '; <anything>'` and run it
+  without a prompt. Claude Code's compound-command split does not catch that,
+  because the injected `;` sits inside a quoted argument of a single matching
+  command. Both the bare and `.tools/just` spellings are covered, since this
+  repository mandates the latter.
+
+  **Downstream caveat:** the `just` recipe names are project-defined, so a
+  repository installing this bundle grants whatever *its* `just test` does,
+  while the deny half — which names this project's publish recipes — is inert
+  there. Review the allow list against your own Justfile after installing.
+
   **Caveat:** project `allow` rules only take effect once the workspace trust
   dialog has been accepted for this repository; `deny` rules apply
   regardless. On a fresh clone that has not accepted the trust dialog, the
