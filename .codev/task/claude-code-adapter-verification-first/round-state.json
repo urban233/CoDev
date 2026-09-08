@@ -10,6 +10,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-08T12:48:34Z",
+    "head": "bca1830de2fb27fa66e30e4c57451674850d0986",
+    "reason": "restacked slice 1 onto the reviewer-handoff branch; every sha rewritten"
+  },
   "reopens": [
     {
       "by": null,
