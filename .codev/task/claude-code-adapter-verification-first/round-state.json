@@ -61,11 +61,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-08T13:41:32Z",
-    "head": "7f7f34590931f5180b4e824d61861e201747371b",
-    "reason": "slice 2 committed after restack"
-  },
   "reopens": [
     {
       "by": null,
@@ -244,7 +239,7 @@
   ],
   "slice_styles": {
     "evidence-hooks": "pair",
-    "permission-surface": "delegate",
+    "permission-surface": "pair",
     "recovery-and-budget": "pair",
     "scientific-gates": "delegate",
     "work-style-and-plan-tiering": "pair"
