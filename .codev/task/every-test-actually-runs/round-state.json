@@ -308,7 +308,32 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "test_quality": {
+            "evidence": "correctness-tests-specialist re-verified only the triaged correction: confirmed tests/test_verify_release.py now ends with the __main__ guard after every class; empirically ran the new AST helper against the actual pre-fix (eba8ea2^) file contents and confirmed it flags both the misplaced-guard shape (test_gate.py, test_task.py) and the missing-guard shape (test_verify_release.py); reproduced bazel test //tests:test_verify_release (13/13, was 0/13) and //tests:test_every_test_class_runs_under_bazel (1/1); confirmed the CHANGELOG's inaccurate completeness claim was corrected. One non-blocking follow-up raised (outer-r9-guard-negative-case): approved with a hardening suggestion, not a defect.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "outer-r9-guard-negative-case",
+            "location": "tests/test_every_test_class_runs_under_bazel.py",
+            "rank": 1,
+            "summary": "The new regression guard's own detection helper (_last_statement_is_main_guard) is only exercised against the current, already-clean tree, with no inline test of a known-bad input (misplaced guard, or no guard at all). If the helper ever regressed to a vacuous check, this meta-test would stay green while verifying nothing -- the same failure mode the task exists to eliminate. Suggested follow-up: add unit cases that feed the helper three inline source strings (guard last, guard misplaced above a class, no guard) and assert on the result directly."
+          }
+        ],
+        "head_snapshot": "9d505c4617360215e93df56e40eaca01915ace71",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
       "round": 9,
       "slice_id": "main-block-placement"
     }
