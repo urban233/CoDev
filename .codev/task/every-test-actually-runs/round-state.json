@@ -1,6 +1,6 @@
 {
-  "base_snapshot": "e74b5f137148f9ac8e5ecfc901fa3bd0fb928ff8",
-  "current_round": 6,
+  "base_snapshot": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+  "current_round": 7,
   "current_slice": "main-block-placement",
   "description": "Four regression tests added this release never ran under CI's Bazel leg, because an if __name__ == __main__ block sat above the classes appended after it.",
   "entry": null,
@@ -80,6 +80,20 @@
       "reason": "Re-anchor base_snapshot to the flush commit before outer-loop review",
       "timestamp": "2026-09-09T19:44:25Z",
       "to_round": 6
+    },
+    {
+      "by": "urban233",
+      "from_round": 6,
+      "head": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 3
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-anchor base_snapshot to the final flushed bookkeeping commit before outer-loop specialist dispatch",
+      "timestamp": "2026-09-09T19:47:15Z",
+      "to_round": 7
     }
   ],
   "reviewer": null,
@@ -135,6 +149,13 @@
       "phase": "outer",
       "reviewer": null,
       "round": 6,
+      "slice_id": "main-block-placement"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 7,
       "slice_id": "main-block-placement"
     }
   ],
