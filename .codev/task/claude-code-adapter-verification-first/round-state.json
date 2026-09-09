@@ -436,7 +436,14 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Head 2162339. f5 (BLOCKING): tests/test_permission_surface.py had its `if __name__ == \"__main__\": unittest.main()` block ABOVE the guard class. tests/BUILD.bazel builds every test_*.py as a py_test with no explicit main, so bazel runs the file as __main__ and unittest.main() exited before the class was defined. Confirmed independently: `bazel test //tests:test_permission_surface --test_output=all --nocache_test_results` reported 'Ran 4 tests', not 6 -- neither test_no_just_allow_rule_uses_a_wildcard nor test_both_just_spellings_are_denied_for_the_publish_recipes executed, so a reintroduced Bash(just test:*) would have shipped green. THIS INVALIDATED ROUND 9'S OWN EVIDENCE: that round claimed the guard produced two failures against the pre-fix rule set. It does -- under `python -m unittest`, where the module is imported and the __main__ block never fires. It did not under `just test`, which is what CI gates on. The verification method silently differed from the project's; same shape as the earlier bug Bazel's sandbox masked, inverted. FIX: the __main__ block moves to the end of the file. Re-verified under bazel: 6 tests, and re-injecting Bash(just test:*) produces 2 failures (settings restored from a copy afterwards, parity re-confirmed identical). f6 (non-blocking): the 'turning AGENTS.md's prose warning into an enforced rule' phrasing was corrected in AGENTS.md during round 9 but survived verbatim in the CHANGELOG entry; the CHANGELOG now reads as defence in depth and names the routes deny cannot cover. f3 and f4 remain accepted as documented, and round 9's review downgraded f3 further on new evidence (exact matching stops the injection route travelling downstream; installer.py treats a locally modified settings file as a conflict rather than overwriting it). VALIDATION: `just lint` all checks passed; `just fmt-check` 229 files already formatted; `just typecheck` 51 source files no issues; `just test` 32/32; `scripts/verify_self_install.py` -> 'No changes.' exit 0; bundle/installed parity identical. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Corrects round 9's blocking finding f5 (the regression guard never executed under the project's own test command) and non-blocking f6 (the enforced-rule over-claim surviving in the CHANGELOG)."
+        },
+        "head_snapshot": "3ceeeeb75736d71b77afbf2e9dca532eebda81ba"
+      },
       "phase": "outer",
       "reviewer": null,
       "round": 10,
