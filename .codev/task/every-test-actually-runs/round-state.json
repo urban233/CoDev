@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-09T19:21:09Z",
-    "head": "4ee3182ba624a196564b3b0ebcead5a6290067a1",
-    "reason": "Wrote and committed the slice's inner-loop implementation plan directly, documenting the already-applied fix"
-  },
   "reopens": [
     {
       "by": null,
