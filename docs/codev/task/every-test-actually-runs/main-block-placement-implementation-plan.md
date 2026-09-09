@@ -90,14 +90,26 @@
 - **Validation actually run:** `bazel test //tests:test_gate
   //tests:test_task` -- `test_task` 180/180, `test_gate` 20/20 (per the
   commit message; the task owner ran this directly before the fix was
-  committed).
+  committed). Independently re-verified by `lightweight-reviewer` and by
+  `correctness-tests-specialist` in the outer loop.
+  `bazel test //tests/...` (33 targets) passes after the round-2 correction
+  below.
 - **Acceptance evidence:** Success criterion above -> the bazel run counts
-  recorded in the commit message.
-- **Scope deviations:** None -- the fix was scanned across every
-  `test_*.py` module and only these two files had the shape described.
+  recorded in the commit message and reproduced independently twice.
+- **Scope deviations:** One, found by the outer loop's
+  `correctness-tests-specialist` and addressed in a correction round rather
+  than at the original commit: `tests/test_verify_release.py` had the
+  sibling shape (no `__main__` block at all, 0/13 tests run under Bazel),
+  which the original scan of "every test module" missed because it only
+  checked for a misplaced block, not a missing one. Fixed by adding the
+  block to that file and by adding
+  `tests/test_every_test_class_runs_under_bazel.py`, a permanent regression
+  guard that fails if any `tests/test_*.py` is ever missing a trailing
+  `__main__` guard.
 - **Known limitations:** None.
-- **Review state:** Not yet reviewed by `lightweight-reviewer`; this plan is
-  being written after the fact because the change was applied directly by
-  the task owner, outside the tracked builder/reviewer round -- the task was
-  paused and resumed (ADR-0038) to absorb it as `pair` work before this plan
-  was written.
+- **Review state:** Reviewed. `lightweight-reviewer`: READY_FOR_OUTER_LOOP,
+  no findings. Outer loop: `correctness-tests-specialist` (the only
+  specialist dispatched; the other four dimensions were waived as
+  irrelevant to this test-only diff) returned CHANGES_REQUIRED with one
+  blocking finding (the `test_verify_release.py` gap above), triaged
+  `address` and fixed in this same pull request.

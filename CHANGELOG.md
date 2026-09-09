@@ -6,20 +6,28 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
-- **Four regression tests were never running under CI's Bazel leg.** An
+- **Seventeen regression tests were never running under CI's Bazel leg.** An
   `if __name__ == "__main__": unittest.main()` block sat above test classes
   appended after it in `tests/test_task.py` and `tests/test_gate.py`.
   `tests/BUILD.bazel` builds every `test_*.py` as a `py_test` with no explicit
   `main`, so Bazel runs the file as `__main__` and `unittest.main()` exited
   before those classes were defined — `test_task` ran 176 of 180 and
-  `test_gate` 16 of 20. The raw `python -m unittest discover` legs imported
-  the module instead and did run them, which is why CI stayed green and the
-  gap was invisible.
+  `test_gate` 16 of 20. `tests/test_verify_release.py` had a sibling shape:
+  no `__main__` block at all, so Bazel ran zero of its 13 tests. The raw
+  `python -m unittest discover` legs imported each module instead and did run
+  every class, which is why CI stayed green and the gap was invisible.
 
-  The blocks move to the end of their files, and every test module was scanned
-  for the same shape. Worth knowing when adding a test: appending a class to
-  the end of a file is not enough — check it below the `__main__` block, and
-  confirm the count under Bazel rather than under `python -m unittest`.
+  The `test_task.py`/`test_gate.py` blocks move to the end of their files,
+  `test_verify_release.py` gets the block it was missing, and a new
+  `tests/test_every_test_class_runs_under_bazel.py` now fails if any
+  `tests/test_*.py` is ever missing a trailing `__main__` guard again — a
+  first pass at this fix moved only the misplaced blocks and claimed every
+  module had been scanned for "the same shape," which was true of the
+  misplaced-block shape but missed the no-block-at-all one; the guard is
+  meant to make that class of miss impossible to repeat silently. Worth
+  knowing when adding a test: appending a class to the end of a file is not
+  enough — check it below the `__main__` block, and confirm the count under
+  Bazel rather than under `python -m unittest`.
 
 ### Added
 - **`.claude/settings.json` now ships a `permissions.allow`/`permissions.deny`

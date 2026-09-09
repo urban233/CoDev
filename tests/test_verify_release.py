@@ -190,3 +190,7 @@ class BundlePackagingTests(unittest.TestCase):
         (cache_dir / "check_google_rules.cpython-313.pyc").write_bytes(b"x")
         self._write_wheel(["AGENTS.md", ".codev/for-ai/ai-agent-guidelines.md"])
         verify_release.verify_bundle_packaging(self.root)
+
+
+if __name__ == "__main__":
+    unittest.main()
