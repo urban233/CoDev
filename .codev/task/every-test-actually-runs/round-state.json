@@ -1,12 +1,12 @@
 {
-  "base_snapshot": "4ee3182ba624a196564b3b0ebcead5a6290067a1",
-  "current_round": 3,
+  "base_snapshot": "78a0384e14fde5867851d7e11010d226eb3e1808",
+  "current_round": 4,
   "current_slice": "main-block-placement",
   "description": "Four regression tests added this release never ran under CI's Bazel leg, because an if __name__ == __main__ block sat above the classes appended after it.",
   "entry": null,
   "link_ref": null,
   "max_rounds": {
-    "inner": 4,
+    "inner": 5,
     "outer": 2
   },
   "owner": "urban233",
@@ -43,6 +43,20 @@
       "reason": "Re-anchor base_snapshot to the commit that added the slice's implementation plan",
       "timestamp": "2026-09-09T19:21:14Z",
       "to_round": 3
+    },
+    {
+      "by": null,
+      "from_round": 3,
+      "head": "78a0384e14fde5867851d7e11010d226eb3e1808",
+      "max_rounds": {
+        "inner": 5,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-anchor base_snapshot to the plan-acceptance commit before dispatching the inner-loop reviewer",
+      "timestamp": "2026-09-09T19:26:17Z",
+      "to_round": 4
     }
   ],
   "reviewer": null,
@@ -67,6 +81,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 3,
+      "slice_id": "main-block-placement"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 4,
       "slice_id": "main-block-placement"
     }
   ],
