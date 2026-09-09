@@ -61,6 +61,11 @@
     "outer": 3
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-09T16:51:27Z",
+    "head": "21623395542f861d8f16fbd83e93acde38d2b4d2",
+    "reason": "guard and changelog fixes applied after round 9's blocking finding"
+  },
   "reopens": [
     {
       "by": null,
@@ -352,7 +357,14 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "Head 69feb86. Corrects finding f1 (blocking) from round 8's security-data-specialist review. DEFECT: `just` interpolates a variadic recipe's *args into its shell line UNQUOTED, so Bash(just test:*) matched `just test '; <anything>'` and ran it unprompted. Reproduced independently before fixing, against this repo's own .tools/just 1.58.0: `just test '; echo INJECTED_COMMAND_RAN'` printed INJECTED_COMMAND_RAN. Claude Code's compound-command split does not catch it -- the ';' sits inside a quoted argument of a single command whose prefix matches. That split was the accepted plan's central safety argument. FIX: every `just` rule is now an exact match, no trailing wildcard. test, test-3-12 and test-3-11 are variadic (the live hole); test-all, lint, typecheck, fmt-check and validate-catalog take no parameters but are pinned exact too so the class cannot return via a recipe that later gains an argument. Both spellings covered (25 allow, 4 deny): AGENTS.md mandates `.tools/just`, which Bash(just ...) never matches, so the deny rules had missed the mandated form and the allow rules were inert for it -- this also addresses finding f2. AGENTS.md's claim that the instruction is 'enforced rather than merely stated' is corrected to defence in depth, naming the routes deny cannot cover (bazel run //packaging:wheel.publish, a direct twine upload). f3 (downstream repos get project-defined just names with an inert deny half) and f4 (git diff/show --output=) are documented in the CHANGELOG rather than fixed. REGRESSION GUARD: tests/test_permission_surface.py gains NoWildcardOnArgumentTakingRecipeTests -- no wildcard on any just allow rule, and both spellings denied for the publish recipes. Verified non-tautological: re-injecting Bash(just test:*) produces 2 failures. VALIDATION: `just lint` all checks passed; `just fmt-check` 229 files already formatted; `just typecheck` 51 source files no issues; `just test` 32/32; `scripts/verify_self_install.py` -> 'No changes.' exit 0; bundle/installed parity identical. NOTE: during the injection test `git checkout -- .claude/settings.json` reverted to the committed (vulnerable) version because the fix was uncommitted; caught because the guard went from 2 failures to 4, and recovered from the bundle copy. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Corrects round 8's blocking security finding: every `just` permission rule is now an exact match, and both the bare and `.tools/just` spellings are covered."
+        },
+        "head_snapshot": "0be0a599657f272700c1c6f631981cd8254d2d4d"
+      },
       "phase": "outer",
       "reviewer": null,
       "round": 9,
