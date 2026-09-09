@@ -23,7 +23,7 @@
       "timestamp": "2026-09-09T20:51:47Z"
     }
   ],
-  "current_round": 4,
+  "current_round": 5,
   "current_slice": "repo-root-resolution",
   "description": "The plan and wave-shape gates fail open on file edits when a session's cwd is a repository subdirectory, because the payload cwd is taken verbatim as the repository root.",
   "entry": null,
@@ -258,6 +258,47 @@
           }
         }
       }
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            "tests/test_gate.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Fixed both triaged blocking findings: moved SubdirectoryCwdTests above tests/test_gate.py's __main__ block so all tests run under Bazel, added a small-change-gate subdirectory regression test, and corrected the CHANGELOG's inaccurate claim that the small-change gate was unaffected.",
+          "deviations": "None beyond the two triaged findings (pr48-r4-subdir-tests-not-running, pr48-r4-small-change-subdir-gap), both explicitly authorized by the developer.",
+          "limitations": "The seven non-blocking findings from this round (architecture/maintainability suggestions, two untested edge-case branches) were not addressed; left for the developer to decide on separately.",
+          "validation": [
+            "python3 -m unittest tests.test_gate -v -> 21 tests, OK",
+            "bazel test //tests:test_gate --test_output=all -> 21/21 (was 16/20)",
+            "New test verified to fail against pre-fix code in a separate worktree at commit 355529c: assertEqual('ask', ...) got 'allow' from a subdirectory, exactly the predicted defect",
+            "bazel test //tests/... -> 31 of 31 targets pass",
+            "ruff check + ruff format --check + mypy on tests/test_gate.py -> clean"
+          ]
+        },
+        "head_snapshot": "7d0cde7f1f5b39d7365bf03119acb5c50d4e7453"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "test_quality": {
+            "evidence": "correctness-tests-specialist re-verified both triaged findings: __main__ block placement confirmed fixed repo-wide (swept every tests/*.py); new small-change subdirectory test confirmed genuine (no mocks; monkeypatching _repo_root back to pre-fix behavior reproduces the exact 'ask' != 'allow' failure); both python -m unittest and bazel test now report 21/21; CHANGELOG's false claim corrected.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "7d0cde7f1f5b39d7365bf03119acb5c50d4e7453",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
+      "round": 5,
+      "slice_id": "repo-root-resolution"
     }
   ],
   "slice_styles": {
