@@ -240,7 +240,16 @@
         }
       },
       "round": 7,
-      "slice_id": "main-block-placement"
+      "slice_id": "main-block-placement",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "outer-r7-verify-release-main-block": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
