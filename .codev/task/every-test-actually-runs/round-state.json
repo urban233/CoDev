@@ -10,6 +10,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-09T19:43:49Z",
+    "head": "edcb60c6eee356e8d7a5eeee12dc5c1daf17e4d0",
+    "reason": "Recording the inner-loop reviewer verdict committed its own bookkeeping past the recorded head"
+  },
   "reopens": [
     {
       "by": null,
