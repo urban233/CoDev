@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-09T19:26:17Z",
-    "head": "78a0384e14fde5867851d7e11010d226eb3e1808",
-    "reason": "Recorded the developer's explicit acceptance of the slice plan (Status: Accepted)"
-  },
   "reopens": [
     {
       "by": null,
