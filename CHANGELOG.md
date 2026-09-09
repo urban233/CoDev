@@ -6,7 +6,7 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Fixed
-- **Seventeen regression tests were never running under CI's Bazel leg.** An
+- **Twenty-one regression tests were never running under CI's Bazel leg.** An
   `if __name__ == "__main__": unittest.main()` block sat above test classes
   appended after it in `tests/test_task.py` and `tests/test_gate.py`.
   `tests/BUILD.bazel` builds every `test_*.py` as a `py_test` with no explicit
