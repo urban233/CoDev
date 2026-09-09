@@ -188,6 +188,40 @@ def _gate_reason(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _repo_root(start: Path) -> Path:
+    """The working-tree root containing `start`, falling back to `start`.
+
+    Gates are handed the tool call's own working directory, which is wherever
+    the developer's session happens to be -- often a subdirectory. Treating
+    that as the repository root made every path comparison below fail, and a
+    guardrail that fails open on its own bad assumption is indistinguishable
+    from one that was never configured. Git resolves this from any depth, so
+    ask it rather than walking parents here.
+
+    Falling back rather than reporting "no repository" is deliberate. The
+    wave-shape gate reads wave plans off the filesystem and needs no git at
+    all, so a directory that is not a repository is a supported case, not an
+    error; degrading there would remove enforcement that previously worked.
+    The fallback is exactly the old behavior, so this can restore the
+    subdirectory case without being able to make any other case worse.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=start,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return start
+    if result.returncode != 0:
+        return start
+    resolved = result.stdout.strip()
+    return Path(resolved) if resolved else start
+
+
 def _current_branch(repo_root: Path) -> str | None:
     result = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -264,7 +298,17 @@ def _has_populated_task_table(section_lines: list[str]) -> bool:
 
 
 def _relative(path: Path, repo_root: Path) -> Path:
-    return path.relative_to(repo_root) if path.is_absolute() else path
+    """`path` expressed relative to the repository root.
+
+    Both sides are resolved before comparing. The root comes from git, which
+    reports the physical path, while a tool payload reports whatever path the
+    session was using -- on macOS those differ for anything under a temporary
+    directory, and comparing them unresolved fails on a difference that is not
+    real.
+    """
+    if not path.is_absolute():
+        return path
+    return path.resolve().relative_to(repo_root.resolve())
 
 
 def _wave_plan_violation(repo_root: Path) -> Path | None:
@@ -458,9 +502,7 @@ def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
         file_path = str(tool_input.get("file_path") or tool_input.get("path") or "")
     if file_path:
         candidate = Path(file_path)
-        relative = (
-            candidate.relative_to(repo_root) if candidate.is_absolute() else candidate
-        )
+        relative = _relative(candidate, repo_root)
         if relative.parts and relative.parts[0] == "docs":
             return _allow(gate, "docs")
 
@@ -604,7 +646,7 @@ def check(gate: str, payload: Any, *, target: Path) -> GateDecision:
         raise ValueError(f"unknown gate {gate!r}; expected one of {GATES}")
     if not isinstance(payload, dict):
         return _not_applicable(gate, "unreadable-payload")
-    repo_root = Path(payload.get("cwd") or target)
+    repo_root = _repo_root(Path(payload.get("cwd") or target))
     try:
         return _GATES[gate](payload, repo_root)
     except Exception as error:  # noqa: BLE001 - guardrails fail open

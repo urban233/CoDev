@@ -5,6 +5,33 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- **The plan and wave-shape gates stopped enforcing anything when a session
+  ran from a subdirectory.** Both took the tool call's working directory
+  verbatim as the repository root, so every path comparison against it raised,
+  and the resulting `degraded` decision is one every hook shim allows. A
+  repository whose gates all fail open looks exactly like one with no
+  guardrails configured, which is why this was silent. The gates now ask git
+  for the working-tree root, falling back to the supplied path when git cannot
+  answer -- so a directory that is not a repository, which the wave-shape gate
+  supports and needs no git for, behaves exactly as it did before. Path
+  comparisons resolve both sides, which also fixes the physical-versus-symlink
+  mismatch that broke any path under a macOS temporary directory. The plan
+  gate's Bash path was never affected. The `small-change` gate was affected
+  worse than the other two: from a subdirectory, an over-budget slice was
+  silently decided `allow "within-budget"` rather than `ask` -- a wrong
+  decision, not just a visible `degraded` gap. All three gates are now
+  covered by subdirectory tests so none of this can regress.
+
+  If you have been running CoDev from a subdirectory, expect the gates to
+  start asking again. Those prompts were being suppressed, not passed.
+
+- **The gate-decision log is ignored wherever a hook writes it.** Its
+  `.gitignore` entry was root-anchored, so a log written from a subdirectory —
+  the same condition as the bug above — showed up as untracked noise in the
+  change under review. Now globbed, in both the installed file and the
+  `GITIGNORE_BLOCK` the installer writes, which had drifted apart.
+
 ## [0.7.2] - 2026-09-07
 
 ### Fixed
