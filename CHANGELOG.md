@@ -5,6 +5,22 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- **Four regression tests were never running under CI's Bazel leg.** An
+  `if __name__ == "__main__": unittest.main()` block sat above test classes
+  appended after it in `tests/test_task.py` and `tests/test_gate.py`.
+  `tests/BUILD.bazel` builds every `test_*.py` as a `py_test` with no explicit
+  `main`, so Bazel runs the file as `__main__` and `unittest.main()` exited
+  before those classes were defined — `test_task` ran 176 of 180 and
+  `test_gate` 16 of 20. The raw `python -m unittest discover` legs imported
+  the module instead and did run them, which is why CI stayed green and the
+  gap was invisible.
+
+  The blocks move to the end of their files, and every test module was scanned
+  for the same shape. Worth knowing when adding a test: appending a class to
+  the end of a file is not enough — check it below the `__main__` block, and
+  confirm the count under Bazel rather than under `python -m unittest`.
+
 ### Added
 - **`.claude/settings.json` now ships a `permissions.allow`/`permissions.deny`
   surface.** `allow` covers the read-only and verification commands CoDev's

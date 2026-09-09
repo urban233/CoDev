@@ -310,10 +310,6 @@ class GateDispatchTests(unittest.TestCase):
         self.assertTrue(decision.recorded)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SubdirectoryCwdTests(unittest.TestCase):
     """A session's working directory is wherever the developer happens to be.
 
@@ -408,3 +404,7 @@ class SubdirectoryCwdTests(unittest.TestCase):
                 target=Path(outside),
             )
         self.assertEqual("ask", decision.decision)
+
+
+if __name__ == "__main__":
+    unittest.main()
