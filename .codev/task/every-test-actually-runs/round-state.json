@@ -1,5 +1,47 @@
 {
   "base_snapshot": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Test-only change: moves an if __name__ == '__main__' block below existing test classes so Bazel collects them; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 7,
+      "slice_id": "main-block-placement",
+      "timestamp": "2026-09-09T19:55:44Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Test-only change: moves an if __name__ == '__main__' block below existing test classes so Bazel collects them; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 7,
+      "slice_id": "main-block-placement",
+      "timestamp": "2026-09-09T19:55:44Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Test-only change: moves an if __name__ == '__main__' block below existing test classes so Bazel collects them; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 7,
+      "slice_id": "main-block-placement",
+      "timestamp": "2026-09-09T19:55:45Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Test-only change: moves an if __name__ == '__main__' block below existing test classes so Bazel collects them; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 7,
+      "slice_id": "main-block-placement",
+      "timestamp": "2026-09-09T19:55:46Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Test-only change: moves an if __name__ == '__main__' block below existing test classes so Bazel collects them; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 7,
+      "slice_id": "main-block-placement",
+      "timestamp": "2026-09-09T19:55:47Z"
+    }
+  ],
   "current_round": 7,
   "current_slice": "main-block-placement",
   "description": "Four regression tests added this release never ran under CI's Bazel leg, because an if __name__ == __main__ block sat above the classes appended after it.",
@@ -154,7 +196,49 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist independently reproduced bazel test //tests:test_gate //tests:test_task (20/20, 180/180) and confirmed the reordering is byte-identical apart from position (AST scan: no class follows either __main__ guard, no assertions changed).",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "No error-handling paths were modified; the newly-executing test classes include real error-path assertions (e.g. test_gate.py's out-of-repo target returning 'ask') that previously never ran.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist found tests/test_verify_release.py has no __main__ guard and runs 0/13 tests under Bazel (same defect class, in-scope per the PR's own CHANGELOG completeness claim), plus no regression guard exists to catch this defect class if reintroduced. See findings outer-r7-verify-release-main-block (blocking) and outer-r7-no-regression-guard (non-blocking).",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "outer-r7-verify-release-main-block",
+            "location": "tests/test_verify_release.py",
+            "rank": 1,
+            "summary": "tests/test_verify_release.py has no `if __name__ == \"__main__\"` block at all, so Bazel runs it as __main__ and unittest.main() is never called: ReleaseVerificationTests (8) and BundlePackagingTests (5) all run 0/13 under Bazel, while `python -m unittest` runs all 13. This is the same silent-skip defect class this PR exists to fix, and it falls inside the PR's own stated scope -- the CHANGELOG claims 'every test module was scanned for the same shape,' which is true only for the 'class below the guard' shape and misses the 'no guard at all' sibling shape."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "outer-r7-no-regression-guard",
+            "location": "tests/",
+            "rank": 2,
+            "summary": "No regression guard exists to fail if a __main__-block-placement or missing-__main__ defect is reintroduced in any tests/test_*.py file; the failure mode is silent by construction (CI's `python -m unittest discover` legs stay green either way). Suggested follow-up: a small AST-based meta-test asserting every tests/test_*.py ends with an `if __name__ == \"__main__\": unittest.main()` guard as its last top-level statement, following the precedent of tests/test_documentation_links.py, tests/test_permission_surface.py, and tests/test_navigator_coverage.py."
+          }
+        ],
+        "head_snapshot": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
       "round": 7,
       "slice_id": "main-block-placement"
     }
