@@ -1,6 +1,6 @@
 {
-  "base_snapshot": "d39317626eaedcbabfd927f4addfbaf458838563",
-  "current_round": 3,
+  "base_snapshot": "d23a94e7357456ed4c77e2d566db7a25f6352ff1",
+  "current_round": 4,
   "current_slice": "reviewer-handoff",
   "description": "The two inner-loop reviewers were the only agents required to run codev task record themselves, making the least-recoverable action the last one under a turn cap. Four consecutive dispatches died there.",
   "entry": null,
@@ -38,6 +38,20 @@
       "reason": "Rebased onto main after gate-root-resolution merged (PR 48); every commit hash changed, so round-state's recorded snapshots no longer matched. Re-anchoring; no code changed beyond the rebase itself.",
       "timestamp": "2026-09-09T21:31:21Z",
       "to_round": 3
+    },
+    {
+      "by": "urban233",
+      "from_round": 3,
+      "head": "d23a94e7357456ed4c77e2d566db7a25f6352ff1",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Absorb the plan-doc commit (written and accepted retroactively) before outer-loop review",
+      "timestamp": "2026-09-09T21:35:39Z",
+      "to_round": 4
     }
   ],
   "reviewer": null,
@@ -79,6 +93,13 @@
       "phase": "outer",
       "reviewer": null,
       "round": 3,
+      "slice_id": "reviewer-handoff"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 4,
       "slice_id": "reviewer-handoff"
     }
   ],
