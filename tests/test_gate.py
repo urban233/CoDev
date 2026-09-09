@@ -36,6 +36,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from codev_workflow import config, git_ops
 from codev_workflow.gate import GATES, check
 
 
@@ -310,10 +311,6 @@ class GateDispatchTests(unittest.TestCase):
         self.assertTrue(decision.recorded)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SubdirectoryCwdTests(unittest.TestCase):
     """A session's working directory is wherever the developer happens to be.
 
@@ -373,6 +370,40 @@ class SubdirectoryCwdTests(unittest.TestCase):
             from_root, self._edit_from(self.subdirectory, gate="wave-shape")
         )
 
+    def test_the_small_change_gate_decides_an_open_pr_the_same_from_a_subdirectory(
+        self,
+    ) -> None:
+        """This gate never compares paths, but it does resolve the task's
+        repository root to measure the slice's size -- the same unresolved
+        `cwd` bug, one level removed. Pre-fix, an over-budget slice opened
+        from a subdirectory was silently decided `allow "within-budget"`
+        rather than `ask`: worse than the plan and wave-shape gates'
+        `degraded`, because a `degraded` decision is at least visible as a
+        gap, while a wrong `allow` looks like a working guardrail that
+        happens to agree the change is fine.
+        """
+        base = git_ops.current_head(self.target)
+        git_ops.create_branch("subdir-task", base, target=self.target)
+        config.set_value("review.max_lines", "1", target=self.target)
+        (self.target / "big.txt").write_text("a\nb\nc\n", encoding="utf-8")
+        git_ops.commit("subdir-task", "big change", target=self.target)
+
+        def _open_pr_from(cwd: Path) -> str:
+            return check(
+                "small-change",
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {
+                        "command": "codev git open-pr --id subdir-task --title x"
+                    },
+                    "cwd": str(cwd),
+                },
+                target=cwd,
+            ).decision
+
+        self.assertEqual("ask", _open_pr_from(self.target))
+        self.assertEqual("ask", _open_pr_from(self.subdirectory))
+
     def test_a_repository_mutating_bash_command_is_still_gated(self) -> None:
         """Already correct before the root fix, because the Bash path never
         compares paths. Pinned so restoring the edit path cannot quietly
@@ -408,3 +439,7 @@ class SubdirectoryCwdTests(unittest.TestCase):
                 target=Path(outside),
             )
         self.assertEqual("ask", decision.decision)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -17,8 +17,11 @@ Semantic Versioning.
   supports and needs no git for, behaves exactly as it did before. Path
   comparisons resolve both sides, which also fixes the physical-versus-symlink
   mismatch that broke any path under a macOS temporary directory. The plan
-  gate's Bash path and the `small-change` gate were never affected and are now
-  covered by tests so they cannot regress.
+  gate's Bash path was never affected. The `small-change` gate was affected
+  worse than the other two: from a subdirectory, an over-budget slice was
+  silently decided `allow "within-budget"` rather than `ask` -- a wrong
+  decision, not just a visible `degraded` gap. All three gates are now
+  covered by subdirectory tests so none of this can regress.
 
   If you have been running CoDev from a subdirectory, expect the gates to
   start asking again. Those prompts were being suppressed, not passed.
