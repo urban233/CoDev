@@ -1,6 +1,6 @@
 # main-block-placement Implementation Plan
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** urban233
 **Reviewer:** lightweight-reviewer (inner loop)
 **Risk:** low
