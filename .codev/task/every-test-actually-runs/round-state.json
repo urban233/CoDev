@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-09T19:10:37Z",
-    "head": "eba8ea2d7a9fc25876ed8db4801e76c06dd7ac97",
-    "reason": "Fix for the __main__-block-placement bug was applied and verified directly by the task owner outside the tracked builder/reviewer loop"
-  },
   "reopens": [
     {
       "by": null,
