@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+  "base_snapshot": "9d505c4617360215e93df56e40eaca01915ace71",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -42,7 +42,7 @@
       "timestamp": "2026-09-09T19:55:47Z"
     }
   ],
-  "current_round": 8,
+  "current_round": 9,
   "current_slice": "main-block-placement",
   "description": "Four regression tests added this release never ran under CI's Bazel leg, because an if __name__ == __main__ block sat above the classes appended after it.",
   "entry": null,
@@ -150,6 +150,20 @@
       "reason": "Round cap exhausted by empty reconciliation rounds from my own bookkeeping-commit drift fixes, not genuine review churn; raising to give the one triaged 'address' finding a round to build in",
       "timestamp": "2026-09-09T20:06:07Z",
       "to_round": 8
+    },
+    {
+      "by": "urban233",
+      "from_round": 8,
+      "head": "9d505c4617360215e93df56e40eaca01915ace71",
+      "max_rounds": {
+        "inner": 8,
+        "outer": 8
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Fixed a one-word CHANGELOG count inaccuracy the specialist caught during its correction re-verification; re-anchoring before recording the round",
+      "timestamp": "2026-09-09T20:13:14Z",
+      "to_round": 9
     }
   ],
   "reviewer": null,
@@ -266,10 +280,36 @@
       }
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            "tests/test_verify_release.py",
+            "tests/test_every_test_class_runs_under_bazel.py",
+            "CHANGELOG.md",
+            "docs/codev/task/every-test-actually-runs/main-block-placement-implementation-plan.md"
+          ],
+          "delivered": "Added the missing if __name__ == \"__main__\": unittest.main() block to tests/test_verify_release.py (was missing entirely, so Bazel ran 0/13 of its tests) and added tests/test_every_test_class_runs_under_bazel.py, an AST-based regression guard that fails if any tests/test_*.py file is ever missing a trailing __main__ guard.",
+          "deviations": "None beyond the scope of the triaged finding (outer-r7-verify-release-main-block) and the accompanying non-blocking suggestion (outer-r7-no-regression-guard), both of which the developer explicitly authorized addressing in this same round.",
+          "limitations": "None known.",
+          "validation": [
+            "python3 -m unittest tests.test_verify_release tests.test_every_test_class_runs_under_bazel -v -> 14 tests, OK",
+            "bazel test //tests:test_verify_release //tests:test_every_test_class_runs_under_bazel --test_output=all -> test_verify_release 13/13 (was 0/13), test_every_test_class_runs_under_bazel 1/1",
+            "bazel test //tests/... -> 33 of 33 targets pass",
+            "ruff check + ruff format --check + mypy on both changed/new files -> clean"
+          ]
+        },
+        "head_snapshot": "42eae8186e7729412eb348bdb374542a2710a44d"
+      },
       "phase": "outer",
       "reviewer": null,
       "round": 8,
+      "slice_id": "main-block-placement"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 9,
       "slice_id": "main-block-placement"
     }
   ],
