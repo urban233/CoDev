@@ -81,7 +81,17 @@
     {
       "builder": null,
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independently re-ran bazel test //tests:test_gate //tests:test_task: test_gate 20/20, test_task 180/180 (previously 16/20 and 176/180). Confirmed the __main__ blocks in both files now sit after every test class, matching the accepted plan; no assertion or behavior changes, scope limited to tests/test_gate.py, tests/test_task.py, CHANGELOG.md, and no other test_*.py file has the same shape.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "3a21b32d17a518533f0036d0529dddfb1d9c9fcb"
+      },
       "round": 4,
       "slice_id": "main-block-placement"
     }
