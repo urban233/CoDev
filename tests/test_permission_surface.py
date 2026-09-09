@@ -85,10 +85,6 @@ class PermissionSurfaceTests(unittest.TestCase):
         self.assertEqual(3, len(settings["hooks"]["PreToolUse"]))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class NoWildcardOnArgumentTakingRecipeTests(unittest.TestCase):
     """A trailing wildcard on a `just` recipe is an arbitrary-command grant.
 
@@ -138,3 +134,7 @@ class NoWildcardOnArgumentTakingRecipeTests(unittest.TestCase):
             for recipe in ("publish-pypi", "publish-testpypi"):
                 with self.subTest(spelling=spelling, recipe=recipe):
                     self.assertIn(f"Bash({spelling} {recipe}:*)", deny)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -11,11 +11,14 @@ Semantic Versioning.
   own workflow runs constantly (`codev next`, `codev task check`, `codev task
   log`, `just test`/`lint`/`typecheck`/`fmt-check`/`validate-catalog`, `git
   diff`/`status`/`log`/`show`, `gh pr view`, `gh run view`), so a routine loop
-  turn stops raising a permission prompt for each one. `deny` covers `just
-  publish-pypi` and `just publish-testpypi`, turning AGENTS.md's existing
-  prose warning against running them as an agent into an enforced rule —
-  `deny` applies to nested subcommands, so it also catches the indirect
-  phrasing the warning already called out (`just ci && just publish-pypi`).
+  turn stops raising a permission prompt for each one. `deny` covers `just publish-pypi`
+  and `just publish-testpypi` in both the bare and `.tools/just` spellings,
+  and because deny applies to nested subcommands it also catches the indirect
+  phrasing AGENTS.md already warned about (`just ci && just publish-pypi`).
+  Treat it as defence in depth rather than enforcement: it cannot cover every
+  route to the same irreversible action — `bazel run //packaging:wheel.publish`
+  and a direct `twine upload` both reach PyPI without matching it, so
+  AGENTS.md's prose, not this rule, remains what every platform relies on.
   Every `just` rule is an **exact match**, never a trailing wildcard: `just`
   interpolates a variadic recipe's arguments into its shell line unquoted, so
   `Bash(just test:*)` would have matched `just test '; <anything>'` and run it
