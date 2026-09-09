@@ -61,11 +61,6 @@
     "outer": 4
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-09T16:51:27Z",
-    "head": "21623395542f861d8f16fbd83e93acde38d2b4d2",
-    "reason": "guard and changelog fixes applied after round 9's blocking finding"
-  },
   "reopens": [
     {
       "by": null,
@@ -380,7 +375,63 @@
         "head_snapshot": "0be0a599657f272700c1c6f631981cd8254d2d4d"
       },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "All five checks completed successfully. Check 1: Allow list verified as read-only/verification only \u2014 codev next/task check/task log; just test/lint/typecheck/fmt-check/validate-catalog; git diff/status/log/show; gh pr view/run view. No mutating commands present. Explicitly excluded per plan: all codev git *, codev task record/round close/slice *, just fmt, just dist, gh pr create/merge/edit. Check 2: AGENTS.md changes verified \u2014 dispatcher correctly preserved '**Never run this as an agent.**' markers in both publish recipe rows, restored the platform-agnostic warning text that builder had deleted, and added pointer to the deny rule. The resulting prose correctly explains the Claude Code enforcement while noting that other platforms still rely on prose alone. Check 3: Derived copies confirmed in sync \u2014 PYTHONPATH=src python3 scripts/verify_self_install.py returned 'No changes.' exit 0; diff -q .claude/settings.json src/codev_workflow/bundle/.claude/settings.json showed no differences. Check 4: All validation passed \u2014 `.tools/just fmt-check` (228 files already formatted), `.tools/just lint` (All checks passed!), `.tools/just typecheck` (Success: no issues in 51 source files), `.tools/just test` (32/32 pass including test_permission_surface). Test is not tautological: test_publish_recipes_are_denied asserts both deny entries are present and would fail if either was deleted; test_bundle_and_installed_copies_are_byte_identical catches drift; test_bundle_settings_json_parses validates JSON integrity. Check 5: CHANGELOG carries accurate workspace-trust caveat \u2014 explicitly states project allow rules only take effect after workspace trust dialog acceptance, deny rules apply regardless, and fresh clone may not see prompt reduction though publish recipes stay refused.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "Re-review of round 8's blocking f1 across base 565d310..head 0be0a59. f1 CLOSED: all 16 `just` allow rules in both .claude/settings.json and the bundle copy are exact matches with no trailing `:*`, so `just test '; <anything>'` no longer matches any rule and raises a prompt; just's unquoted *args interpolation has nothing to interpolate for a bare recipe, and command substitution / appended args likewise fail the exact match. Read every one of the 25 allow rules against the Justfile: test/test-all/test-3-12/test-3-11 (bazel test), lint (ruff check), fmt-check (ruff format --check, non-mutating), typecheck (mypy), validate-catalog (scripts/validate-development-workflow.py, no write_text/mkdir/unlink anywhere in it). The mutating recipes -- fmt, lock, dist, wheel, publish-* -- are all absent from allow; no new side-effecting recipe was introduced. f2 CLOSED: both `just` and `.tools/just` spellings are denied for publish-pypi and publish-testpypi, and AGENTS.md's over-claim is corrected to defence in depth naming the routes deny cannot cover. COMPATIBILITY OK: permissions.allow/deny are long-standing Claude Code keys, added alongside an unchanged defaultMode=plan and three unchanged PreToolUse hooks; bundle and installed copies are byte-identical (diff exit 0); installer.py:1220-1244 turns a locally modified .claude/settings.json into a `conflict` rather than overwriting it, so no downstream data loss. BLOCKING GAP f5: the regression guard is inert. tests/BUILD.bazel py_test runs the file as __main__ and `unittest.main()` at line 88 sys.exit()s before NoWildcardOnArgumentTakingRecipeTests is defined at line 92; `bazel test //tests:test_permission_surface --nocache_test_results --test_output=all` reports 'Ran 4 tests ... OK' and neither guard test runs. Reintroducing Bash(just test:*) would ship green, and the builder receipt's 'produces 2 failures' claim is not reproducible under the project's own gate. One-line fix (move the __main__ block to the end).",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f5",
+            "location": "tests/test_permission_surface.py:88-140 -- `if __name__ == \"__main__\": unittest.main()` sits ABOVE class NoWildcardOnArgumentTakingRecipeTests",
+            "rank": 1,
+            "summary": "The regression guard for round 8's blocking ACE finding never executes. tests/BUILD.bazel builds every test_*.py as a py_test with no explicit `main`, so bazel runs the file AS `__main__`; the module executes top to bottom, hits `if __name__ == \"__main__\": unittest.main()` at line 88, and unittest.main() sys.exit()s before lines 92-140 ever define NoWildcardOnArgumentTakingRecipeTests. Verified twice, hard: `python3 tests/test_permission_surface.py -v` -> 'Ran 4 tests', and `bazel test //tests:test_permission_surface --test_output=all --nocache_test_results` -> 'Ran 4 tests ... OK'. The four are the pre-existing PermissionSurfaceTests; neither test_no_just_allow_rule_uses_a_wildcard nor test_both_just_spellings_are_denied_for_the_publish_recipes runs. CI has no other runner (no pytest anywhere in .github/workflows/ci.yml; the quality gate is `just test-all`/`just lint`/etc., i.e. bazel), so the guard is inert everywhere. Consequence for my dimension: reintroducing `Bash(just test:*)` -- the exact arbitrary-code-execution grant that blocked round 8 -- would pass the full test suite green, and the builder receipt's claim 'Verified non-tautological: re-injecting Bash(just test:*) produces 2 failures' is not reproducible under the project's own test command and would be recorded as verified evidence. The guard's own logic is sound (`rule.rstrip(')').endswith(':*')` does fire on 'Bash(just test:*)', and the deny assertions match the shipped strings), so the fix is one move: put the `if __name__ == \"__main__\"` block at the end of the file. Note the settings themselves are safe today -- this is the durability of the security fix, not a live hole."
+          },
+          {
+            "blocking": false,
+            "category": "compatibility",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": "src/codev_workflow/bundle/.claude/settings.json:4-31 (installed verbatim downstream via installer.py plan_install/plan_update)",
+            "rank": 2,
+            "summary": "Carried forward from round 8, now documented rather than fixed, and I accept that disposition. Consumers still inherit eight standing `just <recipe>` grants naming project-defined scripts CoDev does not control, while the deny half (this project's publish recipes) is inert there. Two things reduce it below blocking: exact matching means only the bare recipe with no arguments is granted, so the unquoted-*args injection route no longer travels downstream; and installer.py only rewrites .claude/settings.json on update when the local copy still hashes to the recorded lock hash (installer.py:1220-1244) -- a consumer who edited their own permission rules gets a `conflict` operation, not a silent clobber, so there is no data-loss or silent-privilege-grant path for a customized file. An unmodified consumer does silently gain the new grants on `codev update`; the CHANGELOG's 'Downstream caveat' names exactly that and tells them to review the allow list against their own Justfile."
+          },
+          {
+            "blocking": false,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": ".claude/settings.json:24,26,27 -- Bash(git diff:*), Bash(git log:*), Bash(git show:*)",
+            "rank": 3,
+            "summary": "Unchanged by this round and still non-blocking; re-confirmed nothing worse lurks in the untouched wildcard rules. git's diff-generation options include --output=<file>, accepted by `git diff`, `git show` and `git log -p`, so these three carry a low-severity unprompted write primitive whose content is diff text, not attacker-chosen bytes. The other classic git escape -- pager, textconv, or external diff driver -- needs a command name configured in .git/config, which a clone does not carry (.gitattributes alone only names a driver), so it is not reachable from an untrusted repository. `git status` has no equivalent. `gh pr view`/`gh run view` are read-only in every flag combination I could construct; `codev next`, `codev task check` and `codev task log` are all print-only paths (cli.py:412-427, 638-644, 799-801)."
+          },
+          {
+            "blocking": false,
+            "category": "security",
+            "expansion_reason": null,
+            "id": "f6",
+            "location": "CHANGELOG.md '### Added' -- 'turning AGENTS.md's existing prose warning against running them as an agent into an enforced rule'",
+            "rank": 4,
+            "summary": "The over-claim f2 flagged in AGENTS.md was corrected there but survives in the CHANGELOG. AGENTS.md now says the right thing ('defence in depth rather than a guarantee', naming `bazel run //packaging:wheel.publish` and a direct `twine upload` as routes deny cannot cover); the CHANGELOG entry describing the same rules still says 'enforced rule' with no such qualifier, and `just -f Justfile publish-pypi`, `./.tools/just publish-pypi` and the two bazel/twine routes all miss the four deny patterns. Cosmetic relative to f2's substance -- the document agents actually read is now accurate -- so one clause, not a hold."
+          }
+        ],
+        "head_snapshot": "69feb86c0eb52318dd78f2c35abafb734877eb5d",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 9,
       "slice_id": "permission-surface"
     },
