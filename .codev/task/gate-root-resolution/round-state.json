@@ -244,7 +244,20 @@
         }
       },
       "round": 4,
-      "slice_id": "repo-root-resolution"
+      "slice_id": "repo-root-resolution",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "pr48-r4-small-change-subdir-gap": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "pr48-r4-subdir-tests-not-running": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
