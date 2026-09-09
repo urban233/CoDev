@@ -10,6 +10,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-09T19:44:25Z",
+    "head": "e74b5f137148f9ac8e5ecfc901fa3bd0fb928ff8",
+    "reason": "Flushed the resume's own leftover bookkeeping diff"
+  },
   "reopens": [
     {
       "by": null,
