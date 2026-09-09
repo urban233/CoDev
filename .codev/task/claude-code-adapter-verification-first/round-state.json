@@ -61,6 +61,11 @@
     "outer": 2
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-09T16:37:45Z",
+    "head": "69feb86c0eb52318dd78f2c35abafb734877eb5d",
+    "reason": "security fix applied after round 8's blocking finding"
+  },
   "reopens": [
     {
       "by": null,
