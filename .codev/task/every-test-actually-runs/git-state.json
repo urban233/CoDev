@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "e41242b29725c84b345de3358ed09c6b9a8bf545",
+  "branch": "codev/every-test-actually-runs--main-block-placement",
+  "slice_branches": {
+    "main-block-placement": {
+      "base_snapshot": "e41242b29725c84b345de3358ed09c6b9a8bf545",
+      "branch": "codev/every-test-actually-runs--main-block-placement"
+    }
+  }
+}
