@@ -42,14 +42,14 @@
       "timestamp": "2026-09-09T19:55:47Z"
     }
   ],
-  "current_round": 7,
+  "current_round": 8,
   "current_slice": "main-block-placement",
   "description": "Four regression tests added this release never ran under CI's Bazel leg, because an if __name__ == __main__ block sat above the classes appended after it.",
   "entry": null,
   "link_ref": null,
   "max_rounds": {
-    "inner": 6,
-    "outer": 3
+    "inner": 8,
+    "outer": 8
   },
   "owner": "urban233",
   "reopens": [
@@ -136,6 +136,20 @@
       "reason": "Re-anchor base_snapshot to the final flushed bookkeeping commit before outer-loop specialist dispatch",
       "timestamp": "2026-09-09T19:47:15Z",
       "to_round": 7
+    },
+    {
+      "by": "urban233",
+      "from_round": 7,
+      "head": "6674640c2dc41dfe81f9e37cfc17f0b048799839",
+      "max_rounds": {
+        "inner": 8,
+        "outer": 8
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round cap exhausted by empty reconciliation rounds from my own bookkeeping-commit drift fixes, not genuine review churn; raising to give the one triaged 'address' finding a round to build in",
+      "timestamp": "2026-09-09T20:06:07Z",
+      "to_round": 8
     }
   ],
   "reviewer": null,
@@ -250,6 +264,13 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 8,
+      "slice_id": "main-block-placement"
     }
   ],
   "slice_styles": {
