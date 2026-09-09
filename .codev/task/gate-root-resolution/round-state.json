@@ -1,5 +1,28 @@
 {
   "base_snapshot": "7d027a5acbf875cebeb2c1552613007a8e8ab470",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Path-resolution and .gitignore/installer-drift fix; no credential, network, data, or serialization surface touched.",
+      "round": 4,
+      "timestamp": "2026-09-09T20:51:46Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrent or shared-state code paths touched; gate.py's fix is a single synchronous path comparison.",
+      "round": 4,
+      "timestamp": "2026-09-09T20:51:47Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No migration, no exposure change; a hook-side bug fix reversible by codev adapter remove/reinstall like any other adapter change.",
+      "round": 4,
+      "timestamp": "2026-09-09T20:51:47Z"
+    }
+  ],
   "current_round": 4,
   "current_slice": "repo-root-resolution",
   "description": "The plan and wave-shape gates fail open on file edits when a session's cwd is a repository subdirectory, because the payload cwd is taken verbatim as the repository root.",
@@ -105,7 +128,121 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist traced every root-resolution and git-invocation site in the repo; confirmed gate decisions now resolve through one canonical path (_relative), with the diff staying within its stated intent. Two non-blocking deviations from the accepted plan noted: _repo_root duplicates git_ops._run_git rather than reusing it, and the hook shims retain the same ad hoc root-resolution pattern this task fixed inside gate.py itself.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist confirmed all four _relative call sites now share one resolved root, reproduced the two new subdirectory tests genuinely failing against pre-fix code, and confirmed GITIGNORE_BLOCK now matches the repo's own .gitignore byte-for-byte. Two non-blocking sharp edges noted (findings pr48-r4-symlink-inside-repo-fail-open, pr48-r4-relative-path-branch-stale-assumption); neither is a wrong decision, both fail open/closed predictably.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist confirmed _repo_root handles OSError, TimeoutExpired, non-zero exit, and empty stdout, preserving prior behavior for non-repository directories. One non-blocking gap: a symlink-inside-repo ValueError still routes through check()'s catch-all as an indistinguishable 'degraded' (pr48-r4-symlink-inside-repo-fail-open).",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist confirmed the GITIGNORE_BLOCK/.gitignore drift class is already structurally guarded by CI's verify_self_install check (which is how this diff's own drift was caught), and found the _plan_gate de-duplication (routing the docs-shortcut through _relative) a genuine improvement. One non-blocking gap: the accepted plan's declared allowed-scope and completion checklist were not amended to reflect the installer.py change or the dropped 'no repository root' step.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "Two blocking gaps found independently by both specialists: the new SubdirectoryCwdTests class never runs under Bazel/just test (pr48-r4-subdir-tests-not-running), and the small-change gate -- the worst pre-fix failure of the three -- has no subdirectory-cwd regression test at all, while the CHANGELOG incorrectly claims it was unaffected (pr48-r4-small-change-subdir-gap). Additional non-blocking gaps: a weak existing assertion on the gitignore glob, and an untested fallback branch.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr48-r4-subdir-tests-not-running",
+            "location": "tests/test_gate.py",
+            "rank": 1,
+            "summary": "The new SubdirectoryCwdTests class sits after tests/test_gate.py's `if __name__ == \"__main__\": unittest.main()` block, so Bazel (which runs the file as __main__ with no explicit main=) never defines or runs it: bazel test //tests:test_gate reports 16 tests, python -m unittest reports 20. This is the same defect class as task every-test-actually-runs fixed elsewhere on the stack -- confirmed independently by both correctness-tests-specialist and architecture-maintainability-specialist. Every local `just test`/`just test-all` invocation and the Bazel CI leg silently run zero of these four regression tests; only the GitHub Actions `python -m unittest discover` matrix leg collects them."
+          },
+          {
+            "blocking": true,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr48-r4-small-change-subdir-gap",
+            "location": "tests/test_small_change_hook.py, CHANGELOG.md",
+            "rank": 2,
+            "summary": "No test exercises the small-change gate from a subdirectory cwd, even though correctness-tests-specialist reproduced that it was the *worst* pre-fix failure of the three gates: an over-budget slice opened from a subdirectory was pre-fix decided `allow \"within-budget\"` (a silent false negative), not `degraded` like the plan/wave-shape gates. CHANGELOG.md's line \"The plan gate's Bash path and the small-change gate were never affected and are now covered by tests so they cannot regress\" is factually wrong on both halves for the small-change gate: it was affected, and it has no subdirectory-cwd test anywhere in the repo (SubdirectoryCwdTests only covers the plan and wave-shape gates)."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr48-r4-repo-root-duplicates-run-git",
+            "location": "src/codev_workflow/gate.py:191 (_repo_root)",
+            "rank": 3,
+            "summary": "The accepted plan specified reusing git_ops._run_git, which gate.py already imports; the shipped _repo_root instead inlines its own subprocess.run call with a different timeout (5s vs _run_git's 30s), duplicating boilerplate from the neighboring _current_branch. A try/except GitOpsError: return start wrapper around _run_git would get the same fallback behavior through one canonical git-invocation path. The plan was not amended to reflect this deviation."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr48-r4-shims-still-ad-hoc-root",
+            "location": ".claude/hooks/require_plan.py, require_wave_shape.py, require_small_change.py (and bundle/ copies)",
+            "rank": 4,
+            "summary": "All three hook shims still do `repo_root = Path(payload.get(\"cwd\") or Path.cwd())` -- the exact ad hoc pattern this task fixed inside gate.py itself. Gate *decisions* are now correct, but the decision-log write still lands under the unresolved subdirectory path, and the plan's stated rationale (\"once the root resolves correctly the log should land at the root anyway\") is incorrect for that reason. Outside this task's declared scope, so non-blocking, but the .gitignore glob-broadening fix elsewhere in this diff is a permanent symptom fix for exactly this residual gap rather than a transitional one."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr48-r4-weak-gitignore-test-assertion",
+            "location": "tests/test_installer.py:664",
+            "rank": 5,
+            "summary": "The existing assertion `assertIn(\".codev/hooks/decisions.jsonl\", gitignore)` still matches the new globbed form `**/.codev/hooks/decisions.jsonl` as a substring, so nothing pins the new anchoring -- a revert to root-anchored would only be caught by CI's separate self-install diff check, not by this unit test."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr48-r4-scope-crossed-plan-not-amended",
+            "location": "docs/codev/task/gate-root-resolution/repo-root-resolution-implementation-plan.md",
+            "rank": 6,
+            "summary": "The accepted plan's allowed scope lists gate.py, .gitignore, tests/, CHANGELOG.md -- not installer.py, which this diff also correctly and necessarily changes (CI-forced, not separable). The plan's own completion checklist asserts \"git diff confirms no change outside the allowed scope\", which is no longer true, and the plan still names a step 2 (a `degraded` reason for a missing repo root) that was deliberately dropped, undocumented in the plan itself."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "pr48-r4-symlink-inside-repo-fail-open",
+            "location": "src/codev_workflow/gate.py:311 (_relative)",
+            "rank": 7,
+            "summary": "`path.resolve().relative_to(repo_root.resolve())` means a file reached through a symlink *inside* the working tree now resolves outside repo_root, raising ValueError, which check()'s catch-all turns into a blanket `degraded` decision -- indistinguishable in the decision log from a genuinely out-of-repository edit. Pre-fix, this case's unresolved comparison happened to succeed."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr48-r4-relative-path-branch-stale-assumption",
+            "location": "src/codev_workflow/gate.py:309-310 (_relative)",
+            "rank": 8,
+            "summary": "_relative's non-absolute-path branch returns the payload path unchanged, which was correct when repo_root equaled the payload cwd; it is not correct now that repo_root is the resolved working-tree root. From cwd=/repo/src with a relative payload path \"docs/x.md\" (naming /repo/src/docs/x.md), the gate now classifies it against the wrong root. Every existing test uses cwd == root with relative paths, so nothing pins this; the \"a subdirectory decides identically\" claim holds only for absolute payload paths."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr48-r4-fallback-branch-untested",
+            "location": "src/codev_workflow/gate.py (_repo_root except OSError/TimeoutExpired)",
+            "rank": 9,
+            "summary": "The except (OSError, TimeoutExpired) fallback branch in _repo_root -- what keeps gates working on a machine with no git on PATH -- is unexercised by any test; only the returncode != 0 branch is covered."
+          }
+        ],
+        "head_snapshot": "210c0fffadf5037bf63234812ce813b09105f80d",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
       "round": 4,
       "slice_id": "repo-root-resolution"
     }
