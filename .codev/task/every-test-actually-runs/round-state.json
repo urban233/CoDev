@@ -14,7 +14,24 @@
   "round_schema_version": 4,
   "rounds": [
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            "tests/test_verify_release.py",
+            "tests/test_every_test_class_runs_under_bazel.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Added the missing if __name__ == \"__main__\": unittest.main() block to tests/test_verify_release.py (was missing entirely, so Bazel ran 0/13 of its tests) and added tests/test_every_test_class_runs_under_bazel.py, an AST-based regression guard that fails if any tests/test_*.py file is ever missing a trailing __main__ guard, or has one that isn't its last statement.",
+          "deviations": "This slice was originally implemented and reviewed earlier today as part of a larger PR (#53) whose branch had tangled pre-existing history (stacked on uncleaned copies of two other tasks' work). Two of that PR's three file changes (tests/test_gate.py, tests/test_task.py) turned out to be redundant with fixes independently merged via PR #48 and PR #52 in the meantime -- confirmed by diffing against origin/main before rebuilding. This slice was rebuilt from a clean base with only the genuinely unique, not-yet-merged content: the tests/test_verify_release.py fix and the new regression-guard test.",
+          "limitations": "None known.",
+          "validation": [
+            "python3 -m unittest tests.test_verify_release tests.test_every_test_class_runs_under_bazel -v -> 14 tests, OK",
+            "bazel test //tests/... -> 32/32 targets pass",
+            "ruff check + ruff format --check on both changed/new files -> clean"
+          ]
+        },
+        "head_snapshot": "f2766bdf70f899db2d9f7d88be55f88ea150f2a9"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 1,
