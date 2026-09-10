@@ -1,0 +1,188 @@
+{
+  "base_snapshot": "33a2deb7eaf30ef7fc965c4f30be292b15a8a84b",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Test-only change: adds a missing __main__ guard to tests/test_verify_release.py and a new AST-based regression-guard test; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 1,
+      "slice_id": "every-test-actually-runs",
+      "timestamp": "2026-09-10T21:33:40Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Test-only change: adds a missing __main__ guard to tests/test_verify_release.py and a new AST-based regression-guard test; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 1,
+      "slice_id": "every-test-actually-runs",
+      "timestamp": "2026-09-10T21:33:41Z"
+    },
+    {
+      "by": "Martin Urban",
+      "dimension": "architecture_scope",
+      "reason": "Test-only change: adds a missing __main__ guard to tests/test_verify_release.py and a new AST-based regression-guard test; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 1,
+      "slice_id": "every-test-actually-runs",
+      "timestamp": "2026-09-10T21:33:44Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Test-only change: adds a missing __main__ guard to tests/test_verify_release.py and a new AST-based regression-guard test; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 1,
+      "slice_id": "every-test-actually-runs",
+      "timestamp": "2026-09-10T21:33:45Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Test-only change: adds a missing __main__ guard to tests/test_verify_release.py and a new AST-based regression-guard test; no production code, no concurrency, security/privacy/data, or rollout surface touched.",
+      "round": 1,
+      "slice_id": "every-test-actually-runs",
+      "timestamp": "2026-09-10T21:33:45Z"
+    }
+  ],
+  "current_round": 2,
+  "current_slice": "every-test-actually-runs",
+  "description": "tests/test_verify_release.py had no __main__ guard at all, so Bazel ran zero of its 13 tests. A new tests/test_every_test_class_runs_under_bazel.py now fails if any tests/test_*.py is ever missing a trailing __main__ guard, or has one that isn't its last statement.",
+  "entry": null,
+  "link_ref": null,
+  "max_rounds": {
+    "inner": 2,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            "tests/test_verify_release.py",
+            "tests/test_every_test_class_runs_under_bazel.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Added the missing if __name__ == \"__main__\": unittest.main() block to tests/test_verify_release.py (was missing entirely, so Bazel ran 0/13 of its tests) and added tests/test_every_test_class_runs_under_bazel.py, an AST-based regression guard that fails if any tests/test_*.py file is ever missing a trailing __main__ guard, or has one that isn't its last statement.",
+          "deviations": "This slice was originally implemented and reviewed earlier today as part of a larger PR (#53) whose branch had tangled pre-existing history (stacked on uncleaned copies of two other tasks' work). Two of that PR's three file changes (tests/test_gate.py, tests/test_task.py) turned out to be redundant with fixes independently merged via PR #48 and PR #52 in the meantime -- confirmed by diffing against origin/main before rebuilding. This slice was rebuilt from a clean base with only the genuinely unique, not-yet-merged content: the tests/test_verify_release.py fix and the new regression-guard test.",
+          "limitations": "None known.",
+          "validation": [
+            "python3 -m unittest tests.test_verify_release tests.test_every_test_class_runs_under_bazel -v -> 14 tests, OK",
+            "bazel test //tests/... -> 32/32 targets pass",
+            "ruff check + ruff format --check on both changed/new files -> clean"
+          ]
+        },
+        "head_snapshot": "f2766bdf70f899db2d9f7d88be55f88ea150f2a9"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "VERIFICATION CHECKLIST:\n1. test_verify_release.py has __main__ block at end: CONFIRMED (lines 195-196 are final lines)\n2. AST logic flags missing guard: CONFIRMED (test shows False for missing guard)\n3. AST logic flags guard not at end: CONFIRMED (test shows False when guard precedes other statements)\n4. test_verify_release runs 13 tests: CONFIRMED (bazel test output: 'Ran 13 tests in 0.018s')\n5. test_every_test_class_runs_under_bazel runs and passes: CONFIRMED (bazel test output: 'Ran 1 test in 0.070s' - PASSED)\n6. All 32 tests in //tests/... pass: CONFIRMED (bazel test //tests/... reports: 'Executed 0 out of 32 tests: 32 tests pass')\n7. No regressions detected: CONFIRMED (all test targets show PASSED status)\n8. Diff matches specification: CONFIRMED (adds __main__ block to test_verify_release.py, adds new meta-test, updates CHANGELOG)\n\nThe fix correctly addresses the stated defect: test_verify_release.py was previously missing the `if __name__ == \"__main__\": unittest.main()` block, causing Bazel to run zero of its 13 tests (a vacuously green target). The fix adds the block at the file's end, enabling all 13 tests to execute under Bazel. The new regression guard (test_every_test_class_runs_under_bazel.py) prevents this class of bug from recurring silently.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "inner-r1-guard-operator-not-validated",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:45-52 (_last_statement_is_main_guard)",
+            "rank": 1,
+            "summary": "The AST check validates the guard's structure (__name__ compared to __main__, unittest.main() called inside) but not the comparison operator itself, so a hypothetical `if __name__ != \"__main__\": unittest.main()` would pass. All 28 actual test files use == correctly and the check catches the two real defect shapes (missing guard, misplaced guard) this task exists to fix; low practical risk."
+          }
+        ],
+        "head_snapshot": "6426209166d526f00995a95f500441ffd4d15128"
+      },
+      "round": 1,
+      "slice_id": "every-test-actually-runs"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist confirmed via AST inspection that the __main__ guard is the last statement in tests/test_verify_release.py, reproduced bazel test //tests:test_verify_release running all 13 tests (was 0), and exercised the AST detector against 11 synthetic shapes plus an end-to-end scratch-directory run confirming both defect shapes (missing guard, guard not last) are correctly caught.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist confirmed the only failure modes (file read, ast.parse) surface informatively (SyntaxError naming the file) with no swallowed exceptions, and the empty-module case is handled explicitly.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist confirmed the new meta-test closes a real, previously undetectable defect class, demonstrated end-to-end against synthetic bad files, and full suite is green at 32/32 targets. Five non-blocking findings recorded for future hardening (vacuous-scan risk under remote execution, no negative tests for the detector itself, imprecise operator/callee check, an inaccurate failure message for one defect shape, and a reference note on the loop-in-test-body idiom).",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr55-r2-meta-test-can-scan-only-itself",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:34,78",
+            "rank": 1,
+            "summary": "The scan sees every test file today only because Path(__file__).resolve() follows Bazel's symlinked runfiles back to the source tree; each py_test target's own runfiles dir actually contains only its one source file. Under remote execution (materialized copies instead of symlinks), the guard would scan just itself and pass vacuously. CI's python -m unittest discover leg is unaffected. Non-blocking: no remote execution is wired up yet."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr55-r2-detector-has-no-negative-tests",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:37-66",
+            "rank": 2,
+            "summary": "The single test only asserts the repo currently conforms; nothing asserts the AST helper itself rejects a defective file, so a refactor that made it return True unconditionally would leave the suite green."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr55-r2-guard-check-imprecise",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:43-56",
+            "rank": 3,
+            "summary": "The comparison check doesn't verify the operator is == (an != guard would pass) or that main() is called on the unittest module specifically (any X.main() passes). Both implausible in this repo today; precision polish, not a live defect."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr55-r2-failure-message-wrong-for-not-last-shape",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:83-88",
+            "rank": 4,
+            "summary": "The failure message says listed files are 'missing' the guard and will run 'zero' of their tests, which is inaccurate for the guard-present-but-not-last shape (the block isn't missing, and tests before it do run)."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr55-r2-loop-in-test-body-reference-note",
+            "location": "tests/test_every_test_class_runs_under_bazel.py:77-82",
+            "rank": 5,
+            "summary": "Collect-and-assert-once over a glob technically has control flow in the test body, but is the right idiom here (aggregate diagnostics naming every offender beats bail-on-first). Recorded as a reference note, not a request to change."
+          }
+        ],
+        "head_snapshot": "0cecd77bc58d0cb6ecd119d5a214c1e2ecbb75f1",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
+      "round": 2,
+      "slice_id": "every-test-actually-runs"
+    }
+  ],
+  "slice_styles": {
+    "every-test-actually-runs": "pair"
+  },
+  "slices": [
+    "every-test-actually-runs"
+  ],
+  "status": "in_progress",
+  "summary": "Stop test classes below a __main__ block from being skipped under Bazel",
+  "task_id": "every-test-actually-runs"
+}
