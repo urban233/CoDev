@@ -367,7 +367,30 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/settings.json",
+            "src/codev_workflow/bundle/.claude/settings.json",
+            "AGENTS.md",
+            "CHANGELOG.md",
+            "tests/test_permission_surface.py"
+          ],
+          "delivered": "Fixed both blocking security findings: hardened the five no-argument-safe just recipes (test, lint, typecheck, fmt-check, validate-catalog) in permissions.allow from trailing-wildcard to exact-match entries, closing the just-multi-recipe-chaining bypass (SEC-1: `just lint publish-pypi` running an unprompted PyPI publish) and the unquoted-argument shell-injection bypass (SEC-2: `just test '&& ...'`). Added two direct regression tests (one shelling out to a real `just -n lint publish-pypi` dry run to confirm the underlying just behavior), plus the four bundled cleanups: exact-list pinning for the full allow list, a failure message on the hook-count assertion, removal of a vacuous test, and softened AGENTS.md wording that no longer overclaims full enforcement.",
+          "deviations": "None beyond the scope the developer explicitly authorized in triage (the two blocking fixes plus four bundled cleanups).",
+          "limitations": "AGENTS.md's softened wording still notes deny is not a comprehensive guarantee (env-prefixed invocation, a differently-invoked bazel command, or other evasion are unverified and treated as defence in depth, matching the plan's own stated risk). The bundled-allow-list-ships-to-downstream-repos concern (pr56-sec3) and the git diff/log/show --output= file-overwrite primitive (pr56-sec4) were both non-blocking findings not triaged for this round.",
+          "validation": [
+            "python -m unittest tests.test_permission_surface -v -> 6/6 pass",
+            "bazel test //tests:test_permission_surface --cache_test_results=no -> Ran 6 tests, OK",
+            "bazel test //tests/... -> 33/33 targets pass",
+            "python3 scripts/verify_self_install.py -> No changes",
+            "diff .claude/settings.json src/codev_workflow/bundle/.claude/settings.json -> byte-identical",
+            "Manually confirmed the matching logic: old wildcard pattern matches 'just lint publish-pypi' (True), new exact pattern does not (False)",
+            "bazel run //:ruff -- check . and format --check -> clean"
+          ]
+        },
+        "head_snapshot": "7bf082ea5563e826b988e1e859dff4c2a04ac329"
+      },
       "phase": "outer",
       "reviewer": {
         "coverage": {
