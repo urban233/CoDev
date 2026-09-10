@@ -192,7 +192,16 @@
         }
       },
       "round": 3,
-      "slice_id": "slice-scoped-coverage"
+      "slice_id": "slice-scoped-coverage",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "pr52-r3-tests-not-running-under-bazel": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
