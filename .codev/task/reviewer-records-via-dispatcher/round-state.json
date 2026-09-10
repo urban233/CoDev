@@ -278,7 +278,54 @@
         "head_snapshot": "01815a10d80b3f77612d4a469cbbdf47905d8cf7"
       },
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist re-verified only the triaged correction: confirmed .opencode/agents/reviewer.md and lightweight-reviewer.md no longer instruct self-recording (byte-identical replacement paragraph to the Claude Code versions), confirmed exact byte parity with their src/codev_workflow/bundle/.opencode/ mirrors, and confirmed the guidelines' unconditional 'no subagent records its own round' rule now holds on both installed platforms. Blocking finding pr49-r4-opencode-still-self-records fully resolved. One new non-blocking note: the mirrored write-to-disk instruction sits alongside a pre-existing (not newly introduced) edit:deny permission gap already present on the accepted Claude Code shape.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist confirmed the plan doc's Allowed scope and Success criterion are now internally consistent with the shipped diff, and reran bazel test //tests/... (31/31) and validate_development_workflow (12 skills, 2 guides, 8 scenarios), both passing. Two non-blocking gaps noted: the plan's own Proposed change/Completion evidence sections weren't updated to reflect the OpenCode widening, and the Allowed scope glob is broader than the files actually touched.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr49-r5-plan-completion-evidence-stale-after-opencode-widening",
+            "location": "docs/codev/task/reviewer-records-via-dispatcher/reviewer-handoff-implementation-plan.md (Proposed change, Completion evidence)",
+            "rank": 1,
+            "summary": "The plan's Focus card (Success, Allowed scope) was widened to cover OpenCode, but Proposed change steps 1/4 and Completion evidence's Changed/Validation bullets still describe a Claude-Code-only change (18 files/112 lines), while the real base-to-head diff is 25 files/552 insertions including the four OpenCode files. The plan's own acceptance record now disagrees with itself about the change's surface."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr49-r5-opencode-reviewer-edit-deny-vs-write-instruction",
+            "location": ".opencode/agents/reviewer.md, lightweight-reviewer.md (permission.edit: deny)",
+            "rank": 2,
+            "summary": "Both OpenCode reviewer role files carry permission.edit: deny while the newly mirrored prose mandates writing findings.json/coverage.json to disk, reachable only through bash (ask). A symmetric gap already existed on the accepted Claude Code shape (no Write tool, Bash-only), so this is a faithful mirror of what round 3 already accepted, not a new defect introduced by this correction -- flagged for awareness, not blocking."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr49-r5-allowed-scope-glob-broader-than-touched-files",
+            "location": "docs/codev/task/reviewer-records-via-dispatcher/reviewer-handoff-implementation-plan.md (Allowed scope)",
+            "rank": 3,
+            "summary": "Allowed scope reads .opencode/agents/*.md (all nine role files) while the justifying sentence narrows it to just reviewer and lightweight-reviewer, which is what actually changed. Consistent with the document's pre-existing .claude/agents/*.md phrasing convention; noted so the wider glob isn't later read as license for untouched OpenCode roles."
+          }
+        ],
+        "head_snapshot": "86fc9bf9ab29f8719540d67c4c23dd536f4b37a4",
+        "specialist_selection": {
+          "specialists": [
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
       "round": 6,
       "slice_id": "reviewer-handoff"
     }
