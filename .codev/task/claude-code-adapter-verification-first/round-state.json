@@ -1,4 +1,5 @@
 {
+  "base_snapshot": "8b7121133462d2587bb96ad5e1093fce7cb875dd",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -50,8 +51,7 @@
       "timestamp": "2026-09-08T13:12:07Z"
     }
   ],
-  "base_snapshot": "4e0d2e92ab35d6fb87a27fd568b520a64970e16a",
-  "current_round": 7,
+  "current_round": 8,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -131,6 +131,20 @@
       "reason": "Rebased the work-style-and-plan-tiering slice branch onto main after PR 48/49/54 merged (and their auto-close/reopen fixup); no product content changed by the rebase itself",
       "timestamp": "2026-09-10T20:12:51Z",
       "to_round": 6
+    },
+    {
+      "by": "urban233",
+      "from_round": 7,
+      "head": "8b7121133462d2587bb96ad5e1093fce7cb875dd",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Absorb the plan-doc commit (written and accepted) before dispatching builder",
+      "timestamp": "2026-09-10T22:02:27Z",
+      "to_round": 8
     }
   ],
   "reviewer": null,
@@ -247,6 +261,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 7,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 8,
       "slice_id": "permission-surface"
     }
   ],
