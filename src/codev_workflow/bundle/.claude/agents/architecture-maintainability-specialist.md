@@ -3,7 +3,7 @@ name: architecture-maintainability-specialist
 description: Outer-loop specialist for architecture, scope, and maintainability — one of five parallel specialist reviewers
 tools: Read, Grep, Glob, Bash
 model: opus
-maxTurns: 20
+maxTurns: 40
 permissionMode: manual
 ---
 

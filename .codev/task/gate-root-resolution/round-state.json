@@ -32,6 +32,7 @@
     "inner": 4,
     "outer": 2
   },
+  "outcome": "approved",
   "owner": "urban233",
   "reopens": [
     {
@@ -307,7 +308,7 @@
   "slices": [
     "repo-root-resolution"
   ],
-  "status": "in_progress",
+  "status": "closed",
   "summary": "Resolve the real repository root before deciding a gate",
   "task_id": "gate-root-resolution"
 }

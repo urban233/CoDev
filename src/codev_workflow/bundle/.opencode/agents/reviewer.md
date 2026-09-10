@@ -35,10 +35,13 @@ Follow `review-change`'s finding and coverage format exactly: rank findings
 most-important-first with a binary `blocking` flag, and record a coverage
 verdict for every review dimension.
 
-Record this round with `codev task record --id <task-id> --round
-<round> --role reviewer --head <head-sha> --findings <findings.json>
---coverage <coverage.json> --decision <decision>` before returning findings
-in the conversation. `codev task check` — run by the session that
+**Write your verdict to disk as you reach it, not at the end.** Put
+findings in `<findings.json>` and coverage in `<coverage.json>` at the paths
+your dispatch names, and state your decision in your reply. Do not call
+`codev task record` yourself — the session that dispatched you records the
+round from those files, exactly as it already does for `builder`'s evidence
+receipt. Writing early is what makes a turn-cap stop cost a summary instead
+of the whole review. `codev task check` — run by the session that
 dispatched you, not you —
 is the sole authority on whether the loop may continue, has hit its round
 cap, has seen a repeated blocking finding, or has an incomplete coverage
