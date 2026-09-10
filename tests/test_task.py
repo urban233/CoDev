@@ -42,6 +42,7 @@ from codev_workflow.task import (
     SUPPORTED_ROUND_SCHEMA_VERSIONS,
     CheckResult,
     TaskError,
+    _effective_coverage,
     _load,
     _save,
     advance_slice,
@@ -2652,7 +2653,7 @@ class WaiverTests(unittest.TestCase):
             start("item-1", "base-sha", target=target)
             waive("item-1", "rollout", "doc-only change", target=target, by="Alice")
             text = log_text("item-1", target=target)
-        self.assertIn("waived by Alice at round 1: rollout", text)
+        self.assertIn("waived by Alice at round 1 (slice item-1): rollout", text)
         self.assertIn("doc-only change", text)
 
 
@@ -3138,6 +3139,89 @@ class BookkeepingCommitWiringTests(unittest.TestCase):
             body = pr_description("item-1", target=target)
         self.assertIn("item-1", body)
         self.assertIn("docs/plan.md", body)
+
+
+class SliceScopedCoverageTests(unittest.TestCase):
+    """A slice is one pull request, so its coverage manifest must describe
+    that slice's diff and no other.
+
+    Waivers and verdicts used to merge across the whole task, so a waiver a
+    human granted for a documentation-only slice silently vouched for the
+    next slice's executable code -- and rendered its reason, verbatim and
+    attributed, into that slice's pull request body.
+    """
+
+    def _advance_to_second_slice(self, target: Path) -> None:
+        start("item-1", "base-sha", target=target, slices=["a", "b"])
+        advance_slice("item-1", "slice-a-head", target=target)
+
+    def test_a_waiver_does_not_cross_a_slice_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, slices=["a", "b"])
+            waive("item-1", "rollout", "slice a is doc-only", target=target)
+            advance_slice("item-1", "slice-a-head", target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual({}, _effective_coverage(document))
+
+    def test_a_verdict_does_not_cross_a_slice_boundary(self) -> None:
+        """The same leak, for real verdicts rather than waivers. A dimension
+        the next slice never re-verifies must not inherit a pass earned
+        against a different diff."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, slices=["a", "b"])
+            record_reviewer(
+                "item-1",
+                1,
+                "slice-a-head",
+                [],
+                FULL_COVERAGE,
+                "READY_FOR_HUMAN_APPROVAL",
+                target=target,
+            )
+            advance_slice("item-1", "slice-a-head", target=target)
+            document = _read_state(target, "item-1")
+        self.assertEqual({}, _effective_coverage(document))
+
+    def test_a_waiver_recorded_before_slice_ids_scopes_by_its_round(self) -> None:
+        """The migration. Entries written before waivers carried a slice have
+        no `slice_id`; they belong to whichever slice owned the round they
+        were granted at, which is the slice the human was looking at."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, slices=["a", "b"])
+            waive("item-1", "rollout", "granted on slice a", target=target)
+            path = target / ".codev" / "task" / "item-1" / "round-state.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            # Reproduce a pre-migration record exactly: no slice_id at all.
+            del document["coverage_waivers"][0]["slice_id"]
+            path.write_text(json.dumps(document), encoding="utf-8")
+            advance_slice("item-1", "slice-a-head", target=target)
+            after = _read_state(target, "item-1")
+            self.assertEqual({}, _effective_coverage(after))
+            # ...and it still applies to the slice it was actually granted on.
+            after["current_slice"] = "a"
+            self.assertTrue(_effective_coverage(after)["rollout"]["waived"])
+
+    def test_carry_forward_within_one_slice_still_works(self) -> None:
+        """The behaviour that must NOT change. Scoping the boundary must not
+        become "every round re-verifies everything"."""
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            start("item-1", "base-sha", target=target, slices=["a", "b"])
+            record_reviewer(
+                "item-1",
+                1,
+                "head-1",
+                [],
+                FULL_COVERAGE,
+                "CHANGES_REQUIRED",
+                target=target,
+            )
+            document = _read_state(target, "item-1")
+        coverage = _effective_coverage(document)
+        self.assertEqual(set(FULL_COVERAGE), set(coverage))
 
 
 if __name__ == "__main__":
