@@ -1,5 +1,31 @@
 {
   "base_snapshot": "32416e7b2126dd325b760ace8b142f12ea821350",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Pure in-process round-state scoping logic; no credential, network, data, or serialization surface touched.",
+      "round": 3,
+      "slice_id": "slice-scoped-coverage",
+      "timestamp": "2026-09-10T20:37:19Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrent or shared-state code paths touched beyond ordinary single-process dict/list filtering.",
+      "round": 3,
+      "slice_id": "slice-scoped-coverage",
+      "timestamp": "2026-09-10T20:37:19Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No migration or exposure change beyond the backward-compat case (waivers recorded before slice_id existed) already covered by tests; reversible by reverting the diff.",
+      "round": 3,
+      "slice_id": "slice-scoped-coverage",
+      "timestamp": "2026-09-10T20:37:20Z"
+    }
+  ],
   "current_round": 3,
   "current_slice": "slice-scoped-coverage",
   "description": "Coverage waivers and reviewer verdicts merge task-wide, so a waiver granted for one slice silently applies to every later slice and renders its reason on their pull requests.",
@@ -77,7 +103,94 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist confirmed state[\"current_slice\"] is the correct, ADR-0035-conformant scoping boundary (read from the explicitly-tracked pointer, not derived), confirmed via grep that pr_description is the only PR-body renderer and it is fully fixed, and confirmed the shipped diff matches its implementation plan's stated scope exactly. One non-blocking, correctly-out-of-scope observation: round caps (_phase_round_count) remain task-wide despite ADR-0035 assigning them to the slice too -- same bug family, recommended as a separate follow-up task.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist confirmed the scoping logic, migration fallback, and all three real call sites of _effective_coverage (check, pr_description) are safe; verified two of the four boundary tests genuinely fail (and one errors) against the pre-fix task.py by temporarily restoring it. current_slice-missing and unknown-waiver-round edge cases both fail closed or degrade to prior semantics correctly.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist confirmed every degenerate input tested (missing current_slice, unknown waiver round, raw v3 document) either preserves legacy semantics or fails closed into stop_incomplete_coverage.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist confirmed the migration fallback is genuinely load-bearing in this repo's own real data (seven pre-slice_id waivers on a real five-slice task) and the CHANGELOG entry is accurate. Three non-blocking gaps: an obsolete docstring/CLI-help sentence describing the now-changed scope, two call sites bypassing the existing current_slice_id() accessor in favor of a raw dict .get with a latent null-vs-missing risk, and a duplicated CHANGELOG ### Fixed heading.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "Blocking: the four regression tests guarding this fix never run under bazel test / just ci (176 vs 180 tests), confirmed independently by both specialists including an empirical pre-fix failure reproduction. Two additional non-blocking test-quality gaps noted by correctness-tests-specialist: one test's docstring claims more than its body proves (carry-forward across rounds vs. a single round's own coverage), and no test exercises the bug at the public interface (pr_description/check) where the real-world harm (PR #51) actually surfaced.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr52-r3-tests-not-running-under-bazel",
+            "location": "tests/test_task.py",
+            "rank": 1,
+            "summary": "SliceScopedCoverageTests (the four regression tests guarding this fix) is defined after tests/test_task.py's if __name__ == \"__main__\": unittest.main() block, so Bazel (which runs the file as __main__ with no explicit main=) never defines or runs them: bazel test //tests:test_task reports 176 tests, python -m unittest reports 180. Confirmed independently by both correctness-tests-specialist and architecture-maintainability-specialist, including empirically reverting to pre-fix task.py and showing two of the four tests genuinely fail (and one errors) against it. just ci / bazel test //tests/... -- the validation this task's own plan commits to -- is green but vacuous for this fix's own regression protection; only the GitHub Actions python -m unittest discover leg exercises them. Same defect class as elsewhere in this stack (every-test-actually-runs, gate-root-resolution)."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr52-r3-obsolete-waive-docstring",
+            "location": "src/codev_workflow/task.py:1258 (waive() docstring), src/codev_workflow/cli.py:691-693 (--dimension help)",
+            "rank": 2,
+            "summary": "waive()'s own docstring -- in the function this diff edits -- still reads \"this coverage dimension will not be run for this task\", but the dimension is now scoped to the slice, not the task. Same stale wording in the CLI help text an agent narrates to the developer. An obsolete comment on the very function being changed is worse than none."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr52-r3-bypasses-current-slice-id-accessor",
+            "location": "src/codev_workflow/task.py:916, 1289 (state.get(\"current_slice\") instead of current_slice_id(state))",
+            "rank": 3,
+            "summary": "task.py already provides a named accessor (current_slice_id) for exactly this concept, used everywhere else in the module (_round_slot, reopen, advance_slice, work_style, set_work_style). Both new call sites use raw state.get(\"current_slice\") instead. Beyond needless repetition, this has a concrete latent consequence: if a waiver's persisted slice_id were ever explicitly null, waiver.get(\"slice_id\", slice_of_round.get(...)) returns None and never reaches the migration-fallback default, silently defeating it -- a risk the named accessor's stricter contract would remove."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr52-r3-log-text-no-slice-attribution",
+            "location": "src/codev_workflow/task.py:1700 (log_text)",
+            "rank": 4,
+            "summary": "codev task log's waiver line (\"waived by X at round N: <dimension> -- <reason>\") has no slice attribution even though slice_id now exists on the record, so an agent or human reading the log for \"what's waived on this pull request\" can still reconstruct the old, wrong task-wide picture, and a multi-slice task's log doesn't say which slice a waiver belonged to. Cheap, in-family follow-up: add the slice to that one rendered line."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr52-r3-round-caps-still-task-wide",
+            "location": "src/codev_workflow/task.py:457 (_phase_round_count)",
+            "rank": 5,
+            "summary": "ADR-0035 explicitly assigns round caps (along with coverage) to the slice, but _phase_round_count still counts across the whole task, so a task whose first slice burned its inner-round budget hands a later slice a stop_round_cap at its own second inner round, with a count describing the task rather than the slice. Same bug family as the one this PR fixes, correctly left out of this PR's stated scope (task.py is allowed but Change/Success/Non-goals are strictly about coverage evidence) -- recommended as a separate follow-up task, not an expansion of this one."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr52-r3-changelog-duplicate-fixed-heading",
+            "location": "CHANGELOG.md",
+            "rank": 6,
+            "summary": "The new entry adds a second ### Fixed section under [Unreleased] (one at line ~8, an existing one at ~56 with ### Changed between them). Precedent exists elsewhere in the file, but merging into the single existing section is the Keep-a-Changelog shape. Trivial."
+          }
+        ],
+        "head_snapshot": "28bb48f090d5ad851e1c12d4f9e03c7bb89135bb",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
       "round": 3,
       "slice_id": "slice-scoped-coverage"
     }
