@@ -3,7 +3,7 @@ name: rollout-specialist
 description: Outer-loop specialist for rollout, monitoring, migration, and rollback — one of five parallel specialist reviewers
 tools: Read, Grep, Glob, Bash
 model: sonnet
-maxTurns: 15
+maxTurns: 40
 permissionMode: manual
 ---
 

@@ -3,7 +3,7 @@ name: security-data-specialist
 description: Outer-loop specialist for security, privacy, data, and compatibility risk — one of five parallel specialist reviewers
 tools: Read, Grep, Glob, Bash
 model: opus
-maxTurns: 20
+maxTurns: 40
 permissionMode: manual
 ---
 
