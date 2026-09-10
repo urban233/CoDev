@@ -1,5 +1,49 @@
 {
   "base_snapshot": "d23a94e7357456ed4c77e2d566db7a25f6352ff1",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "correctness",
+      "reason": "Prose/frontmatter-only change across role subagent .md files and shared guidelines; no executable code path added or changed.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "No credential, network, data, or serialization surface; instruction prose and YAML frontmatter only.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No executable code, nothing concurrent to reason about.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:08Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No migration, no runtime behavior change beyond subagent turn budgets and which process calls one CLI command; reversible by reverting the diff.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:08Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "error_handling",
+      "reason": "Prose/frontmatter-only change; no error-handling code paths added or changed.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:18Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "test_quality",
+      "reason": "No tests added or modified, and none needed: the change is instructional prose and YAML frontmatter, validated by just test (31/31) and just validate-catalog, not by new test cases.",
+      "round": 4,
+      "timestamp": "2026-09-10T19:25:19Z"
+    }
+  ],
   "current_round": 4,
   "current_slice": "reviewer-handoff",
   "description": "The two inner-loop reviewers were the only agents required to run codev task record themselves, making the least-recoverable action the last one under a turn cap. Four consecutive dispatches died there.",
