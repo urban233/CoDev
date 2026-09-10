@@ -163,7 +163,72 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist confirmed the diff collapses all eight role subagents onto one dispatcher-records invariant, consistent with (not a departure from) the guidelines' pre-existing step 5 language. One blocking gap: the opencode platform's reviewer role files were not updated to match, contradicting the new absolute rule in the shared guidelines and the accepted plan's own Success criterion. One non-blocking overstatement: the 'same way you close builder's round' analogy is true of the duty but not the CLI verb (codev round close accepts only --role builder).",
+            "passed": false
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist confirmed byte-for-byte parity between every changed .claude/agents/*.md and its src/codev_workflow/bundle/ mirror (and code-audit-gate.md vs its .md.template, differing only in pre-existing placeholders), and confirmed the shipped diff matches the accepted plan's Proposed change and Allowed scope. Three non-blocking prose gaps noted: a step 4/step 5 timing contradiction on the ok_ready_for_pr path, an unclosed output-path-naming contract between the role files and the guidelines, and a published tutorial page still teaching the retired reviewer self-record shape.",
+            "passed": true
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr49-r4-opencode-still-self-records",
+            "location": ".opencode/agents/reviewer.md, .opencode/agents/lightweight-reviewer.md (and their src/codev_workflow/bundle/.opencode/ mirrors)",
+            "rank": 1,
+            "summary": "The shared, platform-neutral .codev/for-ai/ai-agent-guidelines.md now states unqualified: 'No subagent records its own round.' The installer's AGENTS_BLOCK points every platform's agents at this same shared file, but opencode's reviewer.md and lightweight-reviewer.md still carry the retired instruction verbatim ('Record this round with codev task record ... before returning findings'), and opencode's reviewer role even grants 'codev task *': allow in its permission block. Opencode is a live, fully-installed platform (ADR-0031, ADAPTER_ROLE_PATHS), not a retired one. This also fails the accepted plan's own Success criterion ('No role file instructs a reviewer to call codev task record itself'), which the plan's own Allowed scope (excluding .opencode) contradicts -- an inconsistency in the plan itself that a human should resolve rather than have silently decided by the narrower reading."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr49-r4-step4-step5-timing-conflict",
+            "location": ".codev/for-ai/ai-agent-guidelines.md step 4 vs step 5's ok_ready_for_pr bullet",
+            "rank": 2,
+            "summary": "Step 4 reads as an imperative sequence -- reviewer writes findings, dispatcher records immediately. Step 5's ok_ready_for_pr bullet says the opposite for that specific path: dispatch code-audit-gate BEFORE recording the reviewer round, then record once against whichever head is final. An agent following step 4 literally on the ready path records against a pre-audit head and then either double-records or trips the drift guard once code-audit-gate changes the head. A one-clause exception in step 4 ('except on the ready path, where step 5's cleanup runs first') closes the gap."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "pr49-r4-verb-symmetry-overstated",
+            "location": ".codev/for-ai/ai-agent-guidelines.md ('the same way you close builder's round')",
+            "rank": 3,
+            "summary": "codev round close only accepts --role builder; the reviewer half is still recorded through the raw codev task record surface, not the composite verb. The asymmetry is pre-existing and this diff had no other option, but the new prose's 'the same way' is true of the duty (dispatcher owns persistence) and false of the verb (different CLI command). Suggested rephrase: 'same duty, different verb.' A composite codev round close --role reviewer is a reasonable future follow-up (ADR-0041 direction), out of this slice's scope."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr49-r4-unclosed-output-path-contract",
+            "location": ".claude/agents/reviewer.md, lightweight-reviewer.md (\"the paths your dispatch names\") vs ai-agent-guidelines.md step 4",
+            "rank": 4,
+            "summary": "Both role files tell the subagent to write findings.json/coverage.json 'at the paths your dispatch names', but step 4 only instructs the dispatcher to pre-stage the diff file -- it never tells the dispatcher to actually name the two output paths in the dispatch. As written, the subagent must invent the paths and the dispatcher must guess where to read them back from."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr49-r4-tutorial-teaches-retired-shape",
+            "location": "docs-site/src/content/docs/tutorials/your-first-fix.md:230",
+            "rank": 5,
+            "summary": "The published tutorial still shows the reviewer running codev task record --role reviewer itself ('It records its verdict:'), while the same page's line 187 already correctly says the builder does not record -- the two roles are now taught asymmetrically and the reviewer half is stale. Outside this plan's Allowed scope; flagged as a follow-up, not a reason to expand this PR."
+          }
+        ],
+        "head_snapshot": "5b09137f0704c03e524c0998d21ca6c80748a152",
+        "specialist_selection": {
+          "specialists": [
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
       "round": 5,
       "slice_id": "reviewer-handoff"
     }
