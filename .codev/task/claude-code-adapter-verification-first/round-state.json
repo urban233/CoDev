@@ -83,7 +83,7 @@
       "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 10,
+  "current_round": 11,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -527,6 +527,47 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist re-verified only the triaged correction: confirmed exactly the five intended entries switched to exact-match form (test, lint, typecheck, fmt-check, validate-catalog) with everything else unchanged; independently reproduced the underlying just chaining behavior with the repo's own .tools/just binary; confirmed Claude Code's documented no-wildcard-matches-exact-string semantics makes the fix sound (an allow list can only shrink the auto-approved set, so it cannot introduce a new auto-approval); confirmed no legitimate CI or documented workflow relies on just test with arguments; confirmed both new regression tests fail against a simulated revert. Both blocking findings (pr56-sec1, pr56-sec2) fully resolved. Two new non-blocking notes: deny still can't see through just's own recipe-chaining form specifically (a wording-precision issue, not a regression), and the plan doc's Proposed change section still shows the superseded wildcard form.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec5-deny-blind-to-just-chaining",
+            "location": "AGENTS.md, CHANGELOG.md (deny-rule description)",
+            "rank": 1,
+            "summary": "The fix protects by falling through to a permission prompt, not by extending deny: Bash(just publish-pypi:*) matches subcommands nested through shell operators (catches `just ci && just publish-pypi`) but not just's own recipe-chaining form (`just ci publish-pypi`, a single subcommand). Not a regression -- this was equally reachable before the fix (allow-matched then, unmatched/prompted now) and deny never covered it in either version. Non-blocking since defaultMode is plan and bypassPermissions is an explicit human override; the existing AGENTS.md/CHANGELOG wording already carries a 'not a comprehensive guarantee' hedge, so this is a precision-of-wording note, not a defect."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr56-sec6-plan-doc-shows-superseded-wildcard-form",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/permission-surface-implementation-plan.md:76-77",
+            "rank": 2,
+            "summary": "The plan's Proposed change section still lists the five entries in their original wildcard form (Bash(just test:*), etc.) rather than the shipped exact-match form. Pure planning-artifact drift; the shipped config and test docstrings are both correct."
+          }
+        ],
+        "head_snapshot": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
+      "round": 11,
+      "slice_id": "permission-surface"
     }
   ],
   "slice_styles": {
