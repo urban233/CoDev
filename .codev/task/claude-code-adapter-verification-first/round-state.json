@@ -1,0 +1,263 @@
+{
+  "base_snapshot": "2d043db5eb71077699082783c5ad9d282bdedd82",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Documentation and agent frontmatter only; zero Python changed, no credential, network, data or serialization surface in the diff.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No executable code in the diff; nothing concurrent to reason about.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "error_handling",
+      "reason": "No executable code paths added or changed; the diff is Markdown prose and YAML frontmatter.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "test_quality",
+      "reason": "No tests added or modified, and none needed: the change is instructional prose relocated verbatim, verified by a zero-line diff of the sections before and after the move.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Reviewed in substance across rounds 4 and 5: verbatim relocation confirmed mechanically, the rebase conflict resolution checked against PR #49, and the instruction budget independently re-measured at 7433 under the 7500 ceiling.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "The change reduces always-on instruction load from ~9700 to ~7400 tokens by moving phase-specific prose into a demand-loaded skill body; maintainability is the point of the change rather than a risk it carries.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No runtime behaviour, no migration, no exposure change; reversible by codev adapter remove claude plus reinstall.",
+      "round": 5,
+      "timestamp": "2026-09-08T13:12:07Z"
+    }
+  ],
+  "current_round": 6,
+  "current_slice": "work-style-and-plan-tiering",
+  "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
+  "entry": null,
+  "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
+  "max_rounds": {
+    "inner": 6,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reopens": [
+    {
+      "by": null,
+      "from_round": 1,
+      "head": "54cf0d6c6587b3bc531e186021f511ee5ab33fc1",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "pair slice: absorbing CoDev's own setup and bookkeeping commit as pair work",
+      "timestamp": "2026-09-07T22:50:32Z",
+      "to_round": 2
+    },
+    {
+      "by": null,
+      "from_round": 2,
+      "head": "438394fb8de5bfd624816fe59774e26beb299c0b",
+      "max_rounds": {
+        "inner": 4,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "absorbing the pair-mode slice 1 work into the record",
+      "timestamp": "2026-09-08T12:35:03Z",
+      "to_round": 3
+    },
+    {
+      "by": null,
+      "from_round": 3,
+      "head": "bca1830de2fb27fa66e30e4c57451674850d0986",
+      "max_rounds": {
+        "inner": 5,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "re-baselining onto the restacked head before independent review",
+      "timestamp": "2026-09-08T12:48:34Z",
+      "to_round": 4
+    },
+    {
+      "by": null,
+      "from_round": 4,
+      "head": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "re-baselining onto the head that carries the changelog entry",
+      "timestamp": "2026-09-08T13:01:40Z",
+      "to_round": 5
+    },
+    {
+      "by": "urban233",
+      "from_round": 5,
+      "head": "2d043db5eb71077699082783c5ad9d282bdedd82",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Rebased the work-style-and-plan-tiering slice branch onto main after PR 48/49/54 merged (and their auto-close/reopen fixup); no product content changed by the rebase itself",
+      "timestamp": "2026-09-10T20:12:51Z",
+      "to_round": 6
+    }
+  ],
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 2,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "Base 3834e94, head 438394f. Documentation and frontmatter only -- ZERO Python files changed. CHANGED: .claude/CLAUDE.md gains a 'You implement; subagents verify' section recording pair as the adapter default (ADR-0038) and builder as the mechanical-work exception; .claude/agents/builder.md description narrowed to mechanical work; .codev/for-ai/ai-agent-guidelines.md replaces the Build execution section with a short pointer plus the five phase-independent rules, and drops Bookkeeping commits and Recovering a stuck task; .agents/skills/build-change/SKILL.md receives all three sections VERBATIM. Every file changed in both the bundle and the installed copy; parity verified by diff (silent). INSTRUCTION BUDGET (the plan's ratcheted 7500 ceiling): 9696 -> 7426 tokens, 74 headroom. guidelines 6411->4316, CLAUDE.md 602->878, agent descriptions 258->303. NOTE the first pass measured 7881, over by 381; the plan's named reserve (Recovering a stuck task, 427 tokens) was drawn and the builder description trimmed, because the replacement pointer and the work-style prose cost more than the ledger estimated. The reserve is now spent -- slices 2-5 have 74 tokens. VALIDATION: `just test` 31/31 pass; `just validate-catalog` passes (12 skills, 2 guides, 8 behavioral scenarios); bundle/installed parity silent; both relocated sections confirmed present verbatim by grepping a mid-section line from each. KNOWN LIMITATIONS: (1) 1017 lines across 9 files, over_budget true against the 600-line budget -- almost entirely the verbatim relocation counting as both deletion and insertion, but a reviewer must still confirm the move was verbatim rather than take that on trust. (2) The raw `python -m unittest discover` runner shows 7 failures and 10 errors on this machine, identical to the set present before this slice and traceable to a stale `codev 0.7.2+source.87c55c2` on PATH that the hook-shim subprocess tests invoke; this slice changes no Python so it cannot be the cause, and CI's ubuntu 3.11/3.12 raw legs pass. (3) This branch is off main and does not carry PR #49's +188 always-on tokens; when that merges the ledger must absorb it against the 74 headroom, which will not fit -- more retirement will be needed. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Slice 1 of the verification-first rebalance: pair becomes the Claude Code adapter's default work style, the per-slice plan mandate follows ADR-0043's tiering, and three phase-specific sections move out of the always-on guidelines into the build-change skill body."
+        },
+        "head_snapshot": "c54943b53cf3b4eaf004ab6b142d73626fdbf891"
+      },
+      "phase": "inner",
+      "reviewer": null,
+      "round": 3,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "Base 87c55c2 (head of codev/reviewer-records-via-dispatcher--reviewer-handoff), head e925bad. Docs and frontmatter only -- ZERO Python files changed. CHANGED: .claude/CLAUDE.md gains 'You implement; subagents verify' recording pair as the adapter default (ADR-0038) with builder as the mechanical-work exception; .claude/agents/builder.md description narrowed; .codev/for-ai/ai-agent-guidelines.md replaces Build execution with a short pointer plus five phase-independent rules and drops Bookkeeping commits and Recovering a stuck task; .agents/skills/build-change/SKILL.md receives all three VERBATIM. Bundle and installed copies both changed; parity verified silent across six files. RESTACK: this slice was originally branched off main and could not be reviewed, because its own branch predated the 40-turn cap and the reviewer handoff -- two reviewer dispatches died at 20 turns having written nothing. Rebased --onto the reviewer-handoff branch. One real conflict: slice 1 REMOVES Build execution from the guidelines while PR #49 had edited step 4 INSIDE it. Resolved by taking slice 1's removal and carrying #49's step-4 text into the relocated copy in the skill body -- a naive resolution would have silently deleted #49's dispatcher-records fix. Verified: reviewer.md and lightweight-reviewer.md are byte-identical to #49, and 'record its round yourself' is present in the skill body. VERBATIM PROOF: sections-before.md (three sections at base, from git) diffed against sections-after.md (same three rebuilt from the skill body, normalising only the deliberate heading rename to 'The inner loop, end to end' plus its two-line moved-here note) -> ZERO diff lines. BUDGET: 7426 tokens against the ratcheted 7500 ceiling, 74 headroom. guidelines 6411 -> 3888 (lower than the 4316 measured pre-restack, because #49's +188 tokens sat inside Build execution and moved into the demand-loaded skill body with it -- so the earlier warning that #49's cost would not fit the headroom does not materialise). CLAUDE.md 602 -> 878, agent descriptions 258 -> 294. The plan's named reserve (Recovering a stuck task, 427 tokens) was drawn and is now spent; slices 2-5 have 74 tokens. VALIDATION: `just test` 31/31; `just validate-catalog` passes (12 skills, 2 guides, 8 behavioral scenarios); parity silent. KNOWN LIMITATIONS: (1) 1301-line diff, over the 600-line budget, almost entirely the verbatim relocation counting as both deletion and insertion -- a reviewer must confirm that rather than trust it. (2) The raw `python -m unittest` runner shows 7 failures and 10 errors on this machine, identical to the set present before this slice and caused by a stale codev on PATH that the hook-shim subprocess tests invoke; this slice changes no Python. (3) A backup ref exists at backup/slice1-pre-restack. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Slice 1: pair becomes the Claude Code adapter's default work style, the per-slice plan mandate follows ADR-0043's tiering, and three phase-specific sections move from the always-on guidelines into the build-change skill body. Restacked onto the reviewer-handoff branch."
+        },
+        "head_snapshot": "cf7b5dfa5b1945bbbcc2845d86eb340651b7bf6b"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "CHECK 1 PASSED: Sections-before.md and sections-after.md are identical after normalisation, confirming the move of Build execution, Bookkeeping commits, and Recovering a stuck task sections from ai-agent-guidelines.md into build-change/SKILL.md was verbatim with only the deliberate heading rename. CHECK 2 PASSED: PR #49's fix 'record its round yourself' appears exactly once in the skill body, and reviewer.md and lightweight-reviewer.md are byte-identical to the base, confirming the conflict resolution during rebase was correct. CHECK 3 PASSED: The pointer left in ai-agent-guidelines.md is clear and complete, directing to build-change skill body and retaining five phase-independent rules. CHECK 4 PASSED: All tests pass (31/31), catalog validation passes (12 skills, 2 guides, 8 behavioral scenarios), and parity between bundle and installed files is maintained. CHECK 5 PASSED: Budget measured at 7433 tokens against 7500 ceiling (builder claimed 7426), providing 67 tokens headroom. All scope criteria met: pair is now Claude Code adapter default, builder narrowed to mechanical work, per-slice plan mandate tiered per ADR-0043, three sections successfully relocated. No Python files changed. All changes within allowed scope. Implementation plan is Accepted and matches the actual changes.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/work-style-and-plan-tiering-implementation-plan.md:120",
+            "rank": 1,
+            "summary": "CHANGELOG.md entry is listed as a completion evidence item but was not added to the diff"
+          }
+        ],
+        "head_snapshot": "cf7b5dfa5b1945bbbcc2845d86eb340651b7bf6b"
+      },
+      "round": 4,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "Previously-reviewed head cf7b5df, new head 98ffc03. The ONLY delta is CHANGELOG.md, +29 lines under [Unreleased]/### Changed: three entries covering pair-as-default with builder narrowed to mechanical work, the plan mandate adopting ADR-0043's tiering, and the Build protocol moving into the build-change skill body with the 9700 -> 7400 token effect stated. Everything else in the slice is unchanged from the snapshot round 4 reviewed and approved READY_FOR_OUTER_LOOP. This addresses finding f1 from that round, which was non-blocking. VALIDATION: `just validate-catalog` passes (12 skills, 2 guides, 8 behavioral scenarios); `just test` 31/31 (cached, no source changed). No Python touched. Review state: AWAITING INDEPENDENT REVIEW.",
+          "passed": true,
+          "summary": "Round 5: adds the CHANGELOG entry that round 4's review flagged as missing from the accepted plan's completion evidence. No other change."
+        },
+        "head_snapshot": "f0af1c7b6cabe03e1cf3a20fb44d1b83cc7a27f4"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "DELTA REVIEW: Round 4 identified one non-blocking finding: CHANGELOG.md entry was listed in the plan's completion evidence but not added to the diff. This round (5) resolves it. VERIFICATION: (1) Delta is minimal: 2 files changed (CHANGELOG.md and round-state.json bookkeeping only), matching the brief's expectation. (2) CHANGELOG entry accuracy confirmed against actual tree: `pair` is now default (verified in CLAUDE.md 'You implement; subagents verify' section), plan mandate follows ADR-0043 tiering (verified in 'Before you edit: the focus card'), Build protocol moved to build-change skill (confirmed in SKILL.md with Bookkeeping commits and Recovering a stuck task sections present verbatim), token reduction from ~9,700 to 7,400 is accurate (builder measured 7426, reviewer measured 7433, which rounds to 7,400). (3) Validation passed: `.tools/just validate-catalog` output shows 'Workflow validation passed: 12 skills, 2 guides, plus 8 behavioral scenarios'. (4) Round-state.json updated correctly: current_round incremented to 5, base_snapshot and max_rounds updated, new re-baseline entry added with reason 're-baselining onto the head that carries the changelog entry'. No scope drift: no Python files changed, no other platform bundles affected. Round 4's finding is fully resolved; no new correctness issues found in this delta.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "f0af1c7b6cabe03e1cf3a20fb44d1b83cc7a27f4"
+      },
+      "round": 5,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "DELTA REVIEW: round 6 exists only to absorb a mechanical rebase of this slice's branch onto main after PR 48 (gate-root-resolution), PR 49 (reviewer-records-via-dispatcher), and a corrective ref-fixup PR (54) merged ahead of it in the stack. Diffed the pre-rebase branch tip (b299819) against the post-rebase head (2d043db): the only changes are exactly PR 48's and PR 49's own content (tests/test_gate.py, .opencode/agents/{reviewer,lightweight-reviewer}.md and their bundle mirrors, CHANGELOG.md, PR 49's implementation plan doc) -- nothing from this slice's own product surface changed. Confirmed the content round 5's reviewer evidence described (the build-change SKILL.md 'inner loop, end to end' section, Bookkeeping commits, Recovering a stuck task) is present unchanged both before and after the rebase. No new correctness issues; round 5's READY_FOR_HUMAN_APPROVAL stands.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [],
+        "head_snapshot": "c8c75b7b2bf41f27f8cfe43ee6e0799b5bdf8702",
+        "specialist_selection": {
+          "specialists": []
+        }
+      },
+      "round": 6,
+      "slice_id": "work-style-and-plan-tiering"
+    }
+  ],
+  "slice_styles": {
+    "evidence-hooks": "pair",
+    "permission-surface": "delegate",
+    "recovery-and-budget": "pair",
+    "scientific-gates": "delegate",
+    "work-style-and-plan-tiering": "pair"
+  },
+  "slices": [
+    "work-style-and-plan-tiering",
+    "permission-surface",
+    "evidence-hooks",
+    "scientific-gates",
+    "recovery-and-budget"
+  ],
+  "status": "in_progress",
+  "summary": "Rebalance the Claude Code adapter toward verification-first execution",
+  "task_id": "claude-code-adapter-verification-first"
+}

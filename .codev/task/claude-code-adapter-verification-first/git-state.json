@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
+  "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering",
+  "slice_branches": {
+    "work-style-and-plan-tiering": {
+      "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
+      "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering"
+    }
+  }
+}
