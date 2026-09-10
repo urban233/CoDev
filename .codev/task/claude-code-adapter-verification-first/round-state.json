@@ -369,7 +369,126 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist confirmed byte-parity, that the allow list matches the plan's stated 14 entries, and that the CHANGELOG's claims are accurate against the actual file content. One correctness-categorized non-blocking note: AGENTS.md's 'enforced' framing overclaims given SEC-1/SEC-6.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist confirmed this is a config-and-docs change with no new executable failure mode; deny precedence and the workspace-trust dependency are both documented rather than silently assumed.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist independently verified (with the repo's own just 1.58.0 and a scratch git repo) two real, unprompted bypasses this diff would ship: just's multi-recipe chaining lets an allow-listed recipe (lint/typecheck/fmt-check/validate-catalog) be followed by publish-pypi/publish-testpypi on the same command line, which runs the publish and never matches the deny pattern (pr56-sec1); and just test's unquoted {{args}} interpolation allows shell-operator injection inside a single allow-matched argument (pr56-sec2). Also found git diff/log/show's --output=<file> flag is an arbitrary-file-overwrite primitive not covered by any hook (pr56-sec4, non-blocking) and that the allow list ships to every downstream repo via the bundle (pr56-sec3, non-blocking). No secrets/PII exposure found.",
+            "passed": false
+          },
+          "test_quality": {
+            "evidence": "Blocking security findings aside, test_quality itself is not blocking: correctness-tests-specialist confirmed all 4 tests are non-vacuous (except one, pr56-vacuous-parse-test, non-blocking), the __main__ guard is correctly placed and Bazel-covered, and python -m unittest / bazel test agree at 4/4 with the full suite at 33/33. Marked failed here because the allow list itself -- the dimension's stated top risk per the accepted plan -- is unpinned by any test (pr56-sec5 / pr56-allow-list-not-pinned-by-exact-match), plus a brittle hook-count assertion and one vacuous test.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec1-just-multi-recipe-bypasses-deny",
+            "location": ".claude/settings.json (allow: just lint/typecheck/fmt-check/validate-catalog), justfile (publish-pypi, publish-testpypi)",
+            "rank": 1,
+            "summary": "just parses trailing words on a command line as additional recipes to run when the preceding recipe takes no parameters. Verified with the repo's own just 1.58.0: `just lint publish-pypi` prints and would run `bazel run //:ruff -- check .` then `bazel build //packaging:wheel` then `bazel run //packaging:wheel.publish -- --repository pypi` -- a real PyPI publish. The full command string 'just lint publish-pypi' prefix-matches allow rule Bash(just lint:*) and never contains 'publish-pypi' as a separately-parsed subcommand, so it cannot be caught by Claude Code's operator-aware compound-command splitting (there is no shell operator here at all -- this is just's own argument parsing). Same mechanism via typecheck, fmt-check, and validate-catalog. This diff makes an unprompted PyPI publish reachable, inverting the slice's stated purpose."
+          },
+          {
+            "blocking": true,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec2-just-test-unquoted-arg-interpolation",
+            "location": ".claude/settings.json (allow: Bash(just test:*)), justfile `test *args` recipe body",
+            "rank": 2,
+            "summary": "The test recipe interpolates its variadic {{args}} unquoted into a shell line (`bazel test //tests/... {{args}}`). Verified: `just test '&& echo INJECTED'` produces and would execute `bazel test //tests/... && echo INJECTED` -- including `just test '&& just publish-pypi'`. The command string 'just test ...' still prefix-matches allow Bash(just test:*) as a single quoted argument; exploitability depends on whether Claude Code's own splitter is quote-aware, but the shell-injection mechanism inside just itself is verified regardless."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec3-bundled-allow-list-blast-radius",
+            "location": "src/codev_workflow/bundle/.claude/settings.json",
+            "rank": 3,
+            "summary": "This allow list ships in the bundle to every downstream repo that installs CoDev (confirmed by the diff's own byte-identity test). Entries like Bash(just test:*)/Bash(just lint:*) pre-approve whatever a downstream project's own justfile recipes happen to do, including their own unquoted argument interpolation -- a decision made on behalf of repositories whose recipes CoDev cannot see. Narrowing the entries to resolve SEC-1/SEC-2 likely resolves most of this, but the bundled-vs-local distinction deserves an explicit decision."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec4-git-diff-output-file-overwrite",
+            "location": ".claude/settings.json (allow: git diff/log/show)",
+            "rank": 4,
+            "summary": "git diff/log/show accept --output=<file>, which writes and truncates an arbitrary path -- verified: git diff --output=victim.txt wholesale-replaced an existing file's content with diff text. So git diff --output=.claude/settings.json (or any source file) is a prompt-free arbitrary-file-overwrite primitive, sidestepping the Edit tool entirely. The PreToolUse hooks are not a backstop (require_plan.py fails open by its own docstring, and git diff isn't in ADR-0002's mutation-prefix list). The other allow entries (codev next/task check/task log, lint, fmt-check, validate-catalog, gh run view) were independently confirmed read-only."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-sec5-allow-list-unpinned-by-tests",
+            "location": "tests/test_permission_surface.py",
+            "rank": 5,
+            "summary": "The test suite pins deny membership, defaultMode, hook count, and bundle/installed parity, but asserts nothing about the allow list's actual contents. A future edit adding Bash(just:*), Bash(git:*), Bash(gh:*), or Bash(codev:*) passes every existing assertion. An exact-equality check on the allow list (and exact-set rather than assertIn on deny) would force a deliberate edit and a reviewer's eye before the boundary widens."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr56-sec6-agents-md-overclaims-enforcement",
+            "location": "AGENTS.md, CHANGELOG.md",
+            "rank": 6,
+            "summary": "AGENTS.md now says the publish prohibition 'is now enforced rather than merely stated' and deny 'refuses both recipes' -- false while SEC-1 stands, and an overclaim even once fixed: `just --justfile Justfile publish-pypi`, an env-prefixed invocation, or the underlying `bazel run //packaging:wheel.publish` all evade the deny pattern by name (though those at least fall back to a prompt, matching no allow rule). The defensible claim is 'removes the silent path for these exact recipe names,' not 'enforced.'"
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-allow-list-not-pinned-by-exact-match",
+            "location": "tests/test_permission_surface.py",
+            "rank": 7,
+            "summary": "Same underlying gap as pr56-sec5, raised independently by correctness-tests-specialist: no test pins the allow list itself, which the accepted plan names as the primary risk ('a wrong allow widens that silently')."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr56-manual-validation-not-recorded",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/permission-surface-implementation-plan.md (Completion evidence)",
+            "rank": 8,
+            "summary": "The plan's completion-evidence checklist includes a manual check that just publish-pypi is actually refused and that a routine turn prompts less; neither was exercised/recorded as evidence in this non-interactive build."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-hook-count-assertion-brittle",
+            "location": "tests/test_permission_surface.py:87",
+            "rank": 9,
+            "summary": "assertEqual(3, len(settings['hooks']['PreToolUse'])) has no failure message and will break with a bare '3 != 4' when slice 3 (the hooks slice) legitimately adds a fourth hook."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-vacuous-parse-test",
+            "location": "tests/test_permission_surface.py:63-65",
+            "rank": 10,
+            "summary": "test_bundle_settings_json_parses is fully subsumed by the two tests that json.loads the same file and index into it; harmless but adds no distinct failure mode."
+          }
+        ],
+        "head_snapshot": "0b28e1623c716248313d7fc516856d75448b8039",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist",
+            "correctness-tests-specialist"
+          ]
+        }
+      },
       "round": 10,
       "slice_id": "permission-surface"
     }
