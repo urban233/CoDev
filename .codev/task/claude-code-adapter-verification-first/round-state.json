@@ -490,7 +490,20 @@
         }
       },
       "round": 10,
-      "slice_id": "permission-surface"
+      "slice_id": "permission-surface",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "pr56-sec1-just-multi-recipe-bypasses-deny": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "pr56-sec2-just-test-unquoted-arg-interpolation": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
