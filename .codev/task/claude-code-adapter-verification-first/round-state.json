@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "98ffc0327c6a2b396b0526dc98f9cffc5d09e83c",
+  "base_snapshot": "2d043db5eb71077699082783c5ad9d282bdedd82",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -51,7 +51,7 @@
       "timestamp": "2026-09-08T13:12:07Z"
     }
   ],
-  "current_round": 5,
+  "current_round": 6,
   "current_slice": "work-style-and-plan-tiering",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -117,6 +117,20 @@
       "reason": "re-baselining onto the head that carries the changelog entry",
       "timestamp": "2026-09-08T13:01:40Z",
       "to_round": 5
+    },
+    {
+      "by": "urban233",
+      "from_round": 5,
+      "head": "2d043db5eb71077699082783c5ad9d282bdedd82",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Rebased the work-style-and-plan-tiering slice branch onto main after PR 48/49/54 merged (and their auto-close/reopen fixup); no product content changed by the rebase itself",
+      "timestamp": "2026-09-10T20:12:51Z",
+      "to_round": 6
     }
   ],
   "reviewer": null,
@@ -206,6 +220,13 @@
         "head_snapshot": "f0af1c7b6cabe03e1cf3a20fb44d1b83cc7a27f4"
       },
       "round": 5,
+      "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 6,
       "slice_id": "work-style-and-plan-tiering"
     }
   ],
