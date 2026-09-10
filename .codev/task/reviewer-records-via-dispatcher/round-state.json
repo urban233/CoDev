@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "d23a94e7357456ed4c77e2d566db7a25f6352ff1",
+  "base_snapshot": "8f1d017369d41aeed94da8445fd416223032edce",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -44,7 +44,7 @@
       "timestamp": "2026-09-10T19:25:19Z"
     }
   ],
-  "current_round": 4,
+  "current_round": 5,
   "current_slice": "reviewer-handoff",
   "description": "The two inner-loop reviewers were the only agents required to run codev task record themselves, making the least-recoverable action the last one under a turn cap. Four consecutive dispatches died there.",
   "entry": null,
@@ -96,6 +96,20 @@
       "reason": "Absorb the plan-doc commit (written and accepted retroactively) before outer-loop review",
       "timestamp": "2026-09-09T21:35:39Z",
       "to_round": 4
+    },
+    {
+      "by": "urban233",
+      "from_round": 4,
+      "head": "8f1d017369d41aeed94da8445fd416223032edce",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-anchor base_snapshot to the flushed waiver-bookkeeping commit before recording the outer-loop reviewer verdict",
+      "timestamp": "2026-09-10T19:30:37Z",
+      "to_round": 5
     }
   ],
   "reviewer": null,
@@ -144,6 +158,13 @@
       "phase": "outer",
       "reviewer": null,
       "round": 4,
+      "slice_id": "reviewer-handoff"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 5,
       "slice_id": "reviewer-handoff"
     }
   ],
