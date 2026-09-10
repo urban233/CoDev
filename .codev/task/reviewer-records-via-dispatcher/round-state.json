@@ -256,7 +256,27 @@
       }
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".opencode/agents/reviewer.md",
+            ".opencode/agents/lightweight-reviewer.md",
+            "src/codev_workflow/bundle/.opencode/agents/reviewer.md",
+            "src/codev_workflow/bundle/.opencode/agents/lightweight-reviewer.md",
+            "docs/codev/task/reviewer-records-via-dispatcher/reviewer-handoff-implementation-plan.md"
+          ],
+          "delivered": "Mirrored the reviewer-handoff instruction (write findings.json/coverage.json, state a decision, never call codev task record) into OpenCode's .opencode/agents/reviewer.md and lightweight-reviewer.md, matching the already-updated Claude Code role files. Also widened the accepted plan's Allowed scope/Success criterion to name OpenCode, resolving the internal contradiction the outer-loop review found.",
+          "deviations": "None beyond the scope the developer explicitly authorized in triage (extend the fix to OpenCode rather than narrowing the guideline wording).",
+          "limitations": "The three non-blocking findings from the outer-loop review (step 4/5 timing note, unclosed output-path contract, stale tutorial page) were not addressed in this round; not triaged as blocking.",
+          "validation": [
+            "bazel test //tests/... -> 31/31 targets pass",
+            "bazel run //scripts:validate_development_workflow -- --repo src/codev_workflow/bundle -> Workflow validation passed: 12 skills, 2 guides, plus 8 behavioral scenarios",
+            "diff .opencode/agents/{reviewer,lightweight-reviewer}.md against their src/codev_workflow/bundle/.opencode/agents/ mirrors -> byte-identical",
+            "grep -rn 'codev task record' .opencode -- confirms reviewer.md and lightweight-reviewer.md now only reference it in a 'do not call it yourself' negation, matching every other role file"
+          ]
+        },
+        "head_snapshot": "01815a10d80b3f77612d4a469cbbdf47905d8cf7"
+      },
       "phase": "outer",
       "reviewer": null,
       "round": 6,
