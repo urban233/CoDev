@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "8f1d017369d41aeed94da8445fd416223032edce",
+  "base_snapshot": "5b09137f0704c03e524c0998d21ca6c80748a152",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -44,14 +44,14 @@
       "timestamp": "2026-09-10T19:25:19Z"
     }
   ],
-  "current_round": 5,
+  "current_round": 6,
   "current_slice": "reviewer-handoff",
   "description": "The two inner-loop reviewers were the only agents required to run codev task record themselves, making the least-recoverable action the last one under a turn cap. Four consecutive dispatches died there.",
   "entry": null,
   "link_ref": null,
   "max_rounds": {
-    "inner": 3,
-    "outer": 2
+    "inner": 8,
+    "outer": 8
   },
   "owner": "urban233",
   "reopens": [
@@ -110,6 +110,20 @@
       "reason": "Re-anchor base_snapshot to the flushed waiver-bookkeeping commit before recording the outer-loop reviewer verdict",
       "timestamp": "2026-09-10T19:30:37Z",
       "to_round": 5
+    },
+    {
+      "by": "Martin Urban",
+      "from_round": 5,
+      "head": "5b09137f0704c03e524c0998d21ca6c80748a152",
+      "max_rounds": {
+        "inner": 8,
+        "outer": 8
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round cap exhausted by reconciliation rounds from rebase/bookkeeping, not review churn; raising to give the triaged opencode-parity fix a round to build in",
+      "timestamp": "2026-09-10T19:32:00Z",
+      "to_round": 6
     }
   ],
   "reviewer": null,
@@ -240,6 +254,13 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 6,
+      "slice_id": "reviewer-handoff"
     }
   ],
   "slice_styles": {
