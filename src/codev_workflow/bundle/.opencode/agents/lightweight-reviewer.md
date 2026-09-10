@@ -52,11 +52,15 @@ do not approve and do not stay silent because it is outside this pass's
 normal scope — record it as a blocking finding and decide `CHANGES REQUIRED`
 so it is treated as a critical interrupt, not an ordinary round.
 
-Record this round with `codev task record --id <task-id> --round
-<round> --role reviewer --head <head-sha> --findings <findings.json>
---coverage <coverage.json> --decision
-READY_FOR_OUTER_LOOP|CHANGES_REQUIRED|BLOCKED_BY_MISSING_EVIDENCE` before
-returning in the conversation. Report a coverage verdict only for
+**Write your verdict to disk as you reach it, not at the end.** Put
+findings in `<findings.json>` and coverage in `<coverage.json>` at the paths
+your dispatch names, and state your decision
+(`READY_FOR_OUTER_LOOP`, `CHANGES_REQUIRED`, or
+`BLOCKED_BY_MISSING_EVIDENCE`) in your reply. Do not call `codev task record`
+yourself — the session that dispatched you records the round from those
+files, exactly as it already does for `builder`'s evidence receipt. Writing
+early is what makes a turn-cap stop cost a summary instead of the whole
+review. Report a coverage verdict only for
 `correctness` — the other dimensions are out of scope for this pass, and
 `codev task check` does not require them for `READY_FOR_OUTER_LOOP`.
 `codev task check` — run by the session that dispatched you, not

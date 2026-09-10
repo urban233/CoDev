@@ -20,14 +20,21 @@
   outer-loop specialists already use. Raise every review-shaped subagent's
   `maxTurns` to 40 (`reviewer` 25, the four opus specialists 20,
   `rollout-specialist` 15, `code-audit-gate` 30).
-- **Success:** No role file instructs a reviewer to call `codev task record`
-  itself; `ai-agent-guidelines.md` explicitly assigns that duty to the
-  dispatcher; every `.claude/agents/*.md` change is mirrored byte-for-byte
-  in `src/codev_workflow/bundle/.claude/agents/*.md`.
+- **Success:** No role file on any installed platform instructs a reviewer
+  to call `codev task record` itself; `ai-agent-guidelines.md` explicitly
+  assigns that duty to the dispatcher; every changed role file is mirrored
+  byte-for-byte in its `src/codev_workflow/bundle/` copy.
 - **Non-goals:** No change to any review dimension, finding schema, or
   decision vocabulary; no change to `task.py`'s `record_reviewer` itself.
-- **Allowed scope:** `.claude/agents/*.md`, `.codev/for-ai/ai-agent-guidelines.md`,
-  and their `src/codev_workflow/bundle/` mirrors.
+- **Allowed scope:** `.claude/agents/*.md`, `.opencode/agents/*.md`,
+  `.codev/for-ai/ai-agent-guidelines.md`, and their
+  `src/codev_workflow/bundle/` mirrors. Widened from Claude-Code-only to
+  include OpenCode's reviewer and lightweight-reviewer role files: the
+  outer loop's own review of this slice found that the shared guidelines'
+  new "no subagent records its own round" rule is stated unconditionally,
+  and OpenCode is a live, fully-installed platform (ADR-0031), not a
+  narrowed one -- see round-state's coverage_waivers and reopens history
+  for the finding that prompted this.
 - **Validation:** `just test` (full Bazel suite) and `just validate-catalog`.
 - **Stop if:** A role file's prose change accidentally reintroduces a
   self-record instruction, or a bundle copy diverges from its installed
