@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "5c033d12dcfcb10b5700e118ff149953cd63cc4d",
+  "base_snapshot": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -83,7 +83,7 @@
       "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 11,
+  "current_round": 12,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -205,6 +205,20 @@
       "reason": "Raising the shared round cap so slice 2 (permission-surface) can have its own outer round; slice 1 already consumed the previous cap of 2",
       "timestamp": "2026-09-10T22:30:48Z",
       "to_round": 10
+    },
+    {
+      "by": "urban233",
+      "from_round": 11,
+      "head": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round 11 only recorded security_privacy_data_compatibility coverage, leaving test_quality's stale failed verdict from round 10 in place even though the same fix resolved it; reopening to record both dimensions together in one round",
+      "timestamp": "2026-09-10T22:52:19Z",
+      "to_round": 12
     }
   ],
   "reviewer": null,
@@ -567,6 +581,13 @@
         }
       },
       "round": 11,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 12,
       "slice_id": "permission-surface"
     }
   ],
