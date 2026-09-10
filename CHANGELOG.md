@@ -35,6 +35,17 @@ Semantic Versioning.
   are not followed.
 
 ### Fixed
+- **`tests/test_verify_release.py` ran zero of its 13 tests under Bazel.** It
+  had no `if __name__ == "__main__": unittest.main()` block at all;
+  `tests/BUILD.bazel` builds every `test_*.py` as a `py_test` with no
+  explicit `main`, so Bazel ran the file as `__main__` and never called
+  `unittest.main()` -- a vacuously green target, not a passing one. The
+  block is now present, and a new
+  `tests/test_every_test_class_runs_under_bazel.py` fails if any
+  `tests/test_*.py` is ever missing a trailing `__main__` guard, or has one
+  that isn't its last statement, so this class of bug can't recur silently
+  again.
+
 - **Coverage waivers and verdicts no longer leak from one slice to the next.**
   They merged across the whole task, so a waiver a human granted for one
   slice silently vouched for every later slice, and its reason rendered
