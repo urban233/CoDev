@@ -21,6 +21,18 @@ Semantic Versioning.
   regardless. On a fresh clone that has not accepted the trust dialog, the
   prompt reduction from `allow` will not appear, though the publish recipes
   stay refused either way.
+- **Hardened the five `just test`/`lint`/`typecheck`/`fmt-check`/
+  `validate-catalog` `allow` entries to exact-match (no trailing `:*`).**
+  An outer-loop security review found that the original trailing-wildcard
+  form let a single allow-matched Bash call bypass `deny` entirely: `just`
+  itself chains a bare word after any of these no-argument recipes as a
+  second recipe (`just lint publish-pypi` really does run `lint` and then
+  `publish-pypi`), and `just test`'s variadic argument is interpolated
+  unquoted into a shell line, making `just test '&& echo INJECTED'` a real
+  injection primitive. A pattern with no trailing `:*` matches only that
+  exact command string, so neither bypass can reach these entries anymore;
+  any invocation with extra arguments now falls through to a permission
+  prompt instead of being auto-approved.
 
 ### Changed
 - **Claude Code sessions now implement the work themselves, and dispatch
