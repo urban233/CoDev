@@ -285,7 +285,26 @@
       "slice_id": "permission-surface"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/settings.json",
+            "src/codev_workflow/bundle/.claude/settings.json",
+            "AGENTS.md",
+            "CHANGELOG.md",
+            "tests/test_permission_surface.py"
+          ],
+          "delivered": ".claude/settings.json (and its bundle source) now carry a permissions.allow list of 14 read-only/verification commands and a permissions.deny list covering the two publish recipes. AGENTS.md's prose warning now points to the enforced deny rule for Claude Code. CHANGELOG.md documents the surface and the workspace-trust caveat. New tests/test_permission_surface.py pins JSON validity, both deny entries, bundle/installed parity, and that defaultMode/hooks are untouched.",
+          "deviations": "None. Diff matches the plan's Allowed scope exactly.",
+          "limitations": "Project allow rules only take effect after the workspace trust dialog is accepted (stated in the CHANGELOG); deny-evasion via wrapper scripts/symlinks/env vars is undocumented and treated as defence in depth, not a guarantee, matching the plan's own stated risk.",
+          "validation": [
+            "diff .claude/settings.json src/codev_workflow/bundle/.claude/settings.json -> identical",
+            "python3 scripts/verify_self_install.py -> no changes, clean",
+            "bazel test //tests/... -> 33/33 targets pass, including the new test_permission_surface"
+          ]
+        },
+        "head_snapshot": "3c90a5119f127a9ca8f3a84d427d706582ad01f0"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 9,
