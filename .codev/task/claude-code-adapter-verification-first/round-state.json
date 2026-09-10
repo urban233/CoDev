@@ -49,6 +49,38 @@
       "reason": "No runtime behaviour, no migration, no exposure change; reversible by codev adapter remove claude plus reinstall.",
       "round": 5,
       "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrent or shared-state code paths touched; a static JSON permissions list and prose.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:15Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Small, self-contained slice (a JSON settings surface plus one test file), no architectural surface beyond D6's own stated scope; covered by security-data and correctness-tests specialists.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:15Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No migration, no runtime behavior change beyond agent permission prompts; reversible by editing one JSON file per the plan's own containment statement.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:16Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Small, well-documented JSON surface plus prose; maintainability risk covered incidentally by correctness-tests-specialist's read of the new test file and the plan's own stated containment (one JSON file, fully reversible).",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
   "current_round": 9,
