@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "8b7121133462d2587bb96ad5e1093fce7cb875dd",
+  "base_snapshot": "e1f09dcd99387b68d9638bf7e633dfa2edabff88",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -51,7 +51,7 @@
       "timestamp": "2026-09-08T13:12:07Z"
     }
   ],
-  "current_round": 8,
+  "current_round": 9,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -145,6 +145,20 @@
       "reason": "Absorb the plan-doc commit (written and accepted) before dispatching builder",
       "timestamp": "2026-09-10T22:02:27Z",
       "to_round": 8
+    },
+    {
+      "by": "urban233",
+      "from_round": 8,
+      "head": "e1f09dcd99387b68d9638bf7e633dfa2edabff88",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Rebased the permission-surface branch onto current main (it was stacked on slice 1's older head, missing PR 52/55's merged content); no product content changed by the rebase itself",
+      "timestamp": "2026-09-10T22:03:28Z",
+      "to_round": 9
     }
   ],
   "reviewer": null,
@@ -268,6 +282,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 8,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 9,
       "slice_id": "permission-surface"
     }
   ],
