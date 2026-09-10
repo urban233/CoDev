@@ -2653,7 +2653,7 @@ class WaiverTests(unittest.TestCase):
             start("item-1", "base-sha", target=target)
             waive("item-1", "rollout", "doc-only change", target=target, by="Alice")
             text = log_text("item-1", target=target)
-        self.assertIn("waived by Alice at round 1: rollout", text)
+        self.assertIn("waived by Alice at round 1 (slice item-1): rollout", text)
         self.assertIn("doc-only change", text)
 
 
@@ -3141,10 +3141,6 @@ class BookkeepingCommitWiringTests(unittest.TestCase):
         self.assertIn("docs/plan.md", body)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SliceScopedCoverageTests(unittest.TestCase):
     """A slice is one pull request, so its coverage manifest must describe
     that slice's diff and no other.
@@ -3226,3 +3222,7 @@ class SliceScopedCoverageTests(unittest.TestCase):
             document = _read_state(target, "item-1")
         coverage = _effective_coverage(document)
         self.assertEqual(set(FULL_COVERAGE), set(coverage))
+
+
+if __name__ == "__main__":
+    unittest.main()

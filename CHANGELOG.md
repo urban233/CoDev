@@ -5,25 +5,6 @@ Semantic Versioning.
 
 ## [Unreleased]
 
-### Fixed
-- **Coverage waivers and verdicts no longer leak from one slice to the next.**
-  They merged across the whole task, so a waiver a human granted for one
-  slice silently vouched for every later slice, and its reason rendered
-  verbatim and attributed into their pull request bodies — claiming, for a
-  diff that added a test and changed a permission surface, that no tests were
-  added and no permission surface touched. Real verdicts leaked the same way:
-  a dimension a later slice never re-verified inherited a pass earned against
-  a different diff. A slice is one pull request (ADR-0035), so its coverage
-  manifest now describes that slice's diff and nothing else. Waivers record
-  the slice they were granted on; older records without one are scoped by the
-  slice that owned the round they were granted at.
-
-  **This tightens a gate.** A later slice that was relying, knowingly or not,
-  on an earlier slice's coverage will now report `stop_incomplete_coverage`
-  and need its own verdicts or its own waivers. That is the gate working, not
-  a regression. Carry-forward *within* a slice, including a `codev task
-  reopen` recovery's surviving prior rounds, is unchanged.
-
 ### Changed
 - **Claude Code sessions now implement the work themselves, and dispatch
   subagents to check it.** The adapter defaulted every slice to `delegate`,
@@ -54,6 +35,24 @@ Semantic Versioning.
   are not followed.
 
 ### Fixed
+- **Coverage waivers and verdicts no longer leak from one slice to the next.**
+  They merged across the whole task, so a waiver a human granted for one
+  slice silently vouched for every later slice, and its reason rendered
+  verbatim and attributed into their pull request bodies — claiming, for a
+  diff that added a test and changed a permission surface, that no tests were
+  added and no permission surface touched. Real verdicts leaked the same way:
+  a dimension a later slice never re-verified inherited a pass earned against
+  a different diff. A slice is one pull request (ADR-0035), so its coverage
+  manifest now describes that slice's diff and nothing else. Waivers record
+  the slice they were granted on; older records without one are scoped by the
+  slice that owned the round they were granted at.
+
+  **This tightens a gate.** A later slice that was relying, knowingly or not,
+  on an earlier slice's coverage will now report `stop_incomplete_coverage`
+  and need its own verdicts or its own waivers. That is the gate working, not
+  a regression. Carry-forward *within* a slice, including a `codev task
+  reopen` recovery's surviving prior rounds, is unchanged.
+
 - **The plan and wave-shape gates stopped enforcing anything when a session
   ran from a subdirectory.** Both took the tool call's working directory
   verbatim as the repository root, so every path comparison against it raised,

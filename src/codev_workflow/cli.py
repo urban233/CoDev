@@ -690,7 +690,7 @@ def _parser() -> argparse.ArgumentParser:
         "waive",
         help=(
             "human-authorized: this coverage dimension will not be run for "
-            "this task -- never run without an explicit human decision"
+            "this slice -- never run without an explicit human decision"
         ),
     )
     t_waive.add_argument("--id", required=True)

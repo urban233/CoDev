@@ -913,7 +913,7 @@ def _effective_coverage(state: dict[str, Any]) -> dict[str, Any]:
     executable code, and a verdict earned against one diff is not evidence
     about a different one.
     """
-    current_slice = state.get("current_slice")
+    current_slice = current_slice_id(state)
     rounds: list[dict[str, Any]] = [
         round_entry
         for round_entry in state["rounds"]
@@ -1256,7 +1256,7 @@ def waive(
     by: str | None = None,
 ) -> Path:
     """Human-authorized: this coverage dimension will not be run for this
-    task, instead of leaving it to eventually be covered by some round.
+    slice, instead of leaving it to eventually be covered by some round.
 
     Modeled on `reopen`'s append-only pattern, not `record_triage`'s
     single-slot-per-round one -- `waive` is meant to be callable multiple
@@ -1286,7 +1286,7 @@ def waive(
         {
             "timestamp": _utc_now_iso(),
             "round": state["current_round"],
-            "slice_id": state.get("current_slice"),
+            "slice_id": current_slice_id(state),
             "dimension": dimension,
             "reason": reason,
             "by": by,
@@ -1700,9 +1700,11 @@ def log_text(task_id: str, *, target: Path) -> str:
     for waiver in state.get("coverage_waivers", []):
         by = waiver.get("by")
         by_suffix = f" by {by}" if by else ""
+        slice_id = waiver.get("slice_id")
+        slice_suffix = f" (slice {slice_id})" if slice_id else ""
         lines.append(
-            f"waived{by_suffix} at round {waiver['round']}: {waiver['dimension']} "
-            f"-- {waiver['reason']}"
+            f"waived{by_suffix} at round {waiver['round']}{slice_suffix}: "
+            f"{waiver['dimension']} -- {waiver['reason']}"
         )
     for update in state.get("link_ref_updates", []):
         by = update.get("by")
