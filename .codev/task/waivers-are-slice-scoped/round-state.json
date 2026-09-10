@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "32416e7b2126dd325b760ace8b142f12ea821350",
+  "base_snapshot": "5ea11e2c9773cf1f4805eb07f8108be45a985f93",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -26,7 +26,7 @@
       "timestamp": "2026-09-10T20:37:20Z"
     }
   ],
-  "current_round": 3,
+  "current_round": 4,
   "current_slice": "slice-scoped-coverage",
   "description": "Coverage waivers and reviewer verdicts merge task-wide, so a waiver granted for one slice silently applies to every later slice and renders its reason on their pull requests.",
   "entry": null,
@@ -64,6 +64,20 @@
       "reason": "Rebased onto main after PR 48/49/50 (and their fixups) merged ahead of this task; no product content changed by the rebase itself",
       "timestamp": "2026-09-10T20:30:22Z",
       "to_round": 3
+    },
+    {
+      "by": "urban233",
+      "from_round": 3,
+      "head": "5ea11e2c9773cf1f4805eb07f8108be45a985f93",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "The builder's fix for round 3's triaged finding was mistakenly recorded onto round 3 itself (which already held that round's own reviewer verdict) instead of a fresh round; opening round 4 for the correction's own re-review",
+      "timestamp": "2026-09-10T20:48:37Z",
+      "to_round": 4
     }
   ],
   "reviewer": null,
@@ -101,7 +115,26 @@
       "slice_id": "slice-scoped-coverage"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            "tests/test_task.py",
+            "src/codev_workflow/task.py",
+            "src/codev_workflow/cli.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Moved SliceScopedCoverageTests above tests/test_task.py's __main__ block so all 180 tests run under Bazel (was 176). Addressed four bundled non-blocking findings: corrected waive()'s docstring and the --dimension CLI help text from task-scoped to slice-scoped wording; replaced two raw state.get(\"current_slice\") call sites with the existing current_slice_id() accessor; added slice attribution to codev task log's waiver line; merged CHANGELOG.md's duplicate ### Fixed heading under [Unreleased] into one section.",
+          "deviations": "None beyond the scope the developer explicitly authorized in triage (the blocking test-placement fix plus the four bundled non-blocking cleanups).",
+          "limitations": "The round-caps-still-task-wide finding (pr52-r3-round-caps-still-task-wide) was correctly left out of this round's scope per the specialist's own recommendation -- tracked as a separate follow-up, not addressed here.",
+          "validation": [
+            "python -m unittest tests.test_task -v -> 180 tests, OK",
+            "bazel test //tests:test_task --cache_test_results=no -> Ran 180 tests, OK (was 176)",
+            "bazel test //tests/... -> 31/31 targets pass",
+            "ruff check + ruff format --check on all four changed files -> clean"
+          ]
+        },
+        "head_snapshot": "5ea11e2c9773cf1f4805eb07f8108be45a985f93"
+      },
       "phase": "outer",
       "reviewer": {
         "coverage": {
@@ -202,6 +235,13 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 4,
+      "slice_id": "slice-scoped-coverage"
     }
   ],
   "slice_styles": {
