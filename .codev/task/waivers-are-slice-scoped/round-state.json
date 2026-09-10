@@ -1,6 +1,6 @@
 {
-  "base_snapshot": "fe8827c8f3432f0d6b46fb923a81fecdd2ab64ed",
-  "current_round": 2,
+  "base_snapshot": "32416e7b2126dd325b760ace8b142f12ea821350",
+  "current_round": 3,
   "current_slice": "slice-scoped-coverage",
   "description": "Coverage waivers and reviewer verdicts merge task-wide, so a waiver granted for one slice silently applies to every later slice and renders its reason on their pull requests.",
   "entry": null,
@@ -24,6 +24,20 @@
       "reason": "absorbing the pair-mode implementation into the record",
       "timestamp": "2026-09-08T14:05:55Z",
       "to_round": 2
+    },
+    {
+      "by": "urban233",
+      "from_round": 2,
+      "head": "32416e7b2126dd325b760ace8b142f12ea821350",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Rebased onto main after PR 48/49/50 (and their fixups) merged ahead of this task; no product content changed by the rebase itself",
+      "timestamp": "2026-09-10T20:30:22Z",
+      "to_round": 3
     }
   ],
   "reviewer": null,
@@ -58,6 +72,13 @@
         "head_snapshot": "4f5d47e31d8733dcc9fb149b95350bc74a777b0e"
       },
       "round": 2,
+      "slice_id": "slice-scoped-coverage"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 3,
       "slice_id": "slice-scoped-coverage"
     }
   ],
