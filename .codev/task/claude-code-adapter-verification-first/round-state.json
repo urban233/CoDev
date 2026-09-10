@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "e1f09dcd99387b68d9638bf7e633dfa2edabff88",
+  "base_snapshot": "5c033d12dcfcb10b5700e118ff149953cd63cc4d",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -83,14 +83,14 @@
       "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 9,
+  "current_round": 10,
   "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 6,
-    "outer": 2
+    "inner": 12,
+    "outer": 12
   },
   "owner": "urban233",
   "reopens": [
@@ -191,6 +191,20 @@
       "reason": "Rebased the permission-surface branch onto current main (it was stacked on slice 1's older head, missing PR 52/55's merged content); no product content changed by the rebase itself",
       "timestamp": "2026-09-10T22:03:28Z",
       "to_round": 9
+    },
+    {
+      "by": "urban233",
+      "from_round": 9,
+      "head": "5c033d12dcfcb10b5700e118ff149953cd63cc4d",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Raising the shared round cap so slice 2 (permission-surface) can have its own outer round; slice 1 already consumed the previous cap of 2",
+      "timestamp": "2026-09-10T22:30:48Z",
+      "to_round": 10
     }
   ],
   "reviewer": null,
@@ -350,6 +364,13 @@
         "head_snapshot": "ad5453de23bfbe769d376a718bc3cf960978f7ae"
       },
       "round": 9,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 10,
       "slice_id": "permission-surface"
     }
   ],
