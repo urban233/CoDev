@@ -230,7 +230,16 @@
         }
       },
       "round": 5,
-      "slice_id": "reviewer-handoff"
+      "slice_id": "reviewer-handoff",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "pr49-r4-opencode-still-self-records": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
