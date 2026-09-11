@@ -6,6 +6,53 @@ Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- **A `Stop` hook (`require_green.py`) refuses to end a turn that changed
+  source while the repository's own checks fail.** "All tests pass" stops
+  being a claim the agent reports and becomes a fact the turn cannot end
+  without. Three things bound the cost: a turn that changed no source runs
+  nothing at all, lint and type checking together cost about a second, and
+  the test suite -- the only genuinely expensive check, measured at 25.6s on
+  this repository after one edit -- runs only on a source-touching turn,
+  under a 120s timeout that records `unverified` rather than a pass. The
+  checks themselves are discovered from the repository (`just` recipes where
+  they exist, direct `ruff`/`mypy`/`pytest`/`unittest` otherwise) rather than
+  hard-coding one project's toolchain into a bundle that installs everywhere.
+- **The same hook flags a test that could not have failed.** For each changed
+  test file it compares assertions against `HEAD` through git object storage
+  -- never a checkout, stash, or worktree, so the working tree is untouched
+  -- and blocks on a test function that asserts nothing or whose assertions
+  are unchanged. A test that passes identically before and after a change is
+  not evidence the change works, and it is far easier to catch by execution
+  than by reading.
+- **A `PostToolUse` hook (`format_touched.py`) formats each touched Python
+  file** and tells the agent when the file on disk has changed underneath it.
+  It runs the formatter and nothing else: a type checker here would fire
+  between the edits of a multi-file sequence, where intermediate states are
+  legitimately broken, and send the agent chasing errors that were about to
+  be fixed anyway.
+- **`just test-only <targets>`** runs a named subset (1.0s for one target
+  against 25.6s for the suite). `just test` keeps its documented "append
+  flags to the whole suite" meaning, since narrowing needs its own verb
+  rather than a change of meaning that would break `just test --test_output=all`.
+
+### Fixed
+- **The three guardrail hooks no longer fail open because `codev` is missing
+  from `PATH`.** They resolved a bare command name from whatever environment
+  the host handed them, which is frequently not the shell CoDev was installed
+  into; when that lookup missed, every gate allowed everything and the
+  session was never told. This repository's own decision log recorded **508
+  of 1,112 calls** (46%) doing exactly that -- 77% of all calls on one day.
+  The CLI is now resolved through the interpreter already running the hook,
+  then a repository-local virtualenv, then `PATH`, with a `CODEV_CLI`
+  override for an environment none of those fit. A gate that silently stops
+  existing is worse than no gate, because an absent gate is not trusted and a
+  broken one is.
+- **Degraded gate records now say which kind of failure they were.**
+  `infrastructure` marks tooling that genuinely is not reachable, which is a
+  legitimate fail-open; `hook_error` marks a CLI that answered unusably,
+  which is a defect. Filing both under one label is what let 508 of them go
+  unnoticed.
+
 - **`.claude/settings.json` now ships a `permissions.allow`/`permissions.deny`
   surface.** `allow` covers the read-only and verification commands CoDev's
   own workflow runs constantly (`codev next`, `codev task check`, `codev task

@@ -575,6 +575,8 @@ class InstallerTests(unittest.TestCase):
                 ".claude/hooks/require_plan.py",
                 ".claude/hooks/require_wave_shape.py",
                 ".claude/hooks/require_small_change.py",
+                ".claude/hooks/require_green.py",
+                ".claude/hooks/format_touched.py",
                 ".claude/CLAUDE.md",
             },
             {

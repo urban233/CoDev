@@ -22,6 +22,13 @@ build:
 test *args:
     bazel test //tests/... {{args}}
 
+# Run only the named targets, e.g. `just test-only //tests:test_health`.
+# `just test` deliberately keeps its documented "append flags to the whole
+# suite" meaning; narrowing needs its own verb rather than a change of
+# meaning that would break `just test --test_output=all`.
+test-only +targets:
+    bazel test {{targets}}
+
 test-3-12 *args:
     bazel test --@rules_python//python/config_settings:python_version=3.12 //tests/... {{args}}
 

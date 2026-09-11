@@ -156,12 +156,11 @@ files as a prompt to reconsider slicing the work — not a hard limit; generated
 code, mechanical migrations, and tightly coupled tests may reasonably exceed
 it.
 
-Run the repository's formatter, static checks, affected tests, and
-proportionate broader tests. Report the exact commands and their outcomes —
-never summarize validation you didn't actually run. Coverage percentage is
-diagnostic, not a quality gate. Inspect the *complete* diff yourself before
-handing it off, watching for accidental files, debug code, weakened
-assertions, scope expansion, compatibility risk, and stale documentation.
+Report the exact validation commands and their outcomes. Coverage
+percentage is diagnostic, not a quality gate. Inspect the *complete* diff
+yourself before handing it off, watching for accidental files, debug code,
+weakened assertions, scope expansion, compatibility risk, and stale
+documentation.
 
 After two failed attempts at the same root cause, stop and propose a new
 approach with the human rather than trying a third variation of the same

@@ -13,7 +13,8 @@ Preserve these invariants:
 - require explicit commands for mutations and human authorization for releases.
 
 Use the workflow in the parent repository while CoDev remains nested there.
-Run the standard-library test suite and compile check for every code change.
+Run the test suite and compile check for every code change -- under Claude
+Code a `Stop` hook enforces that rather than trusting the instruction.
 
 ## Build system (Bazel + Just)
 

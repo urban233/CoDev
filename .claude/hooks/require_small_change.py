@@ -33,14 +33,20 @@ adapter enforces the same rule (see `src/codev_workflow/gate.py`); this file
 only translates that answer into Claude Code's PreToolUse protocol and keeps
 the local decision log.
 
-Fails open on everything: a missing `codev` on PATH, a nonzero exit, a
+Fails open on everything: an unreachable `codev`, a nonzero exit, a
 timeout, or unparseable output all allow the tool call. A guardrail that
-errors must never block work.
+errors must never block work. The two cases are recorded distinctly --
+`infrastructure` for a CLI that genuinely is not reachable, `hook_error`
+for one that answered unusably -- because only the second is a defect.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import shlex
+import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -53,19 +59,26 @@ _DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
 
 
 def _log_decision(
-    repo_root: Path, decision: str, *, tool_name: str = "", reason: str = ""
+    repo_root: Path,
+    decision: str,
+    *,
+    tool_name: str = "",
+    reason: str = "",
+    failure_class: str = "",
 ) -> None:
     """Appends one local, gitignored record to `.codev/hooks/decisions.jsonl`.
     Never raises: a broken log must never change this guardrail's own
     allow/ask behavior."""
     try:
-        record = {
+        record: dict[str, str] = {
             "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "hook": _HOOK_NAME,
             "decision": decision,
             "tool_name": tool_name,
             "reason": reason,
         }
+        if failure_class:
+            record["failure_class"] = failure_class
         path = repo_root / _DECISIONS_LOG_RELATIVE
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
@@ -92,10 +105,54 @@ def _ask(reason: str) -> None:
     sys.exit(0)
 
 
-def _decide(raw: str, repo_root: Path) -> dict[str, Any] | None:
+# Why a degraded gate happened, recorded so the two cases can be told apart.
+# `infrastructure` is the legitimate fail-open: the CLI genuinely is not
+# reachable from here. `hook_error` is a CLI that answered but could not be
+# understood, which is a defect rather than an absence and should not be
+# filed alongside it.
+_INFRASTRUCTURE = "infrastructure"
+_HOOK_ERROR = "hook_error"
+
+
+def _codev_argv(repo_root: Path) -> list[str] | None:
+    """The `codev` CLI, resolved without trusting `PATH` alone.
+
+    A hook runs under whatever interpreter and environment the host hands
+    it, which is often not the shell `codev` was installed into. When a bare
+    name misses, every gate allows everything and the session is never told:
+    this repository's own decision log recorded 508 of 1,112 calls deciding
+    nothing for exactly that reason. Candidates are ordered most-specific
+    first and none of them has to spawn a process to be discovered.
+
+    Returns None only when no candidate exists at all, which is the one
+    genuinely infrastructural reason to fail open.
+    """
+    override = os.environ.get("CODEV_CLI", "").strip()
+    if override:
+        return shlex.split(override)
+    try:
+        if importlib.util.find_spec("codev_workflow") is not None:
+            return [sys.executable, "-m", "codev_workflow"]
+    except (ImportError, ValueError):
+        pass
+    for relative in (".venv/bin/codev", ".venv/Scripts/codev.exe"):
+        candidate = repo_root / relative
+        if candidate.exists():
+            return [str(candidate)]
+    found = shutil.which("codev")
+    if found:
+        return [found]
+    return None
+
+
+def _decide(raw: str, repo_root: Path) -> tuple[dict[str, Any] | None, str]:
+    """The gate's answer, or None plus the reason it could not be obtained."""
+    argv = _codev_argv(repo_root)
+    if argv is None:
+        return None, _INFRASTRUCTURE
     try:
         completed = subprocess.run(
-            ["codev", "gate", "check", "--gate", _GATE, "--json"],
+            [*argv, "gate", "check", "--gate", _GATE, "--json"],
             cwd=repo_root,
             input=raw,
             capture_output=True,
@@ -104,14 +161,16 @@ def _decide(raw: str, repo_root: Path) -> dict[str, Any] | None:
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return None
+        return None, _INFRASTRUCTURE
     if completed.returncode != 0:
-        return None
+        return None, _HOOK_ERROR
     try:
         parsed = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
+        return None, _HOOK_ERROR
+    if not isinstance(parsed, dict):
+        return None, _HOOK_ERROR
+    return parsed, ""
 
 
 def main() -> None:
@@ -127,7 +186,7 @@ def main() -> None:
 
     repo_root = Path(payload.get("cwd") or Path.cwd())
     tool_name = str(payload.get("tool_name") or "")
-    decision = _decide(raw, repo_root)
+    decision, failure_class = _decide(raw, repo_root)
     if decision is None:
         # The gate could not be consulted at all -- most often `codev` is not
         # on PATH. Allowing is right; staying silent about it is not, because
@@ -139,6 +198,7 @@ def main() -> None:
             tool_name=tool_name,
             reason="`codev gate check` could not be run, so this tool call "
             "was allowed without being checked",
+            failure_class=failure_class,
         )
         _allow()
         return
