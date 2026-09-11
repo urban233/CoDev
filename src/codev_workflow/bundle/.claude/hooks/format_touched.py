@@ -102,7 +102,7 @@ def _touched_paths(payload: dict[str, object]) -> list[Path]:
 def _formatter_argv() -> list[str] | None:
     """The formatter, resolved without trusting `PATH` alone.
 
-    Same reasoning as `_codev_argv` in the gate hooks: the hook's
+    Same reasoning as `codev_argv` in `_hook_common.py`: the hook's
     environment is frequently not the shell the tooling was installed into.
     Returns None when no formatter is reachable, which is a no-op, not an
     error.

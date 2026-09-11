@@ -50,40 +50,13 @@ best-effort context for a later hook, never a gate.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _gate_common  # noqa: E402
+import _hook_common  # noqa: E402
 
 _CHECKPOINT_FILENAME = "checkpoint.json"
-
-
-def _next_position(repo_root: Path) -> dict[str, object] | None:
-    argv = _gate_common.codev_argv(repo_root)
-    if argv is None:
-        return None
-    try:
-        completed = subprocess.run(
-            # --no-github: a PreCompact hook must be fast and offline-safe;
-            # see the same note in restore_position.py.
-            [*argv, "next", "--json", "--no-github"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if completed.returncode not in (0, 1):  # 1: `next` itself reports blocked
-        return None
-    try:
-        parsed = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
 
 
 def main() -> None:
@@ -99,7 +72,7 @@ def main() -> None:
     if not scratchpad_dir:
         return
     repo_root = Path(payload.get("cwd") or Path.cwd())
-    position = _next_position(repo_root)
+    position = _hook_common.codev_next(repo_root)
     if position is None:
         return
     try:

@@ -26,20 +26,28 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Shared plumbing for the `PreToolUse` gate hooks.
+"""Shared plumbing for every hook in this bundle, gate and advisory alike.
 
 `require_plan.py`, `require_small_change.py`, and `require_wave_shape.py`
 each translate one `codev gate check --gate <name>` verdict into Claude
-Code's `PreToolUse` protocol. Before this module existed, the translation
-itself -- CLI resolution, the local decision log, the fail-open plumbing --
-was copied identically into all three; this slice added two more hooks
-(`SessionStart`, `PreCompact`) that need the same CLI resolution, which is
-the point three independent copies becomes five. Extracted here instead;
-each hook now supplies only its own gate name and hook name.
+Code's `PreToolUse` protocol, sharing `run_gate_hook` below. `restore_position.py`,
+`checkpoint_state.py`, and `statusline.py` are not gates -- they carry no
+allow/ask/degraded verdict -- but need the same `codev` CLI resolution, so
+they share `codev_argv` and `codev_next` instead.
+
+This module was `_gate_common.py` until this file was added: naming it for
+"gate hooks" specifically stopped being accurate the moment a second kind
+of hook needed the same CLI resolution, so it was renamed rather than left
+to describe only half its callers.
+
+Before either half existed, the CLI-resolution/decision-log translation was
+copied identically into the three gate hooks; three independent copies
+becoming five was the point that extraction was no longer optional.
 
 Fails open on everything: an unreachable `codev`, a nonzero exit, a
-timeout, or unparseable output all allow the tool call. A guardrail that
-errors must never block work. The two cases are recorded distinctly --
+timeout, or unparseable output all allow the tool call (or, for the
+advisory half, simply produce no output). A guardrail that errors must
+never block work. The two gate-side cases are recorded distinctly --
 `infrastructure` for a CLI that genuinely is not reachable, `hook_error`
 for one that answered unusably -- because only the second is a defect.
 """
@@ -242,3 +250,38 @@ def run_gate_hook(hook_name: str, gate: str) -> None:
     if decision.get("recorded", True):
         log_decision(repo_root, hook_name, "allow", tool_name=tool_name, reason=reason)
     allow()
+
+
+def codev_next(repo_root: Path, *, timeout: float = 30) -> dict[str, object] | None:
+    """`codev next --json --no-github`'s own report, or None if it could not
+    be run.
+
+    Shared by `restore_position.py`, `checkpoint_state.py`, and
+    `statusline.py` -- the three advisory (non-gate) hooks in this bundle,
+    each of which needs this exact call and previously each defined its own
+    copy. `--no-github`: every caller here fires at a session boundary or on
+    a `statusLine` refresh cadence and must be fast and offline-safe;
+    `codev next --json` alone would check GitHub for most positions, which
+    is exactly the network dependency none of these three should carry.
+    """
+    argv = codev_argv(repo_root)
+    if argv is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [*argv, "next", "--json", "--no-github"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode not in (0, 1):  # 1: `next` itself reports blocked
+        return None
+    try:
+        parsed = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None

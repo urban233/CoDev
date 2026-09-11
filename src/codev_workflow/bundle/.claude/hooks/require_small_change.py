@@ -30,7 +30,7 @@
 
 A shim. The decision lives in `codev gate check --gate small-change` so
 every adapter enforces the same rule (see `src/codev_workflow/gate.py`);
-this file only names the gate and hands off to `_gate_common.py`, which
+this file only names the gate and hands off to `_hook_common.py`, which
 every gate hook shares.
 
 Fails open on everything: an unreachable `codev`, a nonzero exit, a
@@ -46,14 +46,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _gate_common  # noqa: E402
+import _hook_common  # noqa: E402
 
 _HOOK_NAME = "require_small_change.py"
 _GATE = "small-change"
 
 
 def main() -> None:
-    _gate_common.run_gate_hook(_HOOK_NAME, _GATE)
+    _hook_common.run_gate_hook(_HOOK_NAME, _GATE)
 
 
 if __name__ == "__main__":

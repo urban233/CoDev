@@ -48,36 +48,15 @@ unreachable `codev`, a nonzero exit, a timeout, or unparseable output.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _gate_common  # noqa: E402
+import _hook_common  # noqa: E402
 
-
-def _position(repo_root: Path) -> dict[str, object] | None:
-    argv = _gate_common.codev_argv(repo_root)
-    if argv is None:
-        return None
-    try:
-        completed = subprocess.run(
-            [*argv, "next", "--json", "--no-github"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if completed.returncode not in (0, 1):  # 1: `next` itself reports blocked
-        return None
-    try:
-        parsed = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
+# Shorter than the other two callers of _hook_common.codev_next: this one
+# runs on every statusLine refresh, the hottest of the three call sites.
+_TIMEOUT_SECONDS = 10
 
 
 def _context_used_percentage(payload: dict[str, object]) -> str | None:
@@ -92,7 +71,7 @@ def _context_used_percentage(payload: dict[str, object]) -> str | None:
 
 def _line(payload: dict[str, object], repo_root: Path) -> str:
     parts: list[str] = []
-    action = _position(repo_root)
+    action = _hook_common.codev_next(repo_root, timeout=_TIMEOUT_SECONDS)
     if action is not None:
         # slice_id, not the full branch name: `slice_id` is the short,
         # at-a-glance identifier; the branch it is part of

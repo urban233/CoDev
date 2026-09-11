@@ -53,44 +53,14 @@ Claude, never a gate.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _gate_common  # noqa: E402
+import _hook_common  # noqa: E402
 
 _HOOK_NAME = "restore_position.py"
 _CHECKPOINT_FILENAME = "checkpoint.json"
-
-
-def _next_position(repo_root: Path) -> dict[str, object] | None:
-    """`codev next --json`'s own report, or None if it could not be run."""
-    argv = _gate_common.codev_argv(repo_root)
-    if argv is None:
-        return None
-    try:
-        completed = subprocess.run(
-            # --no-github: this fires on every session start and must be
-            # fast and offline-safe. `codev next --json` alone would check
-            # GitHub for most positions, which is exactly the network
-            # dependency a startup hook should not carry.
-            [*argv, "next", "--json", "--no-github"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if completed.returncode not in (0, 1):  # 1: `next` itself reports blocked
-        return None
-    try:
-        parsed = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
 
 
 def _checkpoint(scratchpad_dir: str) -> dict[str, object] | None:
@@ -139,7 +109,7 @@ def main() -> None:
         return
 
     repo_root = Path(payload.get("cwd") or Path.cwd())
-    position = _next_position(repo_root)
+    position = _hook_common.codev_next(repo_root)
     if position is None and payload.get("source") == "compact":
         # `codev` itself may be briefly unreachable right after a
         # compaction; the checkpoint is a second, independent path to the

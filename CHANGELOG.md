@@ -69,10 +69,12 @@ Semantic Versioning.
   currently ~1,289 bytes over the derived ceiling; the ceiling assertion is
   explicitly skipped pending a separate retirement pass (issue #69), so it
   does not block this slice.
-- **The gate hooks' shared CLI-resolution and decision-logging logic is
-  extracted to `.claude/hooks/_gate_common.py`**, ending three independently
-  maintained copies (closes #65) just as two more hooks would otherwise have
-  made it five.
+- **All six hooks' shared logic is extracted to `.claude/hooks/_hook_common.py`**
+  -- the three gate hooks' CLI-resolution and decision-logging (closes #65),
+  plus a shared `codev_next()` runner for the three new advisory hooks
+  above, which an outer-loop review caught still each defining their own
+  copy of it. Named `_hook_common.py` rather than the originally-proposed
+  `_gate_common.py` since three of its six callers are not gates.
 
 ### Fixed
 - **The three guardrail hooks no longer fail open because `codev` is missing

@@ -95,15 +95,15 @@ def _measure() -> dict[str, int]:
 
 class InstructionBudgetTests(unittest.TestCase):
     @unittest.skip(
-        "Decision 1 in this slice's implementation plan is not yet resolved "
-        "by the developer: the real measured total (34,389 bytes) is "
-        "already over the derived 33,100-byte ceiling, and this slice's own "
-        "hooks license at most ~300 bytes of retirement -- nowhere near "
-        "enough to close a ~1,300-byte gap the ledger never actually "
-        "tracked (only two of these five sources were ever measured "
-        "per-slice). Un-skip once the developer decides whether to retire "
-        "more prose, revisit the byte/token conversion, or accept the "
-        "overage as a separately-tracked follow-up."
+        "Decision 1 in this slice's implementation plan was resolved by "
+        "Martin Urban on 2026-09-12: the real measured total (34,389 bytes) "
+        "is over the derived 33,100-byte ceiling, this slice's own hooks "
+        "license at most ~300 bytes of retirement -- nowhere near enough to "
+        "close a ~1,300-byte gap the ledger never actually tracked (only "
+        "two of these five sources were ever measured per-slice) -- and the "
+        "developer chose to file it as a follow-up rather than block this "
+        "slice on it. Tracked as github.com/urban233/CoDev/issues/69. "
+        "Un-skip once that issue resolves the overage or the ceiling."
     )
     def test_total_is_at_or_under_the_ratcheted_ceiling(self) -> None:
         breakdown = _measure()

@@ -482,6 +482,29 @@ running totals in the ledger above were projected assuming sequential order
 and will differ slightly in practice, but the rule they enforce does not
 depend on that order.
 
+## Instruction budget: the ledger's headroom claim no longer holds (2026-09-12)
+
+The recovery-and-budget slice (D7) added the first mechanical measurement of
+the always-on instruction payload
+(`tests/test_instruction_budget.py`), covering all five sources this
+document's own research measured rather than the two files the per-slice
+ledger above actually tracked. The real total is **34,389 bytes**, over the
+**33,100-byte** ceiling the original 9,698-token baseline's own
+bytes-per-token ratio implies -- not the **"7,225 against a 7,500
+ceiling -- 275 tokens of headroom"** the Ledger section states, and not
+consistent with the "every hook added must retire the prose it replaces, in
+the same slice" rule as stated, since `.claude/CLAUDE.md` and the agent
+descriptions grew without either being ledgered against the ceiling at all.
+
+Authorised by Martin Urban 2026-09-12: filed as a separately-tracked
+follow-up (github.com/urban233/CoDev/issues/69) rather than blocking
+recovery-and-budget on it or re-litigating the ledger's arithmetic here.
+`scientific-gates` (D5, building next) should treat the ledger's specific
+running totals as informative history, not a live budget to check against
+-- `test_instruction_budget.py`'s two enforced assertions (non-increase from
+a recorded baseline, and the baseline matching what is actually measured)
+are the live check now.
+
 ## Follow-up tasks
 
 **F1 -- Measure the loop instead of asserting it.** (Recorded here; out of this

@@ -573,7 +573,7 @@ class InstallerTests(unittest.TestCase):
                 ".claude/agents/security-data-specialist.md",
                 ".claude/commands/pr-review.md",
                 ".claude/settings.json",
-                ".claude/hooks/_gate_common.py",
+                ".claude/hooks/_hook_common.py",
                 ".claude/hooks/require_plan.py",
                 ".claude/hooks/require_wave_shape.py",
                 ".claude/hooks/require_small_change.py",

@@ -49,10 +49,16 @@ the reorder)
 - **Allowed scope:** `.claude/settings.json` and its bundle mirror, two new
   hook scripts (`restore_position.py`, `checkpoint_state.py`) plus the three
   existing gate hooks and `format_touched.py` (folding in the
-  `_gate_common.py` extraction -- see "Scope: what is folded in"), one new
-  `statusline.py` script, all five `.claude/agents/*-specialist.md` files,
-  `scripts/verify_claude_code_compat.py`, `tests/`,
-  `AGENTS.md`/`.codev/for-ai/ai-agent-guidelines.md`, `CHANGELOG.md`.
+  `_gate_common.py`/`_hook_common.py` extraction -- see "Scope: what is
+  folded in"), one new `statusline.py` script, all five
+  `.claude/agents/*-specialist.md` files, `scripts/verify_claude_code_compat.py`,
+  `tests/` (including `tests/BUILD.bazel` and the root `BUILD.bazel`
+  filegroup its new test target needs),
+  `AGENTS.md`/`.codev/for-ai/ai-agent-guidelines.md`, `CHANGELOG.md`,
+  `.codev/instruction-budget-baseline.json` (step 7's own recorded
+  baseline), and `docs/plans/claude-code-adapter-verification-first.md`
+  (the reorder record and the budget-overage note, both dated and
+  attributed rather than silent scope creep).
 - **Validation:** new hook/statusline tests by fixture-stdin subprocess,
   matching `tests/test_claude_hook.py`'s pattern; full test suite; the new
   instruction-budget regression test itself; manual confirmation of
@@ -74,6 +80,18 @@ time is the point triplication becomes quintuplication. Extracting now costs
 one shared module and touches the three existing hooks only to replace their
 copy with an import, no behavior change (pinned by the existing hook tests
 passing unmodified). Closes issue #65.
+
+**Correction round, 2026-09-12.** The extraction as first built still left
+`restore_position.py`, `checkpoint_state.py`, and `statusline.py` each
+defining their own copy of the `codev next --json --no-github` runner --
+the identical triplication this section argues against, reproduced within
+the same slice (an outer-loop architecture-maintainability finding,
+address-triaged by Martin Urban). Fixed by moving that runner into the
+shared module too, and renaming it `_hook_common.py`: "gate hooks" stopped
+describing its callers the moment three non-gate hooks needed it for the
+same reason. Every reference to `_gate_common.py` below is the module's
+name as originally proposed and built; the shipped, current name is
+`_hook_common.py`.
 
 **Not folded in -- raising the specialists' `maxTurns`.** Issue #39 (five of
 six outer-loop subagents hit their 40-turn cap in this session's own work)
@@ -265,7 +283,8 @@ original sources in bytes, now:
 - [x] Full suite green (39/39), including the new instruction-budget test
 - [x] `verify_claude_code_compat.py` passes against the published CLI (2.1.269)
       with the extended marker set (35/35)
-- [x] `_gate_common.py` extracted; existing hook tests pass unmodified
+- [x] `_gate_common.py` (shipped as `_hook_common.py` after the correction
+      round below) extracted; existing hook tests pass unmodified
 - [x] `SessionStart`, `PreCompact`, `statusLine` each covered by fixture-stdin
       tests (14 tests total, both fail-open directions and the
       compact-checkpoint fallback in both directions)
@@ -275,9 +294,11 @@ original sources in bytes, now:
 - [x] All five specialist files carry `isolation: worktree`;
       `worktree.baseRef` is `"head"`; both mutation-checked
       (`tests/test_installer.py::test_specialists_install_isolated_and_correctly_based`)
-- [ ] Manually confirmed a specialist worktree is actually cut from the
-      reviewed branch, not `main`, in a live outer-loop review -- needs a
-      real pull request and a real specialist dispatch after this merges
+- [x] Confirmed a specialist worktree is actually cut from the reviewed
+      branch, not `main`, in this slice's own live outer-loop review: the
+      security-data-specialist dispatched against this PR reported its own
+      worktree's `HEAD` as the PR head, while local `main` sat at the
+      unrelated base commit
 - [x] Instruction-budget total measured (34,389 bytes) and recorded in
       `.codev/instruction-budget-baseline.json`; **not** at or under 33,100
       bytes -- see Decision 1's resolution and issue #69 (developer-approved
@@ -289,4 +310,16 @@ original sources in bytes, now:
       session-boundary case, not "after every state change") -- folded into
       issue #69 rather than a token trim that would not move the real number
 - [x] CHANGELOG entry
-- [x] `git diff` confirms no change outside the allowed scope
+- [x] `git diff` confirms no change outside the allowed scope (Allowed
+      scope's own list updated to name the three files this required,
+      rather than the list staying wrong)
+- [x] Outer-loop correction round (2026-09-12): one blocking finding
+      addressed (the triplicated `codev next` runner, above), five
+      non-blocking findings fixed in the same round (this section's
+      correction note; the stale skip-reason text; this budget note;
+      `format_touched.py`'s stale `_codev_argv` reference; the Allowed
+      scope list). Four non-blocking findings left as recorded: the budget
+      test's redundant strict-equality assertion, the duplicated
+      `"checkpoint.json"` filename constant, a test assertion that passes
+      vacuously, and a version-gated silent degradation on Claude Code
+      builds predating `scratchpad_dir`.

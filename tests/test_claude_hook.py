@@ -520,11 +520,11 @@ class CliResolutionTests(unittest.TestCase):
         )
 
     def test_every_gate_hook_resolves_the_cli_the_same_way(self) -> None:
-        """All three hooks delegate to the one shared `_gate_common` module,
+        """All three hooks delegate to the one shared `_hook_common` module,
         so a repair to it fixes every gate at once -- there is no longer a
         second or third copy that a repair could miss."""
         hooks_dir = _HOOK.parent
-        shared_source = (hooks_dir / "_gate_common.py").read_text(encoding="utf-8")
+        shared_source = (hooks_dir / "_hook_common.py").read_text(encoding="utf-8")
         self.assertIn("def codev_argv", shared_source)
         self.assertNotIn('["codev", "gate"', shared_source)
         for name in (
@@ -534,7 +534,7 @@ class CliResolutionTests(unittest.TestCase):
         ):
             source = (hooks_dir / name).read_text(encoding="utf-8")
             with self.subTest(hook=name):
-                self.assertIn("_gate_common", source)
+                self.assertIn("_hook_common", source)
                 self.assertNotIn("def codev_argv", source)
                 self.assertNotIn('["codev", "gate"', source)
 
@@ -577,7 +577,7 @@ class CliResolutionTests(unittest.TestCase):
         literal quote characters cannot be executed at all.
         """
         spec = importlib.util.spec_from_file_location(
-            "_gate_common_under_test", _HOOK.parent / "_gate_common.py"
+            "_hook_common_under_test", _HOOK.parent / "_hook_common.py"
         )
         assert spec is not None and spec.loader is not None
         gate_common = importlib.util.module_from_spec(spec)
