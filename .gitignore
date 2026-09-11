@@ -27,11 +27,14 @@ real-use-cases
 # codev:start
 # CoDev local escalation log (ADR-0003) -- not shared or committed.
 .codev/task/escalations.jsonl
-# CoDev local gate-decision log -- not shared or committed. Globbed rather
-# than root-anchored: a hook invoked with a working directory below the
-# repository root writes its log there instead, and an unignored one shows up
-# as untracked noise in the change under review.
-**/.codev/hooks/decisions.jsonl
+# CoDev local hook state -- decision log, refusal counters, anything a hook
+# writes to remember itself between firings. None of it is shared or
+# committed. The whole directory rather than one filename, because each new
+# hook otherwise has to remember to add its own line and the first one to
+# forget gets swept into the change under review by `codev git commit`'s
+# `git add -A`. Globbed rather than root-anchored: a hook invoked with a
+# working directory below the repository root writes there instead.
+**/.codev/hooks/
 # Pull-request data the review skills fetch -- a cache of GitHub's answers,
 # rebuilt on demand. Without this, `codev git commit`'s `git add -A` sweeps
 # thousands of lines of API responses into the change under review.

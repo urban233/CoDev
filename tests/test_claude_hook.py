@@ -10,6 +10,7 @@ docs/features/skill-eval/design.md).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shlex
@@ -19,6 +20,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 _HOOK = (
     Path(__file__).resolve().parent.parent
@@ -42,6 +44,30 @@ def _codev_on_path() -> str:
     )
     launcher.chmod(0o755)
     return str(bindir)
+
+
+def _path_without_codev() -> str:
+    """The real PATH minus any directory holding a `codev` executable.
+
+    Hard-coding "/usr/bin:/bin" was POSIX-only, and on Windows it removed
+    git along with everything else -- so the gate failed open for the wrong
+    reason and the test passed for the wrong reason. Subtracting only what
+    the test is trying to hide keeps every other tool the gate needs.
+    """
+    name = "codev.exe" if os.name == "nt" else "codev"
+    kept = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry and not (Path(entry) / name).exists()
+    ]
+    return os.pathsep.join(kept)
+
+
+def _quote_executable() -> str:
+    """`sys.executable`, quoted the way this platform's lexer will read it."""
+    if os.name == "nt":
+        return f'"{sys.executable}"'
+    return shlex.quote(sys.executable)
 
 
 def _run_hook(repo: Path, stdin: str) -> subprocess.CompletedProcess[str]:
@@ -419,6 +445,184 @@ class RequirePlanHookTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout)
+
+
+class CliResolutionTests(unittest.TestCase):
+    """The gate must decide even when `codev` is not on the hook's PATH.
+
+    This is a regression test for a real, measured failure rather than a
+    hypothetical one: this repository's own decision log recorded 508 of
+    1,112 hook calls allowing a tool call without checking it, because the
+    hooks resolved a bare `codev` from an environment that did not have
+    one. Every gate silently stopped existing and nothing said so, which is
+    strictly worse than having no gate at all -- an absent gate is not
+    trusted, and a broken one is.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temporary.name)
+        _init_repo(self.repo)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _run_without_codev_on_path(
+        self, hook: Path, payload: dict[str, Any]
+    ) -> subprocess.CompletedProcess[str]:
+        """Run one hook with git reachable but `codev` deliberately absent.
+
+        Only the directories holding `codev` are removed, so git -- which
+        the gate needs -- survives on every platform.
+        """
+        env = dict(os.environ)
+        env["PATH"] = _path_without_codev()
+        env.pop("CODEV_CLI", None)
+        return subprocess.run(
+            [sys.executable, str(hook)],
+            input=json.dumps(payload),
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+
+    def _decisions(self) -> list[dict[str, Any]]:
+        log = self.repo / ".codev/hooks/decisions.jsonl"
+        if not log.exists():
+            return []
+        return [
+            json.loads(line)
+            for line in log.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def test_gate_still_decides_without_codev_on_path(self) -> None:
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "feature/x"], cwd=self.repo, check=True
+        )
+        result = self._run_without_codev_on_path(
+            _HOOK,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": str(self.repo / "src" / "foo.py")},
+                "cwd": str(self.repo),
+            },
+        )
+        self.assertEqual(0, result.returncode)
+        decisions = self._decisions()
+        self.assertTrue(decisions, "the gate recorded nothing at all")
+        self.assertNotEqual(
+            "degraded",
+            decisions[-1]["decision"],
+            "the gate failed open because it could not find `codev`",
+        )
+
+    def test_every_gate_hook_resolves_the_cli_the_same_way(self) -> None:
+        """All three hooks carry the same resolution logic, so a repair to
+        one that misses the others would leave two gates still blind."""
+        hooks_dir = _HOOK.parent
+        for name in (
+            "require_plan.py",
+            "require_wave_shape.py",
+            "require_small_change.py",
+        ):
+            source = (hooks_dir / name).read_text(encoding="utf-8")
+            with self.subTest(hook=name):
+                self.assertIn("_codev_argv", source)
+                self.assertNotIn('["codev", "gate"', source)
+
+    def test_an_explicit_override_is_honoured(self) -> None:
+        """The escape hatch for an environment none of the candidates fit."""
+        env = dict(os.environ)
+        env["PATH"] = _path_without_codev()
+        env["CODEV_CLI"] = f"{_quote_executable()} -m codev_workflow"
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent / "src")
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "feature/y"], cwd=self.repo, check=True
+        )
+        result = subprocess.run(
+            [sys.executable, str(_HOOK)],
+            input=json.dumps(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": str(self.repo / "src" / "foo.py")},
+                    "cwd": str(self.repo),
+                }
+            ),
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        self.assertEqual(0, result.returncode)
+        decisions = self._decisions()
+        self.assertTrue(decisions)
+        self.assertNotEqual("degraded", decisions[-1]["decision"])
+
+    def test_override_parsing_survives_a_quoted_windows_path(self) -> None:
+        """Parse the override the way each platform's lexer must.
+
+        Exercised directly rather than only through the Windows CI leg,
+        because both halves of this were found there and not locally: the
+        POSIX lexer eats the backslashes in a native path, and the
+        non-POSIX one keeps the quotes it split on -- an argv[0] carrying
+        literal quote characters cannot be executed at all.
+        """
+        spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK)
+        assert spec is not None and spec.loader is not None
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+
+        windows_override = r'"C:\Python\python.exe" -m codev_workflow'
+        with (
+            mock.patch.dict(os.environ, {"CODEV_CLI": windows_override}),
+            mock.patch.object(hook.os, "name", "nt"),
+        ):
+            argv = hook._codev_argv(self.repo)
+        self.assertEqual(
+            [r"C:\Python\python.exe", "-m", "codev_workflow"],
+            argv,
+            "backslashes must survive and the quotes must not",
+        )
+
+        posix_override = "/usr/local/bin/codev"
+        with (
+            mock.patch.dict(os.environ, {"CODEV_CLI": posix_override}),
+            mock.patch.object(hook.os, "name", "posix"),
+        ):
+            argv = hook._codev_argv(self.repo)
+        self.assertEqual(["/usr/local/bin/codev"], argv)
+
+    def test_a_degraded_record_says_which_kind_of_failure_it_was(self) -> None:
+        """`infrastructure` is a legitimate fail-open; `hook_error` is a
+        defect. Filing them together is what let 508 of them go unnoticed."""
+        env = dict(os.environ)
+        env["PATH"] = ""
+        env["CODEV_CLI"] = "/nonexistent/codev"
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "feature/z"], cwd=self.repo, check=True
+        )
+        subprocess.run(
+            [sys.executable, str(_HOOK)],
+            input=json.dumps(
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": str(self.repo / "src" / "foo.py")},
+                    "cwd": str(self.repo),
+                }
+            ),
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        degraded = [d for d in self._decisions() if d["decision"] == "degraded"]
+        self.assertTrue(degraded, "expected a degraded record")
+        self.assertEqual("infrastructure", degraded[-1].get("failure_class"))
 
 
 if __name__ == "__main__":
