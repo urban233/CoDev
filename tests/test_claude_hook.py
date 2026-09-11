@@ -44,6 +44,30 @@ def _codev_on_path() -> str:
     return str(bindir)
 
 
+def _path_without_codev() -> str:
+    """The real PATH minus any directory holding a `codev` executable.
+
+    Hard-coding "/usr/bin:/bin" was POSIX-only, and on Windows it removed
+    git along with everything else -- so the gate failed open for the wrong
+    reason and the test passed for the wrong reason. Subtracting only what
+    the test is trying to hide keeps every other tool the gate needs.
+    """
+    name = "codev.exe" if os.name == "nt" else "codev"
+    kept = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry and not (Path(entry) / name).exists()
+    ]
+    return os.pathsep.join(kept)
+
+
+def _quote_executable() -> str:
+    """`sys.executable`, quoted the way this platform's lexer will read it."""
+    if os.name == "nt":
+        return f'"{sys.executable}"'
+    return shlex.quote(sys.executable)
+
+
 def _run_hook(repo: Path, stdin: str) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["PATH"] = _codev_on_path() + os.pathsep + env.get("PATH", "")
@@ -446,11 +470,11 @@ class CliResolutionTests(unittest.TestCase):
     ) -> subprocess.CompletedProcess[str]:
         """Run one hook with git reachable but `codev` deliberately absent.
 
-        A minimal PATH keeps git available -- the gate needs it, and removing
-        it would test the wrong fail-open branch.
+        Only the directories holding `codev` are removed, so git -- which
+        the gate needs -- survives on every platform.
         """
         env = dict(os.environ)
-        env["PATH"] = "/usr/bin:/bin"
+        env["PATH"] = _path_without_codev()
         env.pop("CODEV_CLI", None)
         return subprocess.run(
             [sys.executable, str(hook)],
@@ -510,8 +534,8 @@ class CliResolutionTests(unittest.TestCase):
     def test_an_explicit_override_is_honoured(self) -> None:
         """The escape hatch for an environment none of the candidates fit."""
         env = dict(os.environ)
-        env["PATH"] = "/usr/bin:/bin"
-        env["CODEV_CLI"] = f"{shlex.quote(sys.executable)} -m codev_workflow"
+        env["PATH"] = _path_without_codev()
+        env["CODEV_CLI"] = f"{_quote_executable()} -m codev_workflow"
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent / "src")
         subprocess.run(
             ["git", "checkout", "-q", "-b", "feature/y"], cwd=self.repo, check=True

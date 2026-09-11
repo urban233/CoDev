@@ -130,7 +130,9 @@ def _codev_argv(repo_root: Path) -> list[str] | None:
     """
     override = os.environ.get("CODEV_CLI", "").strip()
     if override:
-        return shlex.split(override)
+        # posix=False on Windows: the POSIX lexer treats a backslash as an
+        # escape, which silently mangles every native path it is given.
+        return shlex.split(override, posix=os.name != "nt")
     try:
         if importlib.util.find_spec("codev_workflow") is not None:
             return [sys.executable, "-m", "codev_workflow"]

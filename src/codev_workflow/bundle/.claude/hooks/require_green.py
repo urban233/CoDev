@@ -133,9 +133,16 @@ def _changed_source(repo_root: Path) -> list[Path] | None:
 
 
 def _just_argv(repo_root: Path) -> list[str] | None:
-    local = repo_root / ".tools" / "just"
-    if local.exists():
-        return [str(local)]
+    """A repository-local `just` if there is one, else whatever is on PATH.
+
+    The local copy is checked with the platform's executable suffixes as
+    well as the bare name: `.tools/just` is the Unix spelling, and Windows
+    needs `just.exe` or `just.bat` to be runnable at all.
+    """
+    for suffix in ("", ".exe", ".bat", ".cmd"):
+        local = repo_root / ".tools" / f"just{suffix}"
+        if local.exists():
+            return [str(local)]
     found = shutil.which("just")
     return [found] if found else None
 

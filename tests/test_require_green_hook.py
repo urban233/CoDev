@@ -94,6 +94,17 @@ def _plant_just(repo: Path, exits: dict[str, int]) -> None:
     """
     tools = repo / ".tools"
     tools.mkdir(exist_ok=True)
+    if os.name == "nt":
+        # Windows cannot execute an extensionless shell script; the hook
+        # looks for the .bat spelling there for exactly this reason.
+        branches = "\r\n".join(
+            f'if "%1"=="{recipe}" (echo {recipe} output & exit /b {code})'
+            for recipe, code in exits.items()
+        )
+        (tools / "just.bat").write_text(
+            "@echo off\r\n" + branches + "\r\nexit /b 0\r\n", encoding="utf-8"
+        )
+        return
     launcher = tools / "just"
     branches = "\n".join(
         f'  {recipe}) echo "{recipe} output"; exit {code} ;;'
