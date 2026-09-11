@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "05846e8e39691a7a0c3175657b33cb5e7cc69f52",
+  "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -99,8 +99,8 @@
       "timestamp": "2026-09-11T16:44:16Z"
     }
   ],
-  "current_round": 16,
-  "current_slice": "evidence-hooks",
+  "current_round": 17,
+  "current_slice": "recovery-and-budget",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
@@ -1110,6 +1110,13 @@
       },
       "round": 16,
       "slice_id": "evidence-hooks"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 17,
+      "slice_id": "recovery-and-budget"
     }
   ],
   "slice_styles": {
@@ -1123,8 +1130,8 @@
     "work-style-and-plan-tiering",
     "permission-surface",
     "evidence-hooks",
-    "scientific-gates",
-    "recovery-and-budget"
+    "recovery-and-budget",
+    "scientific-gates"
   ],
   "status": "in_progress",
   "summary": "Rebalance the Claude Code adapter toward verification-first execution",

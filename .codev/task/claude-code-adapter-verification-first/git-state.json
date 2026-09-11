@@ -10,6 +10,10 @@
       "base_snapshot": "4e0d2e92ab35d6fb87a27fd568b520a64970e16a",
       "branch": "codev/claude-code-adapter-verification-first--permission-surface-2"
     },
+    "recovery-and-budget": {
+      "base_snapshot": "3c59946b5f62d337a153a53eb4c2d256bfbff270",
+      "branch": "codev/claude-code-adapter-verification-first--recovery-and-budget"
+    },
     "work-style-and-plan-tiering": {
       "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
       "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering"

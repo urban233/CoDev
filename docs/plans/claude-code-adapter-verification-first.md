@@ -459,6 +459,29 @@ change what the plan commits to, not merely how it is worded.
 None. This plan is ready for `Status: Accepted`, which is the developer's to
 write.
 
+## Reordering (2026-09-11, Martin Urban)
+
+Slices build **5 then 4**, not 4 then 5 as drafted above. Cause: slice 3
+(evidence-hooks) shipped as PR #57 and fixed the majority cause of gates
+recording `degraded`/unchecked (an unresolvable `codev` on `PATH`), which
+uncovered a second, previously-minor cause -- `gate.py` crashing on a path
+outside the repository -- as the new dominant failure mode (measured 56 of
+80, 71%, gate calls on 2026-09-11). That crash was fixed as its own task
+(`gate-decides-for-out-of-repo-paths`, PR #59, outside this plan's slices),
+but it sharpened the case for D7's recovery-and-frontmatter surface
+(`SessionStart` position recovery, `statusLine`) over D5's scientific-gates
+checks: recovery from a degraded/confused state is the more load-bearing gap
+right now, and E11 (the strongest quantitative finding in either research
+pass) is specifically about recovery, not generation.
+
+No dependency runs the other way: D5's two Stop-hook checks (D3's harness is
+already in place from slice 3) and D7's session/frontmatter surface do not
+reference each other's code. The ledger's per-slice non-increase rule and the
+7,500 ceiling still apply at every boundary regardless of order; the specific
+running totals in the ledger above were projected assuming sequential order
+and will differ slightly in practice, but the rule they enforce does not
+depend on that order.
+
 ## Follow-up tasks
 
 **F1 -- Measure the loop instead of asserting it.** (Recorded here; out of this
