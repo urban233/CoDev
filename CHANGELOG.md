@@ -15,7 +15,9 @@ Semantic Versioning.
   nothing at all, lint and type checking together cost about a second, and
   the test suite -- the only genuinely expensive check, measured at 25.6s on
   this repository after one edit -- runs only on a source-touching turn,
-  under a 120s timeout that records `unverified` rather than a pass. The
+  under a single 150s whole-invocation budget that records `unverified`
+  rather than a pass. A turn the hook refuses pays that cost again on each
+  retry, up to three, before it stands down. The
   checks themselves are discovered from the repository (`just` recipes where
   they exist, direct `ruff`/`mypy`/`pytest`/`unittest` otherwise) rather than
   hard-coding one project's toolchain into a bundle that installs everywhere.

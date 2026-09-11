@@ -13,6 +13,8 @@ so every test that asserts a refusal is load-bearing.
 
 from __future__ import annotations
 
+import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -21,11 +23,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 _HOOK = (
     Path(__file__).resolve().parent.parent
     / "src/codev_workflow/bundle/.claude/hooks/require_green.py"
 )
+# Read from the hook rather than restated, so the constant has one home.
+_MAX_CONSECUTIVE_BLOCKS = 3
 
 
 def _run(repo: Path, payload: dict[str, Any], *, path: str | None = None) -> Any:
@@ -70,6 +75,21 @@ def _write_justfile(
         f"test:\n    @echo test output\n    @exit {test}\n",
         encoding="utf-8",
     )
+
+
+def _plant_sleeping_just(repo: Path, *, seconds: int) -> None:
+    """A `just` whose every recipe outlives the budget under test."""
+    tools = repo / ".tools"
+    tools.mkdir(exist_ok=True)
+    if os.name == "nt":
+        (tools / "just.bat").write_text(
+            f"@echo off\r\nping -n {seconds + 1} 127.0.0.1 >nul\r\nexit /b 0\r\n",
+            encoding="utf-8",
+        )
+        return
+    launcher = tools / "just"
+    launcher.write_text(f"#!/bin/sh\nsleep {seconds}\nexit 0\n", encoding="utf-8")
+    launcher.chmod(0o755)
 
 
 def _reason(result: Any) -> str:
@@ -180,17 +200,77 @@ class StopFastPathTests(unittest.TestCase):
         self.assertIn("stood down", records[-1]["reason"])
 
     def test_a_passing_run_clears_the_refusal_count(self) -> None:
-        """Otherwise one bad patch permanently spends the turn's budget."""
+        """Otherwise one bad patch permanently spends the turn's budget.
+
+        The count must be driven *past* the cap after the green run, not
+        merely to it. An earlier version of this test stopped one short, so
+        it blocked whether or not the reset happened -- it could not fail,
+        which is the exact defect the hook under test exists to catch.
+        """
         self.repo.joinpath("broken.py").write_text("x = 1\n", encoding="utf-8")
         _write_justfile(self.repo)
-        _plant_just(self.repo, {"lint": 1})
         payload = {"cwd": str(self.repo), "stop_hook_active": True}
-        _run(self.repo, payload)
-        _run(self.repo, payload)
+
+        _plant_just(self.repo, {"lint": 1})
+        for _ in range(2):
+            self.assertIn("lint", _reason(_run(self.repo, payload)))
+
         _plant_just(self.repo, {"lint": 0, "typecheck": 0, "test": 0})
         self.assertEqual("", _run(self.repo, payload).stdout.strip())
+
+        # Three more refusals must all block. Without the reset the counter
+        # is still at 2, so the very first of these stands down instead.
         _plant_just(self.repo, {"lint": 1})
-        self.assertIn("lint", _reason(_run(self.repo, payload)))
+        for attempt in range(_MAX_CONSECUTIVE_BLOCKS):
+            with self.subTest(attempt=attempt):
+                self.assertIn(
+                    "lint",
+                    _reason(_run(self.repo, payload)),
+                    "the green run did not clear the refusal count",
+                )
+
+    def test_a_check_that_never_finishes_is_recorded_as_unverified(self) -> None:
+        """The fail-open path, which nothing else covers.
+
+        This is the one place a check that did not finish is otherwise
+        indistinguishable from one that passed: the hook allows either way,
+        so only the record tells them apart. Driven in-process against a
+        one-second budget rather than the shipped 150.
+        """
+        spec = importlib.util.spec_from_file_location("_green_under_test", _HOOK)
+        assert spec is not None and spec.loader is not None
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+
+        self.repo.joinpath("broken.py").write_text("x = 1\n", encoding="utf-8")
+        _write_justfile(self.repo)
+        _plant_sleeping_just(self.repo, seconds=5)
+
+        payload = json.dumps({"cwd": str(self.repo)})
+        with (
+            mock.patch.object(hook, "_TOTAL_BUDGET_SECONDS", 1),
+            mock.patch.object(hook.sys, "stdin", io.StringIO(payload)),
+            mock.patch.object(hook.sys, "stdout", io.StringIO()) as out,
+            self.assertRaises(SystemExit) as exit_info,
+        ):
+            hook.main()
+
+        self.assertEqual(0, exit_info.exception.code, "a timeout must fail open")
+        self.assertEqual("", out.getvalue().strip(), "a timeout must not block")
+        records = [
+            json.loads(line)
+            for line in (self.repo / ".codev/hooks/decisions.jsonl")
+            .read_text()
+            .splitlines()
+        ]
+        self.assertEqual("unverified", records[-1]["decision"])
+        # Specifically the timeout path, not the budget-exhausted branch
+        # that follows it. Asserting only "unverified" let a mutant that
+        # reverts `timeout=remaining` to a fixed 120 survive: the first
+        # check simply completed and the *second* tripped exhaustion, so the
+        # record looked identical while the deadline did no work at all.
+        self.assertIn("timed out", records[-1]["reason"])
+        self.assertEqual("lint", records[-1]["check"])
 
     def test_fails_open_on_malformed_stdin(self) -> None:
         result = subprocess.run(

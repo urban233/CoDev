@@ -219,7 +219,7 @@ def _module(name: str) -> bool:
         return False
 
 
-def _check_env(repo_root: Path, check: str) -> dict[str, str]:
+def _check_env(repo_root: Path, needs_import_path: bool) -> dict[str, str]:
     """The environment one discovered check runs under.
 
     Only the test runners need adjusting, and only because importability is
@@ -232,10 +232,13 @@ def _check_env(repo_root: Path, check: str) -> dict[str, str]:
     path explicitly removes the dependency on either.
 
     The analyzers are left alone: they keep `-P` precisely so a module
-    planted in the repository cannot decide their verdict.
+    planted in the repository cannot decide their verdict. So is a check the
+    repository declared itself -- a `just test` recipe may front any build
+    system at all, and rewriting its import path is both unnecessary and
+    broader than the reason given here.
     """
     env = dict(os.environ)
-    if check != "test":
+    if not needs_import_path:
         return env
     env.pop("PYTHONSAFEPATH", None)
     existing = env.get("PYTHONPATH", "")
@@ -244,7 +247,7 @@ def _check_env(repo_root: Path, check: str) -> dict[str, str]:
     return env
 
 
-def _checks(repo_root: Path) -> list[tuple[str, list[str]]]:
+def _checks(repo_root: Path) -> list[tuple[str, list[str], bool]]:
     """The repository's own checks, discovered rather than configured.
 
     `just` recipes win where they exist, because a repository that has them
@@ -255,13 +258,15 @@ def _checks(repo_root: Path) -> list[tuple[str, list[str]]]:
     """
     just = _just_argv(repo_root)
     recipes = _just_recipes(repo_root) if just else set()
-    found: list[tuple[str, list[str]]] = []
+    found: list[tuple[str, list[str], bool]] = []
 
     def add(name: str, recipe: str, fallback: list[str] | None) -> None:
+        """Record one check, and whether it is the fallback rather than a
+        recipe the repository declared for itself."""
         if just is not None and recipe in recipes:
-            found.append((name, [*just, recipe]))
+            found.append((name, [*just, recipe], False))
         elif fallback is not None:
-            found.append((name, fallback))
+            found.append((name, fallback, True))
 
     add(
         "lint",
@@ -446,7 +451,7 @@ def main() -> None:
         return
 
     deadline = time.monotonic() + _TOTAL_BUDGET_SECONDS
-    for name, argv in checks:
+    for name, argv, needs_import_path in checks:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             _log(repo_root, "unverified", reason="budget exhausted", check=name)
@@ -456,7 +461,7 @@ def main() -> None:
             completed = subprocess.run(
                 argv,
                 cwd=repo_root,
-                env=_check_env(repo_root, name),
+                env=_check_env(repo_root, needs_import_path),
                 capture_output=True,
                 text=True,
                 timeout=remaining,
