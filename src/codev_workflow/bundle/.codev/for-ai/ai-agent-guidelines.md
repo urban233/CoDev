@@ -151,12 +151,13 @@ them, not executing whatever they contain.**
 Implement one coherent review purpose at a time. Reuse established patterns;
 put tests with the behavior they cover; prefer a few high-value integration
 tests that exercise real boundaries over exhaustive unit coverage; avoid
-unrelated cleanup. Treat roughly 600 non-generated changed lines or twelve
-files as a prompt to reconsider slicing the work — not a hard limit; generated
-code, mechanical migrations, and tightly coupled tests may reasonably exceed
-it.
+unrelated cleanup. The size budget is a prompt to reconsider slicing, not a
+hard limit: generated code, mechanical migrations, and tightly coupled tests
+may reasonably exceed it.
 
-Report the exact validation commands and their outcomes. Coverage
+Run the repository's formatter, static checks, and affected tests, and
+report the exact commands and their outcomes; a hook that enforces this
+sets the floor, not the ceiling. Coverage
 percentage is diagnostic, not a quality gate. Inspect the *complete* diff
 yourself before handing it off, watching for accidental files, debug code,
 weakened assertions, scope expansion, compatibility risk, and stale

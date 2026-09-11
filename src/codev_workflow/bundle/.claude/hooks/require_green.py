@@ -55,13 +55,24 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
 _HOOK_NAME = "require_green.py"
 _DECISIONS_LOG_RELATIVE = ".codev/hooks/decisions.jsonl"
-_CHECK_TIMEOUT_SECONDS = 120
+_BLOCKS_STATE_RELATIVE = ".codev/hooks/require_green_blocks.json"
+# A whole-invocation wall-clock budget, not a per-check one. The settings
+# entry gives this hook 180s, while three independent 120s check timeouts
+# could reach 360s -- the host would kill the process before any
+# `unverified` record was written, so a check that never finished would look
+# exactly like one that passed. 150s leaves headroom under the host's limit.
+_TOTAL_BUDGET_SECONDS = 150
 _GIT_TIMEOUT_SECONDS = 20
+# How many times in a row this hook may refuse the same turn before standing
+# down. The host force-overrides after 8; standing down earlier, loudly and
+# on the record, beats being overridden silently.
+_MAX_CONSECUTIVE_BLOCKS = 3
 _SOURCE_SUFFIXES = frozenset({".py", ".pyi"})
 
 
@@ -81,6 +92,35 @@ def _log(repo_root: Path, decision: str, *, reason: str = "", check: str = "") -
             handle.write(json.dumps(record, sort_keys=True) + "\n")
     except Exception:  # noqa: BLE001 - logging must never affect the hook
         pass
+
+
+def _consecutive_blocks(repo_root: Path) -> int:
+    """How many times in a row this hook has refused, across invocations.
+
+    Each `Stop` firing is a fresh process, so the count has to live on disk.
+    A missing or unreadable file reads as zero, which errs toward checking
+    rather than toward standing down.
+    """
+    try:
+        raw = (repo_root / _BLOCKS_STATE_RELATIVE).read_text(encoding="utf-8")
+        value = json.loads(raw).get("consecutive")
+        return int(value) if isinstance(value, int) else 0
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        return 0
+
+
+def _set_blocks(repo_root: Path, value: int) -> None:
+    """Persist the consecutive-refusal count. Never raises."""
+    try:
+        path = repo_root / _BLOCKS_STATE_RELATIVE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"consecutive": value}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _reset_blocks(repo_root: Path) -> None:
+    _set_blocks(repo_root, 0)
 
 
 def _allow() -> None:
@@ -200,17 +240,25 @@ def _checks(repo_root: Path) -> list[tuple[str, list[str]]]:
     add(
         "lint",
         "lint",
-        [sys.executable, "-m", "ruff", "check", "."] if _module("ruff") else None,
+        [sys.executable, "-P", "-m", "ruff", "check", "."] if _module("ruff") else None,
     )
     add(
         "typecheck",
         "typecheck",
-        [sys.executable, "-m", "mypy", "."] if _module("mypy") else None,
+        [sys.executable, "-P", "-m", "mypy", "."] if _module("mypy") else None,
     )
     if _module("pytest"):
-        test_fallback = [sys.executable, "-m", "pytest", "-q"]
+        test_fallback = [sys.executable, "-P", "-m", "pytest", "-q"]
     elif (repo_root / "tests").is_dir():
-        test_fallback = [sys.executable, "-m", "unittest", "discover", "-s", "tests"]
+        test_fallback = [
+            sys.executable,
+            "-P",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+        ]
     else:
         test_fallback = None
     add("test", "test", test_fallback)
@@ -308,13 +356,27 @@ def main() -> None:
     if not isinstance(payload, dict):
         _allow()
         return
-    # A hook that blocked and is being re-entered must not block again on the
-    # same grounds; the host sets this once it has already stopped for us.
-    if payload.get("stop_hook_active"):
+    repo_root = Path(payload.get("cwd") or Path.cwd())
+    # `stop_hook_active` marks a turn this hook already stopped once. It is
+    # deliberately NOT treated as a blanket allow: doing that made the whole
+    # guarantee one-shot, so an agent whose checks still failed simply ended
+    # the turn on its second attempt. Re-run them instead, and stand down
+    # only after a bounded number of consecutive refusals.
+    if (
+        payload.get("stop_hook_active")
+        and _consecutive_blocks(repo_root) >= _MAX_CONSECUTIVE_BLOCKS
+    ):
+        _log(
+            repo_root,
+            "unverified",
+            reason=(
+                f"stood down after {_MAX_CONSECUTIVE_BLOCKS} consecutive "
+                "refusals; the checks were still failing when the turn ended"
+            ),
+        )
+        _reset_blocks(repo_root)
         _allow()
         return
-
-    repo_root = Path(payload.get("cwd") or Path.cwd())
     changed = _changed_source(repo_root)
     if changed is None:
         _log(repo_root, "degraded", reason="git could not be consulted")
@@ -327,6 +389,7 @@ def main() -> None:
     toothless = _toothless_tests(repo_root, changed)
     if toothless:
         _log(repo_root, "block", reason="; ".join(toothless), check="pre-change-test")
+        _set_blocks(repo_root, _consecutive_blocks(repo_root) + 1)
         _block(
             "These tests would pass against the pre-change code, so they "
             "cannot be evidence the change works:\n  - "
@@ -342,14 +405,20 @@ def main() -> None:
         _allow()
         return
 
+    deadline = time.monotonic() + _TOTAL_BUDGET_SECONDS
     for name, argv in checks:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _log(repo_root, "unverified", reason="budget exhausted", check=name)
+            _allow()
+            return
         try:
             completed = subprocess.run(
                 argv,
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
-                timeout=_CHECK_TIMEOUT_SECONDS,
+                timeout=remaining,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -362,12 +431,14 @@ def main() -> None:
         if completed.returncode != 0:
             detail = (completed.stdout + completed.stderr).strip()
             _log(repo_root, "block", reason=f"{name} failed", check=name)
+            _set_blocks(repo_root, _consecutive_blocks(repo_root) + 1)
             _block(
                 f"`{' '.join(argv)}` failed, so this turn's work is not "
                 f"verified:\n\n{detail[-2000:]}"
             )
             return
         _log(repo_root, "pass", check=name)
+    _reset_blocks(repo_root)
     _allow()
 
 

@@ -138,14 +138,59 @@ class StopFastPathTests(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout.strip())
 
-    def test_allows_immediately_when_already_stopped_for_this_hook(self) -> None:
-        """Without this the hook re-blocks its own re-entry until the host's
-        eight-block override fires."""
-        self.repo.joinpath("broken.py").write_text("x=1\n", encoding="utf-8")
-        _write_justfile(self.repo, lint=1)
+    def test_re_entry_still_runs_the_checks(self) -> None:
+        """Re-entry must not be a blanket allow.
+
+        Treating `stop_hook_active` as "already stopped once, let it go"
+        made the whole guarantee one-shot: an agent whose checks still
+        failed simply ended the turn on its second attempt, which is the
+        opposite of what this hook exists to do.
+        """
+        self.repo.joinpath("broken.py").write_text("x = 1\n", encoding="utf-8")
+        _write_justfile(self.repo)
+        _plant_just(self.repo, {"lint": 1})
         result = _run(self.repo, {"cwd": str(self.repo), "stop_hook_active": True})
-        self.assertEqual(0, result.returncode)
+        self.assertIn("lint", _reason(result))
+
+    def test_stands_down_after_three_consecutive_refusals(self) -> None:
+        """Bounded, on the record, and before the host's own override.
+
+        The host force-overrides a Stop hook after eight consecutive
+        blocks. Standing down earlier and saying so is better than being
+        overridden silently -- the record is what stops an unverified turn
+        from reading like a verified one.
+        """
+        self.repo.joinpath("broken.py").write_text("x = 1\n", encoding="utf-8")
+        _write_justfile(self.repo)
+        _plant_just(self.repo, {"lint": 1})
+        payload = {"cwd": str(self.repo), "stop_hook_active": True}
+        for attempt in range(3):
+            with self.subTest(attempt=attempt):
+                self.assertIn("lint", _reason(_run(self.repo, payload)))
+        # Fourth: the budget is spent, so it allows -- loudly.
+        result = _run(self.repo, payload)
         self.assertEqual("", result.stdout.strip())
+        records = [
+            json.loads(line)
+            for line in (self.repo / ".codev/hooks/decisions.jsonl")
+            .read_text()
+            .splitlines()
+        ]
+        self.assertEqual("unverified", records[-1]["decision"])
+        self.assertIn("stood down", records[-1]["reason"])
+
+    def test_a_passing_run_clears_the_refusal_count(self) -> None:
+        """Otherwise one bad patch permanently spends the turn's budget."""
+        self.repo.joinpath("broken.py").write_text("x = 1\n", encoding="utf-8")
+        _write_justfile(self.repo)
+        _plant_just(self.repo, {"lint": 1})
+        payload = {"cwd": str(self.repo), "stop_hook_active": True}
+        _run(self.repo, payload)
+        _run(self.repo, payload)
+        _plant_just(self.repo, {"lint": 0, "typecheck": 0, "test": 0})
+        self.assertEqual("", _run(self.repo, payload).stdout.strip())
+        _plant_just(self.repo, {"lint": 1})
+        self.assertIn("lint", _reason(_run(self.repo, payload)))
 
     def test_fails_open_on_malformed_stdin(self) -> None:
         result = subprocess.run(

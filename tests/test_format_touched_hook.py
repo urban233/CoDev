@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -55,9 +56,32 @@ def _ruff_available() -> bool:
     try:
         import importlib.util
 
-        return importlib.util.find_spec("ruff") is not None
+        if importlib.util.find_spec("ruff") is not None:
+            return True
     except (ImportError, ValueError):
-        return False
+        pass
+    return shutil.which("ruff") is not None
+
+
+def _plant_ruff(repo: Path, *, reformats: bool) -> None:
+    """A `ruff` stand-in on PATH, so the behaviour is testable everywhere.
+
+    Five of these tests skipped under Bazel because ruff is not importable
+    in the sandbox on any leg -- which left the hook's entire purpose
+    unexercised in CI, the same gap a planted `just` closed for the Stop
+    hook. Returns the directory to prepend to PATH.
+    """
+    tools = repo / ".fake-bin"
+    tools.mkdir(exist_ok=True)
+    message = "1 file reformatted" if reformats else "1 file left unchanged"
+    if os.name == "nt":
+        (tools / "ruff.bat").write_text(
+            f"@echo off\r\necho {message}\r\nexit /b 0\r\n", encoding="utf-8"
+        )
+    else:
+        launcher = tools / "ruff"
+        launcher.write_text(f'#!/bin/sh\necho "{message}"\nexit 0\n', encoding="utf-8")
+        launcher.chmod(0o755)
 
 
 class FormatTouchedTests(unittest.TestCase):
@@ -169,6 +193,62 @@ class FormatTouchedTests(unittest.TestCase):
         result = _run(self.repo, _edit(self.repo, target))
         self.assertEqual(0, result.returncode)
         self.assertNotIn("int", result.stdout)
+
+
+class FormatTouchedWithoutRuffInstalledTests(unittest.TestCase):
+    """The hook's purpose, exercised without depending on a real ruff.
+
+    These run on every leg. The `@skipUnless(_ruff_available())` tests above
+    stay because they pin the behaviour against the genuine formatter where
+    one exists; these pin it where one does not.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _run_with_fake_ruff(self, target: Path) -> Any:
+        env = dict(os.environ)
+        env["PATH"] = str(self.repo / ".fake-bin") + os.pathsep + env.get("PATH", "")
+        # -S so the hook's own interpreter cannot import a real ruff and
+        # resolve that in preference to the planted one.
+        return subprocess.run(
+            [sys.executable, "-S", str(_HOOK)],
+            input=json.dumps(_edit(self.repo, target)),
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+
+    def test_reports_back_when_the_formatter_rewrote_the_file(self) -> None:
+        _plant_ruff(self.repo, reformats=True)
+        target = self.repo / "thing.py"
+        target.write_text(_UNFORMATTED, encoding="utf-8")
+        result = self._run_with_fake_ruff(target)
+        self.assertEqual(0, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertIn("thing.py", payload["hookSpecificOutput"]["additionalContext"])
+
+    def test_stays_silent_when_the_formatter_changed_nothing(self) -> None:
+        _plant_ruff(self.repo, reformats=False)
+        target = self.repo / "thing.py"
+        target.write_text("x = 1\n", encoding="utf-8")
+        result = self._run_with_fake_ruff(target)
+        self.assertEqual("", result.stdout.strip())
+
+    def test_passes_force_exclude_so_the_project_exclusions_apply(self) -> None:
+        """Without it the hook rewrites vendored mirrors and eval fixtures
+        that `just fmt-check` deliberately never touches."""
+        source = (
+            Path(__file__).resolve().parent.parent
+            / "src/codev_workflow/bundle/.claude/hooks/format_touched.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"--force-exclude"', source)
 
 
 if __name__ == "__main__":

@@ -145,7 +145,11 @@ def _codev_argv(repo_root: Path) -> list[str] | None:
         return tokens
     try:
         if importlib.util.find_spec("codev_workflow") is not None:
-            return [sys.executable, "-m", "codev_workflow"]
+            # -P keeps the script's own directory and cwd off sys.path. The
+            # hook runs with cwd set to the repository being gated, so
+            # without it a `codev_workflow.py` committed at a repo root
+            # would both execute and decide this gate's own verdict.
+            return [sys.executable, "-P", "-m", "codev_workflow"]
     except (ImportError, ValueError):
         pass
     for relative in (".venv/bin/codev", ".venv/Scripts/codev.exe"):

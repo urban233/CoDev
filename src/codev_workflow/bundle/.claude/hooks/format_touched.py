@@ -111,7 +111,8 @@ def _formatter_argv() -> list[str] | None:
         import importlib.util
 
         if importlib.util.find_spec("ruff") is not None:
-            return [sys.executable, "-m", "ruff"]
+            # -P: see the gate hooks. cwd is the repository being formatted.
+            return [sys.executable, "-P", "-m", "ruff"]
     except (ImportError, ValueError):
         pass
     found = shutil.which("ruff")
@@ -151,7 +152,14 @@ def main() -> None:
             continue
         try:
             completed = subprocess.run(
-                [*argv, "format", str(target)],
+                # --force-exclude: ruff honours the project's `exclude`
+                # for an explicitly named path only when this is set.
+                # Without it this hook rewrites vendored bundle mirrors,
+                # skill sources, and eval fixture repositories whose exact
+                # bytes are evaluation input -- none of which `just
+                # fmt-check` would ever flag, because it respects the
+                # exclusions this call was bypassing.
+                [*argv, "format", "--force-exclude", str(target)],
                 cwd=repo_root,
                 capture_output=True,
                 text=True,

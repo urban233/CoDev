@@ -8,8 +8,10 @@ Semantic Versioning.
 ### Added
 - **A `Stop` hook (`require_green.py`) refuses to end a turn that changed
   source while the repository's own checks fail.** "All tests pass" stops
-  being a claim the agent reports and becomes a fact the turn cannot end
-  without. Three things bound the cost: a turn that changed no source runs
+  being a claim the agent reports and becomes one the turn has to survive:
+  the hook re-runs on re-entry rather than waving a repeat attempt through,
+  and stands down with an `unverified` record after three consecutive
+  refusals rather than being force-overridden silently. Three things bound the cost: a turn that changed no source runs
   nothing at all, lint and type checking together cost about a second, and
   the test suite -- the only genuinely expensive check, measured at 25.6s on
   this repository after one edit -- runs only on a source-touching turn,
