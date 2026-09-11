@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "8e89ddebd92ffe906f97dd71e89ed6abe9a2436f",
+  "base_snapshot": "44652d3db0cd0aab7cf130347bdfdcf5bcec8c9a",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -83,7 +83,7 @@
       "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 13,
+  "current_round": 14,
   "current_slice": "evidence-hooks",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -219,6 +219,20 @@
       "reason": "Round 11 only recorded security_privacy_data_compatibility coverage, leaving test_quality's stale failed verdict from round 10 in place even though the same fix resolved it; reopening to record both dimensions together in one round",
       "timestamp": "2026-09-10T22:52:19Z",
       "to_round": 12
+    },
+    {
+      "by": "urban233",
+      "from_round": 13,
+      "head": "44652d3db0cd0aab7cf130347bdfdcf5bcec8c9a",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Absorb the slice-advance bookkeeping commit (advance_slice/start_slice_branch don't auto-commit) before starting slice 3 work",
+      "timestamp": "2026-09-11T10:43:57Z",
+      "to_round": 14
     }
   ],
   "reviewer": null,
@@ -633,6 +647,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 13,
+      "slice_id": "evidence-hooks"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 14,
       "slice_id": "evidence-hooks"
     }
   ],
