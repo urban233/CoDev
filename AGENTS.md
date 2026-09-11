@@ -80,7 +80,14 @@ of them fail `twine check` or the smoke test. The `publish-testpypi`/
 publishing is exactly the kind of action this project's own policy
 requires "human authorization for releases" for (see the invariants at
 the top of this file), so an agent must never invoke them, even if asked
-indirectly (e.g. "run the full ci suite including publishing").
+indirectly (e.g. "run the full ci suite including publishing"). For Claude
+Code, invoking either recipe by name is refused rather than merely
+discouraged: a `permissions.deny` rule in `.claude/settings.json` refuses
+both recipes, and because deny applies to nested subcommands it catches the
+indirect phrasing too -- this refuses the named recipes specifically, not
+every conceivable way to trigger a publish (e.g. a differently-invoked
+`bazel` command), so it is not a comprehensive guarantee. Every other
+platform still relies on this paragraph alone.
 `packaging/BUILD.bazel` carries a third, hand-kept copy of the package
 version alongside `pyproject.toml`/`src/codev_workflow/__init__.py`;
 `scripts/version.py`'s bump command and `scripts/verify_release.py`'s

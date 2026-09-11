@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "2d043db5eb71077699082783c5ad9d282bdedd82",
+  "base_snapshot": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -49,16 +49,48 @@
       "reason": "No runtime behaviour, no migration, no exposure change; reversible by codev adapter remove claude plus reinstall.",
       "round": 5,
       "timestamp": "2026-09-08T13:12:07Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "No concurrent or shared-state code paths touched; a static JSON permissions list and prose.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:15Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Small, self-contained slice (a JSON settings surface plus one test file), no architectural surface beyond D6's own stated scope; covered by security-data and correctness-tests specialists.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:15Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No migration, no runtime behavior change beyond agent permission prompts; reversible by editing one JSON file per the plan's own containment statement.",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:16Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Small, well-documented JSON surface plus prose; maintainability risk covered incidentally by correctness-tests-specialist's read of the new test file and the plan's own stated containment (one JSON file, fully reversible).",
+      "round": 9,
+      "slice_id": "permission-surface",
+      "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 6,
-  "current_slice": "work-style-and-plan-tiering",
+  "current_round": 12,
+  "current_slice": "permission-surface",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 6,
-    "outer": 2
+    "inner": 12,
+    "outer": 12
   },
   "owner": "urban233",
   "reopens": [
@@ -131,6 +163,62 @@
       "reason": "Rebased the work-style-and-plan-tiering slice branch onto main after PR 48/49/54 merged (and their auto-close/reopen fixup); no product content changed by the rebase itself",
       "timestamp": "2026-09-10T20:12:51Z",
       "to_round": 6
+    },
+    {
+      "by": "urban233",
+      "from_round": 7,
+      "head": "8b7121133462d2587bb96ad5e1093fce7cb875dd",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Absorb the plan-doc commit (written and accepted) before dispatching builder",
+      "timestamp": "2026-09-10T22:02:27Z",
+      "to_round": 8
+    },
+    {
+      "by": "urban233",
+      "from_round": 8,
+      "head": "e1f09dcd99387b68d9638bf7e633dfa2edabff88",
+      "max_rounds": {
+        "inner": 6,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Rebased the permission-surface branch onto current main (it was stacked on slice 1's older head, missing PR 52/55's merged content); no product content changed by the rebase itself",
+      "timestamp": "2026-09-10T22:03:28Z",
+      "to_round": 9
+    },
+    {
+      "by": "urban233",
+      "from_round": 9,
+      "head": "5c033d12dcfcb10b5700e118ff149953cd63cc4d",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Raising the shared round cap so slice 2 (permission-surface) can have its own outer round; slice 1 already consumed the previous cap of 2",
+      "timestamp": "2026-09-10T22:30:48Z",
+      "to_round": 10
+    },
+    {
+      "by": "urban233",
+      "from_round": 11,
+      "head": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Round 11 only recorded security_privacy_data_compatibility coverage, leaving test_quality's stale failed verdict from round 10 in place even though the same fix resolved it; reopening to record both dimensions together in one round",
+      "timestamp": "2026-09-10T22:52:19Z",
+      "to_round": 12
     }
   ],
   "reviewer": null,
@@ -241,6 +329,304 @@
       },
       "round": 6,
       "slice_id": "work-style-and-plan-tiering"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 7,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 8,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/settings.json",
+            "src/codev_workflow/bundle/.claude/settings.json",
+            "AGENTS.md",
+            "CHANGELOG.md",
+            "tests/test_permission_surface.py"
+          ],
+          "delivered": ".claude/settings.json (and its bundle source) now carry a permissions.allow list of 14 read-only/verification commands and a permissions.deny list covering the two publish recipes. AGENTS.md's prose warning now points to the enforced deny rule for Claude Code. CHANGELOG.md documents the surface and the workspace-trust caveat. New tests/test_permission_surface.py pins JSON validity, both deny entries, bundle/installed parity, and that defaultMode/hooks are untouched.",
+          "deviations": "None. Diff matches the plan's Allowed scope exactly.",
+          "limitations": "Project allow rules only take effect after the workspace trust dialog is accepted (stated in the CHANGELOG); deny-evasion via wrapper scripts/symlinks/env vars is undocumented and treated as defence in depth, not a guarantee, matching the plan's own stated risk.",
+          "validation": [
+            "diff .claude/settings.json src/codev_workflow/bundle/.claude/settings.json -> identical",
+            "python3 scripts/verify_self_install.py -> no changes, clean",
+            "bazel test //tests/... -> 33/33 targets pass, including the new test_permission_surface"
+          ]
+        },
+        "head_snapshot": "3c90a5119f127a9ca8f3a84d427d706582ad01f0"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "1. Allow list verification: 14 read-only/verification commands confirmed; all exclusions checked (no codev git, task record, round close, slice, just fmt/dist, gh pr create/merge/edit). 2. Deny list verification: both publish recipes (Bash(just publish-pypi:*), Bash(just publish-testpypi:*)) present and match justfile recipe names exactly. 3. Byte-parity: .claude/settings.json and src/codev_workflow/bundle/.claude/settings.json are byte-identical. 4. Tests: test_permission_surface 4/4 pass; full suite 33/33 pass; verify_self_install.py clean. 5. CHANGELOG: workspace-trust caveat correctly stated. 6. AGENTS.md: updated to reference deny rule enforcement. 7. Scope: all changes within allowed boundaries.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "ad5453de23bfbe769d376a718bc3cf960978f7ae"
+      },
+      "round": 9,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/settings.json",
+            "src/codev_workflow/bundle/.claude/settings.json",
+            "AGENTS.md",
+            "CHANGELOG.md",
+            "tests/test_permission_surface.py"
+          ],
+          "delivered": "Fixed both blocking security findings: hardened the five no-argument-safe just recipes (test, lint, typecheck, fmt-check, validate-catalog) in permissions.allow from trailing-wildcard to exact-match entries, closing the just-multi-recipe-chaining bypass (SEC-1: `just lint publish-pypi` running an unprompted PyPI publish) and the unquoted-argument shell-injection bypass (SEC-2: `just test '&& ...'`). Added two direct regression tests (one shelling out to a real `just -n lint publish-pypi` dry run to confirm the underlying just behavior), plus the four bundled cleanups: exact-list pinning for the full allow list, a failure message on the hook-count assertion, removal of a vacuous test, and softened AGENTS.md wording that no longer overclaims full enforcement.",
+          "deviations": "None beyond the scope the developer explicitly authorized in triage (the two blocking fixes plus four bundled cleanups).",
+          "limitations": "AGENTS.md's softened wording still notes deny is not a comprehensive guarantee (env-prefixed invocation, a differently-invoked bazel command, or other evasion are unverified and treated as defence in depth, matching the plan's own stated risk). The bundled-allow-list-ships-to-downstream-repos concern (pr56-sec3) and the git diff/log/show --output= file-overwrite primitive (pr56-sec4) were both non-blocking findings not triaged for this round.",
+          "validation": [
+            "python -m unittest tests.test_permission_surface -v -> 6/6 pass",
+            "bazel test //tests:test_permission_surface --cache_test_results=no -> Ran 6 tests, OK",
+            "bazel test //tests/... -> 33/33 targets pass",
+            "python3 scripts/verify_self_install.py -> No changes",
+            "diff .claude/settings.json src/codev_workflow/bundle/.claude/settings.json -> byte-identical",
+            "Manually confirmed the matching logic: old wildcard pattern matches 'just lint publish-pypi' (True), new exact pattern does not (False)",
+            "bazel run //:ruff -- check . and format --check -> clean"
+          ]
+        },
+        "head_snapshot": "7bf082ea5563e826b988e1e859dff4c2a04ac329"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist confirmed byte-parity, that the allow list matches the plan's stated 14 entries, and that the CHANGELOG's claims are accurate against the actual file content. One correctness-categorized non-blocking note: AGENTS.md's 'enforced' framing overclaims given SEC-1/SEC-6.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist confirmed this is a config-and-docs change with no new executable failure mode; deny precedence and the workspace-trust dependency are both documented rather than silently assumed.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist independently verified (with the repo's own just 1.58.0 and a scratch git repo) two real, unprompted bypasses this diff would ship: just's multi-recipe chaining lets an allow-listed recipe (lint/typecheck/fmt-check/validate-catalog) be followed by publish-pypi/publish-testpypi on the same command line, which runs the publish and never matches the deny pattern (pr56-sec1); and just test's unquoted {{args}} interpolation allows shell-operator injection inside a single allow-matched argument (pr56-sec2). Also found git diff/log/show's --output=<file> flag is an arbitrary-file-overwrite primitive not covered by any hook (pr56-sec4, non-blocking) and that the allow list ships to every downstream repo via the bundle (pr56-sec3, non-blocking). No secrets/PII exposure found.",
+            "passed": false
+          },
+          "test_quality": {
+            "evidence": "Blocking security findings aside, test_quality itself is not blocking: correctness-tests-specialist confirmed all 4 tests are non-vacuous (except one, pr56-vacuous-parse-test, non-blocking), the __main__ guard is correctly placed and Bazel-covered, and python -m unittest / bazel test agree at 4/4 with the full suite at 33/33. Marked failed here because the allow list itself -- the dimension's stated top risk per the accepted plan -- is unpinned by any test (pr56-sec5 / pr56-allow-list-not-pinned-by-exact-match), plus a brittle hook-count assertion and one vacuous test.",
+            "passed": false
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec1-just-multi-recipe-bypasses-deny",
+            "location": ".claude/settings.json (allow: just lint/typecheck/fmt-check/validate-catalog), justfile (publish-pypi, publish-testpypi)",
+            "rank": 1,
+            "summary": "just parses trailing words on a command line as additional recipes to run when the preceding recipe takes no parameters. Verified with the repo's own just 1.58.0: `just lint publish-pypi` prints and would run `bazel run //:ruff -- check .` then `bazel build //packaging:wheel` then `bazel run //packaging:wheel.publish -- --repository pypi` -- a real PyPI publish. The full command string 'just lint publish-pypi' prefix-matches allow rule Bash(just lint:*) and never contains 'publish-pypi' as a separately-parsed subcommand, so it cannot be caught by Claude Code's operator-aware compound-command splitting (there is no shell operator here at all -- this is just's own argument parsing). Same mechanism via typecheck, fmt-check, and validate-catalog. This diff makes an unprompted PyPI publish reachable, inverting the slice's stated purpose."
+          },
+          {
+            "blocking": true,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec2-just-test-unquoted-arg-interpolation",
+            "location": ".claude/settings.json (allow: Bash(just test:*)), justfile `test *args` recipe body",
+            "rank": 2,
+            "summary": "The test recipe interpolates its variadic {{args}} unquoted into a shell line (`bazel test //tests/... {{args}}`). Verified: `just test '&& echo INJECTED'` produces and would execute `bazel test //tests/... && echo INJECTED` -- including `just test '&& just publish-pypi'`. The command string 'just test ...' still prefix-matches allow Bash(just test:*) as a single quoted argument; exploitability depends on whether Claude Code's own splitter is quote-aware, but the shell-injection mechanism inside just itself is verified regardless."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec3-bundled-allow-list-blast-radius",
+            "location": "src/codev_workflow/bundle/.claude/settings.json",
+            "rank": 3,
+            "summary": "This allow list ships in the bundle to every downstream repo that installs CoDev (confirmed by the diff's own byte-identity test). Entries like Bash(just test:*)/Bash(just lint:*) pre-approve whatever a downstream project's own justfile recipes happen to do, including their own unquoted argument interpolation -- a decision made on behalf of repositories whose recipes CoDev cannot see. Narrowing the entries to resolve SEC-1/SEC-2 likely resolves most of this, but the bundled-vs-local distinction deserves an explicit decision."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec4-git-diff-output-file-overwrite",
+            "location": ".claude/settings.json (allow: git diff/log/show)",
+            "rank": 4,
+            "summary": "git diff/log/show accept --output=<file>, which writes and truncates an arbitrary path -- verified: git diff --output=victim.txt wholesale-replaced an existing file's content with diff text. So git diff --output=.claude/settings.json (or any source file) is a prompt-free arbitrary-file-overwrite primitive, sidestepping the Edit tool entirely. The PreToolUse hooks are not a backstop (require_plan.py fails open by its own docstring, and git diff isn't in ADR-0002's mutation-prefix list). The other allow entries (codev next/task check/task log, lint, fmt-check, validate-catalog, gh run view) were independently confirmed read-only."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-sec5-allow-list-unpinned-by-tests",
+            "location": "tests/test_permission_surface.py",
+            "rank": 5,
+            "summary": "The test suite pins deny membership, defaultMode, hook count, and bundle/installed parity, but asserts nothing about the allow list's actual contents. A future edit adding Bash(just:*), Bash(git:*), Bash(gh:*), or Bash(codev:*) passes every existing assertion. An exact-equality check on the allow list (and exact-set rather than assertIn on deny) would force a deliberate edit and a reviewer's eye before the boundary widens."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr56-sec6-agents-md-overclaims-enforcement",
+            "location": "AGENTS.md, CHANGELOG.md",
+            "rank": 6,
+            "summary": "AGENTS.md now says the publish prohibition 'is now enforced rather than merely stated' and deny 'refuses both recipes' -- false while SEC-1 stands, and an overclaim even once fixed: `just --justfile Justfile publish-pypi`, an env-prefixed invocation, or the underlying `bazel run //packaging:wheel.publish` all evade the deny pattern by name (though those at least fall back to a prompt, matching no allow rule). The defensible claim is 'removes the silent path for these exact recipe names,' not 'enforced.'"
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-allow-list-not-pinned-by-exact-match",
+            "location": "tests/test_permission_surface.py",
+            "rank": 7,
+            "summary": "Same underlying gap as pr56-sec5, raised independently by correctness-tests-specialist: no test pins the allow list itself, which the accepted plan names as the primary risk ('a wrong allow widens that silently')."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "pr56-manual-validation-not-recorded",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/permission-surface-implementation-plan.md (Completion evidence)",
+            "rank": 8,
+            "summary": "The plan's completion-evidence checklist includes a manual check that just publish-pypi is actually refused and that a routine turn prompts less; neither was exercised/recorded as evidence in this non-interactive build."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-hook-count-assertion-brittle",
+            "location": "tests/test_permission_surface.py:87",
+            "rank": 9,
+            "summary": "assertEqual(3, len(settings['hooks']['PreToolUse'])) has no failure message and will break with a bare '3 != 4' when slice 3 (the hooks slice) legitimately adds a fourth hook."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "pr56-vacuous-parse-test",
+            "location": "tests/test_permission_surface.py:63-65",
+            "rank": 10,
+            "summary": "test_bundle_settings_json_parses is fully subsumed by the two tests that json.loads the same file and index into it; harmless but adds no distinct failure mode."
+          }
+        ],
+        "head_snapshot": "0b28e1623c716248313d7fc516856d75448b8039",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist",
+            "correctness-tests-specialist"
+          ]
+        }
+      },
+      "round": 10,
+      "slice_id": "permission-surface",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "pr56-sec1-just-multi-recipe-bypasses-deny": {
+            "disposition": "address",
+            "override_reason": null
+          },
+          "pr56-sec2-just-test-unquoted-arg-interpolation": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist re-verified only the triaged correction: confirmed exactly the five intended entries switched to exact-match form (test, lint, typecheck, fmt-check, validate-catalog) with everything else unchanged; independently reproduced the underlying just chaining behavior with the repo's own .tools/just binary; confirmed Claude Code's documented no-wildcard-matches-exact-string semantics makes the fix sound (an allow list can only shrink the auto-approved set, so it cannot introduce a new auto-approval); confirmed no legitimate CI or documented workflow relies on just test with arguments; confirmed both new regression tests fail against a simulated revert. Both blocking findings (pr56-sec1, pr56-sec2) fully resolved. Two new non-blocking notes: deny still can't see through just's own recipe-chaining form specifically (a wording-precision issue, not a regression), and the plan doc's Proposed change section still shows the superseded wildcard form.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec5-deny-blind-to-just-chaining",
+            "location": "AGENTS.md, CHANGELOG.md (deny-rule description)",
+            "rank": 1,
+            "summary": "The fix protects by falling through to a permission prompt, not by extending deny: Bash(just publish-pypi:*) matches subcommands nested through shell operators (catches `just ci && just publish-pypi`) but not just's own recipe-chaining form (`just ci publish-pypi`, a single subcommand). Not a regression -- this was equally reachable before the fix (allow-matched then, unmatched/prompted now) and deny never covered it in either version. Non-blocking since defaultMode is plan and bypassPermissions is an explicit human override; the existing AGENTS.md/CHANGELOG wording already carries a 'not a comprehensive guarantee' hedge, so this is a precision-of-wording note, not a defect."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr56-sec6-plan-doc-shows-superseded-wildcard-form",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/permission-surface-implementation-plan.md:76-77",
+            "rank": 2,
+            "summary": "The plan's Proposed change section still lists the five entries in their original wildcard form (Bash(just test:*), etc.) rather than the shipped exact-match form. Pure planning-artifact drift; the shipped config and test docstrings are both correct."
+          }
+        ],
+        "head_snapshot": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
+      "round": 11,
+      "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist re-verified only the triaged correction: confirmed exactly the five intended entries switched to exact-match form (test, lint, typecheck, fmt-check, validate-catalog) with everything else unchanged; independently reproduced the underlying just chaining behavior with the repo's own .tools/just binary; confirmed Claude Code's documented no-wildcard-matches-exact-string semantics makes the fix sound; confirmed no legitimate CI or documented workflow relies on just test with arguments; confirmed both new regression tests fail against a simulated revert. Both blocking findings (pr56-sec1, pr56-sec2) fully resolved. Two new non-blocking notes: deny still can't see through just's own recipe-chaining form specifically (a wording-precision issue, not a regression), and the plan doc's Proposed change section still shows the superseded wildcard form.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist re-verified only the four triaged test_quality findings: test_allow_list_matches_expected_exact_list pins the exact 14-entry allow list (verified against both settings.json copies); the hook-count assertion now carries an explanatory failure message; the vacuous test_bundle_settings_json_parses was removed with JSON validity still covered incidentally by the remaining tests; python -m unittest and bazel test both report 6/6 passing with zero skips, and the __main__ guard is correctly the file's last statement.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "pr56-sec5-deny-blind-to-just-chaining",
+            "location": "AGENTS.md, CHANGELOG.md (deny-rule description)",
+            "rank": 1,
+            "summary": "The fix protects by falling through to a permission prompt, not by extending deny: Bash(just publish-pypi:*) matches subcommands nested through shell operators (catches `just ci && just publish-pypi`) but not just's own recipe-chaining form (`just ci publish-pypi`, a single subcommand). Not a regression -- this was equally reachable before the fix (allow-matched then, unmatched/prompted now) and deny never covered it in either version. Non-blocking since defaultMode is plan and bypassPermissions is an explicit human override; the existing AGENTS.md/CHANGELOG wording already carries a 'not a comprehensive guarantee' hedge, so this is a precision-of-wording note, not a defect."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "pr56-sec6-plan-doc-shows-superseded-wildcard-form",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/permission-surface-implementation-plan.md:76-77",
+            "rank": 2,
+            "summary": "The plan's Proposed change section still lists the five entries in their original wildcard form (Bash(just test:*), etc.) rather than the shipped exact-match form. Pure planning-artifact drift; the shipped config and test docstrings are both correct."
+          }
+        ],
+        "head_snapshot": "c821a08de480ebb66ff41b1b62d6998343f84265",
+        "specialist_selection": {
+          "specialists": [
+            "security-data-specialist"
+          ]
+        }
+      },
+      "round": 12,
+      "slice_id": "permission-surface"
     }
   ],
   "slice_styles": {
