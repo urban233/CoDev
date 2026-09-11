@@ -35,8 +35,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from codev_workflow import config, git_ops
+from codev_workflow import gate as gate_module
 from codev_workflow.gate import GATES, check
 
 
@@ -439,6 +441,124 @@ class SubdirectoryCwdTests(unittest.TestCase):
                 target=Path(outside),
             )
         self.assertEqual("ask", decision.decision)
+
+
+class OutOfRepositoryPathTests(unittest.TestCase):
+    """A tool call may name a path outside the repository, and often does.
+
+    A scratchpad file, an agent's own memory directory, anything under a
+    temporary directory. Resolving those against the repository root raised,
+    every hook shim caught it and allowed the call unchecked, and the record
+    said only `degraded`. It is the same shape as `SubdirectoryCwdTests`
+    above -- a gate that fails open on an ordinary input -- and it became the
+    dominant one the moment the unresolvable-`codev` cause was fixed: 56 of
+    80 gate calls on 2026-09-11.
+    """
+
+    def setUp(self) -> None:
+        self._temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temporary.cleanup)
+        self.target = Path(self._temporary.name)
+        _repo(self.target)
+        subprocess.run(
+            ["git", "commit", "-q", "--allow-empty", "-m", "seed"],
+            cwd=self.target,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "checkout", "-q", "-b", "codev/a-task"],
+            cwd=self.target,
+            check=True,
+        )
+        self._outside = tempfile.TemporaryDirectory()
+        self.addCleanup(self._outside.cleanup)
+        self.outside = Path(self._outside.name)
+
+    def _decision(self, path: Path, gate: str = "plan") -> dict[str, object]:
+        return check(
+            gate,
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": str(path)},
+                "cwd": str(self.target),
+            },
+            target=self.target,
+        ).as_dict()
+
+    def test_plan_gate_allows_a_path_outside_the_repository(self) -> None:
+        decision = self._decision(self.outside / "notes.md")
+        self.assertEqual("allow", decision["decision"])
+        self.assertEqual("outside-repo", decision["reason"])
+
+    def test_that_allow_is_recorded_rather_than_silent(self) -> None:
+        """`the gate decided nothing` and `the gate decided yes` must stay
+        distinguishable, or the health report cannot tell them apart."""
+        decision = self._decision(self.outside / "notes.md")
+        self.assertTrue(decision["recorded"])
+        self.assertNotIn("failure_class", decision)
+
+    def test_no_gate_degrades_on_an_outside_path(self) -> None:
+        """The regression itself: every gate, not just the one that crashed."""
+        for gate in GATES:
+            with self.subTest(gate=gate):
+                decision = self._decision(self.outside / "notes.md", gate=gate)
+                self.assertNotEqual(
+                    "degraded",
+                    decision["decision"],
+                    f"{gate} still fails open on a path outside the repository",
+                )
+
+    def test_an_always_planned_name_outside_the_repository_is_not_gated(self) -> None:
+        """`pyproject.toml` in someone else's directory is not this
+        repository's dependency manifest."""
+        decision = self._decision(self.outside / "pyproject.toml")
+        self.assertEqual("allow", decision["decision"])
+        self.assertEqual("outside-repo", decision["reason"])
+
+    def test_a_path_inside_the_repository_is_still_decided(self) -> None:
+        """The fix must not turn the gate off for the paths it exists for."""
+        decision = self._decision(self.target / "pyproject.toml")
+        self.assertEqual("ask", decision["decision"])
+        self.assertIn("dependency manifest", str(decision["reason"]))
+
+    def test_an_internal_error_is_classified_as_one(self) -> None:
+        """`infrastructure` is a legitimate fail-open; `internal_error` is a
+        defect. Filing both under one label is what let the original 508
+        unchecked calls go unnoticed, and then let their replacement do the
+        same.
+
+        The raise is injected rather than contrived from a payload. An
+        earlier version of this test guarded its assertion behind `if
+        decision["decision"] == "degraded"`, which made it pass whether or
+        not the classification existed -- a test that cannot fail, in the
+        change that exists to refuse exactly those.
+        """
+
+        def _explode(payload: object, repo_root: Path) -> None:
+            raise RuntimeError("boom")
+
+        with mock.patch.dict(gate_module._GATES, {"plan": _explode}):
+            decision = check(
+                "plan",
+                {
+                    "tool_name": "Edit",
+                    "tool_input": {"file_path": str(self.target / "src" / "a.py")},
+                    "cwd": str(self.target),
+                },
+                target=self.target,
+            ).as_dict()
+
+        self.assertEqual("degraded", decision["decision"])
+        self.assertEqual("internal_error", decision["failure_class"])
+        self.assertIn("boom", str(decision["reason"]))
+
+    def test_absent_tooling_is_not_filed_as_an_internal_error(self) -> None:
+        """The other half of the distinction: `_degraded` defaults to
+        `infrastructure`, so only an actual raise gets the defect label."""
+        self.assertEqual(
+            "infrastructure",
+            gate_module._degraded("plan", "no git").as_dict()["failure_class"],
+        )
 
 
 if __name__ == "__main__":

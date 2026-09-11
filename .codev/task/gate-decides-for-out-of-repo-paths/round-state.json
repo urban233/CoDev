@@ -1,0 +1,177 @@
+{
+  "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Authorised by Martin Urban 2026-09-11. The change adds no dependency, no network or credential surface, and no shell invocation; it narrows what the gate resolves rather than widening it, and the one new field is a literal label.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:11Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Authorised by Martin Urban 2026-09-11. 263 lines across gate.py and three hook shims, inside the size budget, confined to the accepted scope; no new module, interface, or dependency direction.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Authorised by Martin Urban 2026-09-11. The change removes a raise-and-catch path rather than adding structure; bundle parity is machine-verified and the existing style passes unchanged.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Authorised by Martin Urban 2026-09-11. Pure path resolution and a dataclass field; no shared state, no I/O ordering, nothing concurrent in the diff.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Authorised by Martin Urban 2026-09-11. Rollback is reverting one commit; the gate fails open on every error path either way, so a bad rollout degrades to today's behaviour rather than blocking work.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:13Z"
+    }
+  ],
+  "current_round": 2,
+  "current_slice": "gate-decides-for-out-of-repo-paths",
+  "description": "`codev gate check` resolves the tool payload's file path against the repository root, and `Path.relative_to` raises when the path lies outside it -- so the hook records `degraded` and allows the call unchecked. Any scratchpad, memory-directory, or /tmp path triggers it.\n\nDeliberately left out of scope by #57 at 8 occurrences against 508. With that slice's PATH cause fixed, this is now 56 of 80 gate calls in a day. A path outside the repository is not something these gates govern -- it should resolve to a recorded allow, not a crash. Internal errors should also carry a `failure_class`, which today only invocation failures do.",
+  "entry": null,
+  "link_ref": "https://github.com/urban233/CoDev/issues/58",
+  "max_rounds": {
+    "inner": 3,
+    "outer": 2
+  },
+  "owner": "urban233",
+  "reopens": [
+    {
+      "by": null,
+      "from_round": 1,
+      "head": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+      "max_rounds": {
+        "inner": 3,
+        "outer": 2
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-baselined onto the full HEAD SHA. The task was started with --base 99a46f1 (short), and task.py:979 compares the recorded base against HEAD as a plain string, so the abbreviated form reported stop_drift on a repository where nothing had changed. Filed separately; not this task's subject.",
+      "timestamp": "2026-09-11T18:13:21Z",
+      "to_round": 2
+    }
+  ],
+  "reviewer": null,
+  "round_schema_version": 4,
+  "rounds": [
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 1,
+      "slice_id": "gate-decides-for-out-of-repo-paths"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "DELIVERED: a tool-call path outside the repository resolves to a recorded `allow / outside-repo` instead of raising inside `codev gate check` and leaving every hook to record `degraded` and pass the call unchecked. `_relative` returns None rather than raising, and each of its four call sites decides what 'outside this repository' means for its own question: not a wave plan, not an always-planned manifest, and for the plan gate an explicit allow. Separately, a degraded verdict now carries `failure_class` -- `internal_error` for a raise inside the gate, `infrastructure` for genuinely absent tooling -- and the three gate hooks carry the gate's own classification through instead of dropping it.\n\nWHY IT MATTERED MORE THAN MEASURED: this was known when PR #57 shipped and deliberately left outside that slice's scope boundary at 8 occurrences against 508. Once #57 fixed the unresolvable-`codev` cause, this became 56 of 80 gate calls on 2026-09-11 -- 71%. The guardrail was still failing open on most calls; only the cause had changed.\n\nVALIDATION: just fmt-check (236 files formatted), just lint (clean), just typecheck (54 files clean), just test (35/35), verify_self_install (clean), bundle/installed parity across all five hooks.\n\nMANUAL, against this repository: three real out-of-repo payloads (scratchpad, agent memory directory, /tmp) each recorded `allow / outside-repo` where they previously recorded `degraded / internal error: ... is not in the subpath of ...`; an in-repo source edit still decided normally (`allow / within-budget-small-change`).\n\nMUTATION-CHECKED, four mutants, each caught: restoring the raising `_relative` (5 failures); dropping the `internal_error` label; flipping `_degraded`'s default to `internal_error`; making the outside-repo allow unrecorded. Run with PYTHONDONTWRITEBYTECODE=1 after discovering that a stale .pyc had produced a wrong mutation result earlier in this session -- the mutant and the restored source were the same byte length.\n\nTEST DEFECT FOUND AND FIXED IN MY OWN WORK: the internal-error test originally guarded its assertion behind `if decision['decision'] == 'degraded'`, so it passed whether or not the classification existed. It now injects the raise via mock.patch.dict on the gate table and asserts unconditionally. A second test pins the other half of the distinction.\n\nALSO: appending the new class after the module's `__main__` guard broke tests/test_every_test_class_runs_under_bazel.py, which pins that invariant deliberately. Guard moved to the end.\n\nSCOPE: gate.py, the three gate hooks and their bundle mirrors, tests/test_gate.py, CHANGELOG.md. Not touched: the short-SHA drift defect found while creating this task (filed separately), the paused adapter task's slices 4-5, the triplicated hook logic.\n\nREVIEW STATE: not independently reviewed."
+        },
+        "head_snapshot": "0657ed128d8f29287480e50db419d6ea2879d3b3"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independent re-validation: full test suite (35/35 passing), fmt/lint/typecheck all clean. Code review: all four _relative() call sites handle None correctly; no gate scope erosion detected (plan gate governs repo source edits, not out-of-repo paths; small-change governs repo changes only; wave-shape governs repo wave-plan docs only). Test load-bearing verified: mutant that restores raising _relative breaks 5 tests as expected; mutants dropping internal_error label and making outside-repo unrecorded each break their respective tests. Regression guard test (in-repo pyproject.toml still triggers ask) is load-bearing. failure_class propagates to hooks. No defects found.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 1,
+            "summary": "[verified, no defect] All four _relative() call sites correctly handle the None return value. (1) _target_content_after_edit checks 'if relative is None or not relative.match(...)' at line 384; (2) _plan_gate returns allow(outside-repo) when relative is None at line 529; (3) _plan_gate again checks 'if always_planned is not None and ...' at line 551; (4) _wave_shape_gate uses 'or violation' fallback at line 603, safe for logging."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 2,
+            "summary": "[verified, no defect] No gate legitimately governs paths outside the repository. plan gate: governs repository source edits without a plan, not scratchpad files. small-change gate: governs repository changes, not outside-repo paths. wave-shape gate: governs wave-plan documents in the repo, not external files. Each gate's scope is correctly scoped; outside-repo paths are simply not in scope for any of them."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 3,
+            "summary": "[verified, no defect] failure_class reaches the log correctly. The three hook shims (require_plan.py, require_small_change.py, require_wave_shape.py) all pass failure_class=str(decision.get('failure_class') or '') to _log_decision() when verdict == 'degraded', carrying through both 'internal_error' and 'infrastructure' classifications."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 4,
+            "summary": "[verified, no defect] Test rewrite for internal_error is load-bearing. test_an_internal_error_is_classified_as_one patches the gate to raise, calls check(), and asserts decision['failure_class'] == 'internal_error' unconditionally (not guarded). Confirmed: removing the 'internal_error' parameter breaks this test."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f5",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 5,
+            "summary": "[verified, no defect] Regression guard test is load-bearing. test_a_path_inside_the_repository_is_still_decided confirms that an in-repo file (pyproject.toml) still triggers 'ask' with dependency manifest reason. Confirmed: restoring the raising behavior of _relative breaks this test along with 4 others (5 total)."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f6",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 6,
+            "summary": "[verified, no defect] Mutant verification: at least the first three of four claimed mutants confirmed caught via test failure. (1) Restoring raising _relative: 5 tests fail; (2) Dropping internal_error label: internal_error test fails; (3) Making outside-repo allow unrecorded: test_that_allow_is_recorded_rather_than_silent fails. (4) Not re-checked due to turn constraint, but symmetry of pattern suggests it holds."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f7",
+            "location": "gate-decides-for-out-of-repo-paths @ 0657ed1",
+            "rank": 7,
+            "summary": "[verified, no defect] All validation passes: 236 files formatted, lint clean, 54 type-clean, 35/35 tests passing. No blocking issues."
+          }
+        ],
+        "head_snapshot": "0657ed128d8f29287480e50db419d6ea2879d3b3"
+      },
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths"
+    }
+  ],
+  "slice_styles": {
+    "gate-decides-for-out-of-repo-paths": "pair"
+  },
+  "slices": [
+    "gate-decides-for-out-of-repo-paths"
+  ],
+  "status": "in_progress",
+  "summary": "Stop the gate crashing on a path outside the repository",
+  "task_id": "gate-decides-for-out-of-repo-paths"
+}
