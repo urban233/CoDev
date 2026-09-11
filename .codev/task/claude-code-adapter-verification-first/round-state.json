@@ -1182,7 +1182,17 @@
         "head_snapshot": "bbb6795ae6ae3a466acb2dddb1e36c2a2f7e2092"
       },
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independently re-ran fmt-check/lint/typecheck/test (39/39 pass). Confirmed the four brief questions: _gate_common.py extraction preserves behavior (existing CliResolutionTests pass unmodified); restore_position.py/checkpoint_state.py fail open correctly and use scratchpad_dir and systemMessage (not additionalContext) as the current Claude Code docs require; isolation: worktree and worktree.baseRef: \"head\" ship together on all five specialists and in settings.json; the instruction-budget ceiling test's skip reasoning matches an independently re-run _measure() (34,389 bytes). Bundle/installed parity confirmed byte-identical across all changed .claude/ files.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "38d0cd76f3e9eaf30a5de5583137cdc532c16911"
+      },
       "round": 20,
       "slice_id": "recovery-and-budget"
     }
