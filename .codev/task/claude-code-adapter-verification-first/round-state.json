@@ -650,9 +650,69 @@
       "slice_id": "evidence-hooks"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "evidence": "# Builder evidence -- slice `evidence-hooks`\n\n**Base snapshot:** `0f69069`\n**Work style:** `pair` (implemented in the developer's own session, not delegated)\n**Plan:** `docs/codev/task/claude-code-adapter-verification-first/evidence-hooks-implementation-plan.md`, Status: Accepted\n\n## Delivered\n\n- **`Stop` -> `require_green.py`.** Refuses to end a turn that changed source\n  while the repository's own checks fail. A turn that changed no source runs\n  nothing. Checks are discovered from the repository (`just` recipes where\n  declared, else direct `ruff`/`mypy`/`pytest`/`unittest`) rather than\n  hard-coding one project's toolchain into a bundle that installs everywhere.\n  120s timeout records `unverified`, never a pass.\n- **Pre-change test check** inside the same hook: for each *touched* test\n  function, compares assertions against `HEAD` through git object storage.\n  Blocks on a function that asserts nothing or whose assertions are unchanged.\n  Never checks out, stashes, or creates a worktree.\n- **`PostToolUse` on `Edit|Write|MultiEdit` -> `format_touched.py`.**\n  Formatter only; reports back when the file on disk changed under the agent.\n- **`codev` invocation repaired** in all three existing gate hooks: resolved\n  via the running interpreter, then a repo-local virtualenv, then `PATH`,\n  with a `CODEV_CLI` override. Degraded records now carry `failure_class`\n  (`infrastructure` vs `hook_error`).\n- **`just test-only <targets>`** for a narrowed run (1.0s for one target\n  against 25.6s for the suite). `just test` keeps its documented meaning.\n- **Prose retired** in `ai-agent-guidelines.md` and `AGENTS.md`.\n\n## Changed\n\n15 tracked files modified, 6 added. Hooks (`.claude/hooks/` + bundle\nmirrors), `.claude/settings.json` + mirror, `Justfile`,\n`.codev/for-ai/ai-agent-guidelines.md` + mirror, `AGENTS.md`, `CHANGELOG.md`,\n`tests/test_claude_hook.py`, `tests/test_installer.py`, and two new test\nfiles.\n\n## Validation actually run\n\n| Command | Outcome |\n|---|---|\n| `just fmt-check` | 236 files already formatted |\n| `just lint` | All checks passed |\n| `just typecheck` | Success: no issues found in 54 source files |\n| `just test` | 35 of 35 tests pass |\n| `scripts/verify_self_install.py` | No changes; preview complete |\n| `just test-only //tests:test_installer` | passes after the pinned adapter set was updated |\n\nManual, on this repository:\n\n- Appended an unused `import os` to `src/codev_workflow/health.py`; the `Stop`\n  hook refused with the actual `ruff` E402/F811 output as the reason.\n  Restored; tree verified clean.\n- Ran `require_plan.py` with `PATH=/usr/bin:/bin` (git present, `codev`\n  absent -- the exact condition behind the 508 logged fail-opens): the gate\n  decided `allow / precise-task-plan` instead of `degraded`.\n- Ran the same hook with an empty `PATH`: allowed, and recorded `degraded`\n  with `failure_class: infrastructure`.\n\nMutation check on the headline regression test: reverting `_codev_argv` to\nthe pre-fix bare-`codev` behaviour makes\n`test_gate_still_decides_without_codev_on_path` fail\n(`AssertionError: 'degraded' == 'degraded'`), and restoring it makes the test\npass. The test is not toothless.\n\n## Acceptance evidence\n\n| Plan criterion | Evidence |\n|---|---|\n| A failing test/lint/type error refuses `Stop` | manual lint-error run above; `StopCheckTests` (4 tests) |\n| A touched Python file is reformatted | `test_reformats_a_touched_python_file` |\n| A test that cannot fail is reported as blocking | `ToothlessTestDetectionTests` (9 tests) |\n| No hook decides nothing for want of `codev` on `PATH` | `CliResolutionTests` (4 tests) + mutation check |\n| Instruction payload did not increase | guidelines 15,601 -> 15,461 bytes; `AGENTS.md` 7,060 -> 7,129; **net -71 bytes** |\n| Bundle/installed parity | all 5 hooks, `settings.json`, guidelines verified identical |\n\n## Scope deviations\n\nThree, each recorded rather than absorbed:\n\n1. **`just test` semantics kept; narrowing added as `test-only`.** The plan\n   said one line changing `test`. Changing it would have broken the\n   documented `just test <flags>` usage in `AGENTS.md`, so narrowing got its\n   own verb instead. Same outcome, non-breaking.\n2. **Check discovery is auto-detected, which the plan did not specify.**\n   These hooks install into arbitrary repositories, and hard-coding this\n   project's `just`/Bazel toolchain would make them a no-op or an error\n   everywhere else. Detection order is documented in the hook. Chosen over a\n   config key per the standing preference for a stated default over an\n   option.\n3. **`gate.py:311` out-of-repo crash deliberately NOT fixed.** It is inside\n   this slice's subject matter but outside the parent plan's accepted scope\n   boundary (\"no change to ... `gate.py`\"). Filed as its own task. 8\n   occurrences against the 508 the in-scope repair covers.\n\n## Known limitations\n\n- **The pre-change check is weaker than D4 implies.** It catches a test that\n  asserts nothing and one whose assertions did not really change; it does not\n  catch a test whose assertions changed and still pass against old code. That\n  needs to execute the old code. Filed as follow-up, stated in the plan.\n- **A source-touching turn costs ~26s**, dominated by the suite. `test-only`\n  is the enabler for affected-target narrowing via `bazel query rdeps`; that\n  mapping is follow-up work, not in this slice.\n- **Size: 839 lines / 12 files against a 600/12 budget.** Composition: 569 of\n  those lines are the two new hooks' *bundle mirrors*, which are exact\n  byte-identical copies the installer requires, and 112 lines are the BSD\n  licence header repeated across four new files. Unique authored logic is\n  roughly 460 lines plus 533 lines of tests. The overage is duplication the\n  repository's own layout mandates rather than scope creep, but it is real\n  and a reviewer should judge it rather than take my word.\n\n## Defect found by dogfooding, and fixed\n\nRunning `require_green.py` against its own change during manual verification\nsurfaced a genuine defect: the pre-change check compared *every* test\nfunction in a modified file, so appending one test to\n`tests/test_claude_hook.py` flagged all twenty pre-existing tests as \"same\nassertions as HEAD\" -- true, and irrelevant, since nobody touched them. On\nany real change this would have made the hook unusable. Fixed by carrying\neach function's normalised body alongside its assertions and skipping\nfunctions that are byte-identical to `HEAD`. Two regression tests pin both\ndirections (`test_ignores_untouched_tests_in_a_file_that_gained_a_new_one`,\n`test_still_flags_a_touched_test_in_a_file_with_untouched_ones`).\n\nSeparately, the four `StopCheckTests` initially skipped unless `just` was\ninstalled -- leaving the block path, the most important behaviour this hook\nhas, effectively untested in CI. Replaced the dependency with a planted\n`.tools/just` shim; the suite now runs 19 of 19 with zero skips.\n\n## Review state\n\nNot independently reviewed. No commit, push, or merge performed by me beyond\nthe round's own bookkeeping.\n"
+        },
+        "head_snapshot": "0d93e721085dd819613697800f95196bc5266e01"
+      },
       "phase": "inner",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "Diff confined to the plan's allowed scope. gate.py deliberately untouched, matching the parent plan's stated boundary.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "Independently re-ran the full check set at head 0d93e72: fmt-check 236 files formatted, lint clean, typecheck 54 files clean, 35/35 tests pass. Verified from the code (not the receipt) that require_green.py fails open on infrastructure error and fails closed on a real check failure; that the pre-change check reads git object storage only and never checks out, stashes or creates a worktree; that _codev_argv's resolution order is identical across all three repaired gate hooks; and that stop_hook_active prevents self-re-entry.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "19 tests for require_green.py with zero skips after the just-dependency was replaced by a planted .tools/just shim; 10 for format_touched.py; 4 new CliResolutionTests. The headline regression test was mutation-checked: reverting _codev_argv to the pre-fix behaviour makes it fail, restoring makes it pass. Two regression tests pin both directions of the false-positive defect found during manual verification.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": "slice-wide (codev task size: 839 lines / 12 files vs 600/12)",
+            "rank": 1,
+            "summary": "Over the size budget. 569 of those lines are byte-identical bundle mirrors the installer requires and 112 are the BSD header repeated across four new files; unique authored logic is ~460 lines plus ~533 of tests. Judged structural duplication rather than scope creep, but recorded so a human decides rather than takes it on trust."
+          },
+          {
+            "blocking": false,
+            "category": "scope",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": "Justfile; .claude/hooks/require_green.py:_checks; src/codev_workflow/gate.py:311",
+            "rank": 2,
+            "summary": "Three recorded deviations from the accepted plan, each judged sound: narrowing added as `test-only` rather than changing `just test`'s documented meaning; check discovery auto-detected because these hooks install into arbitrary repositories; and the gate.py out-of-repo crash deliberately left unfixed as outside the parent plan's scope boundary."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": ".claude/hooks/require_green.py:_toothless_tests",
+            "rank": 3,
+            "summary": "The pre-change check is weaker than the parent plan's D4 implies: it catches a test that asserts nothing and one whose assertions did not really change, but not one whose assertions changed and still pass against old code. Execution-based version filed as follow-up."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": "code-audit-gate dispatch",
+            "rank": 4,
+            "summary": "code-audit-gate hit its 40-turn limit mid-run (repo issue #39) and left bundle parity broken. Its edits were reverted after checking them against this codebase: it rewrote `from pathlib import Path` to `import pathlib` (65 files here use the former, 7 the latter), stripped docstring backticks the untouched sibling hooks use, and added Args:/Returns: sections absent from src/codev_workflow/*.py. Applying that to 2 of 5 sibling hooks is less consistent than not applying it. Head unchanged at 0d93e72; full check set green after the revert."
+          }
+        ],
+        "head_snapshot": "0d93e721085dd819613697800f95196bc5266e01"
+      },
       "round": 14,
       "slice_id": "evidence-hooks"
     }
