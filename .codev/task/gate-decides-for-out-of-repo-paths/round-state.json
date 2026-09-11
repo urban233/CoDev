@@ -1,5 +1,47 @@
 {
   "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+  "coverage_waivers": [
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Authorised by Martin Urban 2026-09-11. The change adds no dependency, no network or credential surface, and no shell invocation; it narrows what the gate resolves rather than widening it, and the one new field is a literal label.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:11Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "architecture_scope",
+      "reason": "Authorised by Martin Urban 2026-09-11. 263 lines across gate.py and three hook shims, inside the size budget, confined to the accepted scope; no new module, interface, or dependency direction.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "maintainability",
+      "reason": "Authorised by Martin Urban 2026-09-11. The change removes a raise-and-catch path rather than adding structure; bundle parity is machine-verified and the existing style passes unchanged.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Authorised by Martin Urban 2026-09-11. Pure path resolution and a dataclass field; no shared state, no I/O ordering, nothing concurrent in the diff.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:12Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Authorised by Martin Urban 2026-09-11. Rollback is reverting one commit; the gate fails open on every error path either way, so a bad rollout degrades to today's behaviour rather than blocking work.",
+      "round": 2,
+      "slice_id": "gate-decides-for-out-of-repo-paths",
+      "timestamp": "2026-09-11T19:04:13Z"
+    }
+  ],
   "current_round": 2,
   "current_slice": "gate-decides-for-out-of-repo-paths",
   "description": "`codev gate check` resolves the tool payload's file path against the repository root, and `Path.relative_to` raises when the path lies outside it -- so the hook records `degraded` and allows the call unchecked. Any scratchpad, memory-directory, or /tmp path triggers it.\n\nDeliberately left out of scope by #57 at 8 occurrences against 508. With that slice's PATH cause fixed, this is now 56 of 80 gate calls in a day. A path outside the repository is not something these gates govern -- it should resolve to a recorded allow, not a crash. Internal errors should also carry a `failure_class`, which today only invocation failures do.",
