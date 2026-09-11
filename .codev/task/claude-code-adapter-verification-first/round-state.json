@@ -749,7 +749,234 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "Read the full 3,492-line diff and both authorities (the accepted slice plan docs/codev/task/claude-code-adapter-verification-first/evidence-hooks-implementation-plan.md and the parent plan's D3/D4). Path-by-path scope check: every touched file is inside the plan's allowed scope, and the parent plan's boundary ('no change to installer.py, adapter.py, cli.py, task.py, gate.py') is respected -- confirmed by file list, so leaving gate.py:311 unfixed is the correct call, not a dodge. Conformance to design: the Stop/PostToolUse wiring, the fail-open classes, the git-object-storage pre-change check and the formatter-only PostToolUse all match the accepted resolutions, including the plan's reasoned move of the type checker from D3's PostToolUse into require_green.py. Three stated deviations judged sound (test-only as its own verb; auto-detected check discovery; gate.py deferred). Two divergences from the accepted design were found that are not recorded: the Stop gate keys on an uncommitted tree rather than on 'this turn changed source' (arch-1), and CODEV_CLI adds a configuration surface the plan does not contain and that is shaped unlike the repository's existing CODEV_GH_PATH override (arch-3). One cross-adapter boundary problem: prose was retired from the adapter-neutral guidelines for a hook that installs only under .claude/ (arch-4). No findings on correctness, tests, security, concurrency or rollout, which belong to the other specialists.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "Read the full diff at head d438530 and ran the hooks directly against purpose-built temp repositories. Verified: the Stop protocol output shape (`{\"decision\":\"block\",\"reason\":...}`, exit 0) and PostToolUse `hookSpecificOutput`; the source-touched fast path; `git status --porcelain` parsing including the rename destination; the pre-change check reads only git object storage; `_codev_argv`'s resolution order is byte-identical across all three repaired gate hooks and `python -m codev_workflow` really resolves (src/codev_workflow/__main__.py exists); all five hook copies are byte-identical to their bundle mirrors (cmp). Mutation-checked the false-positive fix: removing the `before[0] == body` guard from a copy of the hook makes it flag both untouched tests, which `test_ignores_untouched_tests_in_a_file_that_gained_a_new_one` asserts against. Three correctness gaps found (c1 stop_hook_active one-shot, c3 duplicate test-name keying, c6 health blind to the new hook events), none blocking.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "Walked every failure branch: malformed stdin, non-dict payload, git absent, no checks reachable, per-check OSError (continue) and TimeoutExpired (`unverified`, allow), logging wrapped so it never raises, CODEV_CLI pointing at a nonexistent binary degrading with failure_class `infrastructure`. The fail-open direction is sound. Two error-handling gaps found: the discovered fallbacks convert a misconfigured environment into a hard block (c2, reproduced with `python -m unittest discover -s tests` failing 104 times in this repository under a non-venv interpreter), and the 180 s host hook timeout is below the 3 x 120 s internal worst case so the `unverified` guarantee can be defeated (c8). Neither blocks merge.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "Reviewed all five hook scripts, their bundle mirrors and the four test files for the Clean Code and GoF catalog. Confirmed by hashing that the ~90-line CLI-resolution block (failure-class constants, _codev_argv, _decide) is byte-identical across the three gate hooks and therefore exists in six copies with the mirrors -- roughly 420 of the diff's 839 added lines for one function's worth of logic -- and that the new test pins the copy by substring rather than by behaviour (arch-2, needless repetition). Counted five hand-rolled 'resolve a tool without trusting PATH' variants across the hook layer. Flagged the hand-written Justfile parser as a reimplementation of `just --summary` with demonstrable misparses (arch-5, fragility/opacity), and the inline classification literals plus the positional 2-tuple returned by _test_functions (arch-6, magic values and intent-hiding names). Checked for missing-pattern signals: no type-code switch, no subclass explosion, no isinstance-driven recursion; the checks list in _checks is already a data-driven sequence rather than a branch cascade, and the hooks' shim shape is appropriate. require_green.main() is long but each step reads at one level and stays within the argument limits, so it is noted only as context for arch-6 rather than as a separate finding. No maintainability finding here is a style preference: each names duplication, fragility or opacity and carries a testable correction.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "{\"command_execution_and_argument_injection\": {\"status\": \"finding\", \"notes\": \"No shell is used anywhere: every subprocess.run call passes a list argv with shell defaulted to False, so no metacharacter injection is possible from payload-derived paths. `git show HEAD:<path>` is always prefixed, so a path cannot be read as an option. What is a finding is module resolution, not argument handling: `[sys.executable, '-m', name]` runs with cwd=repo_root and no `-P`, letting a repo-root file shadow codev_workflow/ruff/mypy/pytest. Demonstrated empirically. See s1.\"}, \"auto_discovered_executables_trust\": {\"status\": \"finding\", \"notes\": \"`_just_argv` prefers repo_root/.tools/just*, `_codev_argv` prefers repo_root/.venv/bin/codev, and `_checks` runs Justfile recipe bodies -- all repository-controlled, all executed at Stop with no permission prompt. Intended behaviour for the feature, but unstated and not recorded in the decision log. See s4. CODEV_CLI is a new env override that redirects the gate's verdict source; setting it requires control of the hook process environment, which is already a higher privilege than the gates defend against, so it is not treated as a separate weakness.\"}, \"destructive_or_irreversible_data_operations\": {\"status\": \"verified\", \"notes\": \"Strong point of the change. The pre-change check reads history through `git show HEAD:<path>` only; git is invoked exclusively with `status --porcelain` and `show` -- no checkout, stash, worktree, reset, or clean anywhere in the diff, so the developer's working tree is never mutated by the verification path. The one file-mutating hook is format_touched.py, whose rewrite is semantics-preserving and applied to a file the agent had just written; its only real exposure is formatting paths the project excluded (s2) or projects",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "Judged against writing-tests.md and test-strategy.md. Strengths are real: 19 require_green tests with zero skips, the planted `.tools/just` shim replacing a skipUnless so the block path (the most load-bearing behaviour) runs everywhere, both directions of the false-positive regression pinned, the working-tree-untouched property pinned, and the Windows CODEV_CLI parsing exercised directly rather than only through the CI leg -- the one place a test double stands in for the real thing (patching `os.name`) is justified because the platform cannot otherwise be reached. Gaps found: the formatter hook's entire formatting behaviour is skipped in CI (c4, `OK (skipped=5)` confirmed under bazel), nothing pins that the new hooks are wired in settings.json (c5), and two tests assert weakly or structurally (c9). All non-blocking.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": ".claude/hooks/require_green.py:526 (`if payload.get(\"stop_hook_active\"): _allow()`); tests/test_require_green_hook.py:test_allows_immediately_when_already_stopped_for_this_hook; CHANGELOG.md; AGENTS.md",
+            "rank": 1,
+            "summary": "[c1] The unconditional allow on `stop_hook_active` reduces the Stop guarantee to one warning per user turn, which is weaker than what the plan, CHANGELOG and AGENTS.md claim."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": ".claude/hooks/require_plan.py:_codev_argv (+ require_small_change.py, require_wave_shape.py, and all three bundle mirrors); .claude/hooks/require_green.py:_checks",
+            "rank": 2,
+            "summary": "[s1] New `python -m <name>` invocations run with cwd=repo_root and without `-P`, so a file at the repository root can shadow the intended module. Verified empirically: with `ruff.py` in cwd, `python3 -m ruff --version` printed the planted file's output; `python3 -P -m ruff --version` printed the real ruff version. The same applies to `[sys.executable, '-m', 'codev_workflow']`, where a repo-root `codev_workflow.py`/`codev_workflow/` would both execute and dictate the gate's allow/ask verdict, and to the `-m ruff|mypy|pytest|unittest` fallbacks the Stop hook runs. This path is introduced by this PR (the previous code resolved a bare `codev` from PATH, which does not include cwd on Unix). Exploiting it needs a repository whose contents the developer has not audited -- plausible when an agent session is pointed at a contributor branch or a submitted repo. Correction: add `-P` to every `[sys.executable, '-m', ...]` argv (requires-python is already >=3.11) or pass env with PYTHONSAFEPATH=1; test by planting `ruff.py` at a fixture repo root and asserting the hook still runs real ruff."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": ".claude/settings.json (Stop hook `\"timeout\": 180`) vs .claude/hooks/require_green.py:276 (`_CHECK_TIMEOUT_SECONDS = 120`)",
+            "rank": 3,
+            "summary": "[c8] The host's 180 s hook timeout is smaller than the hook's worst-case internal budget (3 x 120 s), so a slow repository gets a silent allow with no `unverified` record."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": ".claude/hooks/format_touched.py:main (subprocess argv `[*argv, 'format', str(target)]`) and its bundle mirror",
+            "rank": 4,
+            "summary": "[s2] The formatter is invoked on explicitly-named paths without `--force-exclude`, and ruff applies `exclude`/`extend-exclude` to explicit paths only when that flag is set. Verified in this repository: `ruff format --check src/codev_workflow/bundle/.claude/hooks/require_green.py` reported '1 file would be reformatted' while the same command with `--force-exclude` reported 'No Python files found under the given path(s)'. So the hook rewrites files the project has deliberately declared off-limits to its own formatter -- here `src/codev_workflow/bundle`, `.claude/skills`, `.agents/skills`, and notably `.codev/eval/tasks/*/repository`, which are evaluation fixture repositories whose exact bytes are the input to eval runs. `just fmt-check` will never notice, because it honours the exclusion. Correction: pass `--force-exclude`, and add a test that a path matched by the fixture repo's ruff `exclude` is left byte-identical after the hook runs."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "f5",
+            "location": ".claude/hooks/require_green.py:394-430 (`_checks` fallbacks)",
+            "rank": 5,
+            "summary": "[c2] The auto-discovered direct fallbacks turn a misconfigured environment into a hard `block`, which is the fail-closed direction the plan named as the high risk."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f6",
+            "location": "tests/test_format_touched_hook.py (5 tests behind `@unittest.skipUnless(_ruff_available(), ...)`)",
+            "rank": 6,
+            "summary": "[c4] Every test that asserts `format_touched.py` actually formats anything is skipped in CI, so the hook's entire purpose is untested there."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f7",
+            "location": ".claude/hooks/require_green.py:470 (`out[f\"{path}::{node.name}\"] = ...`)",
+            "rank": 7,
+            "summary": "[c3] Test functions are keyed by bare name, so two same-named methods in one file collapse and the pre-change check silently skips the touched one."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f8",
+            "location": ".claude/hooks/format_touched.py:_formatter_argv (and bundle mirror)",
+            "rank": 8,
+            "summary": "[s3] The formatter hook ships to every repository the bundle installs into and runs ruff whenever ruff is importable or on PATH, with no check that the target project actually uses ruff. `shutil.which('ruff')` will find a user-global ruff (pipx/uv/brew) in a project formatted by black, yapf, or nothing, and every Python file the agent touches there is silently restyled to ruff's defaults, mixing unrelated formatting churn into the developer's change. This is looser than the discipline `require_green.py:_checks` applies for exactly the same reason ('installs everywhere'), where a `just` recipe declared by the repository wins. Correction: require positive evidence the repo uses ruff -- a `fmt`/`format` just recipe, or a `[tool.ruff]` table / `ruff.toml` / `.ruff.toml` -- before formatting, and no-op (logging `degraded`) otherwise; test with a fixture repo that has ruff on PATH but no ruff configuration."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "f9",
+            "location": ".claude/hooks/format_touched.py:146-174 (`_log(repo_root, \"degraded\", ...)`); src/codev_workflow/health.py:202-214",
+            "rank": 9,
+            "summary": "[c7] The formatter logs its no-op as `degraded`, the same label `codev health` reports as 'gate call(s) failed open ... allowed without being checked'."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f10",
+            "location": "tests/test_permission_surface.py:142-152 (`test_default_mode_and_hooks_are_untouched`); .claude/settings.json",
+            "rank": 10,
+            "summary": "[c5] Nothing pins that the two new hooks are wired at all; the existing settings assertion counts only `PreToolUse` and passes unchanged."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f11",
+            "location": ".codev/for-ai/ai-agent-guidelines.md:156-161 and src/codev_workflow/bundle/.codev/for-ai/ai-agent-guidelines.md",
+            "rank": 11,
+            "summary": "[s5] 'Run the repository's formatter, static checks, affected tests, and proportionate broader tests' is removed from the guidelines file the bundle ships to all four adapters, but the enforcement that replaces it (`require_green.py`) exists only under Claude Code. Antigravity, Junie, and OpenCode sessions therefore lose the instruction and gain nothing; what remains for them is 'Report the exact validation commands and their outcomes', which presumes a run it no longer asks for. AGENTS.md keeps a repo-specific line and marks it Claude-only, so the gap is visible there but not in the shared file. Correction: keep a one-line platform-neutral instruction to run the repository's checks in the shared guidelines (the net-bytes claim survives; the removed sentence was four lines), or move the retirement into the Claude-only `.claude/CLAUDE.md`."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f12",
+            "location": "src/codev_workflow/health.py:166-199 (`_hooks_wired`)",
+            "rank": 12,
+            "summary": "[c6] The health check that exists to catch a hook pointing at a missing script only scans `PreToolUse`, so it is blind to both hooks this slice adds."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f13",
+            "location": "tests/test_require_green_hook.py:test_fails_open_when_no_checks_are_reachable; tests/test_claude_hook.py:test_every_gate_hook_resolves_the_cli_the_same_way",
+            "rank": 13,
+            "summary": "[c9] Two tests assert weakly or structurally: one is misnamed and environment-dependent, the other pins source text rather than behaviour."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f14",
+            "location": ".claude/hooks/require_green.py:_just_argv / _checks; .claude/settings.json Stop entry",
+            "rank": 14,
+            "summary": "[s4] The Stop hook executes repository-resident code automatically and outside Claude Code's permission system: `_just_argv` prefers `repo_root/.tools/just{,.exe,.bat,.cmd}` over PATH, and the recipes it then runs (`just lint|typecheck|test`) are arbitrary command bodies from the checked-in Justfile; the gate hooks likewise prefer `repo_root/.venv/bin/codev`. In the ordinary case this is exactly the intended behaviour -- running the repository's own checks -- and the agent would run them via Bash anyway, but via Bash the permission rules and the transcript apply, whereas here a single edited .py file plus end-of-turn is enough. The trust assumption ('opening a repo in a CoDev session means trusting its build files') is real and probably acceptable for this audience, but it is currently unstated and unauditable. Correction, cheap and testable: record the resolved argv in the `.codev/hooks/decisions.jsonl` pass/degraded records (only the check name is stored today), and state the trust assumption in the hook docstring and CHANGELOG entry so a developer reviewing an untrusted branch knows what end-of-turn will run."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f15",
+            "location": "/Users/rootm/github_repos/CoDev/.claude/hooks/require_green.py:_changed_source (and the byte-identical /Users/rootm/github_repos/CoDev/src/codev_workflow/bundle/.claude/hooks/require_green.py); /Users/rootm/github_repos/CoDev/CHANGELOG.md",
+            "rank": 15,
+            "summary": "[arch-1] Unrecorded divergence from the plan's decision 1: the Stop gate keys on an uncommitted tree, not on \"this turn changed source\""
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f16",
+            "location": "/Users/rootm/github_repos/CoDev/.claude/hooks/require_plan.py:106-190, /Users/rootm/github_repos/CoDev/.claude/hooks/require_wave_shape.py:106-190, /Users/rootm/github_repos/CoDev/.claude/hooks/require_small_change.py:105-189, plus the three bundle mirrors under /Users/rootm/github_repos/CoDev/src/codev_workflow/bundle/.claude/hooks/; /Users/rootm/github_repos/CoDev/tests/test_claude_hook.py:test_every_gate_hook_resolves_the_cli_the_same_way",
+            "rank": 16,
+            "summary": "[arch-2] The CLI-resolution repair is triplicated verbatim across the three gate hooks (six copies with mirrors), and a new test pins the duplication in place"
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f17",
+            "location": "/Users/rootm/github_repos/CoDev/.claude/hooks/require_plan.py:131-146 (and the two sibling hooks plus mirrors); /Users/rootm/github_repos/CoDev/CHANGELOG.md:46; compare /Users/rootm/github_repos/CoDev/src/codev_workflow/git_ops.py:134-144",
+            "rank": 17,
+            "summary": "[arch-3] `CODEV_CLI` is a new configuration surface that the accepted plan does not contain, and it is shaped unlike the repository's existing tool override"
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f18",
+            "location": "/Users/rootm/github_repos/CoDev/.codev/for-ai/ai-agent-guidelines.md:156-166 and its mirror /Users/rootm/github_repos/CoDev/src/codev_workflow/bundle/.codev/for-ai/ai-agent-guidelines.md; /Users/rootm/github_repos/CoDev/AGENTS.md:16",
+            "rank": 18,
+            "summary": "[arch-4] Prose retired from the adapter-neutral guidelines, but the hook that replaces it ships only with the `claude` platform"
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f19",
+            "location": "/Users/rootm/github_repos/CoDev/.claude/hooks/require_green.py:_just_recipes and _checks",
+            "rank": 19,
+            "summary": "[arch-5] Check discovery re-implements a parser for another tool's file format instead of asking the tool"
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f20",
+            "location": "/Users/rootm/github_repos/CoDev/.claude/hooks/require_green.py:_test_functions, _toothless_tests, _changed_source, main; /Users/rootm/github_repos/CoDev/.claude/hooks/format_touched.py:178",
+            "rank": 20,
+            "summary": "[arch-6] Classification rules in `require_green.py` are inline magic values, and two names claim more generality than the code has"
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f21",
+            "location": "slice-wide (839 lines / 12 files against 600/12)",
+            "rank": 21,
+            "summary": "[arch-7] Size overage and the three recorded deviations: judged, and accepted as stated"
+          }
+        ],
+        "head_snapshot": "67a656f0a3dfc24a418ad7d14a5a36f3b7d616c1",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist",
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 15,
       "slice_id": "evidence-hooks"
     }
