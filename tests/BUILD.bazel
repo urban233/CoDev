@@ -24,5 +24,17 @@ py_library(
             ":integration_support",
         ],
     )
-    for test_file in glob(["test_*.py"])
+    for test_file in glob(
+        ["test_*.py"],
+        exclude = ["test_instruction_budget.py"],
+    )
 ]
+
+# Split out of the loop above: measures this repository's own root-level
+# instruction files, not codev_workflow's bundle/** mirror of them, so it
+# needs //:instruction_budget_sources rather than the shared deps list.
+py_test(
+    name = "test_instruction_budget",
+    srcs = ["test_instruction_budget.py"],
+    data = ["//:instruction_budget_sources"],
+)

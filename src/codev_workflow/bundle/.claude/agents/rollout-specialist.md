@@ -5,6 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 maxTurns: 40
 permissionMode: manual
+isolation: worktree
 ---
 
 You are one of five specialist reviewers dispatched during outer-loop review, in

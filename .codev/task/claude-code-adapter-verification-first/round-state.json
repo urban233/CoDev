@@ -109,11 +109,6 @@
     "outer": 12
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-11T21:43:59Z",
-    "head": "31b81bd31b8a68f59035132ea573444ca960edb1",
-    "reason": "Plan accepted (Status: Draft -> Accepted by Martin Urban); bookkeeping commit only, not builder/reviewer round work."
-  },
   "reopens": [
     {
       "by": null,

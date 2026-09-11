@@ -7,6 +7,26 @@ load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 # Referenced by //packaging:wheel (description_file, extra_distinfo_files).
 exports_files(["README.md", "LICENSE"])
 
+# This repository's own always-on Claude Code instruction payload -- the
+# root checkout's live files, not their bundle/*.py.template counterparts,
+# since it is *this* session's payload //tests:test_instruction_budget
+# measures. Referenced there rather than through the codev_workflow
+# package's own `bundle/**` data, which mirrors this content for every
+# repository CoDev installs into, not just this one's.
+filegroup(
+    name = "instruction_budget_sources",
+    srcs = [
+        "AGENTS.md",
+        ".claude/CLAUDE.md",
+        ".codev/for-ai/ai-agent-guidelines.md",
+        ".codev/instruction-budget-baseline.json",
+    ] + glob([
+        ".claude/skills/*/SKILL.md",
+        ".claude/agents/*.md",
+    ]),
+    visibility = ["//tests:__pkg__"],
+)
+
 # ruff ships a compiled native executable, not a console_scripts entry
 # point, so py_console_script_binary cannot wrap it -- see design.md's
 # "Tooling Integration" section.

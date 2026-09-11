@@ -1,0 +1,12 @@
+{
+  "total_bytes": 34389,
+  "measured_at": "2026-09-12",
+  "breakdown": {
+    "ai-agent-guidelines.md": 15563,
+    "AGENTS.md": 7090,
+    ".claude/CLAUDE.md": 3514,
+    "skill descriptions": 6903,
+    "agent descriptions": 1319
+  },
+  "note": "Recorded by tests/test_instruction_budget.py, added in the recovery-and-budget slice. Update deliberately when a change intentionally moves this total; see the implementation plan's Decision 1 for the ceiling this must stay under."
+}

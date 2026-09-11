@@ -520,9 +520,13 @@ class CliResolutionTests(unittest.TestCase):
         )
 
     def test_every_gate_hook_resolves_the_cli_the_same_way(self) -> None:
-        """All three hooks carry the same resolution logic, so a repair to
-        one that misses the others would leave two gates still blind."""
+        """All three hooks delegate to the one shared `_gate_common` module,
+        so a repair to it fixes every gate at once -- there is no longer a
+        second or third copy that a repair could miss."""
         hooks_dir = _HOOK.parent
+        shared_source = (hooks_dir / "_gate_common.py").read_text(encoding="utf-8")
+        self.assertIn("def codev_argv", shared_source)
+        self.assertNotIn('["codev", "gate"', shared_source)
         for name in (
             "require_plan.py",
             "require_wave_shape.py",
@@ -530,7 +534,8 @@ class CliResolutionTests(unittest.TestCase):
         ):
             source = (hooks_dir / name).read_text(encoding="utf-8")
             with self.subTest(hook=name):
-                self.assertIn("_codev_argv", source)
+                self.assertIn("_gate_common", source)
+                self.assertNotIn("def codev_argv", source)
                 self.assertNotIn('["codev", "gate"', source)
 
     def test_an_explicit_override_is_honoured(self) -> None:
@@ -571,17 +576,19 @@ class CliResolutionTests(unittest.TestCase):
         non-POSIX one keeps the quotes it split on -- an argv[0] carrying
         literal quote characters cannot be executed at all.
         """
-        spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK)
+        spec = importlib.util.spec_from_file_location(
+            "_gate_common_under_test", _HOOK.parent / "_gate_common.py"
+        )
         assert spec is not None and spec.loader is not None
-        hook = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(hook)
+        gate_common = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate_common)
 
         windows_override = r'"C:\Python\python.exe" -m codev_workflow'
         with (
             mock.patch.dict(os.environ, {"CODEV_CLI": windows_override}),
-            mock.patch.object(hook.os, "name", "nt"),
+            mock.patch.object(gate_common.os, "name", "nt"),
         ):
-            argv = hook._codev_argv(self.repo)
+            argv = gate_common.codev_argv(self.repo)
         self.assertEqual(
             [r"C:\Python\python.exe", "-m", "codev_workflow"],
             argv,
@@ -591,9 +598,9 @@ class CliResolutionTests(unittest.TestCase):
         posix_override = "/usr/local/bin/codev"
         with (
             mock.patch.dict(os.environ, {"CODEV_CLI": posix_override}),
-            mock.patch.object(hook.os, "name", "posix"),
+            mock.patch.object(gate_common.os, "name", "posix"),
         ):
-            argv = hook._codev_argv(self.repo)
+            argv = gate_common.codev_argv(self.repo)
         self.assertEqual(["/usr/local/bin/codev"], argv)
 
     def test_a_degraded_record_says_which_kind_of_failure_it_was(self) -> None:
