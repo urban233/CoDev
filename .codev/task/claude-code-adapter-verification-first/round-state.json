@@ -109,11 +109,6 @@
     "outer": 12
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-11T21:27:25Z",
-    "head": "f7bc59a88f6dca81c9a9eeb69cb78e0e30748870",
-    "reason": "Reordered slices 4/5 and cut the recovery-and-budget branch: authorized bookkeeping (slice-order edit to round-state.json, git-state.json's new slice_branches entry, and a dated note in the parent plan), not builder/reviewer round work."
-  },
   "reopens": [
     {
       "by": null,

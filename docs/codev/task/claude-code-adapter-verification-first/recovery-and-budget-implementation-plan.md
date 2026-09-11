@@ -1,6 +1,6 @@
 # Slice 5: Recovery, Frontmatter, Compat, Budget Assertion - Implementation Plan
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** urban233
 **Reviewer:** independent reviewer, to be named before the pull request is marked ready
 **Risk:** medium. `SessionStart`/`PreCompact` are new hook events for this
