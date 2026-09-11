@@ -262,17 +262,31 @@ original sources in bytes, now:
 
 ## Completion evidence
 
-- [ ] Full suite green, including the new instruction-budget test
-- [ ] `verify_claude_code_compat.py` passes against the published CLI with
-      the extended marker set
-- [ ] `_gate_common.py` extracted; existing hook tests pass unmodified
-- [ ] `SessionStart`, `PreCompact`, `statusLine` each covered by a
-      fixture-stdin test; manual confirmation in a real session
-- [ ] All five specialist files carry `isolation: worktree`;
-      `worktree.baseRef` is `"head"`; manually confirmed a specialist
-      worktree is cut from the reviewed branch, not `main`
-- [ ] Instruction-budget total at or under 33,100 bytes, on-disk baseline
-      file updated to match
-- [ ] Retired prose identified and removed
-- [ ] CHANGELOG entry
-- [ ] `git diff` confirms no change outside the allowed scope
+- [x] Full suite green (39/39), including the new instruction-budget test
+- [x] `verify_claude_code_compat.py` passes against the published CLI (2.1.269)
+      with the extended marker set (35/35)
+- [x] `_gate_common.py` extracted; existing hook tests pass unmodified
+- [x] `SessionStart`, `PreCompact`, `statusLine` each covered by fixture-stdin
+      tests (14 tests total, both fail-open directions and the
+      compact-checkpoint fallback in both directions)
+- [ ] Manual confirmation in a real Claude Code session (startup, `/clear`,
+      `--resume`, and after a real compaction) -- needs the developer's own
+      session; not reproducible from inside this one
+- [x] All five specialist files carry `isolation: worktree`;
+      `worktree.baseRef` is `"head"`; both mutation-checked
+      (`tests/test_installer.py::test_specialists_install_isolated_and_correctly_based`)
+- [ ] Manually confirmed a specialist worktree is actually cut from the
+      reviewed branch, not `main`, in a live outer-loop review -- needs a
+      real pull request and a real specialist dispatch after this merges
+- [x] Instruction-budget total measured (34,389 bytes) and recorded in
+      `.codev/instruction-budget-baseline.json`; **not** at or under 33,100
+      bytes -- see Decision 1's resolution and issue #69 (developer-approved
+      follow-up, 2026-09-12), ceiling assertion explicitly skipped with that
+      reasoning rather than silently passing or blocking this slice
+- [x] Retired prose identified: this slice's own hooks license only ~294
+      bytes (the "Say where things stand" bullet), not retired separately
+      since it remains partially true (SessionStart covers only the
+      session-boundary case, not "after every state change") -- folded into
+      issue #69 rather than a token trim that would not move the real number
+- [x] CHANGELOG entry
+- [x] `git diff` confirms no change outside the allowed scope

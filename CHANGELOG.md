@@ -38,6 +38,41 @@ Semantic Versioning.
   against 25.6s for the suite). `just test` keeps its documented "append
   flags to the whole suite" meaning, since narrowing needs its own verb
   rather than a change of meaning that would break `just test --test_output=all`.
+- **A `SessionStart` hook (`restore_position.py`) surfaces `codev next`'s
+  position at the start of every session** -- a fresh launch, a `/clear`, a
+  `--resume`, or the restart that follows a compaction -- so neither the
+  developer nor the agent has to ask "what was I doing." Falls back to a
+  checkpoint file (below) when `codev` is briefly unreachable right after a
+  compaction.
+- **A `PreCompact` hook (`checkpoint_state.py`) writes that same position to
+  the session's own scratchpad directory before compaction runs**, giving
+  `restore_position.py` an independent second path to the same information.
+- **A `statusLine` script (`statusline.py`) shows the current slice,
+  position, and context-window usage in one line**, reading the same
+  `codev next --json` contract every other hook already uses.
+- **The five outer-loop specialists run in isolated git worktrees**
+  (`isolation: worktree`), shipped together with `worktree.baseRef: "head"`
+  in `.claude/settings.json` -- without the second setting, worktree
+  isolation alone branches from the repository's default branch rather than
+  the branch under review, which would have silently made every specialist
+  review the wrong commit.
+- **`scripts/verify_claude_code_compat.py` now also watches `maxTurns`,
+  `permissionMode`, `isolation`, `worktree`, `baseRef`, `statusLine`, and
+  `effort`** -- frontmatter and settings surface this bundle already relies
+  on (the first two) or now relies on (the rest), previously undocumented
+  in this check.
+- **`tests/test_instruction_budget.py` measures the always-on instruction
+  payload** across all five sources the parent plan's research originally
+  measured, in bytes, against a baseline and a ceiling derived from that
+  research's own token count -- previously tracked by hand, for two of the
+  five sources, one slice at a time. The real total (34,389 bytes) is
+  currently ~1,289 bytes over the derived ceiling; the ceiling assertion is
+  explicitly skipped pending a separate retirement pass (issue #69), so it
+  does not block this slice.
+- **The gate hooks' shared CLI-resolution and decision-logging logic is
+  extracted to `.claude/hooks/_gate_common.py`**, ending three independently
+  maintained copies (closes #65) just as two more hooks would otherwise have
+  made it five.
 
 ### Fixed
 - **The three guardrail hooks no longer fail open because `codev` is missing

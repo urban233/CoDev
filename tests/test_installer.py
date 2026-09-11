@@ -626,6 +626,25 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn("audit-google-typescript-style", content)
         self.assertTrue(installer.check_project(self.target).ok)
 
+    def test_specialists_install_isolated_and_correctly_based(self) -> None:
+        """`isolation: worktree` alone branches new worktrees from the
+        repository's default branch, not from whichever branch dispatched
+        the subagent -- so without `worktree.baseRef: "head"` alongside it,
+        every one of these five would silently review `main` instead of the
+        pull request they were dispatched against. Both must install
+        together, not just the one that is easy to notice missing."""
+        self.install(("claude",))
+
+        settings = json.loads((self.target / ".claude/settings.json").read_text())
+        self.assertEqual("head", settings.get("worktree", {}).get("baseRef"))
+
+        specialists = sorted((self.target / ".claude/agents").glob("*-specialist.md"))
+        self.assertEqual(5, len(specialists))
+        for path in specialists:
+            with self.subTest(agent=path.name):
+                frontmatter = path.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertIn("isolation: worktree", frontmatter)
+
     def test_junie_managed_files_update_and_remove_safely(self) -> None:
         self.install(("junie",))
         agent = self.target / ".junie/agents/assistant.md"
