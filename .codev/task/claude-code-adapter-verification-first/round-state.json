@@ -997,7 +997,117 @@
     {
       "builder": null,
       "phase": "outer",
-      "reviewer": null,
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "a4/s5 resolved: the adapter-neutral instruction reaches all four platforms via AGENTS_BLOCK, and the clauses not restored verbatim survive in the demand-loaded build-change skill, so no platform has neither instruction nor enforcement. Diff stays inside the parent plan's accepted scope boundary.",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "Re-verified at 05846e8. c1 mutation-checked four ways: restoring the blanket stop_hook_active allow, raising the cap to 99, and dropping the block-path increment are all caught; the reset-path mutant was caught only after this round fixed the test. c8's shared deadline verified by mutation against a fixed per-check timeout. _check_env confirmed not to weaken either.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "Fail-open verified on every path: unreachable tooling, timeout (recorded unverified, never a pass), unreadable payload, git unavailable, and no discoverable checks. The timeout branch now has a test that pins the record rather than only the exit code.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "Instruction budget net -8 bytes against the pre-slice baseline, verified after three rounds of tightening rather than by waiving the rule. Bundle/installed parity byte-identical across all five hooks. Hook state no longer leaks into the change under review.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "-P verified empirically to prevent module shadowing (a planted ruff package runs without it, real ruff with it) on all eight sys.executable invocations across both trees. --force-exclude verified against a real eval fixture path. The -P regression it introduced for flat-layout test runners was found and fixed in the same round. No shell invocation, no secrets, no network.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "Two tests in this slice were found unable to fail and fixed; both now mutation-checked in both directions. The formatter hook runs 8 of 13 tests under Bazel where 5 of 10 ran before, including its actual reformat-reporting behaviour. The flat-layout fallback, which had no test at all, is covered.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": "tests/test_require_green_hook.py",
+            "rank": 1,
+            "summary": "[rc-1, rc-2 -- FIXED this round] Re-verification mutation-checked the correction and found two of its own new tests could not fail: the refusal-reset test drove the counter to the cap but not past it, and the timeout test asserted only that something was recorded unverified, which a mutant satisfied through the budget-exhausted branch while the deadline did no work. Both now detect their mutations in both directions. Recorded rather than quietly fixed because a test that cannot fail, inside the slice that adds a hook to refuse exactly that, is the finding worth keeping visible."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": ".claude/hooks/require_green.py:_check_env",
+            "rank": 2,
+            "summary": "[rc-7 -- FIXED this round] The import-path override keyed on the check name 'test', which also matches a repository-declared `just test` recipe fronting any build system (here bazel). It now keys on whether the check is the discovered fallback, matching its stated rationale."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": "CHANGELOG.md",
+            "rank": 3,
+            "summary": "[rc-3 -- FIXED this round] The entry still advertised a 120s per-check timeout replaced by one 150s whole-invocation budget, and omitted that a refused turn pays the cost again on each retry, up to three."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": ".claude/hooks/require_green.py:_checks",
+            "rank": 4,
+            "summary": "[security recheck -- FIXED this round] The -P added for the shadowing fix also suppressed the sys.path entry a flat-layout repository needs, so the test fallback could not import the code under test: fail-closed and unfixable in the shape this bundle installs into most. Runners now get an explicit PYTHONPATH and -t . ; analyzers keep -P. Covered by DiscoveredFallbackTests, a path that previously had no test at all."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f5",
+            "location": ".gitignore; src/codev_workflow/installer.py",
+            "rank": 5,
+            "summary": "[architecture recheck -- FIXED this round] The refusal counter the Stop hook writes was not ignored, so `codev git commit`'s `git add -A` would have swept local hook state into every change under review, here and in every install. The whole .codev/hooks/ directory is now ignored rather than one filename."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f6",
+            "location": ".claude/hooks/require_green.py:_consecutive_blocks",
+            "rank": 6,
+            "summary": "[rc-4 -- NOT fixed, follow-up] The refusal counter is keyed per repository rather than per session, so a turn abandoned mid-refusal leaves a stale count and the next refusing turn stands down early. Keying on the payload's session_id closes it."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f7",
+            "location": "tests/test_format_touched_hook.py",
+            "rank": 7,
+            "summary": "[rc-5 -- NOT fixed, follow-up] The --force-exclude test asserts a literal string in the hook's source, so it would pass even if the argument list were never executed. The class already has a harness that could record the invoked argv instead."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f8",
+            "location": ".claude/hooks/*.py",
+            "rank": 8,
+            "summary": "[a2, a3 -- NOT fixed, deliberately out of scope] The CLI-resolution logic is triplicated verbatim across the three gate hooks, and CODEV_CLI is a configuration surface shaped unlike the narrower CODEV_GH_PATH precedent. Both predate this round's findings and were not among the five the owner selected."
+          }
+        ],
+        "head_snapshot": "05846e8e39691a7a0c3175657b33cb5e7cc69f52",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist",
+            "security-data-specialist"
+          ]
+        }
+      },
       "round": 16,
       "slice_id": "evidence-hooks"
     }
