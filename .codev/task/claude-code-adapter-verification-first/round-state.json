@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "d4385309a62e7988a944c925986ce8ba41b372f6",
+  "base_snapshot": "05846e8e39691a7a0c3175657b33cb5e7cc69f52",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -99,7 +99,7 @@
       "timestamp": "2026-09-11T16:44:16Z"
     }
   ],
-  "current_round": 15,
+  "current_round": 16,
   "current_slice": "evidence-hooks",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -263,6 +263,20 @@
       "reason": "Two CI-repair commits (Windows cross-platform fixes) landed after round 14's reviewer verdict was recorded against 0d93e72. Both were authorised by Martin Urban in-session. Re-baselining onto d438530 so the three specialists' outer-loop round can be recorded against the snapshot they actually reviewed.",
       "timestamp": "2026-09-11T17:00:50Z",
       "to_round": 15
+    },
+    {
+      "by": "urban233",
+      "from_round": 15,
+      "head": "05846e8e39691a7a0c3175657b33cb5e7cc69f52",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Martin Urban authorised fixing five of the outer-loop round's non-blocking findings after round 15 had already been recorded READY_FOR_HUMAN_APPROVAL. Those corrections, plus four regressions the re-verification found in them, moved the head from 67a656f to 05846e8. Re-baselining so the three specialists' re-verification can be recorded against the snapshot they actually checked.",
+      "timestamp": "2026-09-11T17:53:27Z",
+      "to_round": 16
     }
   ],
   "reviewer": null,
@@ -978,6 +992,13 @@
         }
       },
       "round": 15,
+      "slice_id": "evidence-hooks"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 16,
       "slice_id": "evidence-hooks"
     }
   ],
