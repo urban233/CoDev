@@ -10,6 +10,7 @@ docs/features/skill-eval/design.md).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shlex
@@ -19,6 +20,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 _HOOK = (
     Path(__file__).resolve().parent.parent
@@ -559,6 +561,40 @@ class CliResolutionTests(unittest.TestCase):
         decisions = self._decisions()
         self.assertTrue(decisions)
         self.assertNotEqual("degraded", decisions[-1]["decision"])
+
+    def test_override_parsing_survives_a_quoted_windows_path(self) -> None:
+        """Parse the override the way each platform's lexer must.
+
+        Exercised directly rather than only through the Windows CI leg,
+        because both halves of this were found there and not locally: the
+        POSIX lexer eats the backslashes in a native path, and the
+        non-POSIX one keeps the quotes it split on -- an argv[0] carrying
+        literal quote characters cannot be executed at all.
+        """
+        spec = importlib.util.spec_from_file_location("_hook_under_test", _HOOK)
+        assert spec is not None and spec.loader is not None
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+
+        windows_override = r'"C:\Python\python.exe" -m codev_workflow'
+        with (
+            mock.patch.dict(os.environ, {"CODEV_CLI": windows_override}),
+            mock.patch.object(hook.os, "name", "nt"),
+        ):
+            argv = hook._codev_argv(self.repo)
+        self.assertEqual(
+            [r"C:\Python\python.exe", "-m", "codev_workflow"],
+            argv,
+            "backslashes must survive and the quotes must not",
+        )
+
+        posix_override = "/usr/local/bin/codev"
+        with (
+            mock.patch.dict(os.environ, {"CODEV_CLI": posix_override}),
+            mock.patch.object(hook.os, "name", "posix"),
+        ):
+            argv = hook._codev_argv(self.repo)
+        self.assertEqual(["/usr/local/bin/codev"], argv)
 
     def test_a_degraded_record_says_which_kind_of_failure_it_was(self) -> None:
         """`infrastructure` is a legitimate fail-open; `hook_error` is a
