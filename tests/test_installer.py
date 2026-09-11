@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -663,7 +664,31 @@ class InstallerTests(unittest.TestCase):
         self.assertIn(installer.GITIGNORE_START, gitignore)
         self.assertIn(installer.GITIGNORE_END, gitignore)
         self.assertIn(".codev/task/escalations.jsonl", gitignore)
-        self.assertIn(".codev/hooks/decisions.jsonl", gitignore)
+        # check-ignore needs a real repository, and the fixture target is a
+        # plain directory -- without this the assertion below fails with
+        # git's "not a repository" exit 128 rather than on the rule itself.
+        subprocess.run(
+            ["git", "init", "-q"], cwd=self.target, capture_output=True, check=True
+        )
+        # The whole hook-state directory, not one filename: a rule naming
+        # individual files means the first hook that forgets to add its own
+        # gets swept into the change under review. Asserted by asking git,
+        # not by matching the pattern's text, so the rule can be reworded
+        # without this test caring.
+        self.assertIn("**/.codev/hooks/", gitignore)
+        for state_file in (
+            ".codev/hooks/decisions.jsonl",
+            ".codev/hooks/require_green_blocks.json",
+            ".codev/hooks/some_future_hook_state.json",
+        ):
+            with self.subTest(path=state_file):
+                ignored = subprocess.run(
+                    ["git", "check-ignore", state_file],
+                    cwd=self.target,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, ignored.returncode, f"{state_file} is not ignored")
         lock = json.loads((self.target / ".codev" / "lock.json").read_text())
         self.assertIn("gitignore_block_hash", lock["integrations"])
 

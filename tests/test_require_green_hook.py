@@ -271,6 +271,77 @@ class StopCheckTests(unittest.TestCase):
         self.assertNotIn("test output", payload["reason"])
 
 
+class DiscoveredFallbackTests(unittest.TestCase):
+    """The path taken in a repository with no `just` recipes.
+
+    This is the shape the bundle actually installs into most often -- a
+    flat-layout scientific Python project with no Justfile at all -- and it
+    had no test, which is how `-P` on the test runner reached CI green
+    while being permanently broken there.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.repo = Path(self.temporary.name)
+        _init_repo(self.repo)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_unittest_fallback_can_import_a_flat_layout_package(self) -> None:
+        """A package beside its tests must still be importable.
+
+        `-P` strips the cwd entry from sys.path, which is exactly the entry
+        a flat layout relies on. With it, the runner cannot import the code
+        under test, the hook blocks on a failure no agent can fix, and it
+        stands down unverified every time. Hence no -P on the runners --
+        the asymmetry with the analyzers is deliberate.
+        """
+        (self.repo / "mypkg").mkdir()
+        (self.repo / "mypkg" / "__init__.py").write_text(
+            "VALUE = 41\n", encoding="utf-8"
+        )
+        tests_dir = self.repo / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_value.py").write_text(
+            "import unittest\n\nimport mypkg\n\n\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_value(self):\n"
+            "        self.assertEqual(41, mypkg.VALUE)\n",
+            encoding="utf-8",
+        )
+        result = _run(self.repo, {"cwd": str(self.repo)})
+        reason = _reason(result)
+        self.assertNotIn("ModuleNotFoundError", reason)
+        self.assertNotIn("No module named", reason)
+
+    def test_analyzers_keep_the_safe_path_flag(self) -> None:
+        """`-P` is load-bearing where a planted module changes the verdict.
+
+        Asserted on source because the alternative is planting a malicious
+        module in a fixture, and the flag's presence is the whole control.
+        """
+        for rel in (
+            "src/codev_workflow/bundle/.claude/hooks/require_green.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_plan.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_wave_shape.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_small_change.py",
+            "src/codev_workflow/bundle/.claude/hooks/format_touched.py",
+        ):
+            source = (Path(__file__).resolve().parent.parent / rel).read_text(
+                encoding="utf-8"
+            )
+            with self.subTest(hook=rel):
+                for analyzer in ("codev_workflow", "ruff", "mypy"):
+                    if f'"{analyzer}"' in source and "sys.executable" in source:
+                        self.assertIn(
+                            '"-P"',
+                            source,
+                            f"{rel} runs a module without -P",
+                        )
+                        break
+
+
 class ToothlessTestDetectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

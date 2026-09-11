@@ -52,6 +52,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -218,6 +219,31 @@ def _module(name: str) -> bool:
         return False
 
 
+def _check_env(repo_root: Path, check: str) -> dict[str, str]:
+    """The environment one discovered check runs under.
+
+    Only the test runners need adjusting, and only because importability is
+    their whole job: a flat-layout repository -- a package directory beside
+    its tests -- is importable through the current directory, and that entry
+    is suppressed by `-P` *and* by an inherited `PYTHONSAFEPATH`, which some
+    build systems set for their own test actions. Relying on the implicit
+    entry means the hook works locally and fails wherever the environment
+    happens to carry that variable, which is the worst of both. Naming the
+    path explicitly removes the dependency on either.
+
+    The analyzers are left alone: they keep `-P` precisely so a module
+    planted in the repository cannot decide their verdict.
+    """
+    env = dict(os.environ)
+    if check != "test":
+        return env
+    env.pop("PYTHONSAFEPATH", None)
+    existing = env.get("PYTHONPATH", "")
+    root = str(repo_root)
+    env["PYTHONPATH"] = f"{root}{os.pathsep}{existing}" if existing else root
+    return env
+
+
 def _checks(repo_root: Path) -> list[tuple[str, list[str]]]:
     """The repository's own checks, discovered rather than configured.
 
@@ -247,17 +273,31 @@ def _checks(repo_root: Path) -> list[tuple[str, list[str]]]:
         "typecheck",
         [sys.executable, "-P", "-m", "mypy", "."] if _module("mypy") else None,
     )
+    # No -P on the test runners, deliberately, unlike the analyzers above.
+    # -P suppresses the cwd entry on sys.path, and a flat-layout repository
+    # -- a package directory sitting beside its tests, which is most
+    # scientific Python -- needs exactly that entry to import the code under
+    # test. With -P the runner cannot import it, so the hook would block on
+    # a failure the agent has no way to fix and end up permanently
+    # non-functional there. The analyzers need -P because a planted module
+    # really does subvert their verdict; a test runner already executes the
+    # repository's own code by definition, so shadowing `unittest` buys an
+    # attacker nothing they do not already have.
     if _module("pytest"):
-        test_fallback = [sys.executable, "-P", "-m", "pytest", "-q"]
+        test_fallback = [sys.executable, "-m", "pytest", "-q"]
     elif (repo_root / "tests").is_dir():
+        # -t . makes the repository root the top-level directory, which is
+        # what lets `import mypkg` resolve for a package sitting beside its
+        # tests. Without it discovery roots itself at `tests`.
         test_fallback = [
             sys.executable,
-            "-P",
             "-m",
             "unittest",
             "discover",
             "-s",
             "tests",
+            "-t",
+            ".",
         ]
     else:
         test_fallback = None
@@ -416,6 +456,7 @@ def main() -> None:
             completed = subprocess.run(
                 argv,
                 cwd=repo_root,
+                env=_check_env(repo_root, name),
                 capture_output=True,
                 text=True,
                 timeout=remaining,

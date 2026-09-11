@@ -14,8 +14,7 @@ Preserve these invariants:
 
 Use the workflow in the parent repository while CoDev remains nested there.
 Run the test suite and compile check for every code change; under Claude
-Code a `Stop` hook checks it too, refusing up to three turns before standing
-down.
+Code a `Stop` hook checks it too.
 
 ## Build system (Bazel + Just)
 
