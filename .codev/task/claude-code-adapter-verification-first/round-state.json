@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "44652d3db0cd0aab7cf130347bdfdcf5bcec8c9a",
+  "base_snapshot": "d4385309a62e7988a944c925986ce8ba41b372f6",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -81,9 +81,25 @@
       "round": 9,
       "slice_id": "permission-surface",
       "timestamp": "2026-09-10T22:23:27Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Authorised by Martin Urban 2026-09-11. Rollback is deleting two entries from .claude/settings.json and two hook scripts; every hook fails open, so a partial or failed rollout degrades to today's behaviour rather than blocking work.",
+      "round": 14,
+      "slice_id": "evidence-hooks",
+      "timestamp": "2026-09-11T16:44:08Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Authorised by Martin Urban 2026-09-11. The hooks are short-lived serial subprocesses; the only shared state is an append-only JSONL log whose writer never raises, and require_green.py runs its checks strictly in sequence.",
+      "round": 14,
+      "slice_id": "evidence-hooks",
+      "timestamp": "2026-09-11T16:44:16Z"
     }
   ],
-  "current_round": 14,
+  "current_round": 15,
   "current_slice": "evidence-hooks",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -233,6 +249,20 @@
       "reason": "Absorb the slice-advance bookkeeping commit (advance_slice/start_slice_branch don't auto-commit) before starting slice 3 work",
       "timestamp": "2026-09-11T10:43:57Z",
       "to_round": 14
+    },
+    {
+      "by": "urban233",
+      "from_round": 14,
+      "head": "d4385309a62e7988a944c925986ce8ba41b372f6",
+      "max_rounds": {
+        "inner": 12,
+        "outer": 12
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Two CI-repair commits (Windows cross-platform fixes) landed after round 14's reviewer verdict was recorded against 0d93e72. Both were authorised by Martin Urban in-session. Re-baselining onto d438530 so the three specialists' outer-loop round can be recorded against the snapshot they actually reviewed.",
+      "timestamp": "2026-09-11T17:00:50Z",
+      "to_round": 15
     }
   ],
   "reviewer": null,
@@ -714,6 +744,13 @@
         "head_snapshot": "0d93e721085dd819613697800f95196bc5266e01"
       },
       "round": 14,
+      "slice_id": "evidence-hooks"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 15,
       "slice_id": "evidence-hooks"
     }
   ],
