@@ -1363,7 +1363,16 @@
         }
       },
       "round": 21,
-      "slice_id": "recovery-and-budget"
+      "slice_id": "recovery-and-budget",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "f1": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
