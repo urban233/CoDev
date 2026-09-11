@@ -109,11 +109,6 @@
     "outer": 12
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-11T22:27:42Z",
-    "head": "43bae74d0e930b46e85382c8f85469b2d2958a87",
-    "reason": "Absorbing the slice's build commits (steps 1-9 of the accepted plan, built directly per pair style) as pair work."
-  },
   "reopens": [
     {
       "by": null,
