@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "b8e5385c11556e1d8fdf0d3824a1979fc592cef6",
+  "base_snapshot": "8e89ddebd92ffe906f97dd71e89ed6abe9a2436f",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -83,8 +83,8 @@
       "timestamp": "2026-09-10T22:23:27Z"
     }
   ],
-  "current_round": 12,
-  "current_slice": "permission-surface",
+  "current_round": 13,
+  "current_slice": "evidence-hooks",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
@@ -627,6 +627,13 @@
       },
       "round": 12,
       "slice_id": "permission-surface"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 13,
+      "slice_id": "evidence-hooks"
     }
   ],
   "slice_styles": {
