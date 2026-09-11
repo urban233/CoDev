@@ -10,11 +10,6 @@
     "outer": 2
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-11T18:13:21Z",
-    "head": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
-    "reason": "Recording the interruption before resume, per the navigator's own option text."
-  },
   "reopens": [
     {
       "by": null,

@@ -134,6 +134,12 @@ class GateDecision:
     # not reach the decision log, or `codev status`'s gate summary would
     # count every unrelated tool call as an allow.
     recorded: bool = True
+    # Only set on `degraded`, and the whole point of it. `infrastructure`
+    # means the gate genuinely could not be consulted, which is a legitimate
+    # fail-open; `internal_error` means it was consulted and raised, which is
+    # a defect. Filing both under one label is what let 508 unchecked calls
+    # go unnoticed, and then let their replacement do the same.
+    failure_class: str = ""
 
     @property
     def asks(self) -> bool:
@@ -145,12 +151,15 @@ class GateDecision:
         return self.decision in ("allow", "degraded")
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "gate": self.gate,
             "decision": self.decision,
             "reason": self.reason,
             "recorded": self.recorded,
         }
+        if self.failure_class:
+            payload["failure_class"] = self.failure_class
+        return payload
 
 
 def _allow(gate: str, reason: str) -> GateDecision:
@@ -161,11 +170,13 @@ def _not_applicable(gate: str, reason: str) -> GateDecision:
     return GateDecision("allow", reason, gate, recorded=False)
 
 
-def _degraded(gate: str, reason: str) -> GateDecision:
+def _degraded(
+    gate: str, reason: str, failure_class: str = "infrastructure"
+) -> GateDecision:
     """The gate could not decide. It allows -- a guardrail that errors must
     never block work -- but this is not a guardrail that passed, and the two
     must not look the same in the record."""
-    return GateDecision("degraded", reason, gate)
+    return GateDecision("degraded", reason, gate, failure_class=failure_class)
 
 
 def _ask(gate: str, reason: str) -> GateDecision:
@@ -297,18 +308,29 @@ def _has_populated_task_table(section_lines: list[str]) -> bool:
     return any(line.strip().startswith("|") for line in section_lines)
 
 
-def _relative(path: Path, repo_root: Path) -> Path:
-    """`path` expressed relative to the repository root.
+def _relative(path: Path, repo_root: Path) -> Path | None:
+    """`path` expressed relative to the repository root, or None if outside it.
 
     Both sides are resolved before comparing. The root comes from git, which
     reports the physical path, while a tool payload reports whatever path the
     session was using -- on macOS those differ for anything under a temporary
     directory, and comparing them unresolved fails on a difference that is not
     real.
+
+    None rather than a raised `ValueError`, because a path outside the
+    repository is an ordinary thing for a tool call to name -- a scratchpad
+    file, an agent's own memory directory, anything under a temporary
+    directory -- and not a condition any of these gates govern. Raising made
+    every such call record `degraded` and pass unchecked: 56 of 80 gate calls
+    on 2026-09-11, once the unresolvable-`codev` cause was fixed. Each caller
+    now decides what "outside this repository" means for its own question.
     """
     if not path.is_absolute():
         return path
-    return path.resolve().relative_to(repo_root.resolve())
+    try:
+        return path.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return None
 
 
 def _wave_plan_violation(repo_root: Path) -> Path | None:
@@ -358,7 +380,8 @@ def _target_content_after_edit(
         return None
     candidate = Path(file_path)
     relative = _relative(candidate, repo_root)
-    if not relative.match(_WAVE_PLAN_GLOB):
+    # A file outside the repository cannot be one of its wave plans.
+    if relative is None or not relative.match(_WAVE_PLAN_GLOB):
         return None
 
     if tool_name == "Write":
@@ -503,6 +526,12 @@ def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
     if file_path:
         candidate = Path(file_path)
         relative = _relative(candidate, repo_root)
+        if relative is None:
+            # This gate exists to stop repository source being edited without
+            # a plan. A path outside the repository is not that, so it is
+            # allowed -- and recorded, so "the gate decided nothing" and "the
+            # gate decided yes" stay distinguishable in the log.
+            return _allow(gate, "outside-repo")
         if relative.parts and relative.parts[0] == "docs":
             return _allow(gate, "docs")
 
@@ -518,7 +547,8 @@ def _plan_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
     # not made safe by the change being small, and `--allow-dirty` style
     # mistakes are exactly what the bash arm exists to catch.
     if reason == "edit":
-        if file_path and _is_always_planned(_relative(Path(file_path), repo_root)):
+        always_planned = _relative(Path(file_path), repo_root) if file_path else None
+        if always_planned is not None and _is_always_planned(always_planned):
             return _ask(
                 gate,
                 f"{file_path} is a dependency manifest, CI definition, or "
@@ -570,7 +600,7 @@ def _wave_shape_gate(payload: dict[str, Any], repo_root: Path) -> GateDecision:
             return _allow(gate, "no-violation")
         return _ask(
             gate,
-            f"{_relative(violation, repo_root)} has a populated task "
+            f"{_relative(violation, repo_root) or violation} has a populated task "
             "table in its 'Later waves' section -- detail only the "
             "current wave before creating issues. If this issue "
             "genuinely is for the current wave and the other section "
@@ -650,4 +680,4 @@ def check(gate: str, payload: Any, *, target: Path) -> GateDecision:
     try:
         return _GATES[gate](payload, repo_root)
     except Exception as error:  # noqa: BLE001 - guardrails fail open
-        return _degraded(gate, f"internal error: {error}")
+        return _degraded(gate, f"internal error: {error}", "internal_error")
