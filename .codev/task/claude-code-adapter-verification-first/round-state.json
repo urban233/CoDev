@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+  "base_snapshot": "f7bc59a88f6dca81c9a9eeb69cb78e0e30748870",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -99,13 +99,13 @@
       "timestamp": "2026-09-11T16:44:16Z"
     }
   ],
-  "current_round": 17,
+  "current_round": 18,
   "current_slice": "recovery-and-budget",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 12,
+    "inner": 13,
     "outer": 12
   },
   "owner": "urban233",
@@ -282,6 +282,20 @@
       "reason": "Martin Urban authorised fixing five of the outer-loop round's non-blocking findings after round 15 had already been recorded READY_FOR_HUMAN_APPROVAL. Those corrections, plus four regressions the re-verification found in them, moved the head from 67a656f to 05846e8. Re-baselining so the three specialists' re-verification can be recorded against the snapshot they actually checked.",
       "timestamp": "2026-09-11T17:53:27Z",
       "to_round": 16
+    },
+    {
+      "by": null,
+      "from_round": 17,
+      "head": "f7bc59a88f6dca81c9a9eeb69cb78e0e30748870",
+      "max_rounds": {
+        "inner": 13,
+        "outer": 12
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Reorder complete; resuming pair work on the recovery-and-budget slice.",
+      "timestamp": "2026-09-11T21:27:33Z",
+      "to_round": 18
     }
   ],
   "reviewer": null,
@@ -1121,6 +1135,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 17,
+      "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 18,
       "slice_id": "recovery-and-budget"
     }
   ],
