@@ -139,7 +139,7 @@
       "timestamp": "2026-09-12T14:25:29Z"
     }
   ],
-  "current_round": 28,
+  "current_round": 29,
   "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
@@ -1735,6 +1735,46 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist independently re-ran _dependency_gap_findings over this repository's 121 tracked .py files with the pre-fix and post-fix hook loaded side by side: 15 findings -> 2, all 12 _hook_common false positives (six files in .claude/hooks/ plus their six bundle mirrors) plus the seeded-defect fixture gone. Both call sites of _is_first_party are updated (grep across the tree). Bundle mirror confirmed byte-identical at head. Commit 7a89855 touches exactly three files (the hook, its bundle mirror, the test file); only later commits are round-state.json bookkeeping. ruff check and mypy both clean. No blocking defect introduced by the fix: adding importer_dir as a resolution base can in principle mask a genuine undeclared import shadowed by a same-named local sibling module, but that is the same heuristic tradeoff the pre-existing repo_root base already carries, and errs toward under-blocking -- the safe direction for a Stop hook. One non-blocking, out-of-scope observation recorded (sg-r29-1).",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "No error-handling surface changed by this fix. _is_first_party gained a required positional Path parameter; its body still uses only is_dir()/is_file(), which do not raise for a nonexistent path. The caller passes absolute.parent, computed after the existing absolute.exists() guard, so importer_dir always names an existing directory.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "The new regression test (test_never_flags_a_sibling_module_in_the_importing_files_own_directory) is non-vacuous: reconstructed a minimal tree holding the HEAD test file against the pre-fix bundle hook and confirmed exactly this one test fails (AssertionError: 'allow' != 'block'), with the other 16 passing. At head the full suite is 17/17, including both pre-existing first-party tests (flat layout, src layout) unregressed. Pure addition (+18 lines), no existing test weakened, matches this repository's testing-craft conventions (behavioural name, no internals coupling, docstring naming the concrete production shape reproduced).",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r29-1",
+            "location": ".claude/hooks/require_green.py :: _is_first_party (and the byte-identical bundle mirror)",
+            "rank": 1,
+            "summary": "Residual dependency-gap false positives of a different import shape than sg-r28-1, surfaced only because this correction round's re-verification empirically re-ran the check. _dependency_gap_findings over this repository's own 121 tracked .py files drops from 15 findings pre-fix to 2 post-fix, exactly as claimed. The 2 that remain (.codev/eval/tasks/normalize-slug and test-double-fidelity fixtures) have the first-party module sitting one directory ABOVE the importing test file rather than beside it -- pre-existing (identical pre-fix), explicitly disclosed by the builder as an out-of-scope limitation, and not the shape sg-r28-1 named. Recorded for visibility only; does not qualify the resolution of sg-r28-1."
+          }
+        ],
+        "head_snapshot": "7a89855e446b9d41cdc22920fca4c254e085088b",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
+      "round": 29,
+      "slice_id": "scientific-gates"
     }
   ],
   "slice_styles": {
