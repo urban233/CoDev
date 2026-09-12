@@ -125,6 +125,11 @@
     "outer": 13
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-12T11:55:12Z",
+    "head": "1aca1b9",
+    "reason": "Drafting and then accepting the slice-4 (scientific-gates) implementation plan produced two ordinary content commits (25c0423, 1aca1b9) outside the tracked builder/reviewer round flow -- expected for a plan-writing step, not new content drift. Re-baselining onto the accepted plan's own head before builder dispatch."
+  },
   "reopens": [
     {
       "by": null,
