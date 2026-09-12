@@ -73,6 +73,33 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore_position.py\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/checkpoint_state.py\""
+          }
+        ]
+      }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/statusline.py\""
+  },
+  "worktree": {
+    "baseRef": "head"
   }
 }

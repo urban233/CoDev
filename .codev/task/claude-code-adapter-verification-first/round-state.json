@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "05846e8e39691a7a0c3175657b33cb5e7cc69f52",
+  "base_snapshot": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -97,16 +97,32 @@
       "round": 14,
       "slice_id": "evidence-hooks",
       "timestamp": "2026-09-11T16:44:16Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Authorised by Martin Urban 2026-09-12. No shared mutable state, threads, or async in this diff -- each hook is a standalone subprocess invocation reading its own stdin; isolation:worktree structurally prevents cross-specialist file collisions rather than requiring runtime concurrency control.",
+      "round": 20,
+      "slice_id": "recovery-and-budget",
+      "timestamp": "2026-09-11T22:48:15Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "Authorised by Martin Urban 2026-09-12. Every new hook fails open on infrastructure error, matching the existing pattern; rollback is deleting the new settings.json entries and hook scripts, stated explicitly in the plan's own Risks and rollout section. No migration, no data change, no production exposure.",
+      "round": 20,
+      "slice_id": "recovery-and-budget",
+      "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 16,
-  "current_slice": "evidence-hooks",
+  "current_round": 22,
+  "current_slice": "recovery-and-budget",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 12,
-    "outer": 12
+    "inner": 15,
+    "outer": 13
   },
   "owner": "urban233",
   "reopens": [
@@ -277,6 +293,62 @@
       "reason": "Martin Urban authorised fixing five of the outer-loop round's non-blocking findings after round 15 had already been recorded READY_FOR_HUMAN_APPROVAL. Those corrections, plus four regressions the re-verification found in them, moved the head from 67a656f to 05846e8. Re-baselining so the three specialists' re-verification can be recorded against the snapshot they actually checked.",
       "timestamp": "2026-09-11T17:53:27Z",
       "to_round": 16
+    },
+    {
+      "by": null,
+      "from_round": 17,
+      "head": "f7bc59a88f6dca81c9a9eeb69cb78e0e30748870",
+      "max_rounds": {
+        "inner": 13,
+        "outer": 12
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Reorder complete; resuming pair work on the recovery-and-budget slice.",
+      "timestamp": "2026-09-11T21:27:33Z",
+      "to_round": 18
+    },
+    {
+      "by": null,
+      "from_round": 18,
+      "head": "31b81bd31b8a68f59035132ea573444ca960edb1",
+      "max_rounds": {
+        "inner": 14,
+        "outer": 12
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Resuming pair work on recovery-and-budget now that the slice plan is accepted.",
+      "timestamp": "2026-09-11T21:44:16Z",
+      "to_round": 19
+    },
+    {
+      "by": null,
+      "from_round": 19,
+      "head": "43bae74d0e930b46e85382c8f85469b2d2958a87",
+      "max_rounds": {
+        "inner": 15,
+        "outer": 12
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Resuming to record builder evidence for the completed build.",
+      "timestamp": "2026-09-11T22:27:42Z",
+      "to_round": 20
+    },
+    {
+      "by": "urban233",
+      "from_round": 21,
+      "head": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
+      "max_rounds": {
+        "inner": 15,
+        "outer": 13
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 21 (recovery-and-budget, outer phase) onto e903a15 to absorb the correction-round fix (6d5cbfc), the unrelated PR #59 merge, and the CI-nudge commit -- none of which were fed through codev task record. The outer-loop specialists' findings from round 21 are addressed by 6d5cbfc; this round exists to record that against the snapshot it actually reflects.",
+      "timestamp": "2026-09-12T11:16:20Z",
+      "to_round": 22
     }
   ],
   "reviewer": null,
@@ -1110,6 +1182,218 @@
       },
       "round": 16,
       "slice_id": "evidence-hooks"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 17,
+      "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 18,
+      "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 19,
+      "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "evidence": "# Builder evidence -- slice `recovery-and-budget`\n\n**Base snapshot:** `99a46f1` (evidence-hooks landed)\n**Work style:** `pair`\n**Plan:** `docs/codev/task/claude-code-adapter-verification-first/recovery-and-budget-implementation-plan.md`, Status: Accepted\n\n## Delivered\n\n- **`.claude/hooks/_gate_common.py`**, extracted from the three existing\n  gate hooks (`require_plan.py`, `require_small_change.py`,\n  `require_wave_shape.py`), which were byte-identical except their\n  docstring and `_HOOK_NAME`/`_GATE` constants. Closes issue #65.\n- **`SessionStart` -> `restore_position.py`**. Runs `codev next --json\n  --no-github` and surfaces the position via `hookSpecificOutput.systemMessage`\n  (not `additionalContext` -- confirmed against the current Claude Code\n  docs that `SessionStart` does not support it). On `source: \"compact\"`\n  with `codev` unreachable, falls back to the checkpoint file\n  `checkpoint_state.py` wrote.\n- **`PreCompact` -> `checkpoint_state.py`**. Writes the same position to\n  `<scratchpad_dir>/checkpoint.json` -- both `PreCompact` and the following\n  `SessionStart` receive the same `scratchpad_dir`, confirmed against the\n  docs, needing no gitignore entry since it is outside the repository.\n- **`statusLine` -> `statusline.py`**. One line: slice, position (which\n  embeds the round -- `codev next`'s `NextAction` has no separate round\n  field), and `context_window.used_percentage` from the statusLine payload\n  directly. Reads via `codev next --json --no-github` (measured ~0.13s)\n  rather than `round-state.json` directly, a deliberate deviation from the\n  plan's proposed shortcut once measurement showed the subprocess cost\n  negligible against the coupling it would have avoided.\n- **`isolation: worktree` on all five specialist agents, shipped together\n  with `\"worktree\": {\"baseRef\": \"head\"}`** in `.claude/settings.json`.\n  Without the second setting, the first would have silently checked every\n  specialist out from `main` instead of the branch under review --\n  confirmed against the current worktrees.md docs before writing either.\n- **`scripts/verify_claude_code_compat.py`** extended with `maxTurns`,\n  `permissionMode`, `isolation`, `worktree`, `baseRef`, `statusLine`,\n  `effort`. `memory` and per-subagent `hooks` deliberately not added --\n  both are common words that would pass trivially via coincidental\n  substring match, which is worse than no marker.\n- **`tests/test_instruction_budget.py`**, measuring the five sources the\n  parent plan's research originally measured, in bytes, against a recorded\n  baseline (`.codev/instruction-budget-baseline.json`) and a derived\n  ceiling.\n\n## Changed\n\n15 tracked files modified, 8 added (hooks + bundle mirrors, `settings.json`\n+ mirror, five specialist agent files + bundle mirrors, `BUILD.bazel`,\n`tests/BUILD.bazel`, `verify_claude_code_compat.py`, four new test files,\n`tests/test_claude_hook.py`, `tests/test_installer.py`, `CHANGELOG.md`).\n\n## Validation actually run\n\n| Command | Outcome |\n|---|---|\n| `just fmt-check` | 245 files already formatted |\n| `just lint` | All checks passed |\n| `just typecheck` | Success: no issues found in 58 source files |\n| `just test` | 39 of 39 tests pass |\n| `scripts/verify_self_install.py` | No changes; preview complete |\n| `scripts/verify_claude_code_compat.py` | 35/35 markers present against the real published CLI, 2.1.269 |\n\nManual, on this repository:\n\n- Ran `require_plan.py` (now a `_gate_common.py` shim) end to end; confirmed\n  the real gate decision (`allow`/`precise-task-plan`) still reaches\n  `.codev/hooks/decisions.jsonl`, not just a clean exit.\n- Ran `restore_position.py`/`checkpoint_state.py`/`statusline.py` by hand\n  against this repository's real state (not only the test fixtures): all\n  three produced correct output; `restore_position.py`'s checkpoint\n  fallback confirmed with `codev` genuinely unreachable\n  (`CODEV_CLI=/nonexistent/codev`).\n\nMutation checks:\n\n- `tests/test_installer.py::test_specialists_install_isolated_and_correctly_based`:\n  removing `worktree.baseRef` and, separately, removing `isolation: worktree`\n  from one specialist file each independently fail the test (confirmed both\n  directions, then restored).\n- `_gate_common.py` extraction: the existing `CliResolutionTests` (5 tests)\n  pass unmodified against the refactored hooks -- the regression guard for\n  the extraction itself.\n\n## Acceptance evidence\n\n| Plan criterion | Evidence |\n|---|---|\n| Position surfaces at every session start | `RestorePositionTests` (5 tests), manual run |\n| Compaction recovery via scratchpad, not `.codev/` | Confirmed against Claude Code's `hooks.md`; `test_falls_back_to_the_checkpoint_after_a_compaction` |\n| Status line shows slice/position/context | `StatuslineTests` (4 tests), manual run |\n| Specialists isolated AND correctly based | `test_specialists_install_isolated_and_correctly_based`, mutation-checked both ways |\n| Compat script covers the new surface | 35/35 markers against the real CLI |\n| `_gate_common.py` extraction is behavior-neutral | Existing `CliResolutionTests` pass unmodified |\n| Instruction budget is measured, not hand-tracked | `tests/test_instruction_budget.py`; real total (34,389 bytes) found over the derived ceiling (33,100) |\n\n## Scope deviations\n\n1. **`statusline.py` shells out to `codev next --json` rather than reading\n   `round-state.json` directly**, as the plan proposed. Measured at ~0.13s;\n   the plan's own proposed shortcut was not built once this measurement\n   showed the coupling to internal `codev_workflow` modules cost more than\n   it would have saved. Recorded in the file's own docstring.\n2. **Step 8 (retire redundant prose) did not close the instruction-budget\n   gap**, and per the plan's own \"Stop if\" clause this was surfaced rather\n   than forced. The developer chose (2026-09-12): file it as a follow-up\n   (issue #69), ship the rest of the slice as-is. The ceiling assertion in\n   `test_instruction_budget.py` is `@unittest.skip`-ed with that reasoning;\n   the other two budget tests are green.\n3. **Two completion-evidence items need the developer's own session, not\n   mine**: manual confirmation of the three new hooks in a real Claude Code\n   session (this session cannot trigger its own `SessionStart`/`PreCompact`\n   retroactively), and confirming a specialist's worktree is cut from the\n   reviewed branch in a live outer-loop review (needs a real open pull\n   request). Both left unchecked in the plan's completion evidence with\n   that reasoning, not silently marked done.\n\n## Known limitations\n\n- **`checkpoint_state.py`'s guarantee is narrower than D3's incident class\n  implies.** It captures machine-readable task/plan position, not the\n  general \"a mid-session rule vanished\" case E12 cites (that would need to\n  parse the transcript, not shell out to `codev`) -- stated in the hook's\n  own docstring, not left implicit.\n- **The instruction-budget overage is real and unresolved**, tracked as\n  issue #69 rather than fixed in this slice.\n\n## Review state\n\nNot independently reviewed. No commit, push, or merge performed by me\nbeyond this round's own bookkeeping.\n"
+        },
+        "head_snapshot": "bbb6795ae6ae3a466acb2dddb1e36c2a2f7e2092"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "Independently re-ran fmt-check/lint/typecheck/test (39/39 pass). Confirmed the four brief questions: _gate_common.py extraction preserves behavior (existing CliResolutionTests pass unmodified); restore_position.py/checkpoint_state.py fail open correctly and use scratchpad_dir and systemMessage (not additionalContext) as the current Claude Code docs require; isolation: worktree and worktree.baseRef: \"head\" ship together on all five specialists and in settings.json; the instruction-budget ceiling test's skip reasoning matches an independently re-run _measure() (34,389 bytes). Bundle/installed parity confirmed byte-identical across all changed .claude/ files.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "38d0cd76f3e9eaf30a5de5583137cdc532c16911"
+      },
+      "round": 20,
+      "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist: one blocking finding (f1) -- the three new hooks reproduce, in this same slice, the exact triplication pattern the slice's own _gate_common.py extraction was justified by ending. Non-blocking f8 (plan's Allowed scope list omits three touched files, each individually defensible).",
+            "passed": false
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist: extraction verified verbatim against base sources (99a46f1's three gate hooks were byte-identical except docstring/_HOOK_NAME/_GATE); compact-only checkpoint fallback verified correct against the real Claude Code binary's session-scoped scratchpad_dir mechanism (session-id-keyed directory, so an unrelated fresh session cannot see another session's checkpoint). All 26 existing hook tests plus 14 new hook tests pass. Non-blocking findings f9, f11 recorded.",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "correctness-tests-specialist: every claimed fail-open branch read and exercised by a passing test across all three new hooks (unreachable CLI, malformed stdin, missing scratchpad_dir, unwritable scratchpad, non-zero/blocked exit codes). Escaped-exception case also verified safe: Claude Code treats a hook's own crash as fail-open for both PreToolUse and SessionStart.",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist: extraction itself confirmed genuinely behavior-neutral with no new coupling beyond necessary; the statusline.py deviation from the plan (shelling out to codev next rather than reading round-state.json directly) is a well-documented improvement, not a defect. Five non-blocking findings recorded (f2, f3, f4, f6, f7), none blocking on their own -- all are naming/staleness/duplication issues rather than defects in current behavior.",
+            "passed": true
+          },
+          "security_privacy_data_compatibility": {
+            "evidence": "security-data-specialist: verified the isolation:worktree + worktree.baseRef:head reasoning directly against the live worktrees.md contract (not just the plan's citation), and empirically confirmed it live -- the specialist's own dispatch worktree was correctly cut from the PR head, not main. Bundle/installed parity byte-identical across all 13 changed .claude/ files. checkpoint_state.py's use of the caller-supplied scratchpad_dir carries no path-traversal/injection risk (trusted local host input, uid-scoped 0700 directory, benign written content -- verified by inspecting the real written JSON). Full-diff secret scan clean. Two non-blocking findings recorded: f10 (silent version-gated inertness on older Claude Code builds) and f12 (.claude/worktrees/ not in the tracked/managed gitignore, already mitigated by Claude Code's own runtime exclude).",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "correctness-tests-specialist and architecture-maintainability-specialist: suite is right-sized, subprocess-level against real hook files with a real codev, justified use of mock only for an unreachable platform branch. Two non-blocking gaps recorded: f9 (an assertion too weak to catch its own named regression) and f5 (a redundant/over-strict assertion in the new budget test).",
+            "passed": true
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f1",
+            "location": ".claude/hooks/restore_position.py:67-93, checkpoint_state.py:63-86, statusline.py:59-80",
+            "rank": 1,
+            "summary": "The three new hooks each define their own byte-identical (or near-identical) ~20-line codev-next-json runner -- exactly the triplication this slice's own _gate_common.py extraction was justified by ending for the three existing gate hooks. Extract one shared codev_next(repo_root, *, timeout) into the shared module."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f2",
+            "location": ".claude/hooks/_gate_common.py:29",
+            "rank": 2,
+            "summary": "The module's docstring still says 'Shared plumbing for the PreToolUse gate hooks', which is now false for three of its six clients (restore_position.py, checkpoint_state.py, statusline.py use only codev_argv, not the gate machinery). Rename or restructure so the name matches the real dependency shape -- best done alongside fixing f1."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f3",
+            "location": "tests/test_instruction_budget.py:97-107",
+            "rank": 3,
+            "summary": "The skip reason says Decision 1 'is not yet resolved by the developer' and lists three still-open options, but the plan's completion evidence and CHANGELOG both record that it WAS resolved on 2026-09-12 (issue #69 filed). The skip text contradicts the record it documents, and since a skipped test is invisible in just test's normal output, this stale text is the only in-repo pointer a future reader gets."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f4",
+            "location": "docs/plans/claude-code-adapter-verification-first.md:318-321,353",
+            "rank": 4,
+            "summary": "The parent plan still states an unqualified '7,225 against a 7,500 ceiling -- 275 tokens of headroom' and 'every hook added must retire the prose it replaces, in the same slice' rule. This PR's own measurement (34,389 bytes over a 33,100-byte derived ceiling) disproves both, and scientific-gates builds next against a ledger row known to be wrong. The reorder got a dated note in this same file; the budget finding should too."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f5",
+            "location": "tests/test_instruction_budget.py:119,136-150",
+            "rank": 5,
+            "summary": "The strict-equality baseline-accuracy assertion subsumes the non-increase (<=) assertion -- the first can never fail without the second also failing, making the non-increase test dead as a detector. It also means any edit to AGENTS.md/CLAUDE.md/guidelines/skill or agent descriptions now red-builds until the baseline JSON is hand-updated to match, which is close to what the hand-maintained ledger already cost. Collapse to one assertion with the intended semantics, or document that lockstep updating is deliberate."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f6",
+            "location": ".claude/hooks/checkpoint_state.py:60, restore_position.py:64, tests/test_checkpoint_state_hook.py:98, tests/test_restore_position_hook.py:143,168",
+            "rank": 6,
+            "summary": "The 'checkpoint.json' filename is an independently-defined string constant in four places (both hooks, both test files) with no single source of truth. Neither hook's own test does a writer-to-reader round trip, so renaming one side would silently break compaction recovery with a green suite. Move the constant into the shared module."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "f7",
+            "location": ".claude/hooks/format_touched.py:105 (+ bundle mirror)",
+            "rank": 7,
+            "summary": "Still reads 'Same reasoning as _codev_argv in the gate hooks', a name that exists nowhere in the repository after this slice's rename to codev_argv. format_touched.py is already in this slice's allowed scope."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "f8",
+            "location": "docs/codev/task/claude-code-adapter-verification-first/recovery-and-budget-implementation-plan.md:49-55,292",
+            "rank": 8,
+            "summary": "Three touched files are outside the plan's enumerated 'Allowed scope' list: .codev/instruction-budget-baseline.json, root BUILD.bazel, and docs/plans/claude-code-adapter-verification-first.md. Each is individually defensible (described by step 7, mechanically required by the new py_test target, and the reorder record respectively) but the list should be updated to match, since the completion checklist claims the diff stays inside it."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "f9",
+            "location": "tests/test_checkpoint_state_hook.py:133-139",
+            "rank": 9,
+            "summary": "test_tolerates_an_unwritable_scratchpad asserts only returncode == 0, which passes vacuously if _next_position returns None (the write path it names is never reached). Assert result.stderr == '' (or absence of a traceback) so it actually catches a removed except OSError."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f10",
+            "location": ".claude/hooks/checkpoint_state.py:98-100",
+            "rank": 10,
+            "summary": "On Claude Code versions whose PreCompact payload predates the snake_case scratchpad_dir key (confirmed absent in the locally-installed 2.1.245, present in 2.1.269), the checkpoint path is silently inert -- no crash, but the feature's headline guarantee is version-gated in a way nothing in the repo asserts or documents."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "f11",
+            "location": ".claude/hooks/restore_position.py:110",
+            "rank": 11,
+            "summary": "A checkpoint dict lacking a 'position' key would render 'CoDev position: None'. Not reachable from real data (NextAction declares position/recommendation/reason non-optional), noted for completeness only."
+          },
+          {
+            "blocking": false,
+            "category": "security_privacy_data_compatibility",
+            "expansion_reason": null,
+            "id": "f12",
+            "location": ".gitignore, src/codev_workflow/installer.py:166-188 (GITIGNORE_BLOCK)",
+            "rank": 12,
+            "summary": "'.claude/worktrees/' is absent from both the tracked .gitignore and the installer's managed GITIGNORE_BLOCK, and codev git commit's git add -A would stage a worktree as a gitlink if created there. Already mitigated in practice by Claude Code's own runtime-managed .git/info/exclude, so no live exposure on a current CLI, but cheap insurance for older installs."
+          }
+        ],
+        "head_snapshot": "843966a9bda548ebfcfba32b67c06e74d9fca2f8",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "security-data-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
+      "round": 21,
+      "slice_id": "recovery-and-budget",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "f1": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 22,
+      "slice_id": "recovery-and-budget"
     }
   ],
   "slice_styles": {
@@ -1123,8 +1407,8 @@
     "work-style-and-plan-tiering",
     "permission-surface",
     "evidence-hooks",
-    "scientific-gates",
-    "recovery-and-budget"
+    "recovery-and-budget",
+    "scientific-gates"
   ],
   "status": "in_progress",
   "summary": "Rebalance the Claude Code adapter toward verification-first execution",

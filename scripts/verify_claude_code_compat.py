@@ -90,6 +90,27 @@ _EXPECTED_DISCOVERY_PATHS = (
 )
 _EXPECTED_MEMORY_FILES = ("AGENTS.md", "CLAUDE.md", "CLAUDE.local.md")
 _EXPECTED_ENV_VARS = ("CLAUDE_PROJECT_DIR",)
+# Frontmatter/settings keys the bundle relies on that predate this check:
+# `maxTurns`/`permissionMode` on the five specialist subagents, and
+# `isolation`/`worktree`/`baseRef`/`statusLine` added by this slice. `effort`
+# is not used by the bundle yet, named here only to watch for drift before
+# it starts relying on it too.
+#
+# The parent plan's own repository evidence also named `memory` and
+# per-subagent `hooks` as undocumented surface. Deliberately not added as
+# markers: both are common English words with no distinctive spelling, so a
+# substring search would almost certainly find them already, coincidentally,
+# somewhere else in the binary -- a marker that can never fail is worse than
+# no marker, since it reads as coverage this check does not actually have.
+_EXPECTED_FRONTMATTER_SURFACE = (
+    "maxTurns",
+    "permissionMode",
+    "isolation",
+    "worktree",
+    "baseRef",
+    "statusLine",
+    "effort",
+)
 
 _ALL_EXPECTED_MARKERS = (
     _EXPECTED_HOOK_EVENTS
@@ -97,6 +118,7 @@ _ALL_EXPECTED_MARKERS = (
     + _EXPECTED_PERMISSION_SURFACE
     + _EXPECTED_DISCOVERY_PATHS
     + _EXPECTED_MEMORY_FILES
+    + _EXPECTED_FRONTMATTER_SURFACE
     + _EXPECTED_ENV_VARS
 )
 

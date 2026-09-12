@@ -573,11 +573,15 @@ class InstallerTests(unittest.TestCase):
                 ".claude/agents/security-data-specialist.md",
                 ".claude/commands/pr-review.md",
                 ".claude/settings.json",
+                ".claude/hooks/_hook_common.py",
                 ".claude/hooks/require_plan.py",
                 ".claude/hooks/require_wave_shape.py",
                 ".claude/hooks/require_small_change.py",
                 ".claude/hooks/require_green.py",
                 ".claude/hooks/format_touched.py",
+                ".claude/hooks/restore_position.py",
+                ".claude/hooks/checkpoint_state.py",
+                ".claude/hooks/statusline.py",
                 ".claude/CLAUDE.md",
             },
             {
@@ -621,6 +625,25 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("audit-google-python-style", content)
             self.assertNotIn("audit-google-typescript-style", content)
         self.assertTrue(installer.check_project(self.target).ok)
+
+    def test_specialists_install_isolated_and_correctly_based(self) -> None:
+        """`isolation: worktree` alone branches new worktrees from the
+        repository's default branch, not from whichever branch dispatched
+        the subagent -- so without `worktree.baseRef: "head"` alongside it,
+        every one of these five would silently review `main` instead of the
+        pull request they were dispatched against. Both must install
+        together, not just the one that is easy to notice missing."""
+        self.install(("claude",))
+
+        settings = json.loads((self.target / ".claude/settings.json").read_text())
+        self.assertEqual("head", settings.get("worktree", {}).get("baseRef"))
+
+        specialists = sorted((self.target / ".claude/agents").glob("*-specialist.md"))
+        self.assertEqual(5, len(specialists))
+        for path in specialists:
+            with self.subTest(agent=path.name):
+                frontmatter = path.read_text(encoding="utf-8").split("---", 2)[1]
+                self.assertIn("isolation: worktree", frontmatter)
 
     def test_junie_managed_files_update_and_remove_safely(self) -> None:
         self.install(("junie",))
