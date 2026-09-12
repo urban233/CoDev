@@ -550,14 +550,18 @@ def _declared_dependencies(repo_root: Path) -> set[str]:
     return declared
 
 
-def _is_first_party(repo_root: Path, root_name: str) -> bool:
+def _is_first_party(repo_root: Path, root_name: str, importer_dir: Path) -> bool:
     """Whether `root_name` is this repository's own code (Decision 6).
 
-    Checked under the repository root and, if present, under `src/` --
-    covering both a flat-layout repository (a package directory beside its
-    tests) and the "src layout" this repository itself uses.
+    Checked under the repository root, under `src/` if present, and beside
+    the file doing the importing -- covering a flat-layout repository (a
+    package directory beside its tests), the "src layout" this repository
+    itself uses, and a module imported from its own sibling directory (e.g.
+    this repository's own `require_plan.py` importing `_hook_common`, which
+    lives right beside it rather than at the repository root or under
+    `src/`).
     """
-    bases = [repo_root]
+    bases = [repo_root, importer_dir]
     src_dir = repo_root / "src"
     if src_dir.is_dir():
         bases.append(src_dir)
@@ -611,7 +615,7 @@ def _dependency_gap_findings(repo_root: Path, changed: list[Path]) -> list[str]:
             root
             for root in _imported_root_names(source)
             if root not in sys.stdlib_module_names
-            and not _is_first_party(repo_root, root)
+            and not _is_first_party(repo_root, root, absolute.parent)
         }
         if candidates:
             per_file.append((path, candidates))

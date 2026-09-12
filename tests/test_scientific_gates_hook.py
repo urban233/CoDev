@@ -333,6 +333,24 @@ class DependencyGapTests(unittest.TestCase):
         result = _run(self.repo)
         self.assertEqual("allow", _decision(result))
 
+    def test_never_flags_a_sibling_module_in_the_importing_files_own_directory(
+        self,
+    ) -> None:
+        """Reproduces this task's own `require_plan.py` importing
+        `_hook_common`, which lives beside it rather than at the repository
+        root or under `src/` -- neither of `_is_first_party`'s other two
+        bases would resolve it."""
+        self._write_pyproject([])
+        subdir = self.repo / "hooks"
+        subdir.mkdir()
+        (subdir / "_sibling_helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+        _commit_all(self.repo)
+        subdir.joinpath("consumer.py").write_text(
+            "import _sibling_helper\n\n_sibling_helper.VALUE\n", encoding="utf-8"
+        )
+        result = _run(self.repo)
+        self.assertEqual("allow", _decision(result))
+
     def test_applies_uniformly_to_a_test_file(self) -> None:
         """Unlike the RNG check, test files are not excluded (Decision 4): a
         missing dependency breaks a test environment just as much."""
