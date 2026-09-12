@@ -288,9 +288,9 @@ original sources in bytes, now:
 - [x] `SessionStart`, `PreCompact`, `statusLine` each covered by fixture-stdin
       tests (14 tests total, both fail-open directions and the
       compact-checkpoint fallback in both directions)
-- [ ] Manual confirmation in a real Claude Code session (startup, `/clear`,
-      `--resume`, and after a real compaction) -- needs the developer's own
-      session; not reproducible from inside this one
+- [x] Manual confirmation in a real Claude Code session (startup, `/clear`,
+      `--resume`, and after a real compaction), and the status line
+      rendering -- confirmed by Martin Urban, 2026-09-12
 - [x] All five specialist files carry `isolation: worktree`;
       `worktree.baseRef` is `"head"`; both mutation-checked
       (`tests/test_installer.py::test_specialists_install_isolated_and_correctly_based`)
