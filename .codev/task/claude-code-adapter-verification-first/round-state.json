@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "90da3cc1f4f75cbf592507a9e9c486f0e7effc80",
+  "base_snapshot": "1aca1b9",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,13 +115,13 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 24,
+  "current_round": 25,
   "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 16,
+    "inner": 17,
     "outer": 13
   },
   "owner": "urban233",
@@ -368,6 +368,20 @@
       "reason": "Re-baselining round-state's base_snapshot onto 90da3cc (the scientific-gates branch's actual current head, built on the recovery-and-budget branch's own tip 07549c5) to match what start_slice_branch recorded in git-state.json, resolving the self-inflicted mismatch from the initial advance-slice call.",
       "timestamp": "2026-09-12T11:30:18Z",
       "to_round": 24
+    },
+    {
+      "by": "urban233",
+      "from_round": 24,
+      "head": "1aca1b9",
+      "max_rounds": {
+        "inner": 17,
+        "outer": 13
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 24 (scientific-gates, inner phase) onto 1aca1b9, the commit carrying Martin Urban's Status: Accepted edit to the slice-4 plan, so builder dispatch starts from the snapshot the accepted plan actually describes.",
+      "timestamp": "2026-09-12T11:55:13Z",
+      "to_round": 25
     }
   ],
   "reviewer": null,
@@ -1426,6 +1440,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 24,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 25,
       "slice_id": "scientific-gates"
     }
   ],
