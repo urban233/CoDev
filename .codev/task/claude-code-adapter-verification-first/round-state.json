@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "0a6fa7441455f233631e0c65a75f3bf40ab48b2b",
+  "base_snapshot": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,14 +115,14 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 27,
+  "current_round": 28,
   "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
     "inner": 19,
-    "outer": 13
+    "outer": 14
   },
   "owner": "urban233",
   "paused": {
@@ -410,6 +410,20 @@
       "reason": "Re-baselining round 26 onto 0a6fa74, the commit that actually recorded the reviewer's READY_FOR_OUTER_LOOP verdict, so codev task check reads consistent state before publishing.",
       "timestamp": "2026-09-12T12:30:35Z",
       "to_round": 27
+    },
+    {
+      "by": "urban233",
+      "from_round": 27,
+      "head": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
+      "max_rounds": {
+        "inner": 19,
+        "outer": 14
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining onto 0b764cd (work_style=delegate recorded) so codev task check reads consistent state before dispatching outer-loop specialists.",
+      "timestamp": "2026-09-12T14:24:03Z",
+      "to_round": 28
     }
   ],
   "reviewer": null,
@@ -1523,6 +1537,13 @@
       "phase": "outer",
       "reviewer": null,
       "round": 27,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 28,
       "slice_id": "scientific-gates"
     }
   ],
