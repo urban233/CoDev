@@ -125,11 +125,6 @@
     "outer": 13
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-12T11:16:15Z",
-    "head": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
-    "reason": "Round 21's correction-round fix commit (6d5cbfc, addressing the CHANGES_REQUIRED findings) landed together with an unrelated main merge (PR #59, gate-decides-for-out-of-repo-paths) and a CI-nudge commit, none recorded via codev task record. Absorbing as pair work per Martin Urban's authorization."
-  },
   "reopens": [
     {
       "by": null,
