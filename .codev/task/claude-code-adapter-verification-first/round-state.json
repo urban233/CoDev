@@ -1470,7 +1470,7 @@
     "evidence-hooks": "pair",
     "permission-surface": "delegate",
     "recovery-and-budget": "pair",
-    "scientific-gates": "pair",
+    "scientific-gates": "delegate",
     "work-style-and-plan-tiering": "pair"
   },
   "slices": [
