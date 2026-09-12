@@ -125,11 +125,6 @@
     "outer": 13
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-12T11:30:18Z",
-    "head": "90da3cc1f4f75cbf592507a9e9c486f0e7effc80",
-    "reason": "Self-inflicted: advance-slice was called with --head pointing at the recovery-and-budget PR's merge commit on main (e0265aa) rather than the previous slice's own branch tip (07549c5), which is what start_slice_branch actually stacked the new scientific-gates branch on per ADR-0035. Re-baselining onto the branch's real current head."
-  },
   "reopens": [
     {
       "by": null,
@@ -1433,7 +1428,7 @@
     "evidence-hooks": "pair",
     "permission-surface": "delegate",
     "recovery-and-budget": "pair",
-    "scientific-gates": "delegate",
+    "scientific-gates": "pair",
     "work-style-and-plan-tiering": "pair"
   },
   "slices": [
