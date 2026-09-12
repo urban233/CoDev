@@ -125,11 +125,6 @@
     "outer": 13
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-12T12:30:35Z",
-    "head": "0a6fa7441455f233631e0c65a75f3bf40ab48b2b",
-    "reason": "codev task record --role reviewer's own auto-commit lands one commit past the --head value passed to it (the commit recording the round necessarily postdates the snapshot it describes), tripping stop_drift the same way reopen()'s own commits have each time in this session. Re-baselining onto the actual resulting head."
-  },
   "reopens": [
     {
       "by": null,
