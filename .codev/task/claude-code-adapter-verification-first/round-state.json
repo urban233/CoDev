@@ -125,6 +125,11 @@
     "outer": 13
   },
   "owner": "urban233",
+  "paused": {
+    "at": "2026-09-12T14:24:03Z",
+    "head": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
+    "reason": "codev task style --set delegate landed a legitimate but untracked commit (0b764cd) on top of round 27's base_snapshot (0a6fa74, set by the prior resume). Re-baselining onto the actual current head before starting outer-loop review."
+  },
   "reopens": [
     {
       "by": null,
