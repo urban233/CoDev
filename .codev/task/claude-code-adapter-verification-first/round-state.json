@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "e0265aa52fb96821d20691cd9a1563814f753c77",
+  "base_snapshot": "90da3cc1f4f75cbf592507a9e9c486f0e7effc80",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,13 +115,13 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 23,
+  "current_round": 24,
   "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 15,
+    "inner": 16,
     "outer": 13
   },
   "owner": "urban233",
@@ -354,6 +354,20 @@
       "reason": "Re-baselining round 21 (recovery-and-budget, outer phase) onto e903a15 to absorb the correction-round fix (6d5cbfc), the unrelated PR #59 merge, and the CI-nudge commit -- none of which were fed through codev task record. The outer-loop specialists' findings from round 21 are addressed by 6d5cbfc; this round exists to record that against the snapshot it actually reflects.",
       "timestamp": "2026-09-12T11:16:20Z",
       "to_round": 22
+    },
+    {
+      "by": "urban233",
+      "from_round": 23,
+      "head": "90da3cc1f4f75cbf592507a9e9c486f0e7effc80",
+      "max_rounds": {
+        "inner": 16,
+        "outer": 13
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round-state's base_snapshot onto 90da3cc (the scientific-gates branch's actual current head, built on the recovery-and-budget branch's own tip 07549c5) to match what start_slice_branch recorded in git-state.json, resolving the self-inflicted mismatch from the initial advance-slice call.",
+      "timestamp": "2026-09-12T11:30:18Z",
+      "to_round": 24
     }
   ],
   "reviewer": null,
@@ -1405,6 +1419,13 @@
       "phase": "inner",
       "reviewer": null,
       "round": 23,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 24,
       "slice_id": "scientific-gates"
     }
   ],
