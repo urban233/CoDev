@@ -113,6 +113,30 @@
       "round": 20,
       "slice_id": "recovery-and-budget",
       "timestamp": "2026-09-11T22:48:20Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Both new checks parse only this repository's own developer-authored files (pyproject.toml, requirements*.txt, the changed .py files themselves) and resolve import names via importlib.metadata.packages_distributions() -- no external input, no credentials, no network calls, no serialization surface. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Both checks are pure functions with no shared mutable state, threads, or async; each hook invocation is a standalone subprocess reading its own stdin, same as every other check in require_green.py. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No feature flag, no migration, no production exposure change: both checks are additive logic inside the existing require_green.py Stop hook (already shipped in slice 3), fail open on any infrastructure error exactly like the checks around them. Rollback is reverting the two functions and their call sites. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
     }
   ],
   "current_round": 28,
