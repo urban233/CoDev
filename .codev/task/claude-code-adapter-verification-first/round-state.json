@@ -125,11 +125,6 @@
     "outer": 13
   },
   "owner": "urban233",
-  "paused": {
-    "at": "2026-09-12T11:56:05Z",
-    "head": "f112ffd7f112b994cb961a83c2c6c2068415834e",
-    "reason": "Previous resume passed a short-form SHA (1aca1b9) as --head, which reopen() stores verbatim rather than canonicalizing (unlike start_slice_branch's own git rev-parse), so it never matched HEAD and the drift check re-tripped. Re-baselining onto the correct full SHA."
-  },
   "reopens": [
     {
       "by": null,
