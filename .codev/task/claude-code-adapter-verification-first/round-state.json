@@ -1704,7 +1704,16 @@
         }
       },
       "round": 28,
-      "slice_id": "scientific-gates"
+      "slice_id": "scientific-gates",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "sg-r28-1": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
     }
   ],
   "slice_styles": {
