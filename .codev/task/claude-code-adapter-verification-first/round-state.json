@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
+  "base_snapshot": "e0265aa52fb96821d20691cd9a1563814f753c77",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,8 +115,8 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 22,
-  "current_slice": "recovery-and-budget",
+  "current_round": 23,
+  "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
@@ -1394,6 +1394,13 @@
       "reviewer": null,
       "round": 22,
       "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 23,
+      "slice_id": "scientific-gates"
     }
   ],
   "slice_styles": {

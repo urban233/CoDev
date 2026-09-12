@@ -14,6 +14,10 @@
       "base_snapshot": "3c59946b5f62d337a153a53eb4c2d256bfbff270",
       "branch": "codev/claude-code-adapter-verification-first--recovery-and-budget"
     },
+    "scientific-gates": {
+      "base_snapshot": "07549c57e3d4026d0fa8a26033929318446ac97e",
+      "branch": "codev/claude-code-adapter-verification-first--scientific-gates"
+    },
     "work-style-and-plan-tiering": {
       "base_snapshot": "355529c9751c7c047a4e4a59008bc598006e4973",
       "branch": "codev/claude-code-adapter-verification-first--work-style-and-plan-tiering"
