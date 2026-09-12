@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "f112ffd7f112b994cb961a83c2c6c2068415834e",
+  "base_snapshot": "0a6fa7441455f233631e0c65a75f3bf40ab48b2b",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,13 +115,13 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 26,
+  "current_round": 27,
   "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 18,
+    "inner": 19,
     "outer": 13
   },
   "owner": "urban233",
@@ -396,6 +396,20 @@
       "reason": "Correcting the previous re-baseline to use the full 40-character SHA of the accepted plan's actual current head, so round-state's base_snapshot matches what git reports rather than an unexpanded short form.",
       "timestamp": "2026-09-12T11:56:05Z",
       "to_round": 26
+    },
+    {
+      "by": "urban233",
+      "from_round": 26,
+      "head": "0a6fa7441455f233631e0c65a75f3bf40ab48b2b",
+      "max_rounds": {
+        "inner": 19,
+        "outer": 13
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 26 onto 0a6fa74, the commit that actually recorded the reviewer's READY_FOR_OUTER_LOOP verdict, so codev task check reads consistent state before publishing.",
+      "timestamp": "2026-09-12T12:30:35Z",
+      "to_round": 27
     }
   ],
   "reviewer": null,
@@ -1502,6 +1516,13 @@
         "head_snapshot": "6e29162f76f4887e78110122c451d50de36359a0"
       },
       "round": 26,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 27,
       "slice_id": "scientific-gates"
     }
   ],
