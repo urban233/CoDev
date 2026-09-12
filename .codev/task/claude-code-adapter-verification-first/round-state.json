@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "43bae74d0e930b46e85382c8f85469b2d2958a87",
+  "base_snapshot": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -115,14 +115,14 @@
       "timestamp": "2026-09-11T22:48:20Z"
     }
   ],
-  "current_round": 21,
+  "current_round": 22,
   "current_slice": "recovery-and-budget",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
     "inner": 15,
-    "outer": 12
+    "outer": 13
   },
   "owner": "urban233",
   "paused": {
@@ -340,6 +340,20 @@
       "reason": "Resuming to record builder evidence for the completed build.",
       "timestamp": "2026-09-11T22:27:42Z",
       "to_round": 20
+    },
+    {
+      "by": "urban233",
+      "from_round": 21,
+      "head": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
+      "max_rounds": {
+        "inner": 15,
+        "outer": 13
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 21 (recovery-and-budget, outer phase) onto e903a15 to absorb the correction-round fix (6d5cbfc), the unrelated PR #59 merge, and the CI-nudge commit -- none of which were fed through codev task record. The outer-loop specialists' findings from round 21 are addressed by 6d5cbfc; this round exists to record that against the snapshot it actually reflects.",
+      "timestamp": "2026-09-12T11:16:20Z",
+      "to_round": 22
     }
   ],
   "reviewer": null,
@@ -1378,6 +1392,13 @@
           }
         }
       }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 22,
+      "slice_id": "recovery-and-budget"
     }
   ],
   "slice_styles": {
