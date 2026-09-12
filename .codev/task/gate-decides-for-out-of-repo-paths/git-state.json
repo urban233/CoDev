@@ -1,0 +1,10 @@
+{
+  "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+  "branch": "codev/gate-decides-for-out-of-repo-paths",
+  "slice_branches": {
+    "gate-decides-for-out-of-repo-paths": {
+      "base_snapshot": "99a46f105adbf05bafbf9f57067a9f3a4851abb5",
+      "branch": "codev/gate-decides-for-out-of-repo-paths"
+    }
+  }
+}

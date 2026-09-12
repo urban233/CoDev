@@ -77,6 +77,27 @@ Semantic Versioning.
   `_gate_common.py` since three of its six callers are not gates.
 
 ### Fixed
+- **The gate no longer crashes on a path outside the repository.**
+  `codev gate check` resolved the tool payload's file path against the
+  repository root, and `Path.relative_to` raises when the path lies outside
+  it -- so every hook recorded `degraded` and allowed the call unchecked.
+  Any scratchpad file, agent memory directory, or `/tmp` path triggered it.
+  Such a path now resolves to a recorded `allow / outside-repo`: the plan
+  gate exists to stop repository source being edited without a plan, and a
+  scratchpad write is not that. This was known and deliberately deferred at
+  8 occurrences against the 508 caused by an unresolvable `codev` on `PATH`;
+  once that cause was fixed it became **56 of 80 gate calls in a day**, so
+  the guardrail was still failing open on most calls with only the cause
+  changed.
+- **A degraded gate now says whether it was infrastructure or a defect.**
+  `failure_class` previously covered only the hook's own invocation
+  failures. An error raised *inside* `codev gate check` returned cleanly
+  with a `degraded` verdict and no classification, so it was filed
+  identically to genuinely absent tooling -- the same conflation that let
+  the original unchecked calls go unnoticed. Internal errors are now
+  recorded as `internal_error`, absent tooling as `infrastructure`, and the
+  hooks carry the gate's own classification through instead of dropping it.
+
 - **The three guardrail hooks no longer fail open because `codev` is missing
   from `PATH`.** They resolved a bare command name from whatever environment
   the host handed them, which is frequently not the shell CoDev was installed

@@ -239,8 +239,17 @@ def run_gate_hook(hook_name: str, gate: str) -> None:
         ask(reason)
         return
     if verdict == "degraded":
+        # The gate answered, and its answer was that it could not decide.
+        # Carry its own classification through rather than dropping it: an
+        # internal error filed as though the tooling were merely absent is
+        # how this class of hole stays invisible.
         log_decision(
-            repo_root, hook_name, "degraded", tool_name=tool_name, reason=reason
+            repo_root,
+            hook_name,
+            "degraded",
+            tool_name=tool_name,
+            reason=reason,
+            failure_class=str(decision.get("failure_class") or ""),
         )
         allow()
         return
