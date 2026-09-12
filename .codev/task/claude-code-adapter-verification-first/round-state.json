@@ -1559,7 +1559,28 @@
       "slice_id": "scientific-gates"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/hooks/require_green.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_green.py",
+            "tests/test_scientific_gates_hook.py"
+          ],
+          "delivered": "Fixed sg-r28-1 (blocking, correctness): _is_first_party in require_green.py gained an importer_dir parameter, added to its resolution bases alongside repo_root and src/, so a module imported from its own sibling directory (e.g. require_plan.py's `import _hook_common`) is now correctly treated as first-party instead of an undeclared dependency.",
+          "deviations": "None. Scoped exactly to sg-r28-1; no other finding, the RNG check, or CHANGELOG touched.",
+          "limitations": "Two dependency-gap false positives remain in .codev/eval fixtures (normalize-slug, test-double-fidelity) where the first-party module sits one directory above the importing test file (a tests/ subdirectory importing from its parent) rather than beside it -- a different import shape than sg-r28-1 asked to fix, out of scope for this correction round.",
+          "review_state": "AWAITING INDEPENDENT REVIEW",
+          "validation": [
+            "python3 -m unittest tests.test_scientific_gates_hook -v -> 17/17 pass (independently re-run by the orchestrating session)",
+            "Revert-and-check: the new regression test fails against the pre-fix code (AssertionError: 'allow' != 'block'), confirming it exercises the bug",
+            "Empirical repro: _dependency_gap_findings over this repository's own tracked .py files went from 15 false positives pre-fix to 2 (a different, out-of-scope shape) post-fix",
+            ".tools/just lint -> All checks passed! (independently re-run)",
+            ".tools/just typecheck -> Success: no issues found in 59 source files (independently re-run)",
+            "diff .claude/hooks/require_green.py src/codev_workflow/bundle/.claude/hooks/require_green.py -> byte-identical (independently re-run)"
+          ]
+        },
+        "head_snapshot": "7a89855e446b9d41cdc22920fca4c254e085088b"
+      },
       "phase": "outer",
       "reviewer": {
         "coverage": {
