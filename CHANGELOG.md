@@ -75,6 +75,22 @@ Semantic Versioning.
   above, which an outer-loop review caught still each defining their own
   copy of it. Named `_hook_common.py` rather than the originally-proposed
   `_gate_common.py` since three of its six callers are not gates.
+- **The same `Stop` hook now also refuses an unseeded RNG call and an
+  undeclared import, scoped to the lines a turn actually added.** A
+  `random`/`numpy.random` call with no qualifying `seed(...)`/
+  `default_rng(<seed>)` call anywhere in the file blocks in a non-test file
+  (a randomised or property-based test is a legitimate pattern, so test
+  files are excluded from this check only); a call already present at the
+  base commit is left alone, since a repository this bundle installs into
+  may already carry unseeded calls this turn did not introduce. Separately,
+  an absolute import this turn's changed files add -- test files included --
+  blocks when no declared dependency (`pyproject.toml`'s
+  `[project.dependencies]`/`[project.optional-dependencies]`, or a
+  `requirements*.txt`) provides it, resolved via
+  `importlib.metadata.packages_distributions()` rather than a hand-maintained
+  import-name-to-package-name table. Both run as pure, in-process functions
+  inside the existing hook -- no new subprocess, hook registration, or
+  `settings.json` entry.
 
 ### Fixed
 - **The gate no longer crashes on a path outside the repository.**

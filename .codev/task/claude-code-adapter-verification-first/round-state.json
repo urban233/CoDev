@@ -1,5 +1,5 @@
 {
-  "base_snapshot": "e903a152bd0890f95b4a23b14d1e0b81a581ac5a",
+  "base_snapshot": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
   "coverage_waivers": [
     {
       "by": "urban233",
@@ -113,16 +113,40 @@
       "round": 20,
       "slice_id": "recovery-and-budget",
       "timestamp": "2026-09-11T22:48:20Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "security_privacy_data_compatibility",
+      "reason": "Both new checks parse only this repository's own developer-authored files (pyproject.toml, requirements*.txt, the changed .py files themselves) and resolve import names via importlib.metadata.packages_distributions() -- no external input, no credentials, no network calls, no serialization surface. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "concurrency",
+      "reason": "Both checks are pure functions with no shared mutable state, threads, or async; each hook invocation is a standalone subprocess reading its own stdin, same as every other check in require_green.py. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
+    },
+    {
+      "by": "urban233",
+      "dimension": "rollout",
+      "reason": "No feature flag, no migration, no production exposure change: both checks are additive logic inside the existing require_green.py Stop hook (already shipped in slice 3), fail open on any infrastructure error exactly like the checks around them. Rollback is reverting the two functions and their call sites. Authorized by Martin Urban 2026-09-12.",
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "timestamp": "2026-09-12T14:25:29Z"
     }
   ],
-  "current_round": 22,
-  "current_slice": "recovery-and-budget",
+  "current_round": 29,
+  "current_slice": "scientific-gates",
   "description": "Make the main session build and subagents verify, move the hook budget from process to evidence, and hold the always-on instruction payload under 7,500 tokens.",
   "entry": null,
   "link_ref": "docs/plans/claude-code-adapter-verification-first.md",
   "max_rounds": {
-    "inner": 15,
-    "outer": 13
+    "inner": 19,
+    "outer": 14
   },
   "owner": "urban233",
   "reopens": [
@@ -349,6 +373,76 @@
       "reason": "Re-baselining round 21 (recovery-and-budget, outer phase) onto e903a15 to absorb the correction-round fix (6d5cbfc), the unrelated PR #59 merge, and the CI-nudge commit -- none of which were fed through codev task record. The outer-loop specialists' findings from round 21 are addressed by 6d5cbfc; this round exists to record that against the snapshot it actually reflects.",
       "timestamp": "2026-09-12T11:16:20Z",
       "to_round": 22
+    },
+    {
+      "by": "urban233",
+      "from_round": 23,
+      "head": "90da3cc1f4f75cbf592507a9e9c486f0e7effc80",
+      "max_rounds": {
+        "inner": 16,
+        "outer": 13
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round-state's base_snapshot onto 90da3cc (the scientific-gates branch's actual current head, built on the recovery-and-budget branch's own tip 07549c5) to match what start_slice_branch recorded in git-state.json, resolving the self-inflicted mismatch from the initial advance-slice call.",
+      "timestamp": "2026-09-12T11:30:18Z",
+      "to_round": 24
+    },
+    {
+      "by": "urban233",
+      "from_round": 24,
+      "head": "1aca1b9",
+      "max_rounds": {
+        "inner": 17,
+        "outer": 13
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 24 (scientific-gates, inner phase) onto 1aca1b9, the commit carrying Martin Urban's Status: Accepted edit to the slice-4 plan, so builder dispatch starts from the snapshot the accepted plan actually describes.",
+      "timestamp": "2026-09-12T11:55:13Z",
+      "to_round": 25
+    },
+    {
+      "by": "urban233",
+      "from_round": 25,
+      "head": "f112ffd7f112b994cb961a83c2c6c2068415834e",
+      "max_rounds": {
+        "inner": 18,
+        "outer": 13
+      },
+      "phase": "inner",
+      "previous_status": "in_progress",
+      "reason": "Correcting the previous re-baseline to use the full 40-character SHA of the accepted plan's actual current head, so round-state's base_snapshot matches what git reports rather than an unexpanded short form.",
+      "timestamp": "2026-09-12T11:56:05Z",
+      "to_round": 26
+    },
+    {
+      "by": "urban233",
+      "from_round": 26,
+      "head": "0a6fa7441455f233631e0c65a75f3bf40ab48b2b",
+      "max_rounds": {
+        "inner": 19,
+        "outer": 13
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining round 26 onto 0a6fa74, the commit that actually recorded the reviewer's READY_FOR_OUTER_LOOP verdict, so codev task check reads consistent state before publishing.",
+      "timestamp": "2026-09-12T12:30:35Z",
+      "to_round": 27
+    },
+    {
+      "by": "urban233",
+      "from_round": 27,
+      "head": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
+      "max_rounds": {
+        "inner": 19,
+        "outer": 14
+      },
+      "phase": "outer",
+      "previous_status": "in_progress",
+      "reason": "Re-baselining onto 0b764cd (work_style=delegate recorded) so codev task check reads consistent state before dispatching outer-loop specialists.",
+      "timestamp": "2026-09-12T14:24:03Z",
+      "to_round": 28
     }
   ],
   "reviewer": null,
@@ -1394,13 +1488,300 @@
       "reviewer": null,
       "round": 22,
       "slice_id": "recovery-and-budget"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 23,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 24,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "inner",
+      "reviewer": null,
+      "round": 25,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/hooks/require_green.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_green.py",
+            "tests/test_scientific_gates_hook.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Two static checks added inside require_green.py's existing Stop hook, wired into main() immediately after _toothless_tests and before _checks()'s subprocess loop, per the accepted plan's step 3: an unseeded-RNG check (_unseeded_rng_findings, plus helpers _added_lines and _file_is_seeded) scoped to lines a turn actually added in non-test files, and a dependency-gap check (_dependency_gap_findings, plus helpers _normalize_distribution_name, _requirement_name, _declared_dependencies, _is_first_party, _imported_root_names) applied to every changed file including tests, resolving import names to distribution names via importlib.metadata.packages_distributions(). Both combine into one _block() message when either or both fire. No new subprocess, hook registration, or settings.json entry.",
+          "deviations": "One resolved ambiguity in the plan's own wording, not a scope change: the plan's step 1 says both checks run `git diff -- <path>` 'the same git-object-storage technique _toothless_tests already uses', but a literal `git diff` subprocess call produces no output for a file that was never `git add`ed (confirmed empirically), which would silently miss a brand-new untracked script -- the single most common real case. Implemented `_added_lines()` using _toothless_tests's own literal technique instead (current content plus `git show HEAD:<path>` for the previous version, diffed in Python via difflib.SequenceMatcher), matching the plan's parenthetical description and the Containment field's 'no new subprocess'. Also: `bazel run //scripts:verify_self_install` is not an existing Bazel target in this repository (CI invokes it as `python scripts/verify_self_install.py`); ran that actual command instead and confirmed 'No changes.'",
+          "limitations": "Same three the plan itself names, no new ones: RNG scope is random/numpy.random only (torch/tensorflow/jax filed as follow-up, Decision 1); declared-dependency sources are pyproject.toml + requirements*.txt only (Pipenv/Poetry-lock/setup.py filed as follow-up, Decision 5); the dependency-gap check's soundness depends on the hook's own interpreter having the repository's declared dependencies actually installed (the plan's own 'Stop if').",
+          "review_state": "AWAITING INDEPENDENT REVIEW",
+          "validation": [
+            "python3 -m unittest tests.test_scientific_gates_hook -v -> 16/16 pass (independently re-run by the orchestrating session, not just the builder)",
+            ".tools/just lint -> All checks passed!",
+            ".tools/just typecheck -> Success: no issues found in 59 source files",
+            ".tools/just fmt-check -> 247 files already formatted",
+            "bazel test //tests:test_scientific_gates_hook --nocache_test_results -> Ran 16 tests, OK, PASSED in 6.1s",
+            "python3 scripts/verify_self_install.py -> No changes.",
+            "diff .claude/hooks/require_green.py src/codev_workflow/bundle/.claude/hooks/require_green.py -> byte-identical",
+            "Manual: planted an unseeded random.random() call in a scratch file -> Stop hook blocked, reason named the file and line; added random.seed(0) -> Stop hook allowed (ran real lint/typecheck/test to completion); removed the scratch file. Planted an `import scipy` (confirmed absent from packages_distributions() in this environment) -> Stop hook blocked, reason named the missing import; removed the scratch file. git status confirmed no manual-test artifacts remained."
+          ]
+        },
+        "head_snapshot": "680f1cd353855a8cc882293feabd7bc5266e0603"
+      },
+      "phase": "inner",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "All design decisions implemented correctly. VERIFICATION: (1) RNG scope: patterns at lines 399-412 check random and numpy.random/np.random only, matching Decision 1. (2) Detection scope: _added_lines() at lines 415-434 uses difflib.SequenceMatcher against git HEAD to find newly-added lines only, matching Decision 2. (3) Seeding check: _file_is_seeded() at lines 437-451 checks for random.seed(_SEED_SUBSTRING) and default_rng() with arguments, matching Decision 3. (4) Test file exclusion: _unseeded_rng_findings() line 465 excludes test files (\"test\" in path.name), dependency-gap check line 595 includes test files, matching Decision 4. (5) Declared dependencies: _declared_dependencies() at lines 513-550 reads pyproject.toml [project.dependencies] and [project.optional-dependencies] plus requirements*.txt, matching Decision 5. (6) Import resolution: _dependency_gap_findings() line 622 uses importlib.metadata.packages_distributions(), _is_first_party() checks repo root and src/, matching Decision 6. Wire-up at lines 689-704 combines findings after _toothless_tests, before _checks. Tests: all 17 test methods present covering block/allow paths, Decision 3-4 exclusions, file-scoping. CHANGELOG properly documents both checks. Bundle mirror src/codev_workflow/bundle/.claude/hooks/require_green.py byte-identical to main hook. All tests pass: test_scientific_gates_hook PASSED in 6.1s, test_instruction_budget PASSED in 0.7s (confirms no new hook registration or settings.json entry), test_verify_self_install PASSED. Manual validation: unseeded random call blocked with scientific-gates reason; same call with seed allowed; undeclared import blocked; declared import allowed. All acceptance criteria met.",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_OUTER_LOOP",
+        "findings": [],
+        "head_snapshot": "6e29162f76f4887e78110122c451d50de36359a0"
+      },
+      "round": 26,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": null,
+      "round": 27,
+      "slice_id": "scientific-gates"
+    },
+    {
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/hooks/require_green.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_green.py",
+            "tests/test_scientific_gates_hook.py"
+          ],
+          "delivered": "Fixed sg-r28-1 (blocking, correctness): _is_first_party in require_green.py gained an importer_dir parameter, added to its resolution bases alongside repo_root and src/, so a module imported from its own sibling directory (e.g. require_plan.py's `import _hook_common`) is now correctly treated as first-party instead of an undeclared dependency.",
+          "deviations": "None. Scoped exactly to sg-r28-1; no other finding, the RNG check, or CHANGELOG touched.",
+          "limitations": "Two dependency-gap false positives remain in .codev/eval fixtures (normalize-slug, test-double-fidelity) where the first-party module sits one directory above the importing test file (a tests/ subdirectory importing from its parent) rather than beside it -- a different import shape than sg-r28-1 asked to fix, out of scope for this correction round.",
+          "review_state": "AWAITING INDEPENDENT REVIEW",
+          "validation": [
+            "python3 -m unittest tests.test_scientific_gates_hook -v -> 17/17 pass (independently re-run by the orchestrating session)",
+            "Revert-and-check: the new regression test fails against the pre-fix code (AssertionError: 'allow' != 'block'), confirming it exercises the bug",
+            "Empirical repro: _dependency_gap_findings over this repository's own tracked .py files went from 15 false positives pre-fix to 2 (a different, out-of-scope shape) post-fix",
+            ".tools/just lint -> All checks passed! (independently re-run)",
+            ".tools/just typecheck -> Success: no issues found in 59 source files (independently re-run)",
+            "diff .claude/hooks/require_green.py src/codev_workflow/bundle/.claude/hooks/require_green.py -> byte-identical (independently re-run)"
+          ]
+        },
+        "head_snapshot": "7a89855e446b9d41cdc22920fca4c254e085088b"
+      },
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "architecture_scope": {
+            "evidence": "architecture-maintainability-specialist confirmed the diff touches exactly the accepted plan's Allowed scope (require_green.py, its byte-identical bundle mirror, one new auto-discovered test file, CHANGELOG.md, plus the slice's own plan doc and expected .codev/ task bookkeeping). Placement matches Proposed change step 3 exactly. All six decisions are implemented and defensible, not merely present; _hook_common.py is confirmed to offer nothing these checks need, and no logic is duplicated from src/codev_workflow. Rollback stays exactly as the plan described. One non-blocking finding: Decision 3 as implemented lets either RNG family's seed call vouch for the other, an unnamed false negative (arch-4/finding 11).",
+            "passed": true
+          },
+          "correctness": {
+            "evidence": "correctness-tests-specialist verified all six resolved decisions against the code and re-ran the 16 tests (16/16 pass). Decisions 1, 2 (RNG side), 3, 4 and 5 are implemented as written; the difflib-against-git-HEAD substitution for a literal git diff subprocess is correct and better than the plan text. Two decisions are not met in effect: Decision 6's intent (first-party imports excluded) fails for any module imported from its own sibling directory -- 15 false positives reproduced in this repository's own tree, including six of this task's own hook files (blocking finding 1); Decision 3's seed set omits random.Random(seed) and np.random.RandomState(seed), so correctly seeded code is refused (finding 2, non-blocking). Decision 2 (added-lines scoping) is applied to the RNG check only; the dependency-gap check scans each changed file's whole current content, flagging pre-existing imports (finding 3, non-blocking, and the root cause of finding 1 firing on unrelated edits).",
+            "passed": false
+          },
+          "error_handling": {
+            "evidence": "Both checks inherit the hook's fail-open posture and degrade sanely on the paths that matter: a missing file, an unreadable file, a malformed pyproject.toml, an unreadable requirements file, a file that does not parse, a failed git show. The _block/_log/_set_blocks contract matches the existing _toothless_tests block exactly. One real gap: UnicodeDecodeError is a ValueError, not an OSError, so a non-UTF-8 changed source file makes the hook exit with a traceback and skip lint/typecheck/test entirely with no decision-log entry (finding 4, non-blocking, one-token fix; the same latent gap already existed in _toothless_tests for test files).",
+            "passed": true
+          },
+          "maintainability": {
+            "evidence": "architecture-maintainability-specialist confirmed names reveal intent and match the file's existing vocabulary, no function takes more than three arguments or a boolean flag, every literal is a named constant, and every comment explains why rather than what. Four non-blocking findings recorded: CHANGELOG/block-message prose overstates the dependency check's scoping (finding 5/arch-1); a third copy of the changed-file loop skeleton and refusal triple now exists, deliberately left to a follow-up since the accepted containment keeps this slice additive (finding 9/arch-2); the module docstring's cost model no longer covers the static phase (finding 10/arch-3); one log label and a fixed dual-remedy message serves two independent checks (finding 12/arch-5). None makes the code worse than before; the change materially improves the hook's coverage within its stated design.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "All 16 required cases from the plan's step-4 list are present and pass, and none is vacuous (verified by disabling each check path and confirming the corresponding test fails). Size and scope match the risk: real scratch-repository subprocess tests against the real hook, no internals mocked. Gaps are real but not disqualifying: the combined-block message, the load-bearing pattern ordering, the level==0 relative-import guard, and the dependency-gap check's file scope are each unpinned (finding 6); allow-path assertions cannot distinguish a genuine pass from a degraded allow (finding 7). Neither weakens an existing test nor hides the blocking defect for a reason of test design -- finding 1 is missed because no case covers a subdirectory sibling import at all.",
+            "passed": true
+          }
+        },
+        "decision": "CHANGES_REQUIRED",
+        "findings": [
+          {
+            "blocking": true,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r28-1",
+            "location": ".claude/hooks/require_green.py :: _is_first_party / _dependency_gap_findings (and the byte-identical bundle mirror)",
+            "rank": 1,
+            "summary": "The dependency-gap check flags first-party sibling imports as missing dependencies: _is_first_party resolves a root name only directly under the repository root and under src/, so a module imported from its own sibling directory resolves to neither, packages_distributions has no entry for it, and it is reported as undeclared. Running the check over this repository's own 121 .py files returns 15 findings, every one a false positive -- including require_plan.py's deliberate `import _hook_common` (line 50), the same for statusline.py, require_small_change.py, require_wave_shape.py, restore_position.py and checkpoint_state.py in both .claude/hooks/ and the bundle mirror, plus three eval fixture tests. Reproduced generically outside this repository too (scripts/analysis.py importing a sibling helpers.py). Because the check reads each changed file's whole current content, the refusal fires on any future edit to one of these existing files for an import the turn did not add, and the block message names no action that can clear a first-party import -- the turn stays refused until the consecutive-block stand-down. Contradicts the Focus card's own Success criterion (\"neither check fires ... on a stdlib or first-party import\") and Decision 6's intent, while matching Decision 6's narrower letter. Fix: also resolve the root name relative to the importing file's own directory, and add a test for a changed file in a subdirectory importing a sibling module there."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r28-2",
+            "location": ".claude/hooks/require_green.py :: _RNG_CALL_PATTERNS / _file_is_seeded",
+            "rank": 2,
+            "summary": "Correctly seeded RNG constructors (random.Random(42), np.random.RandomState(42)) are reported as unseeded: both idiomatic ways to obtain a reproducible local RNG match _RNG_CALL_PATTERNS, but _file_is_seeded's only constructor-style case is default_rng with an argument. This follows Decision 3's literal enumeration, so it is a plan gap faithfully implemented rather than a builder error. Related: the bare-random pattern has no leading word boundary (unlike the numpy pattern's \\b), so custom_random.draw() and self.random.choice([1]) are also flagged. Fix mirrors the default_rng handling already present: treat random.Random(/RandomState( with an argument as seeding, and anchor the bare-random pattern."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r28-3",
+            "location": ".claude/hooks/require_green.py :: _dependency_gap_findings",
+            "rank": 3,
+            "summary": "The dependency-gap check diverges from Decision 2's stated added-lines-only scoping (it never consults git and flags every absolute import in a changed file's current content, pre-existing ones included) -- this matches Proposed-change step 2's literal text (\"AST-parse the current content\"), so the plan itself is internally inconsistent and the implementation picked one side without a recorded sign-off on the pre-existing-debt exposure Decision 2 exists to prevent; this whole-file scoping is what lets sg-r28-1 fire on unrelated edits. Separately, there is no direct comparison of the normalised root name against the declared set: a declared-but-not-installed dependency (e.g. numpy in pyproject.toml but absent from the hook's interpreter) produces a false \"has no declared dependency providing it\" message. Fix: state which of Decision 2 or step 2 governs and pin it with a test either way; add a normalised-name short-circuit and distinguish undeclared from declared-but-not-installed in the message."
+          },
+          {
+            "blocking": false,
+            "category": "error_handling",
+            "expansion_reason": null,
+            "id": "sg-r28-4",
+            "location": ".claude/hooks/require_green.py :: _unseeded_rng_findings, _dependency_gap_findings, _declared_dependencies",
+            "rank": 4,
+            "summary": "UnicodeDecodeError escapes both new checks and crashes the whole hook. Both checks wrap read_text(encoding=\"utf-8\") in except OSError, but UnicodeDecodeError is a ValueError, not an OSError; a changed source file with a PEP 263 latin-1 coding declaration and a non-UTF-8 byte makes both functions raise, main() has no guard, and the hook dies with a traceback -- no block, no log entry, and lint/typecheck/test never run for that turn. _toothless_tests already had this gap but only for test-named files; this widens the exposure to every changed .py/.pyi file. Fix: catch (OSError, UnicodeDecodeError) at each read site (or read with errors=\"replace\"), and add one test with a non-UTF-8 changed file."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "sg-r28-5",
+            "location": "CHANGELOG.md",
+            "rank": 5,
+            "summary": "The CHANGELOG headline and the hook's own block message both claim the dependency-gap check is scoped to lines a turn actually added, but per sg-r28-3 it is whole-file scoped -- the code conforms to the accepted plan's own step 2, so the defect is in the prose, but it misstates the Decision 2 boundary that exists to avoid refusing a turn for pre-existing debt. Fix: reword the CHANGELOG sentence and the block message's \"this turn added\" clause to match whole-file scoping, or record whole-file scope as a named accepted limitation beside the RNG check's added-line scope."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "sg-r28-6",
+            "location": "tests/test_scientific_gates_hook.py",
+            "rank": 6,
+            "summary": "Three behaviours the plan requires or the code deliberately implements have no test that would fail if they broke: (1) the plan's required single combined message when both checks fire; (2) the numpy-before-random pattern ordering (the existing test asserts only on the echoed source line, which is present under either label, so swapping the tuple order leaves all 16 tests green); (3) the load-bearing level==0 relative-import guard in _imported_root_names. Also unpinned in either direction: the dependency-gap check's file scope (why sg-r28-3 went unnoticed), and _requirement_name's claimed four requirement-line shapes, of which only one is exercised even though this repository's own requirements_lock.txt is the hash-pinned shape the check actually reads. Fix: add one test each for the four gaps above."
+          },
+          {
+            "blocking": false,
+            "category": "test_quality",
+            "expansion_reason": null,
+            "id": "sg-r28-7",
+            "location": "tests/test_scientific_gates_hook.py :: _decision and the eight allow tests",
+            "rank": 7,
+            "summary": "Every allow-path assertion is satisfied by empty stdout, which the hook also produces on its degraded paths (git could not be consulted, no checks reachable), not only on a genuine pass -- so the eight allow tests would still pass even if the scratch fixture stopped reaching the checks at all. Not a defect today (the block tests share the same fixture and prove the pipeline runs), but it is the failure mode that would make a future regression invisible. Fix: in at least one allow test per class, assert the decision journal recorded a pass for the discovered checks rather than only that stdout was empty."
+          },
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r28-8",
+            "location": ".claude/hooks/require_green.py :: _unseeded_rng_findings",
+            "rank": 8,
+            "summary": "_added_lines runs one git show subprocess for every non-test changed file, including files containing no RNG pattern at all, before main() establishes its _TOTAL_BUDGET_SECONDS deadline -- so this work is unbudgeted, contradicting the plan's Containment claim that both checks stay effectively free. Fix: pattern-scan the current content first and call _added_lines only when a candidate match exists."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "sg-r28-9-arch2",
+            "location": ".claude/hooks/require_green.py",
+            "rank": 9,
+            "summary": "require_green.py now holds three static checks with the same signature and per-file skeleton, and main() repeats the log/set_blocks/block/return refusal triple a third time -- the rule-of-three point for a small check table, but deliberately NOT recommended inside this slice: the accepted containment is to revert the two functions and their two call sites, and a refactor would touch the two pre-existing branches the plan promises not to. Filed as a follow-up for once a fourth static check is proposed, not a fix for this slice."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "sg-r28-10-arch3",
+            "location": ".claude/hooks/require_green.py",
+            "rank": 10,
+            "summary": "The hook's module docstring cost model (\"Two things bound the cost...\") no longer describes the static phase this change adds: a turn that changed source now also pays, per changed file, a read plus an ast.parse, and per changed non-test file an extra object-storage read via _added_lines, all before the wall-clock deadline is established. Fix: add one sentence to the module docstring covering the static phase's per-file cost."
+          },
+          {
+            "blocking": false,
+            "category": "architecture_scope",
+            "expansion_reason": null,
+            "id": "sg-r28-11-arch4",
+            "location": ".claude/hooks/require_green.py",
+            "rank": 11,
+            "summary": "_file_is_seeded tests one substring (\"random.seed(\") against the whole file, so a stdlib random.seed(0) call vouches for an added np.random.rand() call and vice versa -- literal conformance with Decision 3 (a flat set, never paired to the RNG family it actually seeds), so not a divergence from accepted authority, but an unnamed false negative against the plan's own standard of naming accepted limitations. Fix: name the cross-family seeding gap in the _file_is_seeded docstring, and carry it into the Decision 1 follow-up issue for framework RNGs."
+          },
+          {
+            "blocking": false,
+            "category": "maintainability",
+            "expansion_reason": null,
+            "id": "sg-r28-12-arch5",
+            "location": ".claude/hooks/require_green.py",
+            "rank": 12,
+            "summary": "The combined block records check=\"scientific-gates\" for both new checks, so a later reader of decisions.jsonl cannot tell an RNG refusal from a dependency-gap refusal without parsing free text, unlike every other entry which carries a specific label. The block message likewise always names both remedies even when only one check fired. Fix: log the two checks under distinct labels while keeping the single combined block message, and consider emitting only the remedy sentences for the checks that actually fired."
+          }
+        ],
+        "head_snapshot": "0b764cd9d3e6249837ba22f2b1d343686d10f3e2",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist",
+            "architecture-maintainability-specialist"
+          ]
+        }
+      },
+      "round": 28,
+      "slice_id": "scientific-gates",
+      "triage": {
+        "by": "urban233",
+        "dispositions": {
+          "sg-r28-1": {
+            "disposition": "address",
+            "override_reason": null
+          }
+        }
+      }
+    },
+    {
+      "builder": null,
+      "phase": "outer",
+      "reviewer": {
+        "coverage": {
+          "correctness": {
+            "evidence": "correctness-tests-specialist independently re-ran _dependency_gap_findings over this repository's 121 tracked .py files with the pre-fix and post-fix hook loaded side by side: 15 findings -> 2, all 12 _hook_common false positives (six files in .claude/hooks/ plus their six bundle mirrors) plus the seeded-defect fixture gone. Both call sites of _is_first_party are updated (grep across the tree). Bundle mirror confirmed byte-identical at head. Commit 7a89855 touches exactly three files (the hook, its bundle mirror, the test file); only later commits are round-state.json bookkeeping. ruff check and mypy both clean. No blocking defect introduced by the fix: adding importer_dir as a resolution base can in principle mask a genuine undeclared import shadowed by a same-named local sibling module, but that is the same heuristic tradeoff the pre-existing repo_root base already carries, and errs toward under-blocking -- the safe direction for a Stop hook. One non-blocking, out-of-scope observation recorded (sg-r29-1).",
+            "passed": true
+          },
+          "error_handling": {
+            "evidence": "No error-handling surface changed by this fix. _is_first_party gained a required positional Path parameter; its body still uses only is_dir()/is_file(), which do not raise for a nonexistent path. The caller passes absolute.parent, computed after the existing absolute.exists() guard, so importer_dir always names an existing directory.",
+            "passed": true
+          },
+          "test_quality": {
+            "evidence": "The new regression test (test_never_flags_a_sibling_module_in_the_importing_files_own_directory) is non-vacuous: reconstructed a minimal tree holding the HEAD test file against the pre-fix bundle hook and confirmed exactly this one test fails (AssertionError: 'allow' != 'block'), with the other 16 passing. At head the full suite is 17/17, including both pre-existing first-party tests (flat layout, src layout) unregressed. Pure addition (+18 lines), no existing test weakened, matches this repository's testing-craft conventions (behavioural name, no internals coupling, docstring naming the concrete production shape reproduced).",
+            "passed": true
+          }
+        },
+        "decision": "READY_FOR_HUMAN_APPROVAL",
+        "findings": [
+          {
+            "blocking": false,
+            "category": "correctness",
+            "expansion_reason": null,
+            "id": "sg-r29-1",
+            "location": ".claude/hooks/require_green.py :: _is_first_party (and the byte-identical bundle mirror)",
+            "rank": 1,
+            "summary": "Residual dependency-gap false positives of a different import shape than sg-r28-1, surfaced only because this correction round's re-verification empirically re-ran the check. _dependency_gap_findings over this repository's own 121 tracked .py files drops from 15 findings pre-fix to 2 post-fix, exactly as claimed. The 2 that remain (.codev/eval/tasks/normalize-slug and test-double-fidelity fixtures) have the first-party module sitting one directory ABOVE the importing test file rather than beside it -- pre-existing (identical pre-fix), explicitly disclosed by the builder as an out-of-scope limitation, and not the shape sg-r28-1 named. Recorded for visibility only; does not qualify the resolution of sg-r28-1."
+          }
+        ],
+        "head_snapshot": "7a89855e446b9d41cdc22920fca4c254e085088b",
+        "specialist_selection": {
+          "specialists": [
+            "correctness-tests-specialist"
+          ]
+        }
+      },
+      "round": 29,
+      "slice_id": "scientific-gates"
     }
   ],
   "slice_styles": {
     "evidence-hooks": "pair",
     "permission-surface": "delegate",
     "recovery-and-budget": "pair",
-    "scientific-gates": "delegate",
+    "scientific-gates": "pair",
     "work-style-and-plan-tiering": "pair"
   },
   "slices": [

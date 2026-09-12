@@ -50,13 +50,17 @@ cannot deadlock a session.
 from __future__ import annotations
 
 import ast
+import difflib
+import importlib.metadata
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -392,6 +396,248 @@ def _toothless_tests(repo_root: Path, changed: list[Path]) -> list[str]:
     return findings
 
 
+_RNG_CALL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # Checked before the plain "random" pattern below: "np.random.rand(" and
+    # "numpy.random.rand(" both contain "random.rand(" as a substring, so
+    # checking the numpy-specific pattern first is what keeps a numpy call
+    # labelled correctly instead of as a bare "random" one.
+    ("numpy.random", re.compile(r"\b(?:numpy\.random|np\.random)\.\w+\(")),
+    ("random", re.compile(r"random\.\w+\(")),
+)
+# "numpy.random.seed(" and "np.random.seed(" both contain this as a
+# substring, so one check covers all three names Decision 3 lists.
+_SEED_SUBSTRING = "random.seed("
+_DEFAULT_RNG_PATTERN = re.compile(
+    r"(?:numpy\.random|np\.random)\.default_rng\(([^)]*)\)"
+)
+
+
+def _added_lines(repo_root: Path, path: Path, current: str) -> list[str]:
+    """Lines `current` has that the base commit's version did not.
+
+    Reads the pre-change version through git object storage
+    (`git show HEAD:<path>`), exactly like `_toothless_tests` reads its
+    "previous" version, rather than shelling out to `git diff`: a file
+    `_changed_source` reports that was never `git add`ed has no index entry
+    at all, so a literal `git diff` invocation shows no differences for it
+    and would silently miss every line of a brand-new script -- the single
+    most common case this check exists for (Decision 2).
+    """
+    previous_source = _git(repo_root, "show", f"HEAD:{path.as_posix()}")
+    previous_lines = previous_source.splitlines() if previous_source else []
+    current_lines = current.splitlines()
+    matcher = difflib.SequenceMatcher(a=previous_lines, b=current_lines, autojunk=False)
+    added: list[str] = []
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag in ("insert", "replace"):
+            added.extend(current_lines[j1:j2])
+    return added
+
+
+def _file_is_seeded(content: str) -> bool:
+    """Whether `content` already contains a qualifying seed call (Decision 3).
+
+    Presence anywhere in the file's current content, not order- or
+    reachability-checked -- confirming the seed call actually executes
+    before the RNG call needs real execution, out of scope for a Stop hook.
+    A bare `default_rng()` does not count: it is itself OS-entropy-seeded
+    and non-reproducible, so only a call given at least one argument
+    qualifies.
+    """
+    if _SEED_SUBSTRING in content:
+        return True
+    return any(
+        match.group(1).strip() for match in _DEFAULT_RNG_PATTERN.finditer(content)
+    )
+
+
+def _unseeded_rng_findings(repo_root: Path, changed: list[Path]) -> list[str]:
+    """Unreproducible randomness this turn's diff adds (Decisions 1-4).
+
+    Scoped to lines a turn actually added, in non-test files: a call
+    already present at the base commit is pre-existing debt this turn did
+    not introduce (Decision 2), and a call inside a test file is a
+    legitimate randomised- or property-based test, not the reproducibility
+    concern this check targets (Decision 4).
+    """
+    findings: list[str] = []
+    for path in changed:
+        if "test" in path.name:
+            continue
+        absolute = repo_root / path
+        if not absolute.exists():
+            continue
+        try:
+            current = absolute.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _file_is_seeded(current):
+            continue
+        for line in _added_lines(repo_root, path, current):
+            for label, pattern in _RNG_CALL_PATTERNS:
+                if pattern.search(line):
+                    findings.append(
+                        f"{path.as_posix()}: {line.strip()!r} uses {label} "
+                        "with no seed call in this file"
+                    )
+                    break
+    return findings
+
+
+_REQUIREMENT_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _normalize_distribution_name(name: str) -> str:
+    """PEP 503 normalisation, so `PyYAML`, `pyyaml`, and `py_yaml` compare
+    equal between a declared dependency and an installed distribution."""
+    return re.sub(r"[-_.]+", "-", name).strip().lower()
+
+
+def _requirement_name(entry: str) -> str | None:
+    """The bare distribution name from one requirement line, or None.
+
+    Handles a PEP 621 dependency string (`"pyyaml>=6.0"`), a
+    `requirements.txt` line, one of its `--hash=...` continuation lines, an
+    option line (`-r other.txt`), and a comment -- stopping at the first
+    character a bare distribution name cannot contain.
+    """
+    line = entry.split("#", 1)[0].strip()
+    if not line or line.startswith("-"):
+        return None
+    match = _REQUIREMENT_NAME_PATTERN.match(line)
+    if not match:
+        return None
+    return _normalize_distribution_name(match.group(0))
+
+
+def _declared_dependencies(repo_root: Path) -> set[str]:
+    """Every distribution name this repository declares (Decision 5).
+
+    `pyproject.toml`'s `[project.dependencies]` plus every group under
+    `[project.optional-dependencies]`, and any `requirements*.txt` at the
+    repository root -- together the most common declaration surface across
+    Python projects generally, and the one this repository itself uses.
+    """
+    declared: set[str] = set()
+    pyproject = repo_root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            data: object = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            data = {}
+        project = data.get("project", {}) if isinstance(data, dict) else {}
+        if isinstance(project, dict):
+            for entry in project.get("dependencies") or []:
+                name = _requirement_name(str(entry))
+                if name:
+                    declared.add(name)
+            optional = project.get("optional-dependencies") or {}
+            if isinstance(optional, dict):
+                for group in optional.values():
+                    for entry in group or []:
+                        name = _requirement_name(str(entry))
+                        if name:
+                            declared.add(name)
+    for requirements_file in sorted(repo_root.glob("requirements*.txt")):
+        try:
+            lines = requirements_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            name = _requirement_name(line)
+            if name:
+                declared.add(name)
+    return declared
+
+
+def _is_first_party(repo_root: Path, root_name: str, importer_dir: Path) -> bool:
+    """Whether `root_name` is this repository's own code (Decision 6).
+
+    Checked under the repository root, under `src/` if present, and beside
+    the file doing the importing -- covering a flat-layout repository (a
+    package directory beside its tests), the "src layout" this repository
+    itself uses, and a module imported from its own sibling directory (e.g.
+    this repository's own `require_plan.py` importing `_hook_common`, which
+    lives right beside it rather than at the repository root or under
+    `src/`).
+    """
+    bases = [repo_root, importer_dir]
+    src_dir = repo_root / "src"
+    if src_dir.is_dir():
+        bases.append(src_dir)
+    return any(
+        (base / root_name).is_dir() or (base / f"{root_name}.py").is_file()
+        for base in bases
+    )
+
+
+def _imported_root_names(source: str) -> set[str]:
+    """Absolute top-level import names an already-parsed file uses.
+
+    `level == 0` excludes a relative import (`from . import x`), which
+    cannot be a missing external dependency by definition. Returns an empty
+    set for a file that does not parse -- a syntax error is the lint
+    check's finding, not this one's.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return set()
+    roots: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                roots.add(alias.name.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            roots.add(node.module.split(".", 1)[0])
+    return roots
+
+
+def _dependency_gap_findings(repo_root: Path, changed: list[Path]) -> list[str]:
+    """Imports no declared dependency provides (Decisions 5-6).
+
+    Applies to every changed file, test files included (Decision 4): a
+    missing dependency breaks a test environment exactly as much as it
+    breaks library code. `packages_distributions()` and the declared set
+    are each computed at most once per hook invocation, only once at least
+    one changed file has a candidate import left to check.
+    """
+    per_file: list[tuple[Path, set[str]]] = []
+    for path in changed:
+        absolute = repo_root / path
+        if not absolute.exists():
+            continue
+        try:
+            source = absolute.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        candidates = {
+            root
+            for root in _imported_root_names(source)
+            if root not in sys.stdlib_module_names
+            and not _is_first_party(repo_root, root, absolute.parent)
+        }
+        if candidates:
+            per_file.append((path, candidates))
+    if not per_file:
+        return []
+
+    declared = _declared_dependencies(repo_root)
+    mapping = importlib.metadata.packages_distributions()
+    findings: list[str] = []
+    for path, roots in per_file:
+        for root in sorted(roots):
+            distributions = {
+                _normalize_distribution_name(dist) for dist in mapping.get(root, [])
+            }
+            if not distributions or not (distributions & declared):
+                findings.append(
+                    f"{path.as_posix()}: import '{root}' has no declared "
+                    "dependency providing it"
+                )
+    return findings
+
+
 def main() -> None:
     try:
         payload = json.loads(sys.stdin.read())
@@ -441,6 +687,23 @@ def main() -> None:
             + "\n  - ".join(toothless)
             + "\nGive each one an assertion that fails without this change, "
             "or say explicitly why it is a non-behavioral test."
+        )
+        return
+
+    scientific = [
+        *_unseeded_rng_findings(repo_root, changed),
+        *_dependency_gap_findings(repo_root, changed),
+    ]
+    if scientific:
+        _log(repo_root, "block", reason="; ".join(scientific), check="scientific-gates")
+        _set_blocks(repo_root, _consecutive_blocks(repo_root) + 1)
+        _block(
+            "This turn is not reproducible as written:\n  - "
+            + "\n  - ".join(scientific)
+            + "\nSeed every randomness-producing call this turn added (e.g. "
+            "random.seed(...) or np.random.default_rng(<seed>)), and declare "
+            "every third-party import this turn added in pyproject.toml or a "
+            "requirements*.txt."
         )
         return
 
