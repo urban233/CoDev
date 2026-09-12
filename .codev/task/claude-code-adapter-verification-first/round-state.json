@@ -1459,7 +1459,31 @@
       "slice_id": "scientific-gates"
     },
     {
-      "builder": null,
+      "builder": {
+        "evidence": {
+          "changed": [
+            ".claude/hooks/require_green.py",
+            "src/codev_workflow/bundle/.claude/hooks/require_green.py",
+            "tests/test_scientific_gates_hook.py",
+            "CHANGELOG.md"
+          ],
+          "delivered": "Two static checks added inside require_green.py's existing Stop hook, wired into main() immediately after _toothless_tests and before _checks()'s subprocess loop, per the accepted plan's step 3: an unseeded-RNG check (_unseeded_rng_findings, plus helpers _added_lines and _file_is_seeded) scoped to lines a turn actually added in non-test files, and a dependency-gap check (_dependency_gap_findings, plus helpers _normalize_distribution_name, _requirement_name, _declared_dependencies, _is_first_party, _imported_root_names) applied to every changed file including tests, resolving import names to distribution names via importlib.metadata.packages_distributions(). Both combine into one _block() message when either or both fire. No new subprocess, hook registration, or settings.json entry.",
+          "deviations": "One resolved ambiguity in the plan's own wording, not a scope change: the plan's step 1 says both checks run `git diff -- <path>` 'the same git-object-storage technique _toothless_tests already uses', but a literal `git diff` subprocess call produces no output for a file that was never `git add`ed (confirmed empirically), which would silently miss a brand-new untracked script -- the single most common real case. Implemented `_added_lines()` using _toothless_tests's own literal technique instead (current content plus `git show HEAD:<path>` for the previous version, diffed in Python via difflib.SequenceMatcher), matching the plan's parenthetical description and the Containment field's 'no new subprocess'. Also: `bazel run //scripts:verify_self_install` is not an existing Bazel target in this repository (CI invokes it as `python scripts/verify_self_install.py`); ran that actual command instead and confirmed 'No changes.'",
+          "limitations": "Same three the plan itself names, no new ones: RNG scope is random/numpy.random only (torch/tensorflow/jax filed as follow-up, Decision 1); declared-dependency sources are pyproject.toml + requirements*.txt only (Pipenv/Poetry-lock/setup.py filed as follow-up, Decision 5); the dependency-gap check's soundness depends on the hook's own interpreter having the repository's declared dependencies actually installed (the plan's own 'Stop if').",
+          "review_state": "AWAITING INDEPENDENT REVIEW",
+          "validation": [
+            "python3 -m unittest tests.test_scientific_gates_hook -v -> 16/16 pass (independently re-run by the orchestrating session, not just the builder)",
+            ".tools/just lint -> All checks passed!",
+            ".tools/just typecheck -> Success: no issues found in 59 source files",
+            ".tools/just fmt-check -> 247 files already formatted",
+            "bazel test //tests:test_scientific_gates_hook --nocache_test_results -> Ran 16 tests, OK, PASSED in 6.1s",
+            "python3 scripts/verify_self_install.py -> No changes.",
+            "diff .claude/hooks/require_green.py src/codev_workflow/bundle/.claude/hooks/require_green.py -> byte-identical",
+            "Manual: planted an unseeded random.random() call in a scratch file -> Stop hook blocked, reason named the file and line; added random.seed(0) -> Stop hook allowed (ran real lint/typecheck/test to completion); removed the scratch file. Planted an `import scipy` (confirmed absent from packages_distributions() in this environment) -> Stop hook blocked, reason named the missing import; removed the scratch file. git status confirmed no manual-test artifacts remained."
+          ]
+        },
+        "head_snapshot": "680f1cd353855a8cc882293feabd7bc5266e0603"
+      },
       "phase": "inner",
       "reviewer": null,
       "round": 26,
