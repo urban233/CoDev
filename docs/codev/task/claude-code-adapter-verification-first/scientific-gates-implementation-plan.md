@@ -1,6 +1,6 @@
 # Slice 4: Scientific Gates - Implementation Plan
 
-**Status:** Draft
+**Status:** Accepted
 **Owner:** urban233
 **Reviewer:** independent reviewer, to be named before the pull request is marked ready
 **Risk:** normal. Both checks are additive, read-only static analysis inside
